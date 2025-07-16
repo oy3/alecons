@@ -1,16 +1,16 @@
 <script lang="js">
 import { RouterView } from 'vue-router';
-import Header from './components/Header.vue'
+import Navbar from './components/Header.vue'
 
 export default {
   name: 'App',
   computed: {},
-  components: {RouterView, Header}
+  components: {RouterView, Navbar}
 }
 </script>
 
 <template>
-  <Header />
+  <Navbar />
   <RouterView />
 </template>
 

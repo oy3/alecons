@@ -5,7 +5,7 @@
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  background-color: white;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -25,9 +25,7 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
+  min-width: 100%;
   min-height: 100vh;
 }
 
@@ -76,10 +74,11 @@ button:focus-visible {
   }
 }
 
+/* Custom CSS */
+
 .acon-text-primary {
   color: #2d7d7d !important;
 }
-
 
 .acon-text-secondary {
   color: #e07a5f !important;
@@ -95,42 +94,68 @@ button:focus-visible {
   color: #fff !important;
 }
 
-.acon-btn-primary {
-  background-color: #2d7d7d;
-  color: #fff;
-  border: 2px solid #2d7d7d;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  transition: all 0.3s ease;
+.btn-acon-primary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: #2d7d7d !important;
+  --bs-btn-border-color: #2d7d7d !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #256868;
+  --bs-btn-hover-border-color: #256868 !important;
+  --bs-btn-focus-shadow-rgb: 45, 125, 125;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #1e5555;
+  --bs-btn-active-border-color: #1e5555;
 }
 
-.acon-btn-primary:hover {
-  background-color: #2d7d7d;
-  border-color: #2d7d7d;
-  color: #fff;
-  text-decoration: none;
+.btn-acon-secondary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: #e07a5f !important;
+  --bs-btn-border-color: #e07a5f !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #c56a53;
+  --bs-btn-hover-border-color: #c56a53 !important;
+  --bs-btn-focus-shadow-rgb: 224, 122, 95;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #a85a45;
+  --bs-btn-active-border-color: #a85a45;
 }
+
+.btn-outline-acon-primary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #2d7d7d !important;
+  --bs-btn-border-color: #2d7d7d !important;
+  --bs-btn-hover-color: #fff !important;
+  --bs-btn-hover-bg: #2d7d7d;
+  --bs-btn-hover-border-color: #2d7d7d !important;
+  --bs-btn-focus-shadow-rgb: 45, 125, 125;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #1e5555;
+  --bs-btn-active-border-color: #1e5555;
+}
+
+.btn-outline-acon-secondary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #e07a5f !important;
+  --bs-btn-border-color: #e07a5f !important;
+  --bs-btn-hover-color: #fff !important;
+  --bs-btn-hover-bg: #e07a5f;
+  --bs-btn-hover-border-color: #e07a5f !important;
+  --bs-btn-focus-shadow-rgb: 224, 122, 95;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #a85a45;
+  --bs-btn-active-border-color: #a85a45;
+}
+
+
+
+
 
 .acon-btn-primary:focus,
 .acon-btn-primary:active {
-  box-shadow: 0 0 0 0.2rem rgb(45, 125, 125, 0.5);
+  box-shadow: 0 0 0 0.2rem rgb(45, 125, 125, 0.5) !important;
   outline: none;
-}
-
-.acon-btn-secondary {
-  background-color: #e07a5f;
-  color: #fff;
-  border: 1px solid #e07a5f;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  transition: all 0.3s ease;
-}
-
-.acon-btn-secondary:hover {
-  background-color: rgb(224, 122, 95, 0.9);
-  border-color: rgb(224, 122, 95, 0.9);
-  color: #fff;
-  text-decoration: none;
 }
 
 .acon-btn-secondary:focus,
@@ -139,42 +164,10 @@ button:focus-visible {
   outline: none;
 }
 
-.acon-btn-outline-primary {
-  color: #2d7d7d;
-  border: 1px solid #2d7d7d;
-  background-color: transparent;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  transition: all 0.3s ease;
-}
-
-.acon-btn-outline-primary:hover {
-  background-color: #2d7d7d;
-  color: #fff;
-  text-decoration: none;
-  border-color: #2d7d7d;
-}
-
 .acon-btn-outline-primary:focus,
 .acon-btn-outline-primary:active {
   box-shadow: 0 0 0 0.2rem rgb(45, 125, 125, 0.5);
   outline: none;
-}
-
-.acon-btn-outline-secondary {
-  color: #e07a5f;
-  border: 2px solid #e07a5f;
-  background-color: transparent;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  transition: all 0.3s ease;
-}
-
-.acon-btn-outline-secondary:hover {
-  background-color: #e07a5f;
-  color: #fff;
-  text-decoration: none;
-  border-color: #2d7d7d;
 }
 
 .acon-btn-outline-secondary:focus,

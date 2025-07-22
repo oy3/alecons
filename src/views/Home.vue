@@ -1,6 +1,6 @@
 <script lang="js">
 import Hero from '../components/Hero.vue';
-import CTA  from '../components/CTA.vue';
+import CTA from '../components/CTA.vue';
 
 export default {
   name: "Home",
@@ -30,11 +30,15 @@ export default {
 
         <div class="col-md-6 px-5">
           <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body">
+            <div class="card-body px-0 px-md-0">
               <div class="d-flex">
-                <div class="d-inline-flex acon-bg-primary p-3 rounded-3">
-                  <i class="bi bi-book h2 mb-0"></i>
+                <div>
+                  <div class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
+                    style="width: 70px; height: 70px;">
+                    <i class="bi bi-book h1 mb-0 text-white"></i>
+                  </div>
                 </div>
+
                 <div class="ms-3">
                   <h5 class="card-title acon-text-primary fw-bold mb-0">
                     About ACONS
@@ -49,10 +53,13 @@ export default {
           </div>
 
           <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body">
+            <div class="card-body  px-0 px-md-0">
               <div class="d-flex">
-                <div class="d-inline-flex acon-bg-secondary p-3 rounded-3">
-                  <i class="bi bi-people h2 mb-0"></i>
+                <div>
+                  <div class="d-inline-flex justify-content-center align-items-center acon-bg-secondary rounded-3"
+                    style="width: 70px; height: 70px;">
+                    <i class="bi bi-people h1 mb-0 text-white"></i>
+                  </div>
                 </div>
                 <div class="ms-3">
                   <h5 class="card-title acon-text-secondary fw-bold mb-0">
@@ -67,10 +74,13 @@ export default {
           </div>
 
           <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body">
+            <div class="card-body  px-0 px-md-0">
               <div class="d-flex">
-                <div class="d-inline-flex acon-bg-primary p-3 rounded-3">
-                  <i class="bi bi-award h2 mb-0"></i>
+                <div>
+                  <div class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
+                    style="width: 70px; height: 70px;">
+                    <i class="bi bi-award h1 mb-0 text-white"></i>
+                  </div>
                 </div>
                 <div class="ms-3">
                   <h5 class="card-title acon-text-primary fw-bold mb-0">
@@ -85,10 +95,13 @@ export default {
           </div>
 
           <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body">
+            <div class="card-body  px-0 px-md-0">
               <div class="d-flex">
-                <div class="d-inline-flex acon-bg-secondary p-3 rounded-3">
-                  <i class="bi bi-calendar h2 mb-0"></i>
+                <div>
+                  <div class="d-inline-flex justify-content-center align-items-center acon-bg-secondary rounded-3"
+                    style="width: 70px; height: 70px;">
+                    <i class="bi bi-calendar h1 mb-0 text-white"></i>
+                  </div>
                 </div>
                 <div class="ms-3">
                   <h5 class="card-title acon-text-secondary fw-bold mb-0">
@@ -103,10 +116,13 @@ export default {
           </div>
 
           <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body">
+            <div class="card-body  px-0 px-md-0">
               <div class="d-flex">
-                <div class="d-inline-flex acon-bg-primary p-3 rounded-3">
-                  <i class="bi bi-phone h2 mb-0"></i>
+                <div>
+                  <div class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
+                    style="width: 70px; height: 70px;">
+                    <i class="bi bi-telephone h1 mb-0 text-white"></i>
+                  </div>
                 </div>
                 <div class="ms-3">
                   <h5 class="card-title acon-text-primary fw-bold mb-0">
@@ -219,7 +235,7 @@ export default {
       </div>
     </div>
 
-    <CTA />
+    <CTA class="mb-5" />
   </div>
 </template>
 

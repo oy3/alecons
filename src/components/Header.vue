@@ -32,7 +32,7 @@ export default {
             class="fw-light text-secondary fs-6"
             style="letter-spacing: 1.5px"
           >
-            OF NURSING Services
+            OF NURSING Sciences
           </span>
         </div>
       </a>

@@ -89,6 +89,10 @@ button:focus-visible {
   color: #fff !important;
 }
 
+.acon-bg-light {
+  background-color: rgb(240 248 248);
+}
+
 .acon-bg-secondary {
   background-color: #e07a5f !important;
   color: #fff !important;

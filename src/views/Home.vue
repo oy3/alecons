@@ -9,7 +9,7 @@ export default {
 </script>
 
 <template>
-  <div class="container-fluid p-0">
+  <div class="container-fluid p-0" style="margin-top: 117px">
     <Hero />
 
     <div class="text-center my-5">

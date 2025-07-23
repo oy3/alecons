@@ -88,7 +88,6 @@ export default {
   background-position: center;
   height: 100%;
   overflow: hidden;
-  margin-top: 117px;
 }
 
 .overlay {

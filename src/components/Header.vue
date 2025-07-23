@@ -54,7 +54,9 @@ export default {
             <a class="nav-link" href="#">Admissions</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#">Contact</a>
+            <router-link to="/contact" class="nav-link" :class="{ 'active acon-active': $route.name === 'Contact' }">
+              Contact
+            </router-link>
           </li>
         </ul>
         <button type="button" class="btn btn-outline-acon-primary me-2">

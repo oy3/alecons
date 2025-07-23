@@ -152,6 +152,20 @@ button:focus-visible {
   --bs-btn-active-border-color: #a85a45;
 }
 
+.btn-acon-dark {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: #264653 !important;
+  --bs-btn-border-color: #264653 !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #1e3a47;
+  --bs-btn-hover-border-color: #1e3a47 !important;
+  --bs-btn-focus-shadow-rgb: 45, 125, 125;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #1e5555;
+  --bs-btn-active-border-color: #1e5555;
+}
+
 
 
 
@@ -178,4 +192,8 @@ button:focus-visible {
 .acon-btn-outline-secondary:active {
   box-shadow: 0 0 0 0.2rem rgb(224, 122, 95, 0.5);
   outline: none;
+}
+
+.acon-border-primary {
+    border-color: #2d7d7d !important;
 }

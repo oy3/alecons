@@ -12,15 +12,15 @@ export default {
   <div class="container-fluid p-0" style="margin-top: 117px">
     <Hero />
 
-    <div class="text-center my-5">
+    <div class="text-center m-5">
       <h2 class="acon-text-primary fw-bold">Explore ACONS</h2>
       <p class="lead">
         Discover everything you need to know about studying at Alebiosu College
         of Nursing Sciences
       </p>
 
-      <div class="row g-0">
-        <div class="col-md-6 px-3">
+      <div class="row g-4">
+        <div class="col-md-6 px-md-3">
           <iframe class="w-100" height="315"
             src="https://www.youtube.com/embed/sZqgjguwYog?si=t_L6pugV6AbPMi9Q&amp;controls=0"
             title="YouTube video player" frameborder="0"
@@ -28,7 +28,7 @@ export default {
             referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
         </div>
 
-        <div class="col-md-6 px-5">
+        <div class="col-md-6 px-md-5">
           <div class="card text-start border-0 shadow py-1 mb-3">
             <div class="card-body px-0 px-md-0">
               <div class="d-flex">
@@ -144,7 +144,7 @@ export default {
       <p class="lead mb-5 text-secondary">Join a community of excellence where your nursing career begins with the best
         foundation</p>
 
-      <div class="row g-4 mx-5 mb-5">
+      <div class="row g-4 mx-0 mx-md-5 mb-5">
         <div class="col-12 col-md-6 col-lg-3">
           <div class="card border-0 shadow p-1 h-100">
             <div class="card-body">

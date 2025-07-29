@@ -172,13 +172,13 @@ export default {
 
     <div class="p-5 text-center">
       <h2 class="fw-bold acon-text-primary">Our Journey</h2>
-      <p class="text-secondary fs-5 fw-light mx-5">
+      <p class="text-secondary fs-5 fw-light mx-0 mx-md-5">
         From our humble beginnings to becoming Ekiti State's premier nursing
         institution, our journey has been marked by continuous growth and
         excellence.
       </p>
 
-      <div class="row row-cols-1 row-cols-md-3 g-4 mx-5 mb-5">
+      <div class="row row-cols-1 row-cols-md-3 g-4 mx-0 mx-md-5 mb-5">
         <div class="col">
           <div class="card border-0 shadow p-0 h-100">
             <div class="card-body text-start">
@@ -257,7 +257,7 @@ export default {
 
     <div class="p-5 text-center acon-bg-light">
       <h2 class="fw-bold acon-text-primary">Leadership Team</h2>
-      <p class="text-secondary fs-5 fw-light mx-5 mb-5">
+      <p class="text-secondary fs-5 fw-light mx-0 mx-md-5 mb-5">
         Meet the experienced leaders who guide our institution's vision and
         ensure the highest standards of nursing education.
       </p>
@@ -321,7 +321,7 @@ export default {
 
     <div class="container-fluid acon-bg-secondary p-5 text-center">
       <h2 class="fw-bold">Educate. Inspire. Grow. Join Our Faculty</h2>
-      <p class="fs-5 fw-light mx-5 mb-4" style="color: #fff3f0">
+      <p class="fs-5 fw-light mx-0 mx-md-5 mb-4" style="color: #fff3f0">
         At ALECONS, we don’t just teach — we inspire. We're seeking passionate
         educators and healthcare professionals to help cultivate compassionate,
         skilled nurses. Be part of a forward-thinking institution committed to

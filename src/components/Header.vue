@@ -73,6 +73,6 @@ export default {
 <style scoped>
 .nav-link.acon-active {
   color: #2d7d7d !important;
-  font-weight: 500;
+  font-weight: 600 !important;
 }
 </style>

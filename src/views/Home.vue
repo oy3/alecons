@@ -21,11 +21,16 @@ export default {
 
       <div class="row g-4">
         <div class="col-md-6 px-md-3">
-          <iframe class="w-100" height="315"
+          <iframe
+            class="w-100"
+            height="315"
             src="https://www.youtube.com/embed/sZqgjguwYog?si=t_L6pugV6AbPMi9Q&amp;controls=0"
-            title="YouTube video player" frameborder="0"
+            title="YouTube video player"
+            frameborder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+            referrerpolicy="strict-origin-when-cross-origin"
+            allowfullscreen
+          ></iframe>
         </div>
 
         <div class="col-md-6 px-md-5">
@@ -33,8 +38,10 @@ export default {
             <div class="card-body px-0 px-md-0">
               <div class="d-flex">
                 <div>
-                  <div class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
-                    style="width: 70px; height: 70px;">
+                  <div
+                    class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
+                    style="width: 70px; height: 70px"
+                  >
                     <i class="bi bi-book h1 mb-0 text-white"></i>
                   </div>
                 </div>
@@ -53,11 +60,13 @@ export default {
           </div>
 
           <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body  px-0 px-md-0">
+            <div class="card-body px-0 px-md-0">
               <div class="d-flex">
                 <div>
-                  <div class="d-inline-flex justify-content-center align-items-center acon-bg-secondary rounded-3"
-                    style="width: 70px; height: 70px;">
+                  <div
+                    class="d-inline-flex justify-content-center align-items-center acon-bg-secondary rounded-3"
+                    style="width: 70px; height: 70px"
+                  >
                     <i class="bi bi-people h1 mb-0 text-white"></i>
                   </div>
                 </div>
@@ -74,11 +83,13 @@ export default {
           </div>
 
           <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body  px-0 px-md-0">
+            <div class="card-body px-0 px-md-0">
               <div class="d-flex">
                 <div>
-                  <div class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
-                    style="width: 70px; height: 70px;">
+                  <div
+                    class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
+                    style="width: 70px; height: 70px"
+                  >
                     <i class="bi bi-award h1 mb-0 text-white"></i>
                   </div>
                 </div>
@@ -95,11 +106,13 @@ export default {
           </div>
 
           <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body  px-0 px-md-0">
+            <div class="card-body px-0 px-md-0">
               <div class="d-flex">
                 <div>
-                  <div class="d-inline-flex justify-content-center align-items-center acon-bg-secondary rounded-3"
-                    style="width: 70px; height: 70px;">
+                  <div
+                    class="d-inline-flex justify-content-center align-items-center acon-bg-secondary rounded-3"
+                    style="width: 70px; height: 70px"
+                  >
                     <i class="bi bi-calendar h1 mb-0 text-white"></i>
                   </div>
                 </div>
@@ -116,11 +129,13 @@ export default {
           </div>
 
           <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body  px-0 px-md-0">
+            <div class="card-body px-0 px-md-0">
               <div class="d-flex">
                 <div>
-                  <div class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
-                    style="width: 70px; height: 70px;">
+                  <div
+                    class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
+                    style="width: 70px; height: 70px"
+                  >
                     <i class="bi bi-telephone h1 mb-0 text-white"></i>
                   </div>
                 </div>
@@ -141,8 +156,10 @@ export default {
 
     <div class="text-center py-5 acon-bg-light">
       <h2 class="fw-bold acon-text-primary mt-5">Why Choose ACONS?</h2>
-      <p class="lead mb-5 text-secondary">Join a community of excellence where your nursing career begins with the best
-        foundation</p>
+      <p class="lead mb-5 text-secondary">
+        Join a community of excellence where your nursing career begins with the
+        best foundation
+      </p>
 
       <div class="row g-4 mx-0 mx-md-5 mb-5">
         <div class="col-12 col-md-6 col-lg-3">
@@ -182,60 +199,102 @@ export default {
           </div>
         </div>
       </div>
-
     </div>
 
-    <div class="text-center py-5 ">
+    <div class="text-center py-5">
       <h2 class="fw-bold acon-text-primary mt-5">Our Programs</h2>
-      <p class="lead mb-5 text-secondary">Comprehensive nursing education programs designed for your success</p>
+      <p class="lead mb-5 text-secondary">
+        Comprehensive nursing education programs designed for your success
+      </p>
       <div class="row g-4 mx-5 mb-5">
         <div class="col-12 col-md-6 col-lg-4">
           <div class="card border-0 shadow p-1 h-100 text-start">
             <div class="card-body">
-              <div class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3 mb-3"
-                style="width: 50px; height: 50px;">
+              <div
+                class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3 mb-3"
+                style="width: 50px; height: 50px"
+              >
                 <i class="bi bi-book h3 mb-0 text-white"></i>
               </div>
 
-              <h5 class="card-title fw-bolder acon-text-primary">Basic Nursing Program</h5>
-              <p class="text-secondary">3-year comprehensive program covering all fundamental nursing skills and
-                knowledge.</p>
-              <a href="">Learn More </a>
+              <h5 class="card-title fw-bolder acon-text-primary">
+                Basic Nursing Program
+              </h5>
+
+              <p class="text-secondary">
+                3-year comprehensive program covering all fundamental nursing
+                skills and knowledge.
+              </p>
+
+              <a
+                class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
+                href="#"
+              >
+                <span>Learn More</span>
+                <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
+              </a>
             </div>
           </div>
         </div>
         <div class="col-12 col-md-6 col-lg-4">
           <div class="card border-0 shadow p-1 h-100 text-start">
             <div class="card-body">
-              <div class="d-inline-flex justify-content-center align-items-center acon-bg-secondary rounded-3 mb-3"
-                style="width: 50px; height: 50px;">
+              <div
+                class="d-inline-flex justify-content-center align-items-center acon-bg-secondary rounded-3 mb-3"
+                style="width: 50px; height: 50px"
+              >
                 <i class="bi bi-people h3 mb-0 text-white"></i>
               </div>
 
-              <h5 class="card-title fw-bolder acon-text-secondary">Post-Basic Nursing</h5>
-              <p class="text-secondary">18-month advanced program for practicing nurses seeking specialization.</p>
-              <a href="">Learn More </a>
+              <h5 class="card-title fw-bolder acon-text-secondary">
+                Post-Basic Nursing
+              </h5>
+              <p class="text-secondary">
+                18-month advanced program for practicing nurses seeking
+                specialization.
+              </p>
+              <a
+                class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
+                href="#"
+              >
+                <span>Learn More</span>
+                <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
+              </a>
             </div>
           </div>
         </div>
         <div class="col-12 col-md-6 col-lg-4">
           <div class="card border-0 shadow p-1 h-100 text-start">
             <div class="card-body">
-              <div class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3 mb-3"
-                style="width: 50px; height: 50px;">
+              <div
+                class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3 mb-3"
+                style="width: 50px; height: 50px"
+              >
                 <i class="bi bi-book h3 mb-0 text-white"></i>
               </div>
 
-              <h5 class="card-title fw-bolder acon-text-primary">Midwifery Program</h5>
-              <p class="text-secondary">2-year specialized program focusing on maternal and infant care.</p>
-              <a href="">Learn More </a>
+              <h5 class="card-title fw-bolder acon-text-primary">
+                Midwifery Program
+              </h5>
+              <p class="text-secondary">
+                2-year specialized program focusing on maternal and infant care.
+              </p>
+              <a
+                class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
+                href="#"
+              >
+                <span>Learn More</span>
+                <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
+              </a>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <CTA class="mb-5" />
+    <div class="m-5">
+      <CTA />
+    </div>
   </div>
 </template>
 

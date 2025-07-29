@@ -175,14 +175,6 @@ export default {
     color: #e07a5f !important;
 }
 
-.acon-link {
-    text-decoration: none;
-}
-
-.acon-link:hover {
-    color: #e07a5f !important;
-}
-
 ul.no-bullets {
     list-style-type: none;
     padding: 0;

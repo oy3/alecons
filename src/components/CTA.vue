@@ -6,7 +6,7 @@ export default {
 </script>
 
 <template>
-    <div class="container-fluid acon-bg-primary p-5 text-center">
+    <div class="container-fluid acon-bg-primary p-5 text-center rounded-3">
         <h2>Ready to Start Your Nursing Career?</h2>
         <p class="fs-5 fw-light mx-0 mx-md-5">Join thousands of successful nursing graduates who started their journey at ACON. Apply
             today and take the

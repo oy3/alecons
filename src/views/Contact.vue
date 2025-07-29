@@ -250,7 +250,7 @@ export default {
         Omuo Oke, Ekiti State.
       </p>
 
-      <div class="row g-4">
+      <div class="row g-4 mt-3">
         <div class="col-md-4">
           <div class="card border-0 shadow p-0 h-100">
             <div class="card-body">
@@ -349,11 +349,11 @@ export default {
 
         <div class="col-md-12 mt-5">
           <div
-            class="card border-0 shadow p-0"
+            class="card border-0 p-1"
             style="background-color: #f0f8f8"
           >
             <div class="card-body">
-              <h4 class="fw-bold acon-text-primary">Nearby Landmarks</h4>
+              <h4 class="fw-bold acon-text-primary mb-3">Nearby Landmarks</h4>
               <ul class="text-start fw-light text-muted row">
                 <li class="col-md-4">
                   Omuo Oke General Hospital - 2 minutes walk

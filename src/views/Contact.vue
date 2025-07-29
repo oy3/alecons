@@ -16,25 +16,95 @@ export default {
       </p>
     </div>
 
-    <div class="p-5 acon-bg-light">
-      <p class="fw-light mb-5">
+    <div class="p-5 acon-bg-light text-center">
+      <h2 class="fw-bold acon-text-primary">Get in Touch</h2>
+      <p class="fw-light mx-0 mx-md-5">
         Ready to begin your nursing education journey? We're here to answer your
         questions and help you take the next step. Contact our admissions team
         today.
       </p>
+
+      <div class="card border-0 shadow mt-4">
+        <div class="card-body text-start">
+          <form>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label for="firstName" class="form-label">First Name <span class="text-danger">*</span></label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="firstName"
+                  placeholder="Enter your first name"
+                  required
+                />
+              </div>
+
+              <div class="col-md-6">
+                <label for="lastName" class="form-label">Last Name <span class="text-danger">*</span></label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="lastName"
+                  placeholder="Enter your last name"
+                  required
+                />
+              </div>
+
+              <div class="col-md-6">
+                <label for="email" class="form-label">Email Address <span class="text-danger">*</span></label>
+                <input
+                  type="email"
+                  class="form-control"
+                  id="email"
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+
+              <div class="col-md-6">
+                <label for="phone" class="form-label">Phone Number</label>
+                <input
+                  type="tel"
+                  class="form-control"
+                  id="phone"
+                  placeholder="+234 XXX XXX XXXX"
+                  required
+                />
+              </div>
+
+              <div class="col-12">
+                <label for="message" class="form-label">Your Message <span class="text-danger">*</span></label>
+                <textarea
+                  class="form-control"
+                  id="message"
+                  rows="5"
+                  placeholder="Tell us about your questions or how we can help you..."
+                  required
+                ></textarea>
+              </div>
+
+              <div class="col-12">
+                <button type="submit" class="btn btn-acon-primary w-100 mt-3">
+                  Send Message <i class="bi bi-send"></i>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
 
     <div class="p-5 text-center">
       <h2 class="fw-bold acon-text-primary">Visit Our Campus</h2>
-      <p class="text-secondary fs-5 fw-light mx-5">
+      <p class="text-secondary fs-5 fw-light mx-0 mx-md-5">
         Located in the beautiful and serene environment of Omuo Oke, Ekiti
         State, our campus provides an ideal setting for learning and personal
         growth.
       </p>
 
-      <div class="row g-4 align-items-center mt-5">
+      <div class="row g-4 align-items-center mt-3">
         <div class="col-md-6">
-          <div class="card border-0 shadow rounded-4 p-4 h-100">
+          <div class="card border-0 shadow rounded-4 p-2 p-md-4 h-100">
             <div class="card-body">
               <h4 class="fw-bold mb-4 acon-text-primary">Main Campus</h4>
 
@@ -96,11 +166,11 @@ export default {
 
     <div class="p-5 acon-bg-light text-center">
       <h2 class="fw-bold acon-text-primary">Department Contacts</h2>
-      <p class="text-secondary fs-5 fw-light mx-5">
+      <p class="text-secondary fs-5 fw-light mx-0 mx-md-5">
         Get in touch with the right department for your specific needs.
       </p>
 
-      <div class="row g-4">
+      <div class="row g-4 mt-3">
         <div class="col-12 col-md-6 col-lg-6">
           <div class="card border-0 shadow h-100">
             <div class="card-body text-start">
@@ -140,7 +210,7 @@ export default {
           <div class="card border-0 shadow h-100">
             <div class="card-body text-start">
               <h5 class="card-title acon-text-primary text-center">
-                Admissions Office
+                Student Affairs
               </h5>
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">
@@ -175,7 +245,7 @@ export default {
           <div class="card border-0 shadow h-100">
             <div class="card-body text-start">
               <h5 class="card-title acon-text-primary text-center">
-                Admissions Office
+                Academic Affairs
               </h5>
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">
@@ -210,7 +280,7 @@ export default {
           <div class="card border-0 shadow h-100">
             <div class="card-body text-start">
               <h5 class="card-title acon-text-primary text-center">
-                Admissions Office
+                Financial Services
               </h5>
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">
@@ -245,7 +315,7 @@ export default {
 
     <div class="p-5 text-center">
       <h2 class="fw-bold acon-text-primary">Getting to Campus</h2>
-      <p class="text-secondary fs-5 fw-light mx-5">
+      <p class="text-secondary fs-5 fw-light mx-0 mx-md-5">
         Multiple transportation options are available to reach our campus in
         Omuo Oke, Ekiti State.
       </p>
@@ -348,10 +418,7 @@ export default {
         </div>
 
         <div class="col-md-12 mt-5">
-          <div
-            class="card border-0 p-1"
-            style="background-color: #f0f8f8"
-          >
+          <div class="card border-0 p-1" style="background-color: #f0f8f8">
             <div class="card-body">
               <h4 class="fw-bold acon-text-primary mb-3">Nearby Landmarks</h4>
               <ul class="text-start fw-light text-muted row">

@@ -195,5 +195,12 @@ button:focus-visible {
 }
 
 .acon-border-primary {
-    border-color: #2d7d7d !important;
+  border-color: #2d7d7d !important;
+}
+
+/* Focused input style */
+.form-control:focus {
+  border-color: #0c6980 !important;
+  box-shadow: 0 0 0 0.2rem rgba(12, 105, 128, 0.25) !important;
+  outline: none !important;
 }

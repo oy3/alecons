@@ -212,3 +212,7 @@ button:focus-visible {
 .acon-link:hover {
     color: #e07a5f !important;
 }
+
+.acon-bullet li::marker {
+  color: #e07a5f !important;
+}

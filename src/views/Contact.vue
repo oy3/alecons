@@ -421,7 +421,7 @@ export default {
           <div class="card border-0 p-1" style="background-color: #f0f8f8">
             <div class="card-body">
               <h4 class="fw-bold acon-text-primary mb-3">Nearby Landmarks</h4>
-              <ul class="text-start fw-light text-muted row">
+              <ul class="text-start fw-light text-muted row acon-bullet">
                 <li class="col-md-4">
                   Omuo Oke General Hospital - 2 minutes walk
                 </li>
@@ -446,7 +446,4 @@ export default {
 </template>
 
 <style scoped>
-li::marker {
-  color: #e07a5f;
-}
 </style>

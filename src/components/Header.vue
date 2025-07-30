@@ -20,32 +20,61 @@ export default {
     </div>
     <div class="container-fluid bg-white py-2">
       <a class="navbar-brand d-flex align-items-center" href="#">
-        <img src="/src/assets/img/logo.png" alt="Logo" width="50" class="d-inline-block align-text-top me-2" />
+        <img
+          src="/src/assets/img/logo.png"
+          alt="Logo"
+          width="50"
+          class="d-inline-block align-text-top me-2"
+        />
         <div class="text-start text-uppercase d-flex flex-column">
           <span class="fw-bold acon-text-primary">ALEBIOSU COLLEGE</span>
-          <span class="fw-light text-secondary fs-6" style="letter-spacing: 1.5px">
+          <span
+            class="fw-light text-secondary fs-6"
+            style="letter-spacing: 1.5px"
+          >
             OF NURSING Sciences
           </span>
         </div>
       </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarText"
-        aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarText"
+        aria-controls="navbarText"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navbarText">
         <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
           <li class="nav-item">
-            <router-link to="/" class="nav-link" :class="{ 'active acon-active': $route.name === 'Home' }">
+            <router-link
+              to="/"
+              class="nav-link"
+              :class="{ 'active acon-active': $route.name === 'Home' }"
+            >
               Home
             </router-link>
           </li>
           <li class="nav-item">
-            <router-link to="/about" class="nav-link" :class="{ 'active acon-active': $route.name === 'About' }">
+            <router-link
+              to="/about"
+              class="nav-link"
+              :class="{ 'active acon-active': $route.name === 'About' }"
+            >
               About
             </router-link>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#">Programs</a>
+            <router-link
+              to="/programs"
+              class="nav-link"
+              :class="{ 'active acon-active': $route.name === 'Programs' }"
+            >
+              Programs
+            </router-link>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="#">Faculty</a>
@@ -54,7 +83,11 @@ export default {
             <a class="nav-link" href="#">Admissions</a>
           </li>
           <li class="nav-item">
-            <router-link to="/contact" class="nav-link" :class="{ 'active acon-active': $route.name === 'Contact' }">
+            <router-link
+              to="/contact"
+              class="nav-link"
+              :class="{ 'active acon-active': $route.name === 'Contact' }"
+            >
               Contact
             </router-link>
           </li>

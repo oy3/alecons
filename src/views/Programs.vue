@@ -2,7 +2,7 @@
 
 export default {
   name: "Programs",
-  components: { },
+  components: {},
 };
 </script>
 
@@ -154,16 +154,217 @@ export default {
     </div>
 
     <div class="p-5 text-center">
-      <h2 class="fw-bold my-5 acon-text-primary">Admission Requirements</h2>
+      <h2 class="fw-bold acon-text-primary">Admission Requirements</h2>
       <p class="lead mb-5 text-secondary">
         Ready to join ALECONS? Here are the requirements for admission into our
         nursing programs.
       </p>
 
-      <div class="row">
-        <div class="col-md-6"></div>
+      <div class="row g-4 d-flex align-items-center">
+        <div class="col-md-6 text-start">
+          <h4 class="acon-text-primary fw-bold">General Requirements</h4>
+          <ul class="list-unstyled fw-light fs-5 text-secondary">
+            <li>
+              <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
+              Senior Secondary School Certificate (SSCE) with minimum 5 credits
+              including English, Mathematics, Biology, Chemistry, and Physics
+            </li>
+            <li>
+              <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
+              Minimum age of 17 years at the time of admission
+            </li>
+            <li>
+              <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
+              Medical fitness certificate from a recognized medical practitioner
+            </li>
+            <li>
+              <i class="bi bi-check2-circle acon-text-secondary me-2"></i> Valid
+              entrance examination score (JAMB UTME or ACON entrance exam)
+            </li>
+            <li>
+              <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
+              Character reference from a recognized religious leader or
+              community leader
+            </li>
+          </ul>
+          <button class="btn btn-acon-primary btn-lg mt-3">
+            Start Application
+          </button>
+        </div>
+
         <div class="col-md-6">
-            <img src="../assets/img/nurse4.png" alt="">
+          <img
+            src="../assets/img/nurse4.png"
+            class="img-fluid rounded-4"
+            style="height: 600px; width: 90%; object-fit: cover"
+            alt=""
+          />
+        </div>
+      </div>
+    </div>
+
+    <div class="acon-bg-light p-5 text-center">
+      <h2 class="fw-bold acon-text-primary">Clinical Training Sites</h2>
+      <p class="lead mb-5 text-secondary">
+        Our students gain hands-on experience at leading healthcare facilities
+        across Ekiti State.
+      </p>
+      <div class="row g-4 text-start">
+        <div class="col-md-6">
+          <div class="card border-0 shadow p-2">
+            <div class="card-body">
+              <h5 class="acon-text-primary">
+                <i class="bi bi-hospital me-2 fs-3"></i> Ekiti State University
+                Teaching Hospital
+              </h5>
+              <h6 class="acon-text-secondary">Ado-Ekiti</h6>
+              <p class="fw-light m-0">
+                General Medicine, Surgery, Pediatrics, Obstetrics & Gynecology
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="card border-0 shadow p-2">
+            <div class="card-body">
+              <h5 class="acon-text-primary">
+                <i class="bi bi-hospital me-2 fs-3"></i> Federal Medical Centre
+              </h5>
+              <h6 class="acon-text-secondary">Ido-Ekiti</h6>
+              <p class="fw-light m-0">
+                Internal Medicine, Critical Care, Emergency Medicine
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="card border-0 shadow p-2">
+            <div class="card-body">
+              <h5 class="acon-text-primary">
+                <i class="bi bi-hospital me-2 fs-3"></i> Omuo General Hospital
+              </h5>
+              <h6 class="acon-text-secondary">Omuo-Oke</h6>
+              <p class="fw-light m-0">
+                Community Health, Primary Care, Maternal Health
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="card border-0 shadow p-2">
+            <div class="card-body">
+              <h5 class="acon-text-primary">
+                <i class="bi bi-hospital me-2 fs-3"></i>Ijero Local Government
+                Health Centers
+              </h5>
+              <h6 class="acon-text-secondary">Ijero</h6>
+              <p class="fw-light m-0">
+                Public Health, Immunization, Family Planning
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-5 text-center">
+      <h2 class="fw-bold acon-text-primary">Learning Facilities</h2>
+      <p class="lead mb-5 text-secondary">
+        Modern facilities and equipment that provide an optimal learning
+        environment for our students.
+      </p>
+
+      <div class="row g-4 text-start">
+        <div class="col-md-3">
+          <div class="card border-0 shadow p-0 h-100">
+            <img
+              src="../assets/img/program-img-1.png"
+              class="card-img-top"
+              style="height: 200px; object-fit: cover"
+            />
+            <div class="card-body">
+              <h5 class="card-title acon-text-primary">
+                Simulation Laboratory
+              </h5>
+              <p class="card-text fw-light">
+                State-of-the-art simulation equipment for hands-on clinical
+                training
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3">
+          <div class="card border-0 shadow p-0 h-100">
+            <img
+              src="../assets/img/program-img-1.png"
+              class="card-img-top"
+              style="height: 200px; object-fit: cover"
+            />
+            <div class="card-body">
+              <h5 class="card-title acon-text-primary">Skills Laboratory</h5>
+              <p class="card-text fw-light">
+                Comprehensive skills training facility with modern nursing
+                equipment
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3">
+          <div class="card border-0 shadow p-0 h-100">
+            <img
+              src="../assets/img/program-img-1.png"
+              class="card-img-top"
+              style="height: 200px; object-fit: cover"
+            />
+            <div class="card-body">
+              <h5 class="card-title acon-text-primary">
+                Library & Resource Center
+              </h5>
+              <p class="card-text fw-light">
+                Extensive collection of nursing textbooks, journals, and digital
+                resources
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3">
+          <div class="card border-0 shadow p-0 h-100">
+            <img
+              src="../assets/img/program-img-1.png"
+              class="card-img-top"
+              style="height: 200px; object-fit: cover"
+            />
+            <div class="card-body">
+              <h5 class="card-title acon-text-primary">Computer Laboratory</h5>
+              <p class="card-text fw-light">
+                Modern computer lab with internet access for research and
+                learning
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="acon-bg-light mx-md-5 my-5 px-5 py-4 text-center rounded-4">
+        <h4 class="fw-bold acon-text-primary">
+          Ready to Start Your Nursing Career?
+        </h4>
+        <p class="lead mb-5 text-secondary">
+          Our admissions team is here to help you choose the right program and
+          guide you through the application process. Take the first step towards
+          becoming a healthcare professional.
+        </p>
+        <div class="d-grid d-md-flex justify-content-center gap-3 mx-auto">
+          <button class="btn btn-acon-primary">Apply Now</button>
+          <button class="btn btn-outline-acon-primary">
+            Download Brochure
+          </button>
         </div>
       </div>
     </div>

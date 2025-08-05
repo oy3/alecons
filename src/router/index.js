@@ -3,6 +3,7 @@ import Home from "../views/Home.vue";
 import About from "../views/About.vue";
 import Programs from "../views/Programs.vue";
 import Contact from "../views/Contact.vue";
+import Admissions from "../views/Admissions.vue";
 
 const routes = [
     {
@@ -25,6 +26,11 @@ const routes = [
         name: "Contact",
         component: Contact,
     },
+    {
+        path: "/admissions",
+        name: "Admissions",
+        component: Admissions,
+    }
 ];
 
 const router = createRouter({

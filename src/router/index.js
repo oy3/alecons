@@ -4,6 +4,7 @@ import About from "../views/About.vue";
 import Programs from "../views/Programs.vue";
 import Contact from "../views/Contact.vue";
 import Admissions from "../views/Admissions.vue";
+import Faculty from "../views/Faculty.vue";
 
 const routes = [
     {
@@ -22,15 +23,20 @@ const routes = [
         component: Programs,
     },
     {
+        path: "/admissions",
+        name: "Admissions",
+        component: Admissions,
+    },
+    {
+        path: "/faculty",
+        name: "Faculty",
+        component: Faculty,
+    },
+    {
         path: "/contact",
         name: "Contact",
         component: Contact,
     },
-    {
-        path: "/admissions",
-        name: "Admissions",
-        component: Admissions,
-    }
 ];
 
 const router = createRouter({

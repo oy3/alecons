@@ -50,7 +50,9 @@ export default {
             </router-link>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#">Faculty</a>
+            <router-link to="/faculty" class="nav-link" :class="{ 'active acon-active': $route.name === 'Faculty' }">
+              Faculty
+            </router-link>
           </li>
           <li class="nav-item">
             <router-link to="/admissions" class="nav-link" :class="{ 'active acon-active': $route.name === 'Admissions' }">

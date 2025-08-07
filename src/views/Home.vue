@@ -19,12 +19,12 @@ export default {
         of Nursing Sciences
       </p>
 
-      <div class="row g-4">
-        <div class="col-md-6 px-md-3">
+      <div class="row g-4 align-items-stretch">
+        <div class="col-md-6 px-md-3 d-flex">
           <iframe
-            class="w-100"
-            height="315"
-            src="https://www.youtube.com/embed/sZqgjguwYog?si=t_L6pugV6AbPMi9Q&amp;controls=0"
+            class="flex-fill"
+            style="min-height: 100%"
+            src="https://www.youtube.com/embed/sZqgjguwYog?si=t_L6pugV6AbPMi9Q&controls=0"
             title="YouTube video player"
             frameborder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -33,11 +33,11 @@ export default {
           ></iframe>
         </div>
 
-        <div class="col-md-6 px-md-5">
-          <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body px-0 px-md-0">
+        <div class="col-md-6 px-md-5 d-flex flex-column">
+          <div class="card text-start border-0 py-2 shadow mb-3">
+            <div class="card-body p-0">
               <div class="d-flex">
-                <div>
+                <div class="my-auto">
                   <div
                     class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
                     style="width: 70px; height: 70px"
@@ -50,19 +50,26 @@ export default {
                   <h5 class="card-title acon-text-primary fw-bold mb-0">
                     About ACONS
                   </h5>
-                  <p class="card-text text-secondary">
+                  <p class="card-text text-secondary mb-0">
                     Learn about our history, mission, and commitment to
                     excellence
                   </p>
+                  <a
+                    class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
+                    href="#"
+                  >
+                    <small>Learn More</small>
+                    <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
+                  </a>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body px-0 px-md-0">
+          <div class="card text-start border-0 py-2 shadow mb-3">
+            <div class="card-body p-0">
               <div class="d-flex">
-                <div>
+                <div class="my-auto">
                   <div
                     class="d-inline-flex justify-content-center align-items-center acon-bg-secondary rounded-3"
                     style="width: 70px; height: 70px"
@@ -74,18 +81,25 @@ export default {
                   <h5 class="card-title acon-text-secondary fw-bold mb-0">
                     Programs
                   </h5>
-                  <p class="card-text text-secondary">
+                  <p class="card-text text-secondary mb-0">
                     Explore our comprehensive nursing education programs
                   </p>
+                  <a
+                    class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
+                    href="#"
+                  >
+                    <small>Learn More</small>
+                    <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
+                  </a>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body px-0 px-md-0">
+          <div class="card text-start border-0 shadow py-2 mb-3">
+            <div class="card-body p-0">
               <div class="d-flex">
-                <div>
+                <div class="my-auto">
                   <div
                     class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
                     style="width: 70px; height: 70px"
@@ -97,18 +111,25 @@ export default {
                   <h5 class="card-title acon-text-primary fw-bold mb-0">
                     Faculty
                   </h5>
-                  <p class="card-text text-secondary">
+                  <p class="card-text text-secondary mb-0">
                     Meet our experienced and dedicated faculty members
                   </p>
+                  <a
+                    class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
+                    href="#"
+                  >
+                    <small>Learn More</small>
+                    <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
+                  </a>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body px-0 px-md-0">
+          <div class="card text-start border-0 shadow py-2 mb-3">
+            <div class="card-body p-0">
               <div class="d-flex">
-                <div>
+                <div class="my-auto">
                   <div
                     class="d-inline-flex justify-content-center align-items-center acon-bg-secondary rounded-3"
                     style="width: 70px; height: 70px"
@@ -120,18 +141,25 @@ export default {
                   <h5 class="card-title acon-text-secondary fw-bold mb-0">
                     Admissions
                   </h5>
-                  <p class="card-text text-secondary">
+                  <p class="card-text text-secondary mb-0">
                     Start your application process and join our community
                   </p>
+                  <a
+                    class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
+                    href="#"
+                  >
+                    <small>Learn More</small>
+                    <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
+                  </a>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="card text-start border-0 shadow py-1 mb-3">
-            <div class="card-body px-0 px-md-0">
+          <div class="card text-start border-0 shadow py-2">
+            <div class="card-body p-0">
               <div class="d-flex">
-                <div>
+                <div class="my-auto">
                   <div
                     class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-3"
                     style="width: 70px; height: 70px"
@@ -143,9 +171,16 @@ export default {
                   <h5 class="card-title acon-text-primary fw-bold mb-0">
                     Contact
                   </h5>
-                  <p class="card-text text-secondary">
+                  <p class="card-text text-secondary mb-0">
                     Get in touch with us for more information
                   </p>
+                  <a
+                    class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
+                    href="#"
+                  >
+                    <small>Learn More</small>
+                    <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
+                  </a>
                 </div>
               </div>
             </div>

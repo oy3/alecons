@@ -264,7 +264,7 @@ export default {
 
       <div class="row row-cols-1 row-cols-md-3 g-4">
         <div class="col">
-          <div class="card border-0 shadow h-100">
+          <div class="card border-0 shadow h-100 p-3">
             <img
               src="/src/assets/img/nurse1.png"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
@@ -283,7 +283,7 @@ export default {
           </div>
         </div>
         <div class="col">
-          <div class="card border-0 shadow h-100">
+          <div class="card border-0 shadow h-100 p-3">
             <img
               src="/src/assets/img/nurse2.jpg"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
@@ -300,7 +300,7 @@ export default {
           </div>
         </div>
         <div class="col">
-          <div class="card border-0 shadow h-100">
+          <div class="card border-0 shadow h-100 p-3">
             <img
               src="/src/assets/img/nurse3.jpg"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
@@ -319,16 +319,15 @@ export default {
       </div>
     </div>
 
-    <div class="container-fluid acon-bg-secondary p-5 text-center">
-      <h2 class="fw-bold">Educate. Inspire. Grow. Join Our Faculty</h2>
+    <div class="acon-bg-dark p-5 text-center">
+      <h2 class="fw-bold">Start Your Journey at ALECONS Today!</h2>
       <p class="fs-5 fw-light mx-0 mx-md-5 mb-4" style="color: #fff3f0">
-        At ALECONS, we don’t just teach — we inspire. We're seeking passionate
-        educators and healthcare professionals to help cultivate compassionate,
-        skilled nurses. Be part of a forward-thinking institution committed to
-        academic excellence and community impact.
+        Apply Now to Alebiosu College of Nursing Sciences – where excellence in
+        healthcare education meets compassion. Join a new generation of nurses
+        equipped to make a difference in hospitals, communities, and the world.
       </p>
-      <button class="btn btn-acon-dark btn-lg px-5" type="button">
-        Join the Team
+      <button class="btn btn-outline-light btn-lg px-5" type="button">
+        Apply Now
       </button>
     </div>
   </div>

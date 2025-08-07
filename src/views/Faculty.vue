@@ -550,14 +550,33 @@ export default {
           <li class="page-item disabled">
             <a class="page-link">Previous</a>
           </li>
-          <li class="page-item"><a class="page-link acon-link acon-text-primary" href="#">1</a></li>
-          <li class="page-item"><a class="page-link acon-link acon-text-primary" href="#">2</a></li>
-          <li class="page-item"><a class="page-link acon-link acon-text-primary" href="#">3</a></li>
+          <li class="page-item">
+            <a class="page-link acon-link acon-text-primary" href="#">1</a>
+          </li>
+          <li class="page-item">
+            <a class="page-link acon-link acon-text-primary" href="#">2</a>
+          </li>
+          <li class="page-item">
+            <a class="page-link acon-link acon-text-primary" href="#">3</a>
+          </li>
           <li class="page-item">
             <a class="page-link acon-link acon-text-primary" href="#">Next</a>
           </li>
         </ul>
       </nav>
+    </div>
+
+    <div class="acon-bg-secondary p-5 text-center">
+      <h2 class="fw-bold">Educate. Inspire. Grow. Join Our Faculty</h2>
+      <p class="fs-5 fw-light mx-0 mx-md-5 mb-4" style="color: #fff3f0">
+        At ALECONS, we don’t just teach — we inspire. We're seeking passionate
+        educators and healthcare professionals to help cultivate compassionate,
+        skilled nurses. Be part of a forward-thinking institution committed to
+        academic excellence and community impact.
+      </p>
+      <button class="btn btn-acon-dark btn-lg px-5" type="button">
+        Join the Team
+      </button>
     </div>
   </div>
 </template>

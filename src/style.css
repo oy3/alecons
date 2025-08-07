@@ -98,6 +98,11 @@ button:focus-visible {
   color: #fff !important;
 }
 
+.acon-bg-dark {
+  background-color: #264653 !important;
+  color: #fff !important;
+}
+
 .btn-acon-primary {
   --bs-btn-font-weight: 400;
   --bs-btn-color: #fff !important;
@@ -206,11 +211,11 @@ button:focus-visible {
 }
 
 .acon-link {
-    text-decoration: none !important;
+  text-decoration: none !important;
 }
 
 .acon-link:hover {
-    color: #e07a5f !important;
+  color: #e07a5f !important;
 }
 
 .acon-bullet li::marker {

@@ -27,7 +27,7 @@ export default {
       </div>
 
       <div class="d-grid gap-2 d-md-block">
-        <button class="btn btn-acon-secondary btn-lg me-0 me-md-3 px-4">
+        <button class="btn btn-acon-secondary btn-lg icon-link icon-link-hover me-0 me-md-3 px-4">
           Start Your Journey <i class="bi bi-arrow-right-short h3"></i>
         </button>
         <button

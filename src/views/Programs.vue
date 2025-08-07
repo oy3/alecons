@@ -180,7 +180,7 @@ export default {
             </li>
             <li>
               <i class="bi bi-check2-circle acon-text-secondary me-2"></i> Valid
-              entrance examination score (JAMB UTME or ACON entrance exam)
+              entrance examination score (JAMB UTME or ALECONS entrance exam)
             </li>
             <li>
               <i class="bi bi-check2-circle acon-text-secondary me-2"></i>

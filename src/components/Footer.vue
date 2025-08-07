@@ -38,7 +38,7 @@ export default {
                         </li>
                         <li>
                             <i class="bi bi-envelope acon-text-secondary fs-5 me-2"></i>
-                            <span>admissions@acon.edu.ng</span>
+                            <span>admissions@alecons.edu.ng</span>
                         </li>
                     </ul>
 

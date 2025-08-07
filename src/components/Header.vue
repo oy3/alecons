@@ -13,7 +13,7 @@ export default {
           <i class="bi bi-telephone me-1"></i> +234 708 460 1610
         </span>
         <span class="navbar-text text-white">
-          <i class="bi bi-envelope-at me-1"></i> admissions@acon.edu.ng
+          <i class="bi bi-envelope-at me-1"></i> admissions@alecons.edu.ng
         </span>
       </div>
       <span class="navbar-text text-white">Omuo Oke, Ekiti State, Nigeria</span>
@@ -24,7 +24,7 @@ export default {
         <div class="text-start text-uppercase d-flex flex-column">
           <span class="fw-bold acon-text-primary">ALEBIOSU COLLEGE</span>
           <span class="fw-light text-secondary fs-6" style="letter-spacing: 1.5px">
-            OF NURSING Sciences
+            OF NURSING SCIENCES
           </span>
         </div>
       </a>

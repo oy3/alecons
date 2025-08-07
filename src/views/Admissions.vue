@@ -12,7 +12,7 @@ export default {
       <h1 class="text-uppercase fw-bold">Admissions</h1>
       <p class="fs-4 mx-0 mx-md-5 fw-light mb-4">
         Join the next generation of healthcare professionals. Start your journey
-        towards a rewarding career in nursing at ACON.
+        towards a rewarding career in nursing at ALECONS.
       </p>
       <div class="d-grid d-md-flex justify-content-center gap-3 mx-auto">
         <button
@@ -203,7 +203,7 @@ export default {
               </div>
 
               <p class="mb-3 text-secondary">
-                Take the ACON entrance examination or use JAMB UTME score
+                Take the ALECONS entrance examination or use JAMB UTME score
               </p>
               <ul class="list-unstyled text-secondary fw-light">
                 <li>
@@ -212,7 +212,7 @@ export default {
                 </li>
                 <li>
                   <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  ACON entrance examination
+                  ALECONS entrance examination
                 </li>
                 <li>
                   <i class="bi bi-check2-circle acon-text-secondary me-2"></i>

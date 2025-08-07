@@ -13,7 +13,7 @@ export default {
     <Hero />
 
     <div class="text-center m-5">
-      <h2 class="acon-text-primary fw-bold">Explore ACONS</h2>
+      <h2 class="acon-text-primary fw-bold">Explore ALECONS</h2>
       <p class="lead">
         Discover everything you need to know about studying at Alebiosu College
         of Nursing Sciences

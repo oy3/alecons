@@ -20,7 +20,7 @@ export default {
         <div class="col-md-7">
           <p class="fs-4 my-4">
             Empowering the next generation of healthcare professionals in Ekiti
-            State, Nigeria. Join ACON and transform lives through compassionate
+            State, Nigeria. Join ALECONS and transform lives through compassionate
             care and clinical excellence.
           </p>
         </div>

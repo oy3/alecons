@@ -2,7 +2,7 @@
 
 export default {
   metaInfo: {
-  title: 'Contact Alecons College of Nursing Sciences',
+  title: 'Contact - Alecons College of Nursing Sciences',
   meta: [
     {
       name: 'description',

@@ -1,5 +1,5 @@
 import { createApp } from "vue";
-import VueMeta from "vue-meta";
+import { createMetaManager } from "vue-meta";
 import "./style.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap";
@@ -9,7 +9,5 @@ import App from "./App.vue";
 
 createApp(App)
   .use(router)
-  .use(VueMeta, {
-    refreshOnceOnNavigation: true,
-  })
+  .use(createMetaManager())
   .mount("#app");

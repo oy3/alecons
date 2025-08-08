@@ -1,6 +1,20 @@
 <script lang="js">
 
 export default {
+  metaInfo: {
+  title: 'Our Faculty - Alecons College of Nursing Sciences',
+  meta: [
+    {
+      name: 'description',
+      content: 'Meet our experienced and dedicated faculty members who are committed to providing high-quality nursing education and mentorship.'
+    },
+    {
+      name: 'keywords',
+      content: 'nursing faculty Nigeria, Alecons College of Nursing Sciences teachers, nursing lecturers, healthcare educators, alecons'
+    }
+  ]
+},
+
   name: "Faculty",
   components: {} ,
 };

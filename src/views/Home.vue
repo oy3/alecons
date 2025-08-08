@@ -3,6 +3,19 @@ import Hero from '../components/Hero.vue';
 import CTA from '../components/CTA.vue';
 
 export default {
+  metaInfo: {
+    title: 'Alecons College of Nursing Sciences - Excellence in Nursing Education',
+    meta: [
+      {
+        name: 'description',
+        content: 'Alecons College of Nursing Sciences offers world-class nursing education in Ekiti State, Nigeria. Join us to build a rewarding career in healthcare.'
+      },
+      {
+        name: 'keywords',
+        content: 'nursing school in Nigeria, Alecons College of Nursing Sciences, nursing education, healthcare careers, nursing programs, alecons'
+      }
+    ]
+  },
   name: "Home",
   components: { Hero, CTA },
 };

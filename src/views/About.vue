@@ -1,6 +1,19 @@
 <script lang="js">
 
 export default {
+  metaInfo: {
+  title: 'About Alecons College of Nursing Sciences',
+  meta: [
+    {
+      name: 'description',
+      content: 'Learn about Alecons College of Nursing Sciences, our mission, vision, and commitment to producing skilled, compassionate healthcare professionals.'
+    },
+    {
+      name: 'keywords',
+      content: 'about Alecons College of Nursing Sciences, nursing school mission, nursing education Nigeria, healthcare training, alecons'
+    }
+  ]
+},
     name: "About",
     components: {},
 };

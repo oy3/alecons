@@ -1,6 +1,20 @@
 <script lang="js">
 
 export default {
+  metaInfo: {
+  title: 'Contact Alecons College of Nursing Sciences',
+  meta: [
+    {
+      name: 'description',
+      content: 'Get in touch with Alecons College of Nursing Sciences for admissions, program inquiries, and general information. We are here to help you start your journey in nursing.'
+    },
+    {
+      name: 'keywords',
+      content: 'contact Alecons College of Nursing Sciences, nursing school Nigeria contact, admissions help, nursing inquiries, alecons'
+    }
+  ]
+},
+
     name: "Contact",
     components: {},
 };

@@ -1,6 +1,19 @@
 <script lang="js">
 
 export default {
+  metaInfo: {
+    title: 'Admissions - Alecons College of Nursing Sciences',
+    meta: [
+      {
+        name: 'description',
+        content: 'Apply now to Alecons College of Nursing Sciences. Learn about our admissions process, requirements, and deadlines.'
+      },
+      {
+        name: 'keywords',
+        content: 'nursing school, admissions, Alecons College of Nursing Sciences, alecons'
+      }
+    ]
+  },
     name: "Admissions",
     components: {},
 };
@@ -419,14 +432,14 @@ export default {
       </p>
       <div class="d-grid gap-2 d-md-flex justify-content-md-center">
         <button class="btn btn-acon-secondary px-5" type="button">
-                  Learn About Payment Plans
+          Learn About Payment Plans
         </button>
         <button
           class="btn btn-outline-light px-5"
           style="--bs-btn-hover-color: #2d7d7d"
           type="button"
-        >    Contact Financial Services
-
+        >
+          Contact Financial Services
         </button>
       </div>
     </div>

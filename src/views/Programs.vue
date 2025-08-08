@@ -1,6 +1,20 @@
 <script lang="js">
 
 export default {
+  metaInfo: {
+  title: 'Nursing Programs - Alecons College of Nursing Sciences',
+  meta: [
+    {
+      name: 'description',
+      content: 'Explore our accredited nursing programs, from basic nursing to advanced diplomas. Develop the skills you need for a successful nursing career.'
+    },
+    {
+      name: 'keywords',
+      content: 'nursing programs Nigeria, Alecons College of Nursing Sciences courses, nursing diploma, nursing training Nigeria, alecons'
+    }
+  ]
+},
+
   name: "Programs",
   components: {},
 };

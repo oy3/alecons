@@ -20,62 +20,61 @@ export default {
         <div class="col-md-7">
           <p class="fs-4 my-4">
             Empowering the next generation of healthcare professionals in Ekiti
-            State, Nigeria. Join ALECONS and transform lives through compassionate
-            care and clinical excellence.
+            State, Nigeria. Join ALECONS and transform lives through
+            compassionate care and clinical excellence.
           </p>
         </div>
       </div>
 
       <div class="d-grid gap-2 d-md-block">
-        <button class="btn btn-acon-secondary btn-lg icon-link icon-link-hover me-0 me-md-3 px-4">
+        <button
+          class="btn btn-acon-secondary btn-lg icon-link icon-link-hover me-0 me-md-3 px-4"
+        >
           Start Your Journey <i class="bi bi-arrow-right-short h3"></i>
         </button>
-        <button
+        <router-link
+          to="/programs"
           class="btn btn-outline-light btn-lg px-4"
           style="--bs-btn-hover-color: #2d7d7d"
         >
           Explore Programs
-        </button>
+        </router-link>
       </div>
-
 
       <div class="col-md-9">
-      <div
-        class="stats-container mt-5 p-4 px-md-5 py-md-3 rounded-4 text-white d-flex flex-column flex-md-row justify-content-around align-items-center gap-4"
-      >
-        <div class="">
-          <div class="d-flex align-items-end justify-content-center">
-            <i class="bi bi-people h2 acon-text-secondary me-2"></i>
-            <h2 class="fw-bold mt-2">500+</h2>
+        <div
+          class="stats-container mt-5 p-4 px-md-5 py-md-3 rounded-4 text-white d-flex flex-column flex-md-row justify-content-around align-items-center gap-4"
+        >
+          <div class="">
+            <div class="d-flex align-items-end justify-content-center">
+              <i class="bi bi-people h2 acon-text-secondary me-2"></i>
+              <h2 class="fw-bold mt-2">500+</h2>
+            </div>
+
+            <p class="mb-0">Nursing Students</p>
           </div>
 
-          <p class="mb-0">Nursing Students</p>
-        </div>
-
-        <div class="">
-          <div class="d-flex align-items-end justify-content-center">
-            <i class="bi bi-award h2 acon-text-secondary me-2"></i>
-            <h2 class="fw-bold mt-2">95%</h2>
+          <div class="">
+            <div class="d-flex align-items-end justify-content-center">
+              <i class="bi bi-award h2 acon-text-secondary me-2"></i>
+              <h2 class="fw-bold mt-2">95%</h2>
+            </div>
+            <p class="mb-0">Graduate Success Rate</p>
           </div>
-          <p class="mb-0">Graduate Success Rate</p>
-        </div>
 
-        <div>
-          <div class="d-flex align-items-end justify-content-center">
-            <i class="bi bi-geo-alt h2 acon-text-secondary me-2"></i>
-            <h2 class="fw-bold mt-2">15+</h2>
+          <div>
+            <div class="d-flex align-items-end justify-content-center">
+              <i class="bi bi-geo-alt h2 acon-text-secondary me-2"></i>
+              <h2 class="fw-bold mt-2">15+</h2>
+            </div>
+            <p class="mb-0">Years of Excellence</p>
           </div>
-          <p class="mb-0">Years of Excellence</p>
         </div>
       </div>
-      </div>
-
-
 
       <div class="d-flex justify-content-center mt-5">
         <i class="bi bi-mouse fs-1"></i>
       </div>
-
     </div>
   </div>
 </template>

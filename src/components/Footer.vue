@@ -71,16 +71,16 @@ export default {
                     <h5 class="mb-4">Quick Links</h5>
                     <ul class="nav flex-column">
                         <li class="nav-item mb-2">
-                            <a href="#" class="nav-link p-0 fw-light">About ALECONS</a>
+                            <router-link to="/about" class="nav-link p-0 fw-light">About ALECONS</router-link>
                         </li>
                         <li class="nav-item mb-2">
-                            <a href="#" class="nav-link p-0 fw-light">Programs</a>
+                            <router-link to="/programs" class="nav-link p-0 fw-light">Programs</router-link>
                         </li>
                         <li class="nav-item mb-2">
-                            <a href="#" class="nav-link p-0 fw-light">Admissions</a>
+                            <router-link to="/admissions" class="nav-link p-0 fw-light">Admissions</router-link>
                         </li>
                         <li class="nav-item mb-2">
-                            <a href="#" class="nav-link p-0 fw-light">Faculty</a>
+                            <router-link to="/faculty" class="nav-link p-0 fw-light">Faculty</router-link>
                         </li>
                         <li class="nav-item mb-2">
                             <a href="#" class="nav-link p-0 text-body-secondary fw-light">Student Life</a>
@@ -94,22 +94,22 @@ export default {
                     <h5 class="mb-4">Our Programs</h5>
                     <ul class="nav flex-column">
                         <li class="nav-item mb-2">
-                            <a href="#" class="nav-link p-0 fw-light">Basic Nursing</a>
+                            <router-link to="/programs" class="nav-link p-0 fw-light">Basic Nursing</router-link>
                         </li>
                         <li class="nav-item mb-2">
-                            <a href="#" class="nav-link p-0 fw-light">Post-Basic Nursing</a>
+                            <router-link to="/programs" class="nav-link p-0 fw-light">Post-Basic Nursing</router-link>
                         </li>
                         <li class="nav-item mb-2">
-                            <a href="#" class="nav-link p-0 fw-light">Midwifery Program</a>
+                            <router-link to="/programs" class="nav-link p-0 fw-light">Midwifery Program</router-link>
                         </li>
                         <li class="nav-item mb-2">
-                            <a href="#" class="nav-link p-0 fw-light">Continuing Education</a>
+                            <router-link to="/programs" class="nav-link p-0 fw-light">Continuing Education</router-link>
                         </li>
                         <li class="nav-item mb-2">
-                            <a href="#" class="nav-link p-0 fw-light">Clinical Rotations</a>
+                            <router-link to="/programs" class="nav-link p-0 fw-light">Clinical Rotations</router-link>
                         </li>
                         <li class="nav-item mb-2">
-                            <a href="#" class="nav-link p-0 fw-light">Simulation Labs</a>
+                            <router-link to="/programs" class="nav-link p-0 fw-light">Simulation Labs</router-link>
                         </li>
                     </ul>
                 </div>

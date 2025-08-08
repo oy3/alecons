@@ -67,13 +67,13 @@ export default {
                     Learn about our history, mission, and commitment to
                     excellence
                   </p>
-                  <a
+                  <router-link
+                    to="/about"
                     class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
-                    href="#"
                   >
                     <small>Learn More</small>
                     <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-                  </a>
+                  </router-link>
                 </div>
               </div>
             </div>
@@ -97,13 +97,13 @@ export default {
                   <p class="card-text text-secondary mb-0">
                     Explore our comprehensive nursing education programs
                   </p>
-                  <a
+                  <router-link
+                    to="/programs"
                     class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
-                    href="#"
                   >
                     <small>Learn More</small>
                     <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-                  </a>
+                  </router-link>
                 </div>
               </div>
             </div>
@@ -127,13 +127,13 @@ export default {
                   <p class="card-text text-secondary mb-0">
                     Meet our experienced and dedicated faculty members
                   </p>
-                  <a
+                  <router-link
+                    to="/faculty"
                     class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
-                    href="#"
                   >
                     <small>Learn More</small>
                     <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-                  </a>
+                  </router-link>
                 </div>
               </div>
             </div>
@@ -157,13 +157,13 @@ export default {
                   <p class="card-text text-secondary mb-0">
                     Start your application process and join our community
                   </p>
-                  <a
+                  <router-link
+                    to="/admissions"
                     class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
-                    href="#"
                   >
                     <small>Learn More</small>
                     <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-                  </a>
+                  </router-link>
                 </div>
               </div>
             </div>
@@ -187,13 +187,13 @@ export default {
                   <p class="card-text text-secondary mb-0">
                     Get in touch with us for more information
                   </p>
-                  <a
+                  <router-link
+                    to="/contact"
                     class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
-                    href="#"
                   >
                     <small>Learn More</small>
                     <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-                  </a>
+                  </router-link>
                 </div>
               </div>
             </div>
@@ -274,13 +274,13 @@ export default {
                 skills and knowledge.
               </p>
 
-              <a
+              <router-link
+                to="/programs"
                 class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
-                href="#"
               >
                 <span>Learn More</span>
                 <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-              </a>
+              </router-link>
             </div>
           </div>
         </div>
@@ -301,13 +301,13 @@ export default {
                 18-month advanced program for practicing nurses seeking
                 specialization.
               </p>
-              <a
+              <router-link
+                to="/programs"
                 class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
-                href="#"
               >
                 <span>Learn More</span>
                 <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-              </a>
+              </router-link>
             </div>
           </div>
         </div>
@@ -327,13 +327,13 @@ export default {
               <p class="text-secondary">
                 2-year specialized program focusing on maternal and infant care.
               </p>
-              <a
+              <router-link
+                to="/programs"
                 class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
-                href="#"
               >
                 <span>Learn More</span>
                 <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-              </a>
+              </router-link>
             </div>
           </div>
         </div>

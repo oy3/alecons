@@ -123,7 +123,7 @@ export default {
 
     <div class="p-5 acon-bg-primary text-center">
       <h2 class="fw-bold my-5">Why Choose ALECONS Programs?</h2>
-      
+
       <div class="row g-4">
         <div class="col-md-4">
           <i class="bi bi-mortarboard display-4 acon-text-secondary"></i>
@@ -162,7 +162,7 @@ export default {
       </p>
 
       <div class="row g-4 d-flex align-items-center">
-        <div class="col-md-6 text-start">
+        <div class="col-md-6 text-start order-2 order-md-1">
           <h4 class="acon-text-primary fw-bold">General Requirements</h4>
           <ul class="list-unstyled fw-light fs-5 text-secondary">
             <li>
@@ -193,11 +193,10 @@ export default {
           </button>
         </div>
 
-        <div class="col-md-6">
+        <div class="col-md-6 order-1 order-md-2">
           <img
             src="../assets/img/nurse4.png"
-            class="img-fluid rounded-4"
-            style="height: 600px; width: 90%; object-fit: cover"
+            class="img-fluid rounded-4 custom-img"
             alt=""
           />
         </div>
@@ -372,4 +371,18 @@ export default {
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.custom-img {
+  height: 80vh;
+  width: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+@media (max-width: 767.98px) {
+  .custom-img {
+    height: 50vh;
+    object-fit: cover;
+  }
+}
+</style>

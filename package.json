@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node generate-sitemap.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "clean": "rm -rf node_modules yarn.lock package-lock.json"
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",

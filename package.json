@@ -1,7 +1,11 @@
 {
-  "name": "vue",
+  "name": "alecons",
   "private": true,
-  "version": "0.0.0",
+    "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

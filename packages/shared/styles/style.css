@@ -1,0 +1,227 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: white;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  min-width: 100%;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+
+button:hover {
+  border-color: #646cff;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+.card {
+  padding: 2em;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+
+  a:hover {
+    color: #747bff;
+  }
+
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+/* Custom CSS */
+
+.acon-text-primary {
+  color: #2d7d7d !important;
+}
+
+.acon-text-dark {
+  color: #264653 !important;
+}
+
+.acon-text-secondary {
+  color: #e07a5f !important;
+}
+
+.acon-bg-primary {
+  background-color: #2d7d7d !important;
+  color: #fff !important;
+}
+
+.acon-bg-light {
+  background-color: rgb(240 248 248);
+}
+
+.acon-bg-secondary {
+  background-color: #e07a5f !important;
+  color: #fff !important;
+}
+
+.acon-bg-dark {
+  background-color: #264653 !important;
+  color: #fff !important;
+}
+
+.btn-acon-primary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: #2d7d7d !important;
+  --bs-btn-border-color: #2d7d7d !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #256868;
+  --bs-btn-hover-border-color: #256868 !important;
+  --bs-btn-focus-shadow-rgb: 45, 125, 125;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #1e5555;
+  --bs-btn-active-border-color: #1e5555;
+}
+
+.btn-acon-secondary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: #e07a5f !important;
+  --bs-btn-border-color: #e07a5f !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #c56a53;
+  --bs-btn-hover-border-color: #c56a53 !important;
+  --bs-btn-focus-shadow-rgb: 224, 122, 95;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #a85a45;
+  --bs-btn-active-border-color: #a85a45;
+}
+
+.btn-outline-acon-primary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #2d7d7d !important;
+  --bs-btn-border-color: #2d7d7d !important;
+  --bs-btn-hover-color: #fff !important;
+  --bs-btn-hover-bg: #2d7d7d;
+  --bs-btn-hover-border-color: #2d7d7d !important;
+  --bs-btn-focus-shadow-rgb: 45, 125, 125;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #1e5555;
+  --bs-btn-active-border-color: #1e5555;
+}
+
+.btn-outline-acon-secondary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #e07a5f !important;
+  --bs-btn-border-color: #e07a5f !important;
+  --bs-btn-hover-color: #fff !important;
+  --bs-btn-hover-bg: #e07a5f;
+  --bs-btn-hover-border-color: #e07a5f !important;
+  --bs-btn-focus-shadow-rgb: 224, 122, 95;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #a85a45;
+  --bs-btn-active-border-color: #a85a45;
+}
+
+.btn-acon-dark {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: #264653 !important;
+  --bs-btn-border-color: #264653 !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #1e3a47;
+  --bs-btn-hover-border-color: #1e3a47 !important;
+  --bs-btn-focus-shadow-rgb: 45, 125, 125;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #1e5555;
+  --bs-btn-active-border-color: #1e5555;
+}
+
+
+
+
+
+.acon-btn-primary:focus,
+.acon-btn-primary:active {
+  box-shadow: 0 0 0 0.2rem rgb(45, 125, 125, 0.5) !important;
+  outline: none;
+}
+
+.acon-btn-secondary:focus,
+.acon-btn-secondary:active {
+  box-shadow: 0 0 0 0.2rem rgb(224, 122, 95, 0.5);
+  outline: none;
+}
+
+.acon-btn-outline-primary:focus,
+.acon-btn-outline-primary:active {
+  box-shadow: 0 0 0 0.2rem rgb(45, 125, 125, 0.5);
+  outline: none;
+}
+
+.acon-btn-outline-secondary:focus,
+.acon-btn-outline-secondary:active {
+  box-shadow: 0 0 0 0.2rem rgb(224, 122, 95, 0.5);
+  outline: none;
+}
+
+.acon-border-primary {
+  border-color: #2d7d7d !important;
+}
+
+/* Focused input style */
+.form-control:focus {
+  border-color: #0c6980 !important;
+  box-shadow: 0 0 0 0.2rem rgba(12, 105, 128, 0.25) !important;
+  outline: none !important;
+}
+
+.acon-link {
+  text-decoration: none !important;
+}
+
+.acon-link:hover {
+  color: #e07a5f !important;
+}
+
+.acon-bullet li::marker {
+  color: #e07a5f !important;
+}

@@ -19,9 +19,9 @@ const router = createRouter({
       component: () => import('../views/registration/Registration.vue')
     },
     {
-      path: '/application',
-      name: 'Application',
-      component: () => import('../views/application_form/Index.vue')
+      path: '/application-form',
+      name: 'ApplicationForm',
+      component: () => import('../views/application_form/application_form.vue')
     },
     {
       path: '/payment',

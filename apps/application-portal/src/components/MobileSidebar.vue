@@ -3,15 +3,20 @@ import BrandLogo from "./BrandLogo.vue";
 
 export default {
   name: "MobileSidebar",
-  components: { BrandLogo }
+  components: { BrandLogo },
 };
 </script>
 
-
 <template>
-  <div class="offcanvas offcanvas-start acon-bg-dark text-white" id="mobileSidebar">
+  <div
+    class="offcanvas offcanvas-start acon-bg-dark text-white"
+    id="mobileSidebar"
+  >
     <div class="offcanvas-header">
-      <BrandLogo />
+      <!-- <BrandLogo /> -->
+      <!-- <div class="text-center my-4"> -->
+      <img src="@shared/assets/logo.png" alt="Logo" width="70" class="" />
+      <!-- </div> -->
       <button
         type="button"
         class="btn-close btn-close-white"
@@ -20,18 +25,18 @@ export default {
     </div>
     <div class="offcanvas-body">
       <nav class="nav flex-column">
-        <a href="#" class="nav-link text-white py-3">
-          <i class="bi bi-house me-2"></i> Home
+        <router-link to="/dashboard" class="nav-link text-white py-4 acon-link">
+          <i class="bi bi-house h5 me-2"></i> Home
+        </router-link>
+        <router-link to="/payments" class="nav-link text-white py-4 acon-link">
+          <i class="bi bi-credit-card h5 me-2"></i> Payments
+        </router-link>
+        <a href="#" class="nav-link text-white py-4 acon-link">
+          <i class="bi bi-gear h5 me-2"></i> Settings
         </a>
-        <a href="#" class="nav-link text-white py-3">
-          <i class="bi bi-credit-card me-2"></i> Payments
-        </a>
-        <a href="#" class="nav-link text-white py-3">
-          <i class="bi bi-gear me-2"></i> Settings
-        </a>
-        <a href="#" class="nav-link text-white mt-auto py-3">
-          <i class="bi bi-box-arrow-right me-2"></i> Logout
-        </a>
+        <router-link to="/" class="nav-link text-white mt-auto py-4 acon-link">
+          <i class="bi bi-box-arrow-right h5 me-2"></i> Logout
+        </router-link>
       </nav>
     </div>
   </div>

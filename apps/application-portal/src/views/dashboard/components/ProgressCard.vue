@@ -53,9 +53,9 @@ export default {
         </div>
       </div>
 
-      <button class="btn btn-acon-secondary btn-sm rounded-4 px-4 mt-3">
+      <router-link to="/application-form" class="btn btn-acon-secondary btn-sm rounded-4 px-4 mt-3">
         Resume
-      </button>
+      </router-link >
     </div>
   </div>
 </template>

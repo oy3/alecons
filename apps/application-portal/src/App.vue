@@ -27,8 +27,8 @@ export default {
     <main class="flex-grow-1 bg-white d-flex flex-column min-vh-100">
       <!-- Navbar -->
       <Navbar v-if="showLayout" />
-      <div class="flex-grow-1">
-        <router-view></router-view>
+      <div class="flex-grow-1  overflow-auto">
+        <router-view class=""></router-view>
       </div>
     </main>
 

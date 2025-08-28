@@ -207,6 +207,10 @@ button:focus-visible {
   border-color: #2d7d7d !important;
 }
 
+.acon-border-secondary {
+  border-color: #e07a5f !important;
+}
+
 /* Focused input style */
 .form-control:focus {
   border-color: #0c6980 !important;
@@ -224,4 +228,12 @@ button:focus-visible {
 
 .acon-bullet li::marker {
   color: #e07a5f !important;
+}
+
+.acon-secondary-link {
+  text-decoration: none !important;
+}
+
+.acon-primary-link:hover {
+  color: #2d7d7d !important;
 }

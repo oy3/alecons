@@ -6,7 +6,8 @@ export default {
   data() {
     return {
       appNumber: '',
-      password: ''
+      password: '',
+        email: ''
     };
   },
   methods: {
@@ -15,9 +16,20 @@ export default {
       alert(`Logging in with Application Number: ${this.appNumber}`);
       this.$router.push({ name: 'Dashboard' });
     },
-    onForgotPassword() {
-      // Handle forgot password logic here
-      alert('Forgot password clicked');
+     submitForgotPassword() {
+      if (!this.email) {
+        alert("Please enter your email address");
+        return;
+      }
+      // Example: Call API
+      console.log("Sending reset link to:", this.email);
+      alert(`Password reset link sent to ${this.email}`);
+
+      // Close modal programmatically
+      const modal = bootstrap.Modal.getInstance(
+        document.getElementById("forgotPasswordModal")
+      );
+      modal.hide();
     }
   },
   components: {BrandLogo},
@@ -71,7 +83,8 @@ export default {
           <a
             href="#"
             class="acon-link acon-text-primary text-opacity-75 text-decoration-none small"
-            @click.prevent="onForgotPassword"
+            data-bs-toggle="modal"
+            data-bs-target="#forgotPasswordModal"
           >
             Forgot password?
           </a>
@@ -85,6 +98,77 @@ export default {
           Login
         </button>
       </form>
+    </div>
+  </div>
+
+  <!-- Fullscreen Modal -->
+  <div
+    class="modal fade"
+    id="forgotPasswordModal"
+    tabindex="-1"
+    aria-labelledby="forgotPasswordLabel"
+    aria-hidden="true"
+  >
+    <div class="modal-dialog modal-fullscreen">
+      <div class="modal-content acon-bg-dark">
+        <div class="modal-header border-bottom-0">
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+            aria-label="Close"
+          ></button>
+        </div>
+        <div class="d-flex align-items-center justify-content-center h-100">
+          <div
+            class="border-0 p-4 rounded-4"
+            style="max-width: 500px; width: 100%"
+          >
+            <div class="card-body">
+              <div class="text-center mb-5">
+                <i
+                  class="bi bi-fingerprint h1 acon-bg-primary rounded p-2"
+                ></i>
+              </div>
+              <h4 class="fw-bold text-center mb-3">Forgot password?</h4>
+              <p class="text-center small mb-4">
+                Enter your email address to receive password reset instructions.
+              </p>
+
+              <!-- Email Input -->
+              <div class="mb-3">
+                <label for="email" class="form-label small fw-semibold"
+                  >Email Address</label
+                >
+                <input
+                  type="email"
+                  id="email"
+                  class="form-control"
+                  v-model="email"
+                  placeholder="Enter your email"
+                />
+              </div>
+
+              <button
+                class="btn btn-acon-primary w-100 mb-5"
+                @click="submitForgotPassword"
+              >
+                Reset password
+              </button>
+
+              <div class="text-center">
+                <a
+                  class="acon-text-secondary acon-primary-link"
+                  href="#"
+                  data-bs-dismiss="modal"
+                >
+                  <i class="bi bi-arrow-left"></i> Back to log in
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>

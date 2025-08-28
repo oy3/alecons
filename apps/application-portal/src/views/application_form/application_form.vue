@@ -881,7 +881,7 @@ export default {
             <h6 class="fw-semibold mb-3">Uploaded Documents</h6>
             <div class="row g-3">
               <div class="col-md-4">
-                <p class="small text-muted mb-1">Profile Picture</p>
+                <p class="small text-muted mb-1">Profile Picture: test.jpg</p>
                 <img
                   v-if="profilePreview"
                   :src="profilePreview"
@@ -898,7 +898,7 @@ export default {
                   class="small text-muted mb-1"
                 >
                   Sitting {{ index + 1 }} Document:
-                  {{ sitting.documentName || "Uploaded" }}
+                  {{ sitting.documentName || "test.pdf" }}
                 </p>
               </div>
               <div class="col-12">
@@ -909,7 +909,7 @@ export default {
                   class="small text-muted mb-1"
                 >
                   Reference Letter {{ index + 1 }}:
-                  {{ ref?.name || "Uploaded" }}
+                  {{ ref?.name || "test.pdf" }}
                 </p>
               </div>
             </div>

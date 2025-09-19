@@ -1,0 +1,67 @@
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Types } from 'mongoose';
+
+export type StudentPaymentDocument = StudentPayment & Document;
+
+export enum PaymentStatus {
+    PENDING = 'pending',
+    SUCCESSFUL = 'successful',
+    FAILED = 'failed',
+    CANCELLED = 'cancelled',
+}
+
+export enum PaymentChannel {
+    CARD = 'card',
+    BANK_TRANSFER = 'bank_transfer',
+    USSD = 'ussd',
+    QR = 'qr',
+    MOBILE_MONEY = 'mobile_money',
+}
+
+@Schema({ timestamps: true })
+export class StudentPayment {
+    @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+    userId: Types.ObjectId;
+
+    @Prop({ type: Types.ObjectId, ref: 'Application' })
+    applicationId?: Types.ObjectId;
+
+    @Prop({ type: Types.ObjectId, ref: 'Payment', required: true })
+    paymentId: Types.ObjectId;
+
+    @Prop({ required: true })
+    amount: number;
+
+    @Prop({ required: true, unique: true })
+    reference: string;
+
+    @Prop()
+    paidAt?: Date;
+
+    @Prop({ enum: PaymentChannel })
+    channel?: PaymentChannel;
+
+    @Prop()
+    fee?: number;
+
+    @Prop()
+    gatewayId?: string;
+
+    @Prop({ required: true, enum: PaymentStatus, default: PaymentStatus.PENDING })
+    status: PaymentStatus;
+
+    @Prop()
+    remarks?: string;
+
+    // Paystack specific fields
+    @Prop()
+    paystackReference?: string;
+
+    @Prop()
+    authorizationCode?: string;
+
+    @Prop()
+    accessCode?: string;
+}
+
+export const StudentPaymentSchema = SchemaFactory.createForClass(StudentPayment);

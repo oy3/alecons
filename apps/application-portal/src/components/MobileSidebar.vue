@@ -28,7 +28,7 @@ export default {
         <router-link to="/dashboard" class="nav-link text-white py-4 acon-link">
           <i class="bi bi-house h5 me-2"></i> Home
         </router-link>
-        <router-link to="/payments" class="nav-link text-white py-4 acon-link">
+        <router-link to="/payment" class="nav-link text-white py-4 acon-link">
           <i class="bi bi-credit-card h5 me-2"></i> Payments
         </router-link>
         <a href="#" class="nav-link text-white py-4 acon-link">

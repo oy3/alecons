@@ -1,35 +1,143 @@
 <script lang="js">
 import BrandLogo from '../../components/BrandLogo.vue';
+import { logger } from '@shared/utils/logger';
+import { apiService } from '../../services/api.js';
+import Swal from 'sweetalert2';
 
 export default {
   name: 'LoginPage',
+  inheritAttrs: false, // Add this to handle non-prop attributes
   data() {
     return {
-      appNumber: '',
+      email: '',
       password: '',
-        email: ''
+      resetEmail: ''
     };
   },
   methods: {
-    onSubmit() {
-      // Handle login submission logic here
-      alert(`Logging in with Application Number: ${this.appNumber}`);
-      this.$router.push({ name: 'Dashboard' });
-    },
-     submitForgotPassword() {
-      if (!this.email) {
-        alert("Please enter your email address");
-        return;
-      }
-      // Example: Call API
-      console.log("Sending reset link to:", this.email);
-      alert(`Password reset link sent to ${this.email}`);
+    async onSubmit() {
+      try {
+        // Validate inputs
+        if (!this.email || !this.password) {
+          await Swal.fire({
+            icon: 'warning',
+            title: 'Missing Information',
+            text: 'Please enter both email and password',
+            confirmButtonColor: '#2d7d7d',
+          });
+          return;
+        }
 
-      // Close modal programmatically
-      const modal = bootstrap.Modal.getInstance(
-        document.getElementById("forgotPasswordModal")
-      );
-      modal.hide();
+        // Show loading state
+        Swal.fire({
+          title: 'Logging in...',
+          html: 'Please wait',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          },
+        });
+
+        // Call backend API
+        const result = await apiService.login({
+          email: this.email,
+          password: this.password,
+        });
+
+        if (result.success) {
+          logger.info('Login successful:', result.data.user);
+          
+          // Store user data in localStorage for session management
+          localStorage.setItem('user', JSON.stringify(result.data.user));
+          if (result.data.applicationId) {
+            localStorage.setItem('applicationId', result.data.applicationId);
+          }
+          
+          // Success message
+          await Swal.fire({
+            icon: 'success',
+            title: 'Welcome!',
+            text: `Welcome back, ${result.data.user.firstName}!`,
+            timer: 1500,
+            showConfirmButton: false,
+          });
+          
+          this.$router.push({ name: 'Dashboard' });
+        } else {
+          // Handle API errors
+          await Swal.fire({
+            icon: 'error',
+            title: 'Login Failed',
+            text: result.error || 'Please check your credentials and try again',
+            confirmButtonColor: '#2d7d7d',
+          });
+        }
+      } catch (error) {
+        logger.error('Login error:', error);
+        
+        // Show error message
+        await Swal.fire({
+          icon: 'error',
+          title: 'Oops...',
+          text: 'Something went wrong! Please try again.',
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#2d7d7d',
+        });
+      }
+    },
+     async submitForgotPassword() {
+      try {
+        if (!this.resetEmail) {
+          await Swal.fire({
+            icon: 'warning',
+            title: 'Email Required',
+            text: 'Please enter your email address',
+            confirmButtonColor: '#2d7d7d',
+          });
+          return;
+        }
+
+        // Show loading state
+        Swal.fire({
+          title: 'Sending Reset Link...',
+          html: 'Please wait',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          },
+        });
+
+        // Simulate API call (replace with actual API call)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        logger.info("Sending reset link to:", this.resetEmail);
+
+        // Show success message
+        await Swal.fire({
+          icon: 'success',
+          title: 'Reset Link Sent!',
+          text: `Password reset instructions have been sent to ${this.resetEmail}`,
+          confirmButtonColor: '#2d7d7d',
+        });
+
+        // Close modal programmatically
+        const modal = bootstrap.Modal.getInstance(
+          document.getElementById("forgotPasswordModal")
+        );
+        modal.hide();
+
+        // Clear email field
+        this.resetEmail = '';
+      } catch (error) {
+        logger.error('Password reset error:', error);
+        
+        await Swal.fire({
+          icon: 'error',
+          title: 'Oops...',
+          text: 'Failed to send reset link. Please try again.',
+          confirmButtonColor: '#2d7d7d',
+        });
+      }
     }
   },
   components: {BrandLogo},
@@ -37,7 +145,7 @@ export default {
 </script>
 
 <template>
-  <div class="login-page d-flex align-items-center justify-content-center">
+  <div class="login-page d-flex align-items-center justify-content-center" v-bind="$attrs">
     <div class="overlay"></div>
     <div
       class="login-card card p-4 shadow-lg text-white bg-dark bg-opacity-25 border border-light border-opacity-25"
@@ -52,17 +160,17 @@ export default {
       <h3 class="mb-4 text-center">Application Login</h3>
       <form @submit.prevent="onSubmit">
         <div class="mb-3">
-          <label for="appNumber" class="form-label text-white"
-            >Application Number</label
+          <label for="email" class="form-label text-white"
+            >Email Address</label
           >
           <input
-            id="appNumber"
-            v-model="appNumber"
-            type="text"
+            id="email"
+            v-model="email"
+            type="email"
             class="form-control bg-dark bg-opacity-25 text-white border-light border-opacity-25"
-            placeholder="Enter application number"
+            placeholder="Enter your email"
             required
-            autocomplete="off"
+            autocomplete="email"
           />
         </div>
 
@@ -137,14 +245,14 @@ export default {
 
               <!-- Email Input -->
               <div class="mb-3">
-                <label for="email" class="form-label small fw-semibold"
+                <label for="resetEmail" class="form-label small fw-semibold"
                   >Email Address</label
                 >
                 <input
                   type="email"
-                  id="email"
+                  id="resetEmail"
                   class="form-control"
-                  v-model="email"
+                  v-model="resetEmail"
                   placeholder="Enter your email"
                 />
               </div>

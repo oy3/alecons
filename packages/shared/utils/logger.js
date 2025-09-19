@@ -31,20 +31,30 @@ class Logger {
     }
 
     getLogLevelFromEnv() {
-        // For frontend (Vite)
-        const env = import.meta?.env?.VITE_APP_ENV ||
-            // For backend (Node.js)
-            process?.env?.NODE_ENV ||
-            'development';
+        // Check if we're in a browser environment (Vite/Frontend)
+        if (typeof import.meta !== 'undefined' && import.meta.env) {
+            const env = import.meta.env.VITE_APP_ENV || 'development';
+            const debugMode = import.meta.env.VITE_APP_DEBUG === 'true';
 
-        const debugMode = import.meta?.env?.VITE_APP_DEBUG === 'true' ||
-            process?.env?.DEBUG === 'true' ||
-            false;
-
-        if (env === 'production') {
-            return debugMode ? LogLevel.INFO : LogLevel.ERROR;
+            if (env === 'production') {
+                return debugMode ? LogLevel.INFO : LogLevel.ERROR;
+            }
+            return debugMode ? LogLevel.DEBUG : LogLevel.INFO;
         }
-        return debugMode ? LogLevel.DEBUG : LogLevel.INFO;
+
+        // Node.js environment (Backend)
+        if (typeof process !== 'undefined' && process.env) {
+            const env = process.env.NODE_ENV || 'development';
+            const debugMode = process.env.DEBUG === 'true';
+
+            if (env === 'production') {
+                return debugMode ? LogLevel.INFO : LogLevel.ERROR;
+            }
+            return debugMode ? LogLevel.DEBUG : LogLevel.INFO;
+        }
+
+        // Default to development mode with debug enabled
+        return LogLevel.DEBUG;
     }
 
     getTime() {
@@ -83,7 +93,11 @@ class Logger {
     }
 
     colorize(message, color) {
-        return this.options.color ? `${Colors[color]}${message}${Colors.reset}` : message;
+        // Only use ANSI colors in Node.js environment
+        if (typeof process !== 'undefined' && process.env && this.options.color) {
+            return `${Colors[color]}${message}${Colors.reset}`;
+        }
+        return message;
     }
 
     error(message, ...args) {

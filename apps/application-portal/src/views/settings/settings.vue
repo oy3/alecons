@@ -1,6 +1,17 @@
-<script>
+<script lang="js">
+import { useAuth, authManager } from "../../services/auth.js";
+import { logger } from '@shared/utils/logger';
+
 export default {
   name: "Settings",
+    setup() {
+    const { user, isAuthenticated, application } = useAuth();
+    return {
+      user,
+      isAuthenticated,
+      application
+    };
+  },
   components: {},
 };
 </script>
@@ -35,36 +46,42 @@ export default {
         <h6>Details</h6>
         <div class="mb-5 row g-3">
           <div class="col-md-6">
-            <label for="exampleFormControlInput1" class="form-label small">
+            <label for="settingsFirstName" class="form-label small">
               First Name
             </label>
             <input
               type="email"
               class="form-control"
-              id="exampleFormControlInput1"
+              id="settingsFirstName"
+              v-model="user.firstName"
               placeholder="Enter your first name"
+              disabled
             />
           </div>
           <div class="col-md-6">
-            <label for="exampleFormControlInput1" class="form-label small">
+            <label for="settingsLastName" class="form-label small">
               Last Name
             </label>
             <input
               type="email"
               class="form-control"
-              id="exampleFormControlInput1"
+              id="settingsLastName"
+              v-model="user.lastName"
               placeholder="Enter your last name"
+              disabled
             />
           </div>
           <div class="col-md-12">
-            <label for="exampleFormControlInput1" class="form-label small">
+            <label for="settingsEmail" class="form-label small">
               Email address
             </label>
             <input
               type="email"
               class="form-control"
-              id="exampleFormControlInput1"
+              id="settingsEmail"
+              v-model="user.email"
               placeholder="name@example.com"
+              disabled
             />
           </div>
         </div>
@@ -89,7 +106,7 @@ export default {
             <input
               type="password"
               class="form-control"
-              id="exampleInputPassword1"
+              id="exampleInputPassword2"
               placeholder="********"
             />
           </div>

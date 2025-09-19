@@ -1,6 +1,7 @@
-<script>
+<script lang="js">
 import { useAuth, authManager } from '../services/auth.js';
 import { useRouter } from 'vue-router';
+import Swal from 'sweetalert2';
 
 export default {
   name: "Navbar",
@@ -9,8 +10,31 @@ export default {
     const router = useRouter();
 
     const logout = () => {
-      authManager.clearAuth();
-      router.push({ name: 'Login' });
+
+      Swal.fire({
+        title: 'Are you sure?',
+        text: 'You will be logged out of the application.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, logout'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          authManager.clearAuth();
+          router.push({ name: 'Login' });
+
+          Swal.fire({
+            toast: true,
+            position: "top-end",
+            icon: "success",
+            title: "Logged out successfully.",
+            showConfirmButton: false,
+            timer: 2000,
+          });
+
+        }
+      });
     };
 
     return {
@@ -26,11 +50,7 @@ export default {
   <nav class="navbar navbar-expand-lg navbar-light bg-white px-3">
     <div class="w-100 p-0 d-flex align-items-center justify-content-between">
       <!-- Mobile Sidebar Toggle -->
-      <button
-        class="btn d-md-none me-2"
-        data-bs-toggle="offcanvas"
-        data-bs-target="#mobileSidebar"
-      >
+      <button class="btn d-md-none me-2" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar">
         <i class="bi bi-list"></i>
       </button>
 
@@ -39,11 +59,7 @@ export default {
         <!-- Search -->
         <form class="d-flex me-3 flex-grow-1 flex-md-grow-0 w-100 custom-search-width">
           <div class="input-group">
-            <input
-              type="text"
-              class="form-control border-0 bg-light"
-              placeholder="What do you need?"
-            />
+            <input type="text" class="form-control border-0 bg-light" placeholder="What do you need?" />
             <span class="input-group-text border-0">
               <i class="bi bi-search text-muted"></i>
             </span>
@@ -53,25 +69,16 @@ export default {
         <!-- Right Icons -->
         <div class="d-flex align-items-center ms-auto">
           <i class="bi bi-bell fs-5 me-3"></i>
-          
+
           <!-- User Profile Dropdown -->
-          <div class="dropdown">
-            <a
-              href="#"
-              class="d-flex align-items-center text-decoration-none dropdown-toggle"
-              id="userDropdown"
-              data-bs-toggle="dropdown"
-              aria-expanded="false"
-            >
-              <img
-                src="https://placehold.co/40?text=IMG"
-                width="40"
-                alt="Profile"
-                class="rounded-circle me-2 border border-secondary"
-              />
+          <!-- <div class="dropdown">
+            <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark" id="userDropdown"
+              data-bs-toggle="dropdown" aria-expanded="false"> -->
+              <img src="https://placehold.co/40?text=IMG" width="40" alt="Profile"
+                class="rounded-circle me-2 border border-secondary" />
               <span class="fw-bold d-none d-sm-inline">{{ user?.firstName || 'User' }}</span>
-            </a>
-            
+            <!-- </a>
+
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
               <li>
                 <h6 class="dropdown-header">{{ user?.fullName || 'User' }}</h6>
@@ -79,7 +86,9 @@ export default {
               <li>
                 <span class="dropdown-item-text small text-muted">{{ user?.email }}</span>
               </li>
-              <li><hr class="dropdown-divider"></li>
+              <li>
+                <hr class="dropdown-divider">
+              </li>
               <li>
                 <router-link to="/settings" class="dropdown-item">
                   <i class="bi bi-gear me-2"></i>Settings
@@ -91,7 +100,7 @@ export default {
                 </a>
               </li>
             </ul>
-          </div>
+          </div> -->
         </div>
       </div>
     </div>

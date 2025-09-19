@@ -1,4 +1,4 @@
-<script>
+<script lang="js">
 import BrandLogo from "./BrandLogo.vue";
 import { useAuth, authManager } from "../services/auth.js";
 import { logger } from "@shared/utils/logger";

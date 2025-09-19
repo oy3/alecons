@@ -40,39 +40,30 @@ export default {
   mounted() {
     // Log dashboard access
     logger.info('Dashboard accessed by user:', {
-      userId: this.user?.id,
-      email: this.user?.email,
-      application: this.application,
-      applicationNumber: this.application?.applicationNumber,
-      currentStage: this.application?.currentStage
+      userData: this.user,
+      applicationData: this.application,
     });
 
     // Check if user has an application
-    if (!this.application && this.user?.role === 'applicant') {
-      logger.warn('User is an applicant but has no application record');
-      // Optionally redirect to application form or show a prompt
-      this.$nextTick(() => {
-        Swal.fire({
-          icon: 'info',
-          title: 'Complete Your Application',
-          text: 'You need to complete your application form to continue.',
-          confirmButtonText: 'Go to Application Form',
-          confirmButtonColor: '#2d7d7d',
-        }).then((result) => {
-          if (result.isConfirmed) {
-            this.$router.push({ name: 'ApplicationForm' });
-          }
-        });
-      });
-    }
+    // if (!this.application && this.user?.role === 'applicant') {
+    //   logger.warn('User is an applicant but has no application record');
+    //   // Optionally redirect to application form or show a prompt
+    //   this.$nextTick(() => {
+    //     Swal.fire({
+    //       icon: 'info',
+    //       title: 'Complete Your Application',
+    //       text: 'You need to complete your application form to continue.',
+    //       confirmButtonText: 'Go to Application Form',
+    //       confirmButtonColor: '#2d7d7d',
+    //     }).then((result) => {
+    //       if (result.isConfirmed) {
+    //         this.$router.push({ name: 'ApplicationForm' });
+    //       }
+    //     });
+    //   });
+    // }
   },
-  methods: {
-    logout() {
-      logger.info('User initiated logout');
-      authManager.clearAuth();
-      this.$router.push({ name: 'Login' });
-    },
-  },
+  methods: { },
   computed: {
     progressPercent() {
       return ((this.application?.currentStage || 1) / (this.stages.length - 1)) * 100;

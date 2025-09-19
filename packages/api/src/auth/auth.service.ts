@@ -153,10 +153,17 @@ export class AuthService {
         const access_token = this.jwtService.sign(payload);
 
         // Get application if user is an applicant
-        let applicationId = null;
+        let applicationData = null;
         if (user.role === UserRole.APPLICANT) {
             const application = await this.applicationModel.findOne({ userId: user._id });
-            applicationId = application?._id;
+            if (application) {
+                applicationData = {
+                    id: application._id,
+                    applicationNumber: application.applicationNumber,
+                    currentStage: application.currentStage,
+                    status: application.status
+                };
+            }
         }
 
         return {
@@ -170,7 +177,9 @@ export class AuthService {
                 role: user.role,
                 fullName: user.fullName,
             },
-            applicationId,
+            application: applicationData,
+            // Keep backward compatibility
+            applicationId: applicationData?.id,
         };
     }
 
@@ -181,5 +190,35 @@ export class AuthService {
             return result;
         }
         return null;
+    }
+
+    async getApplicationById(applicationId: string) {
+        try {
+            const application = await this.applicationModel
+                .findById(applicationId)
+                .populate('programId', 'name code')
+                .populate('programTypeId', 'type')
+                .populate('programModeId', 'mode')
+                .exec();
+
+            if (!application) {
+                throw new BadRequestException('Application not found');
+            }
+
+            return {
+                success: true,
+                data: {
+                    id: application._id,
+                    applicationNumber: application.applicationNumber,
+                    currentStage: application.currentStage,
+                    status: application.status,
+                    program: application.programId,
+                    programType: application.programTypeId,
+                    programMode: application.programModeId,
+                }
+            };
+        } catch (error) {
+            throw new BadRequestException('Failed to fetch application details');
+        }
     }
 }

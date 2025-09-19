@@ -1,6 +1,24 @@
 <script>
+import { useAuth, authManager } from '../services/auth.js';
+import { useRouter } from 'vue-router';
+
 export default {
-  name: "Navbar"
+  name: "Navbar",
+  setup() {
+    const { user, isAuthenticated } = useAuth();
+    const router = useRouter();
+
+    const logout = () => {
+      authManager.clearAuth();
+      router.push({ name: 'Login' });
+    };
+
+    return {
+      user,
+      isAuthenticated,
+      logout
+    };
+  }
 };
 </script>
 
@@ -35,13 +53,45 @@ export default {
         <!-- Right Icons -->
         <div class="d-flex align-items-center ms-auto">
           <i class="bi bi-bell fs-5 me-3"></i>
-          <img
-            src="https://placehold.co/40?text=IMG"
-            width="40"
-            alt="Profile"
-            class="rounded-circle me-2 border border-secondary"
-          />
-          <span class="fw-bold d-none d-sm-inline">John</span>
+          
+          <!-- User Profile Dropdown -->
+          <div class="dropdown">
+            <a
+              href="#"
+              class="d-flex align-items-center text-decoration-none dropdown-toggle"
+              id="userDropdown"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            >
+              <img
+                src="https://placehold.co/40?text=IMG"
+                width="40"
+                alt="Profile"
+                class="rounded-circle me-2 border border-secondary"
+              />
+              <span class="fw-bold d-none d-sm-inline">{{ user?.firstName || 'User' }}</span>
+            </a>
+            
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+              <li>
+                <h6 class="dropdown-header">{{ user?.fullName || 'User' }}</h6>
+              </li>
+              <li>
+                <span class="dropdown-item-text small text-muted">{{ user?.email }}</span>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <router-link to="/settings" class="dropdown-item">
+                  <i class="bi bi-gear me-2"></i>Settings
+                </router-link>
+              </li>
+              <li>
+                <a href="#" @click.prevent="logout" class="dropdown-item text-danger">
+                  <i class="bi bi-box-arrow-right me-2"></i>Logout
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

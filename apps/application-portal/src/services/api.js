@@ -1,5 +1,21 @@
 /**
- * API Service for Alecons Application Portal
+ * import { authManager } from './auth.js';
+
+class ApiService {
+    constructor() {
+        this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    }
+
+    // Get current auth token
+    get token() {
+        return authManager.getToken();
+    }
+
+    // Handle token expiration
+    handleTokenExpiration() {
+        authManager.clearAuth();
+        // Redirect to login will be handled by route guard
+    }Alecons Application Portal
  * Handles all backend API calls
  */
 
@@ -46,6 +62,12 @@ class ApiService {
             const response = await fetch(url, config);
             const data = await response.json();
 
+            // Handle authentication errors
+            if (response.status === 401) {
+                this.handleTokenExpiration();
+                throw new Error('Authentication required');
+            }
+
             if (!response.ok) {
                 throw new Error(data.message || 'API request failed');
             }
@@ -59,6 +81,16 @@ class ApiService {
             return { success: true, data };
         } catch (error) {
             console.error('API Error:', error);
+
+            // Handle network errors or other issues
+            if (error.message === 'Authentication required') {
+                return {
+                    success: false,
+                    error: 'Session expired. Please login again.',
+                    requiresAuth: true
+                };
+            }
+
             return {
                 success: false,
                 error: error.message || 'Network error occurred'

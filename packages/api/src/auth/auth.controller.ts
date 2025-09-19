@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -24,5 +24,13 @@ export class AuthController {
     @ApiResponse({ status: 401, description: 'Invalid credentials' })
     async login(@Body() loginDto: LoginDto) {
         return this.authService.login(loginDto);
+    }
+
+    @Get('application/:id')
+    @ApiOperation({ summary: 'Get application details' })
+    @ApiResponse({ status: 200, description: 'Application details retrieved' })
+    @ApiResponse({ status: 404, description: 'Application not found' })
+    async getApplication(@Param('id') id: string) {
+        return this.authService.getApplicationById(id);
     }
 }

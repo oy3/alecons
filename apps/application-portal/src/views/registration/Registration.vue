@@ -1,6 +1,7 @@
 <script lang="js">
 import BrandLogo from '../../components/BrandLogo.vue';
 import { apiService } from '../../services/api.js';
+import { authManager } from '../../services/auth.js';
 import { logger } from '@shared/utils/logger';
 import Swal from 'sweetalert2';
 
@@ -119,21 +120,30 @@ export default {
         if (result.success) {
           logger.info('Registration successful:', result.data.user);
 
-          // Store user data
-          localStorage.setItem('user', JSON.stringify(result.data.user));
-          if (result.data.applicationId) {
-            localStorage.setItem('applicationId', result.data.applicationId);
-          }
+          // Create application object for consistency with login response
+          const applicationData = {
+            id: result.data.applicationId,
+            applicationNumber: result.data.applicationNumber,
+            currentStage: 1,
+            status: 'pending'
+          };
+
+          // Set authentication using auth manager
+          authManager.setAuth(
+            result.data.user,
+            result.data.access_token,
+            applicationData
+          );
 
           // Success message
           await Swal.fire({
             icon: 'success',
             title: 'Account Created!',
-            text: `Welcome to Alecons, ${result.data.user.firstName}!`,
+            text: `Welcome to Alecons, ${result.data.user.firstName}! Your application number is ${result.data.applicationNumber}`,
             confirmButtonColor: '#2d7d7d',
           });
 
-          // Redirect to dashboard or application form
+          // Redirect to dashboard
           this.$router.push({ name: 'Dashboard' });
         } else {
           // Handle API errors

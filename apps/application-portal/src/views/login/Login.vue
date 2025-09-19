@@ -2,6 +2,7 @@
 import BrandLogo from '../../components/BrandLogo.vue';
 import { logger } from '@shared/utils/logger';
 import { apiService } from '../../services/api.js';
+import { authManager } from '../../services/auth.js';
 import Swal from 'sweetalert2';
 
 export default {
@@ -47,11 +48,12 @@ export default {
         if (result.success) {
           logger.info('Login successful:', result.data.user);
           
-          // Store user data in localStorage for session management
-          localStorage.setItem('user', JSON.stringify(result.data.user));
-          if (result.data.applicationId) {
-            localStorage.setItem('applicationId', result.data.applicationId);
-          }
+          // Set authentication using auth manager
+          authManager.setAuth(
+            result.data.user,
+            result.data.access_token,
+            result.data.application
+          );
           
           // Success message
           await Swal.fire({

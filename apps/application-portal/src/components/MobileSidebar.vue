@@ -1,9 +1,40 @@
 <script>
 import BrandLogo from "./BrandLogo.vue";
+import { useAuth, authManager } from "../services/auth.js";
+import { logger } from "@shared/utils/logger";
+import Swal from "sweetalert2";
 
 export default {
   name: "MobileSidebar",
   components: { BrandLogo },
+  methods: {
+    logout() {
+      Swal.fire({
+        title: "Are you sure?",
+        text: "You will be logged out of the application.",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#3085d6",
+        cancelButtonColor: "#d33",
+        confirmButtonText: "Yes, logout",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          logger.info("User confirmed logout");
+          authManager.clearAuth();
+          this.$router.push({ name: "Login" });
+
+          Swal.fire({
+            toast: true,
+            position: "top-end",
+            icon: "success",
+            title: "Logged out successfully.",
+            showConfirmButton: false,
+            timer: 2000,
+          });
+        }
+      });
+    },
+  },
 };
 </script>
 
@@ -34,9 +65,10 @@ export default {
         <a href="#" class="nav-link text-white py-4 acon-link">
           <i class="bi bi-gear h5 me-2"></i> Settings
         </a>
-        <router-link to="/" class="nav-link text-white mt-auto py-4 acon-link">
+       <li
+        @click="logout" class="nav-link text-white mt-auto py-4 acon-link">
           <i class="bi bi-box-arrow-right h5 me-2"></i> Logout
-        </router-link>
+        </li>
       </nav>
     </div>
   </div>

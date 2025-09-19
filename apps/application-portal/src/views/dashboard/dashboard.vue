@@ -104,7 +104,7 @@ export default {
         <ProgressCard
           class="mb-4"
           :stages="stages"
-          :currentStage="application?.currentStage || 1"
+          :currentStage="application?.currentStage || 0"
           :name="user?.firstName || 'Student'"
         />
 

@@ -5,6 +5,9 @@ export type PaymentDocument = Payment & Document;
 
 @Schema({ timestamps: true })
 export class Payment {
+    @Prop({ required: true, unique: true })
+    paymentCode: string;
+
     @Prop({ required: true })
     name: string;
 
@@ -13,6 +16,9 @@ export class Payment {
 
     @Prop({ required: true })
     amount: number;
+
+    @Prop()
+    category?: string;
 
     @Prop({ default: true })
     active: boolean;

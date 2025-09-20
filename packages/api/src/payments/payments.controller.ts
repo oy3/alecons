@@ -10,7 +10,7 @@ export class PaymentsController {
     @Get('summary')
     async getStudentPaymentsSummary(@Request() req) {
         try {
-            const userId = req.user.sub; // User ID from JWT token
+            const userId = req.user._id.toString(); // User ID from authenticated user
             const summary = await this.paymentsService.getStudentPaymentsSummary(userId);
             
             return {
@@ -32,14 +32,20 @@ export class PaymentsController {
     @Post('initialize')
     async initializePayment(
         @Request() req,
-        @Body() body: { paymentId: string; amount: number }
+        @Body() body: { paymentId: string; email: string }
     ) {
         try {
-            const userId = req.user.sub;
+            console.log('Initialize payment request:', {
+                userId: req.user?._id,
+                body: body,
+                user: req.user
+            });
+            
+            const userId = req.user._id.toString();
             const result = await this.paymentsService.initializePayment(
                 userId,
                 body.paymentId,
-                body.amount
+                body.email
             );
             
             return {

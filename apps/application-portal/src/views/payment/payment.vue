@@ -61,19 +61,41 @@ export default {
 
     async initiatePayment(fee) {
       try {
+        // Clear any previous errors
+        this.error = null;
+        
         logger.info('Initiating payment for fee:', fee);
         
-        // Here you would integrate with Paystack
-        // For now, we'll show a placeholder
-        alert(`Payment for ${fee.name} (${this.formatCurrency(fee.amount)}) will be implemented with Paystack integration.`);
-        
-        // const result = await paymentService.initializePayment(fee.id, fee.amount);
-        // if (result.success) {
-        //   window.location.href = result.data.authorization_url;
-        // }
+        if (!this.user?.email) {
+          this.error = 'User email not found. Please log in again.';
+          return;
+        }
+
+        // Launch Paystack payment popup
+        const result = await paymentService.launchPaystackPayment({
+          amount: fee.amount,
+          email: this.user.email,
+          firstName: this.user.firstName || 'Student',
+          lastName: this.user.lastName || '',
+          paymentType: fee.id,
+          description: fee.name
+        });
+
+        if (result.success) {
+          logger.info('Payment completed successfully:', result);
+          
+          // Refresh payment data to show updated status
+          await this.fetchPayments();
+          
+          // Show success message
+          alert(`Payment for ${fee.name} completed successfully! Reference: ${result.data.reference}`);
+        } else {
+          logger.error('Payment failed:', result);
+          this.error = result.message || 'Payment failed. Please try again.';
+        }
       } catch (error) {
         logger.error('Error initiating payment:', error);
-        alert('Failed to initiate payment. Please try again.');
+        this.error = 'Failed to initiate payment. Please try again.';
       }
     },
 

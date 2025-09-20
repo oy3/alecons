@@ -1,7 +1,12 @@
 import { apiService } from './api.js';
 import { logger } from '@shared/utils/logger';
+import PaystackPop from '@paystack/inline-js';
 
 class PaymentService {
+    constructor() {
+        this.paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+    }
+
     /**
      * Get student payment summary (paid and unpaid fees)
      */
@@ -32,12 +37,12 @@ class PaymentService {
     /**
      * Initialize payment with Paystack
      */
-    async initializePayment(paymentId, amount) {
+    async initializePayment(paymentId, email) {
         try {
-            logger.info('Initializing payment:', { paymentId, amount });
+            logger.info('Initializing payment:', { paymentId, email });
             const response = await apiService.post('/payments/initialize', {
                 paymentId,
-                amount
+                email
             });
             
             if (response.success) {
@@ -54,6 +59,78 @@ class PaymentService {
             return {
                 success: false,
                 message: error.message || 'Failed to initialize payment',
+                error
+            };
+        }
+    }
+
+    /**
+     * Launch Paystack popup for payment
+     */
+    async launchPaystackPayment(paymentData) {
+        try {
+            logger.info('Launching Paystack payment:', paymentData);
+            
+            // Extract data from the payment object
+            const { email, paymentType: paymentId, amount, description } = paymentData;
+            
+            // Initialize payment first
+            const initResult = await this.initializePayment(paymentId, email);
+            
+            if (!initResult.success) {
+                throw new Error(initResult.message);
+            }
+
+            const { reference, access_code } = initResult.data;
+
+            // Launch Paystack popup
+            return new Promise((resolve, reject) => {
+                const popup = PaystackPop.setup({
+                    key: this.paystackPublicKey,
+                    email: email,
+                    amount: amount * 100, // Convert to kobo
+                    currency: 'NGN',
+                    ref: reference,
+                    metadata: {
+                        paymentName: description,
+                        paymentId: paymentId
+                    },
+                    callback: (response) => {
+                        logger.info('Payment successful:', response);
+                        this.verifyPayment(response.reference).then(verificationResult => {
+                            resolve({
+                                success: true,
+                                data: {
+                                    reference: response.reference,
+                                    verification: verificationResult
+                                }
+                            });
+                        }).catch(error => {
+                            logger.error('Payment verification failed:', error);
+                            resolve({
+                                success: false,
+                                message: 'Payment successful but verification failed',
+                                data: { reference: response.reference }
+                            });
+                        });
+                    },
+                    onClose: () => {
+                        logger.info('Payment popup closed');
+                        resolve({
+                            success: false,
+                            message: 'Payment cancelled by user'
+                        });
+                    }
+                });
+
+                popup.openIframe();
+            });
+
+        } catch (error) {
+            logger.error('Error launching Paystack payment:', error);
+            return {
+                success: false,
+                message: error.message || 'Failed to launch payment',
                 error
             };
         }
@@ -94,7 +171,7 @@ class PaymentService {
             style: 'currency',
             currency: 'NGN',
             minimumFractionDigits: 2
-        }).format(amount);
+        }).format(amount / 100); // Convert from kobo to naira
     }
 
     /**

@@ -26,7 +26,7 @@ export default {
       ],
       stages: [
         "Registration",
-        "Form Fee",
+        "Portal Fee",
         "Application Form",
         "Admission",
         "Acceptance Fee",

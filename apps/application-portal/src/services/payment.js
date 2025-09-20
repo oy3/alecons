@@ -171,7 +171,7 @@ class PaymentService {
             style: 'currency',
             currency: 'NGN',
             minimumFractionDigits: 2
-        }).format(amount / 100); // Convert from kobo to naira
+        }).format(amount);
     }
 
     /**

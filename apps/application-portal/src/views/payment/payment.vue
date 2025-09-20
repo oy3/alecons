@@ -20,7 +20,8 @@ export default {
       unpaidFees: [],
       totalPaid: 0,
       totalUnpaid: 0,
-      selectedReceipt: null
+      selectedReceipt: null,
+      paymentLoading: {} // Track loading state for each payment button
     };
   },
   async mounted() {
@@ -61,6 +62,9 @@ export default {
 
     async initiatePayment(fee) {
       try {
+        // Set loading state for this specific payment
+        this.paymentLoading[fee.id] = true;
+        
         // Clear any previous errors
         this.error = null;
         
@@ -96,6 +100,9 @@ export default {
       } catch (error) {
         logger.error('Error initiating payment:', error);
         this.error = 'Failed to initiate payment. Please try again.';
+      } finally {
+        // Clear loading state for this payment
+        this.paymentLoading[fee.id] = false;
       }
     },
 
@@ -110,6 +117,10 @@ export default {
 
     formatDate(date) {
       return paymentService.formatDate(date);
+    },
+
+    isPaymentLoading(feeId) {
+      return this.paymentLoading[feeId] || false;
     }
   },
   components: {},
@@ -167,9 +178,11 @@ export default {
               </div>
               <button 
                 @click="initiatePayment(fee)"
-                class="btn btn-acon-primary btn-sm"
+                :disabled="isPaymentLoading(fee.id)"
+                :class="['btn', 'btn-acon-primary', 'btn-sm', { 'loading': isPaymentLoading(fee.id) }]"
               >
-                Pay Now
+                <span v-if="isPaymentLoading(fee.id)" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                {{ isPaymentLoading(fee.id) ? 'Processing...' : 'Pay Now' }}
               </button>
             </li>
           </ul>
@@ -294,4 +307,31 @@ export default {
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.btn.loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+  position: relative;
+}
+
+.btn.loading:hover {
+  transform: none;
+}
+
+/* Optional: Add a subtle pulse animation to the loading button */
+.btn.loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0.7;
+  }
+}
+</style>

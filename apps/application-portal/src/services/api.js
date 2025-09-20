@@ -24,7 +24,11 @@ const API_BASE_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:8000/
 class ApiService {
     constructor() {
         this.baseURL = API_BASE_URL;
-        this.token = localStorage.getItem('authToken');
+    }
+
+    // Get current token dynamically from localStorage
+    get token() {
+        return localStorage.getItem('authToken');
     }
 
     // Set authorization token
@@ -96,6 +100,44 @@ class ApiService {
                 error: error.message || 'Network error occurred'
             };
         }
+    }
+
+    // HTTP method helpers
+    async get(endpoint) {
+        return this.makeRequest(endpoint, { method: 'GET' });
+    }
+
+    async post(endpoint, data = {}) {
+        return this.makeRequest(endpoint, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async put(endpoint, data = {}) {
+        return this.makeRequest(endpoint, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async patch(endpoint, data = {}) {
+        return this.makeRequest(endpoint, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async delete(endpoint) {
+        return this.makeRequest(endpoint, { method: 'DELETE' });
+    }
+
+    // Handle token expiration
+    handleTokenExpiration() {
+        // Import dynamically to avoid circular dependency
+        import('./auth.js').then(({ authManager }) => {
+            authManager.clearAuth();
+        });
     }
 
     // Authentication methods

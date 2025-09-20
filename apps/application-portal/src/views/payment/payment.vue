@@ -1,39 +1,192 @@
 <script>
+import { paymentService } from '../../services/payment.js';
+import { useAuth } from '../../services/auth.js';
+import { logger } from '@shared/utils/logger';
+
 export default {
   name: "Payment",
+  setup() {
+    const { user, isAuthenticated } = useAuth();
+    return {
+      user,
+      isAuthenticated
+    };
+  },
+  data() {
+    return {
+      loading: true,
+      error: null,
+      paidFees: [],
+      unpaidFees: [],
+      totalPaid: 0,
+      totalUnpaid: 0,
+      selectedReceipt: null
+    };
+  },
+  async mounted() {
+    await this.fetchPayments();
+  },
+  methods: {
+    async fetchPayments() {
+      try {
+        this.loading = true;
+        this.error = null;
+
+        logger.info('Fetching payment data for user:', this.user?.id);
+        const result = await paymentService.getPaymentsSummary();
+
+        if (result.success) {
+          this.paidFees = result.data.paidFees || [];
+          this.unpaidFees = result.data.unpaidFees || [];
+          this.totalPaid = result.data.totalPaid || 0;
+          this.totalUnpaid = result.data.totalUnpaid || 0;
+
+          logger.info('Payment data loaded:', {
+            paidCount: this.paidFees.length,
+            unpaidCount: this.unpaidFees.length,
+            totalPaid: this.totalPaid,
+            totalUnpaid: this.totalUnpaid
+          });
+        } else {
+          this.error = result.message || 'Failed to load payment data';
+          logger.error('Failed to fetch payments:', result);
+        }
+      } catch (error) {
+        this.error = 'An error occurred while loading payment data';
+        logger.error('Error in fetchPayments:', error);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async initiatePayment(fee) {
+      try {
+        logger.info('Initiating payment for fee:', fee);
+        
+        // Here you would integrate with Paystack
+        // For now, we'll show a placeholder
+        alert(`Payment for ${fee.name} (${this.formatCurrency(fee.amount)}) will be implemented with Paystack integration.`);
+        
+        // const result = await paymentService.initializePayment(fee.id, fee.amount);
+        // if (result.success) {
+        //   window.location.href = result.data.authorization_url;
+        // }
+      } catch (error) {
+        logger.error('Error initiating payment:', error);
+        alert('Failed to initiate payment. Please try again.');
+      }
+    },
+
+    viewReceipt(fee) {
+      this.selectedReceipt = fee;
+      logger.info('Viewing receipt for:', fee);
+    },
+
+    formatCurrency(amount) {
+      return paymentService.formatCurrency(amount);
+    },
+
+    formatDate(date) {
+      return paymentService.formatDate(date);
+    }
+  },
   components: {},
 };
 </script>
-
 <template>
   <div class="mt-3 p-5">
     <h5>Payments</h5>
     <hr />
 
-    <div class="row">
+    <!-- Loading State -->
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-2">Loading payment information...</p>
+    </div>
+
+    <!-- Error State -->
+    <div v-else-if="error" class="alert alert-danger" role="alert">
+      <i class="bi bi-exclamation-triangle"></i>
+      {{ error }}
+      <button @click="fetchPayments" class="btn btn-outline-danger btn-sm ms-2">
+        Try Again
+      </button>
+    </div>
+
+    <!-- Payment Data -->
+    <div v-else class="row">
       <div class="col-md-8 mx-auto">
+        <!-- Unpaid Charges -->
         <div class="mb-5">
-          <h6 class="fw-bold">Unpaids charges</h6>
-          <ul class="list-unstyled">
-            <li class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="fw-bold">
+            Unpaid Charges
+            <span v-if="unpaidFees.length > 0" class="badge bg-warning text-dark ms-2">
+              {{ unpaidFees.length }}
+            </span>
+          </h6>
+          
+          <div v-if="unpaidFees.length === 0" class="alert alert-success" role="alert">
+            <i class="bi bi-check-circle"></i>
+            All fees have been paid!
+          </div>
+          
+          <ul v-else class="list-unstyled">
+            <li 
+              v-for="fee in unpaidFees" 
+              :key="fee.id"
+              class="d-flex justify-content-between align-items-center mb-4"
+            >
               <div class="d-grid">
-                <span>Acceptance Fee</span>
-                <span class="fw-bold">₦10,000.00</span>
+                <span>{{ fee.name }}</span>
+                <span class="fw-bold">{{ formatCurrency(fee.amount) }}</span>
+                <!-- <small v-if="fee.description" class="text-muted">{{ fee.description }}</small> -->
               </div>
-              <button class="btn btn-acon-primary btn-sm">Pay Now</button>
+              <button 
+                @click="initiatePayment(fee)"
+                class="btn btn-acon-primary btn-sm"
+              >
+                Pay Now
+              </button>
             </li>
           </ul>
+          
+          <!-- <div v-if="unpaidFees.length > 0" class="mt-3">
+            <strong>Total Unpaid: {{ formatCurrency(totalUnpaid) }}</strong>
+          </div> -->
         </div>
 
+        <!-- Paid Charges -->
         <div class="mb-5">
-          <h6 class="fw-bold">Paid Charges</h6>
-          <ul class="list-unstyled">
-            <li class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="fw-bold">
+            Paid Charges
+            <span v-if="paidFees.length > 0" class="badge bg-success ms-2">
+              {{ paidFees.length }}
+            </span>
+          </h6>
+          
+          <div v-if="paidFees.length === 0" class="alert alert-info" role="alert">
+            <i class="bi bi-info-circle"></i>
+            No payments have been made yet.
+          </div>
+          
+          <ul v-else class="list-unstyled">
+            <li 
+              v-for="fee in paidFees" 
+              :key="fee.id"
+              class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded bg-light"
+            >
               <div class="d-grid">
-                <span>Form Fee</span>
-                <span class="fw-bold">₦20,000.00</span>
+                <span>{{ fee.name }}</span>
+                <span class="fw-bold">{{ formatCurrency(fee.amount) }}</span>
+                <small v-if="fee.paidAt" class="text-success">
+                  <i class="bi bi-check-circle"></i>
+                  Paid on {{ formatDate(fee.paidAt) }}
+                </small>
               </div>
               <button
+                @click="viewReceipt(fee)"
                 class="btn btn-outline-secondary btn-sm"
                 type="button"
                 data-bs-toggle="offcanvas"
@@ -44,6 +197,10 @@ export default {
               </button>
             </li>
           </ul>
+          
+          <!-- <div v-if="paidFees.length > 0" class="mt-3">
+            <strong>Total Paid: {{ formatCurrency(totalPaid) }}</strong>
+          </div> -->
         </div>
       </div>
     </div>
@@ -66,23 +223,25 @@ export default {
           aria-label="Close"
         ></button>
       </div>
-      <div class="offcanvas-body">
+      <div class="offcanvas-body" v-if="selectedReceipt">
         <div class="d-grid text-center mb-5">
-          <h5 class="fw-bold acon-text-primary">₦20,000.00</h5>
-          <span>Form Fee</span>
-          <small class="text-body-secondary">on August 02, 2025</small>
+          <h5 class="fw-bold acon-text-primary">{{ formatCurrency(selectedReceipt.amount) }}</h5>
+          <span>{{ selectedReceipt.name }}</span>
+          <small class="text-body-secondary">
+            on {{ formatDate(selectedReceipt.paidAt) }}
+          </small>
         </div>
 
         <div class="mb-5">
           <ul class="list-group list-group-flush">
             <li class="list-group-item d-grid">
               <small>Description</small>
-              <span class="fw-bold">Form Fee</span>
+              <span class="fw-bold">{{ selectedReceipt.description || selectedReceipt.name }}</span>
             </li>
             <li class="list-group-item d-flex justify-content-between">
               <div class="d-grid">
                 <small>Payment Method</small>
-                <span class="fw-bold">Paystack</span>
+                <span class="fw-bold">{{ selectedReceipt.channel || 'Paystack' }}</span>
               </div>
               <div class="d-grid text-center">
                 <small>fees</small>
@@ -92,13 +251,13 @@ export default {
             <li class="list-group-item">
               <div class="d-grid">
                 <small>Reference</small>
-                <span class="fw-bold">ALC-1-1753318732161</span>
+                <span class="fw-bold">{{ selectedReceipt.reference }}</span>
               </div>
             </li>
             <li class="list-group-item">
               <div class="d-flex flex-column align-items-start">
                 <small>Status</small>
-                <span class="text-success fs-6 fw-bolder mt-2">Successful</span>
+                <span class="text-success fs-6 fw-bolder mt-2">{{ selectedReceipt.status || 'Successful' }}</span>
               </div>
             </li>
           </ul>

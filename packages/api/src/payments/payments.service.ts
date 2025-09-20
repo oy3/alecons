@@ -14,6 +14,7 @@ export interface PaymentSummary {
     reference?: string;
     status?: PaymentStatus;
     channel?: string;
+    fee?: number;
 }
 
 export interface StudentPaymentsSummary {
@@ -79,7 +80,8 @@ export class PaymentsService {
                     paidAt: studentPayment.paidAt,
                     reference: studentPayment.reference,
                     status: studentPayment.status,
-                    channel: studentPayment.channel
+                    channel: studentPayment.channel,
+                    fee: studentPayment.fee
                 });
             } else {
                 unpaidFees.push({
@@ -190,14 +192,16 @@ export class PaymentsService {
                 // If it's a failed attempt, update status to pending for retry
                 if (existingAttempt.status === PaymentStatus.FAILED) {
                     existingAttempt.status = PaymentStatus.PENDING;
-                    existingAttempt.remarks = 'Payment retry attempt - awaiting user action';
+                    existingAttempt.retryCount = (existingAttempt.retryCount || 0) + 1;
+                    existingAttempt.remarks = `Payment retry attempt x${existingAttempt.retryCount} - awaiting user action`;
                     await existingAttempt.save();
-                    console.log('Updated failed payment attempt to pending for retry');
+                    console.log(`Updated failed payment attempt to pending for retry #${existingAttempt.retryCount}`);
                 } else if (existingAttempt.status === PaymentStatus.PENDING) {
                     // Update remarks to show it's being retried
-                    existingAttempt.remarks = 'Payment re-initialized - awaiting user action';
+                    existingAttempt.retryCount = (existingAttempt.retryCount || 0) + 1;
+                    existingAttempt.remarks = `Payment re-initialized with new reference x${existingAttempt.retryCount} - awaiting user action`;
                     await existingAttempt.save();
-                    console.log('Updated pending payment attempt remarks');
+                    console.log(`Updated pending payment attempt remarks for retry #${existingAttempt.retryCount}`);
                 }
 
                 // For existing attempts, we need to create a NEW Paystack transaction with a NEW reference
@@ -209,9 +213,8 @@ export class PaymentsService {
                 
                 // Update the existing record with the new reference
                 existingAttempt.reference = newReference;
-                existingAttempt.paystackReference = newReference;
                 existingAttempt.status = PaymentStatus.PENDING;
-                existingAttempt.remarks = 'Payment re-initialized with new reference - awaiting user action';
+                existingAttempt.remarks = `Payment re-initialized with new reference x${existingAttempt.retryCount || 1} - awaiting user action`;
                 await existingAttempt.save();
 
                 return {
@@ -232,7 +235,7 @@ export class PaymentsService {
                     reference,
                     status: PaymentStatus.PENDING,
                     remarks: 'Payment initialized - awaiting user action',
-                    paystackReference: reference
+                    retryCount: 0
                 });
 
                 return {
@@ -322,6 +325,7 @@ export class PaymentsService {
             studentPayment.remarks = 'Payment successful and verified';
             studentPayment.paidAt = new Date();
             studentPayment.channel = transaction.channel;
+            studentPayment.fee = transaction.fees ? (transaction.fees / 100) : 0; // Convert from kobo to naira
             studentPayment.gatewayId = transaction.id;
             studentPayment.authorizationCode = transaction.authorization?.authorization_code;
         } else {

@@ -30,7 +30,7 @@ export class StudentPayment {
     paymentId: Types.ObjectId;
 
     @Prop({ required: true })
-    amount: number;
+    amount: number; // Payment amount in Naira
 
     @Prop({ required: true, unique: true })
     reference: string;
@@ -42,7 +42,7 @@ export class StudentPayment {
     channel?: PaymentChannel;
 
     @Prop()
-    fee?: number;
+    fee?: number; // Transaction fee in Naira (converted from kobo)
 
     @Prop()
     gatewayId?: string;
@@ -53,10 +53,10 @@ export class StudentPayment {
     @Prop()
     remarks?: string;
 
-    // Paystack specific fields
-    @Prop()
-    paystackReference?: string;
+    @Prop({ default: 0 })
+    retryCount?: number;
 
+    // Paystack specific fields
     @Prop()
     authorizationCode?: string;
 

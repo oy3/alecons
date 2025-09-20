@@ -267,7 +267,7 @@ export default {
               </div>
               <div class="d-grid text-center">
                 <small>fees</small>
-                <span class="badge rounded-pill acon-bg-secondary">₦0.00</span>
+                <span class="badge rounded-pill acon-bg-secondary">{{ formatCurrency(selectedReceipt.fee || 0) }}</span>
               </div>
             </li>
             <li class="list-group-item">

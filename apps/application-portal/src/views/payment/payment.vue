@@ -202,10 +202,10 @@ export default {
               <div class="d-grid">
                 <span>{{ fee.name }}</span>
                 <span class="fw-bold">{{ formatCurrency(fee.amount) }}</span>
-                <small v-if="fee.paidAt" class="text-success">
+                <!-- <small v-if="fee.paidAt" class="text-success">
                   <i class="bi bi-check-circle"></i>
                   Paid on {{ formatDate(fee.paidAt) }}
-                </small>
+                </small> -->
               </div>
               <button
                 @click="viewReceipt(fee)"

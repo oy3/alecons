@@ -18,11 +18,11 @@ export default {
   data() {
     return {
       todos: [
-        { title: "Submit Application", description: "Complete and submit your form" },
-        { title: "Make Payment", description: "Pay the application fee" },
-        { title: "Upload Documents", description: "Upload all required credentials" },
-        { title: "Check Status", description: "Track your application progress" },
-        { title: "Attend Interview", description: "Be available for the scheduled interview" },
+        { title: "Submit Application", description: "Complete and submit your form", status: "completed" },
+        { title: "Make Payment", description: "Pay the application fee", status: "active" },
+        { title: "Upload Documents", description: "Upload all required credentials", status: "inactive" },
+        { title: "Check Status", description: "Track your application progress", status: "inactive"  },
+        { title: "Attend Interview", description: "Be available for the scheduled interview", status: "inactive" },
       ],
       stages: [
         "Registration",

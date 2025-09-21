@@ -34,7 +34,7 @@ export default {
   <div>
     <h3>Your To-do</h3>
     <hr />
-    <div ref="todoContainer" class="row flex-nowrap gap-3 overflow-x-scroll">
+    <div ref="todoContainer" class="row flex-nowrap gap-3 overflow-x-scroll py-2">
       <TodoItem v-for="(item, index) in todos" :key="index" :item="item" />
     </div>
     <div class="d-flex justify-content-end mt-3" v-if="showArrows">

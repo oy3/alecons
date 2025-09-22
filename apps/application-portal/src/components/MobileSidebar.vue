@@ -56,17 +56,28 @@ export default {
     </div>
     <div class="offcanvas-body">
       <nav class="nav flex-column">
-        <router-link to="/dashboard" class="nav-link text-white py-4 acon-link">
+        <router-link 
+          to="/dashboard" 
+          class="nav-link text-white py-4 acon-link"
+          data-bs-dismiss="offcanvas">
           <i class="bi bi-house h5 me-2"></i> Home
         </router-link>
-        <router-link to="/payment" class="nav-link text-white py-4 acon-link">
+        <router-link 
+          to="/payment" 
+          class="nav-link text-white py-4 acon-link"
+          data-bs-dismiss="offcanvas">
           <i class="bi bi-credit-card h5 me-2"></i> Payments
         </router-link>
-        <a href="#" class="nav-link text-white py-4 acon-link">
+        <a 
+          href="#" 
+          class="nav-link text-white py-4 acon-link"
+          data-bs-dismiss="offcanvas">
           <i class="bi bi-gear h5 me-2"></i> Settings
         </a>
        <li
-        @click="logout" class="nav-link text-white mt-auto py-4 acon-link">
+        @click="logout" 
+        class="nav-link text-white mt-auto py-4 acon-link"
+        data-bs-dismiss="offcanvas">
           <i class="bi bi-box-arrow-right h5 me-2"></i> Logout
         </li>
       </nav>

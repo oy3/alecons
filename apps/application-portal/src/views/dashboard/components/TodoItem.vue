@@ -42,7 +42,7 @@ export default {
             ></i>
             <i
               v-else-if="item.status === 'active' && item.paymentStage"
-              class="bi bi-credit-card text-warning"
+              class="bi bi-credit-card text-primary-emphasis"
             ></i>
             <i
               v-else-if="item.status === 'active'"
@@ -81,13 +81,13 @@ export default {
 
 /* active */
 .active-stage {
-  border-left: 4px solid #0d6efd;
+  /* border-left: 4px solid #0d6efd; */
   background-color: rgba(13, 110, 253, 0.05);
 }
 
 /* Payment stage highlighting */
 .payment-stage {
-  border-left: 4px solid #ffc107;
+  /* border-left: 4px solid #ffc107; */
   background-color: rgba(255, 193, 7, 0.1);
 }
 

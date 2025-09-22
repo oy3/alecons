@@ -173,7 +173,7 @@ export default {
 
 <template>
   <div class="container mt-3 px-3 px-md-5 py-5">
-    <div class="row g-5">
+    <div class="row gy-5">
       <div class="col-md-8">
         <ProgressCard
           class="mb-4"

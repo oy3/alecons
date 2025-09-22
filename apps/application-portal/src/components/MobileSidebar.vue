@@ -8,6 +8,41 @@ export default {
   name: "MobileSidebar",
   components: { BrandLogo },
   methods: {
+    navigateAndClose(routePath, event) {
+      // Prevent default anchor link behavior
+      if (event) {
+        event.preventDefault();
+      }
+      
+      // Navigate to the route
+      this.$router
+        .push(routePath)
+        .then(() => {
+          // Close the offcanvas after successful navigation
+          this.closeOffcanvas();
+        })
+        .catch((error) => {
+          // Handle navigation errors (e.g., if already on the same route)
+          if (error.name !== "NavigationDuplicated") {
+            console.error("Navigation error:", error);
+          } else {
+            // Even if we're already on the route, still close the offcanvas
+            this.closeOffcanvas();
+          }
+        });
+    },
+
+    closeOffcanvas() {
+      // Use Bootstrap's data-bs-dismiss by programmatically clicking the close button
+      const offcanvasElement = document.getElementById("mobileSidebar");
+      if (offcanvasElement) {
+        const closeButton = offcanvasElement.querySelector('.btn-close');
+        if (closeButton) {
+          closeButton.click();
+        }
+      }
+    },
+
     logout() {
       Swal.fire({
         title: "Are you sure?",
@@ -21,7 +56,9 @@ export default {
         if (result.isConfirmed) {
           logger.info("User confirmed logout");
           authManager.clearAuth();
-          this.$router.push({ name: "Login" });
+          this.$router.push({ name: "Login" }).then(() => {
+            this.closeOffcanvas();
+          });
 
           Swal.fire({
             toast: true,
@@ -56,28 +93,28 @@ export default {
     </div>
     <div class="offcanvas-body">
       <nav class="nav flex-column">
-        <router-link 
-          to="/dashboard" 
+        <a
+          @click="navigateAndClose('/dashboard', $event)"
+          href="#"
           class="nav-link text-white py-4 acon-link"
-          data-bs-dismiss="offcanvas">
+        >
           <i class="bi bi-house h5 me-2"></i> Home
-        </router-link>
-        <router-link 
-          to="/payment" 
+        </a>
+        <a
+          @click="navigateAndClose('/payment', $event)"
+          href="#"
           class="nav-link text-white py-4 acon-link"
-          data-bs-dismiss="offcanvas">
+        >
           <i class="bi bi-credit-card h5 me-2"></i> Payments
-        </router-link>
-        <a 
-          href="#" 
+        </a>
+        <a
+          @click="navigateAndClose('/settings', $event)"
+          href="#"
           class="nav-link text-white py-4 acon-link"
-          data-bs-dismiss="offcanvas">
+        >
           <i class="bi bi-gear h5 me-2"></i> Settings
         </a>
-       <li
-        @click="logout" 
-        class="nav-link text-white mt-auto py-4 acon-link"
-        data-bs-dismiss="offcanvas">
+        <li @click="logout" class="nav-link text-white mt-auto py-4 acon-link">
           <i class="bi bi-box-arrow-right h5 me-2"></i> Logout
         </li>
       </nav>

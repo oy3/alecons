@@ -1,15 +1,16 @@
 <script>
-import { paymentService } from '../../services/payment.js';
-import { useAuth } from '../../services/auth.js';
-import { logger } from '@shared/utils/logger';
+import { paymentService } from "../../services/payment.js";
+import { useAuth } from "../../services/auth.js";
+import { logger } from "@shared/utils/logger";
 
 export default {
   name: "Payment",
   setup() {
-    const { user, isAuthenticated } = useAuth();
+    const { user, isAuthenticated, application } = useAuth();
     return {
       user,
-      isAuthenticated
+      isAuthenticated,
+      application,
     };
   },
   data() {
@@ -21,7 +22,7 @@ export default {
       totalPaid: 0,
       totalUnpaid: 0,
       selectedReceipt: null,
-      paymentLoading: {} // Track loading state for each payment button
+      paymentLoading: {}, // Track loading state for each payment button
     };
   },
   async mounted() {
@@ -33,7 +34,7 @@ export default {
         this.loading = true;
         this.error = null;
 
-        logger.info('Fetching payment data for user:', this.user?.id);
+        logger.info("Fetching payment data for user:", this.user?.id);
         const result = await paymentService.getPaymentsSummary();
 
         if (result.success) {
@@ -42,19 +43,19 @@ export default {
           this.totalPaid = result.data.totalPaid || 0;
           this.totalUnpaid = result.data.totalUnpaid || 0;
 
-          logger.info('Payment data loaded:', {
+          logger.info("Payment data loaded:", {
             paidCount: this.paidFees.length,
             unpaidCount: this.unpaidFees.length,
             totalPaid: this.totalPaid,
-            totalUnpaid: this.totalUnpaid
+            totalUnpaid: this.totalUnpaid,
           });
         } else {
-          this.error = result.message || 'Failed to load payment data';
-          logger.error('Failed to fetch payments:', result);
+          this.error = result.message || "Failed to load payment data";
+          logger.error("Failed to fetch payments:", result);
         }
       } catch (error) {
-        this.error = 'An error occurred while loading payment data';
-        logger.error('Error in fetchPayments:', error);
+        this.error = "An error occurred while loading payment data";
+        logger.error("Error in fetchPayments:", error);
       } finally {
         this.loading = false;
       }
@@ -64,14 +65,14 @@ export default {
       try {
         // Set loading state for this specific payment
         this.paymentLoading[fee.id] = true;
-        
+
         // Clear any previous errors
         this.error = null;
-        
-        logger.info('Initiating payment for fee:', fee);
-        
+
+        logger.info("Initiating payment for fee:", fee);
+
         if (!this.user?.email) {
-          this.error = 'User email not found. Please log in again.';
+          this.error = "User email not found. Please log in again.";
           return;
         }
 
@@ -79,27 +80,29 @@ export default {
         const result = await paymentService.launchPaystackPayment({
           amount: fee.amount,
           email: this.user.email,
-          firstName: this.user.firstName || 'Student',
-          lastName: this.user.lastName || '',
+          firstName: this.user.firstName || "Student",
+          lastName: this.user.lastName || "",
           paymentType: fee.id,
-          description: fee.name
+          description: fee.name,
         });
 
         if (result.success) {
-          logger.info('Payment completed successfully:', result);
-          
+          logger.info("Payment completed successfully:", result);
+
           // Refresh payment data to show updated status
           await this.fetchPayments();
-          
+
           // Show success message
-          alert(`Payment for ${fee.name} completed successfully! Reference: ${result.data.reference}`);
+          alert(
+            `Payment for ${fee.name} completed successfully! Reference: ${result.data.reference}`
+          );
         } else {
-          logger.error('Payment failed:', result);
-          this.error = result.message || 'Payment failed. Please try again.';
+          logger.error("Payment failed:", result);
+          this.error = result.message || "Payment failed. Please try again.";
         }
       } catch (error) {
-        logger.error('Error initiating payment:', error);
-        this.error = 'Failed to initiate payment. Please try again.';
+        logger.error("Error initiating payment:", error);
+        this.error = "Failed to initiate payment. Please try again.";
       } finally {
         // Clear loading state for this payment
         this.paymentLoading[fee.id] = false;
@@ -108,7 +111,7 @@ export default {
 
     viewReceipt(fee) {
       this.selectedReceipt = fee;
-      logger.info('Viewing receipt for:', fee);
+      logger.info("Viewing receipt for:", fee);
     },
 
     formatCurrency(amount) {
@@ -121,7 +124,30 @@ export default {
 
     isPaymentLoading(feeId) {
       return this.paymentLoading[feeId] || false;
-    }
+    },
+
+    isPaymentAvailable(fee) {
+      // Map payment codes to their required stages
+      const paymentStageMap = {
+        'portalFee': 2,        // Portal fee (Form fee) available at stage 2
+        'acceptanceFee': 5,    // Acceptance fee available at stage 5
+        'administrativeFee': 7, // Administrative fee available at stage 7
+        'schoolFee': 8         // School fee available at stage 8
+      };
+
+      const requiredStage = paymentStageMap[fee.paymentCode];
+      return requiredStage && this.application?.currentStage === requiredStage;
+    },
+
+    getRequiredStage(paymentCode) {
+      const paymentStageMap = {
+        'portalFee': 2,        // Portal fee (Form fee) available at stage 2
+        'acceptanceFee': 5,    // Acceptance fee available at stage 5
+        'administrativeFee': 7, // Administrative fee available at stage 7
+        'schoolFee': 8         // School fee available at stage 8
+      };
+      return paymentStageMap[paymentCode] || 'Unknown';
+    },
   },
   components: {},
 };
@@ -155,38 +181,64 @@ export default {
         <div class="mb-5">
           <h6 class="fw-bold">
             Unpaid Charges
-            <span v-if="unpaidFees.length > 0" class="badge bg-warning text-dark ms-2">
+            <span
+              v-if="unpaidFees.length > 0"
+              class="badge bg-warning text-dark ms-2"
+            >
               {{ unpaidFees.length }}
             </span>
           </h6>
-          
-          <div v-if="unpaidFees.length === 0" class="alert alert-success" role="alert">
+
+          <div
+            v-if="unpaidFees.length === 0"
+            class="alert alert-success"
+            role="alert"
+          >
             <i class="bi bi-check-circle"></i>
             All fees have been paid!
           </div>
-          
+
           <ul v-else class="list-unstyled">
-            <li 
-              v-for="fee in unpaidFees" 
+            <li
+              v-for="fee in unpaidFees"
               :key="fee.id"
               class="d-flex justify-content-between align-items-center mb-4"
             >
               <div class="d-grid">
                 <span>{{ fee.name }}</span>
                 <span class="fw-bold">{{ formatCurrency(fee.amount) }}</span>
-                <!-- <small v-if="fee.description" class="text-muted">{{ fee.description }}</small> -->
+                <small v-if="!isPaymentAvailable(fee)" class="text-warning">
+                  <i class="bi bi-info-circle"></i>
+                  <!-- Available at stage {{ getRequiredStage(fee.paymentCode) }} -->
+                   Not available yet
+                </small>
               </div>
-              <button 
+              <button
                 @click="initiatePayment(fee)"
-                :disabled="isPaymentLoading(fee.id)"
-                :class="['btn', 'btn-acon-primary', 'btn-sm', { 'loading': isPaymentLoading(fee.id) }]"
+                :disabled="
+                  isPaymentLoading(fee.id) || !isPaymentAvailable(fee)
+                "
+                :class="[
+                  'btn',
+                  'btn-acon-primary',
+                  'btn-sm',
+                  { loading: isPaymentLoading(fee.id) },
+                ]"
               >
-                <span v-if="isPaymentLoading(fee.id)" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                {{ isPaymentLoading(fee.id) ? 'Processing...' : 'Pay Now' }}
+                <span
+                  v-if="isPaymentLoading(fee.id)"
+                  class="spinner-border spinner-border-sm me-2"
+                  role="status"
+                  aria-hidden="true"
+                ></span>
+                {{ 
+                  isPaymentLoading(fee.id) ? "Processing..." : 
+                  "Pay Now" 
+                }}
               </button>
             </li>
           </ul>
-          
+
           <!-- <div v-if="unpaidFees.length > 0" class="mt-3">
             <strong>Total Unpaid: {{ formatCurrency(totalUnpaid) }}</strong>
           </div> -->
@@ -200,15 +252,19 @@ export default {
               {{ paidFees.length }}
             </span>
           </h6>
-          
-          <div v-if="paidFees.length === 0" class="alert alert-info" role="alert">
+
+          <div
+            v-if="paidFees.length === 0"
+            class="alert alert-info"
+            role="alert"
+          >
             <i class="bi bi-info-circle"></i>
             No payments have been made yet.
           </div>
-          
+
           <ul v-else class="list-unstyled">
-            <li 
-              v-for="fee in paidFees" 
+            <li
+              v-for="fee in paidFees"
               :key="fee.id"
               class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded bg-light"
             >
@@ -232,7 +288,7 @@ export default {
               </button>
             </li>
           </ul>
-          
+
           <!-- <div v-if="paidFees.length > 0" class="mt-3">
             <strong>Total Paid: {{ formatCurrency(totalPaid) }}</strong>
           </div> -->
@@ -260,7 +316,9 @@ export default {
       </div>
       <div class="offcanvas-body" v-if="selectedReceipt">
         <div class="d-grid text-center mb-5">
-          <h5 class="fw-bold acon-text-primary">{{ formatCurrency(selectedReceipt.amount) }}</h5>
+          <h5 class="fw-bold acon-text-primary">
+            {{ formatCurrency(selectedReceipt.amount) }}
+          </h5>
           <span>{{ selectedReceipt.name }}</span>
           <small class="text-body-secondary">
             on {{ formatDate(selectedReceipt.paidAt) }}
@@ -271,16 +329,22 @@ export default {
           <ul class="list-group list-group-flush">
             <li class="list-group-item d-grid">
               <small>Description</small>
-              <span class="fw-bold">{{ selectedReceipt.description || selectedReceipt.name }}</span>
+              <span class="fw-bold">{{
+                selectedReceipt.description || selectedReceipt.name
+              }}</span>
             </li>
             <li class="list-group-item d-flex justify-content-between">
               <div class="d-grid">
                 <small>Payment Method</small>
-                <span class="fw-bold">{{ selectedReceipt.channel || 'Paystack' }}</span>
+                <span class="fw-bold">{{
+                  selectedReceipt.channel || "Paystack"
+                }}</span>
               </div>
               <div class="d-grid text-center">
                 <small>fees</small>
-                <span class="badge rounded-pill acon-bg-secondary">{{ formatCurrency(selectedReceipt.fee || 0) }}</span>
+                <span class="badge rounded-pill acon-bg-secondary">{{
+                  formatCurrency(selectedReceipt.fee || 0)
+                }}</span>
               </div>
             </li>
             <li class="list-group-item">
@@ -292,15 +356,21 @@ export default {
             <li class="list-group-item">
               <div class="d-flex flex-column align-items-start">
                 <small>Status</small>
-                <span class="text-success fs-6 fw-bolder mt-2">{{ selectedReceipt.status || 'Successful' }}</span>
+                <span class="text-success fs-6 fw-bolder mt-2">{{
+                  selectedReceipt.status || "Successful"
+                }}</span>
               </div>
             </li>
           </ul>
         </div>
 
         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-          <button class="btn btn-acon-primary me-md-2" type="button">Download PDF</button>
-          <button class="btn btn-outline-acon-primary" type="button">Send to mail</button>
+          <button class="btn btn-acon-primary me-md-2" type="button">
+            Download PDF
+          </button>
+          <button class="btn btn-outline-acon-primary" type="button">
+            Send to mail
+          </button>
         </div>
       </div>
     </div>

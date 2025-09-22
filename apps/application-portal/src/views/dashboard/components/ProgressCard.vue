@@ -4,11 +4,23 @@ export default {
   props: {
     stages: Array,
     currentStage: Number,
-    name: { type: String, default: "John" }
+    name: { type: String, default: "John" },
+    resumeConfig: { 
+      type: Object, 
+      default: () => ({ 
+        text: 'Continue', 
+        route: '/dashboard', 
+        disabled: false, 
+        variant: 'btn-acon-secondary' 
+      }) 
+    }
   },
   computed: {
     progressPercent() {
-      return (this.currentStage / (this.stages.length - 1)) * 100;
+      // Progress should show completed stages, not current stage
+      // If currentStage = 3 (working on stage 3), then 2 stages are completed
+      const completedStages = Math.max(0, this.currentStage - 1);
+      return (completedStages / (this.stages.length - 1)) * 100;
     }
   }
 };
@@ -46,16 +58,30 @@ export default {
               class="d-flex flex-column align-items-center"
               style="width: 0"
             >
-              <span class="dot" :class="{ completed: index <= currentStage }"></span>
+              <span class="dot" :class="{ completed: index < Math.max(0, currentStage) }"></span>
               <small class="text-muted text-center">{{ stage }}</small>
             </div>
           </div>
         </div>
       </div>
 
-      <router-link to="/application-form" class="btn btn-acon-secondary btn-sm rounded-4 px-4 mt-3">
+      <button 
+        v-if="resumeConfig.route && !resumeConfig.disabled"
+        @click="$router.push(resumeConfig.route)"
+        :class="['btn', 'btn-sm', 'rounded-4', 'px-4', 'mt-3', resumeConfig.variant]"
+      >
+        <!-- {{ resumeConfig.text }} -->
+          Resume
+      </button>
+      
+      <button 
+        v-else
+        :disabled="resumeConfig.disabled"
+        :class="['btn', 'btn-sm', 'rounded-4', 'px-4', 'mt-3', resumeConfig.variant]"
+      >
+        <!-- {{ resumeConfig.text }} -->
         Resume
-      </router-link >
+      </button>
     </div>
   </div>
 </template>

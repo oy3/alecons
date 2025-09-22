@@ -40,32 +40,61 @@ export default {
         });
 
         // Call backend API
-        const result = await apiService.login({
-          email: this.email,
-          password: this.password,
-        });
+        logger.info('About to call apiService.login...');
+        
+        let result;
+        try {
+          result = await apiService.login({
+            email: this.email,
+            password: this.password,
+          });
+           logger.info('apiService.login completed successfully');
+        } catch (apiError) {
+          logger.error('Error in apiService.login:', apiError);
+          throw apiError;
+        }
+
+        logger.info('Login component received result:', result);
+        logger.info('Result type:', typeof result);
+        logger.info('Result properties:', Object.keys(result || {}));
 
         if (result.success) {
           logger.info('Login successful:', result.data.user);
           
-          // Set authentication using auth manager
-          authManager.setAuth(
-            result.data.user,
-            result.data.access_token,
-            result.data.application
-          );
-          
-          // Success message
-          await Swal.fire({
-            icon: 'success',
-            title: 'Welcome!',
-            text: `Welcome back, ${result.data.user.firstName}!`,
-            timer: 1500,
-            showConfirmButton: false,
-          });
-          
-          this.$router.push({ name: 'Dashboard' });
+          try {
+            // Set authentication using auth manager
+            logger.info('Setting auth with:', {
+              user: result.data.user,
+              token: result.data.access_token,
+              application: result.data.application
+            });
+            
+            authManager.setAuth(
+              result.data.user,
+              result.data.access_token,
+              result.data.application
+            );
+            
+            logger.info('Auth set successfully');
+            
+            // Success message
+            await Swal.fire({
+              icon: 'success',
+              title: 'Welcome!',
+              text: `Welcome back, ${result.data.user.firstName}!`,
+              timer: 1500,
+              showConfirmButton: false,
+            });
+            
+            logger.info('About to navigate to dashboard');
+            this.$router.push({ name: 'Dashboard' });
+            
+          } catch (authError) {
+            logger.error('Error during auth setup:', authError);
+            throw authError;
+          }
         } else {
+          console.error('Login failed in component:', result);
           // Handle API errors
           await Swal.fire({
             icon: 'error',

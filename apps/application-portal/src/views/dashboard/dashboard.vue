@@ -17,13 +17,6 @@ export default {
   },
   data() {
     return {
-      todos: [
-        { title: "Submit Application", description: "Complete and submit your form", status: "completed" },
-        { title: "Make Payment", description: "Pay the application fee", status: "active" },
-        { title: "Upload Documents", description: "Upload all required credentials", status: "inactive" },
-        { title: "Check Status", description: "Track your application progress", status: "inactive"  },
-        { title: "Attend Interview", description: "Be available for the scheduled interview", status: "inactive" },
-      ],
       stages: [
         "Registration",
         "Portal Fee",
@@ -44,67 +37,158 @@ export default {
       applicationData: this.application,
     });
 
-    // Check if user has an application
-    // if (!this.application && this.user?.role === 'applicant') {
-    //   logger.warn('User is an applicant but has no application record');
-    //   // Optionally redirect to application form or show a prompt
-    //   this.$nextTick(() => {
-    //     Swal.fire({
-    //       icon: 'info',
-    //       title: 'Complete Your Application',
-    //       text: 'You need to complete your application form to continue.',
-    //       confirmButtonText: 'Go to Application Form',
-    //       confirmButtonColor: '#2d7d7d',
-    //     }).then((result) => {
-    //       if (result.isConfirmed) {
-    //         this.$router.push({ name: 'ApplicationForm' });
-    //       }
-    //     });
-    //   });
-    // }
+
   },
   methods: { },
   computed: {
     progressPercent() {
-      return ((this.application?.currentStage || 1) / (this.stages.length - 1)) * 100;
+      return ((this.application?.currentStage) / (this.stages.length - 1)) * 100;
     },
+
+    currentStage() {
+      return this.application?.currentStage;
+    },
+
+    todos() {
+      const currentStage = this.currentStage;
+      const stageDefinitions = [
+        {
+          stage: 1,
+          title: "Complete Registration",
+          description: "Create your account and verify email",
+          paymentStage: false
+        },
+        {
+          stage: 2,
+          title: "Pay Form Fee",
+          description: "Pay the application form fee to proceed",
+          paymentStage: true
+        },
+        {
+          stage: 3,
+          title: "Complete Application Form",
+          description: "Fill out your application details",
+          paymentStage: false
+        },
+        {
+          stage: 4,
+          title: "Await Admission Decision",
+          description: "Your application is under review",
+          paymentStage: false
+        },
+        {
+          stage: 5,
+          title: "Pay Acceptance Fee",
+          description: "Pay acceptance fee to confirm admission",
+          paymentStage: true
+        },
+        {
+          stage: 6,
+          title: "Await Clearance",
+          description: "Document verification in progress",
+          paymentStage: false
+        },
+        {
+          stage: 7,
+          title: "Pay Administrative Fee",
+          description: "Pay administrative processing fee",
+          paymentStage: true
+        },
+        {
+          stage: 8,
+          title: "Pay School Fees",
+          description: "Pay tuition and other school fees",
+          paymentStage: true
+        },
+        {
+          stage: 9,
+          title: "Application Complete",
+          description: "Welcome! Your application process is complete",
+          paymentStage: false
+        }
+      ];
+
+      return stageDefinitions.map(def => ({
+        stage: def.stage,
+        title: def.title,
+        description: def.description,
+        paymentStage: def.paymentStage,
+        status: def.stage < currentStage ? 'completed' :
+                def.stage === currentStage ? 'active' : 'inactive'
+      }));
+    },
+
+    resumeButtonConfig() {
+      const stage = this.currentStage;
+
+      // Payment stages: 2, 5, 7, 8
+      if ([2, 5, 7, 8].includes(stage)) {
+        return {
+          text: 'Make Payment',
+          route: '/payment',
+          disabled: false,
+          variant: 'btn-acon-secondary'
+        };
+      }
+
+      // Application form stage: 3
+      if (stage === 3) {
+        return {
+          text: 'Complete Application',
+          route: '/application-form',
+          disabled: false,
+          variant: 'btn-acon-secondary'
+        };
+      }
+
+      // Waiting stages: 1, 4, 6, 9
+      if ([1, 4, 6, 9].includes(stage)) {
+        const waitingMessages = {
+          1: 'Registration Complete',
+          4: 'Awaiting Admission Decision',
+          6: 'Awaiting Clearance',
+          9: 'Application Complete!'
+        };
+
+        return {
+          text: waitingMessages[stage],
+          route: null,
+          disabled: true,
+          variant: 'btn-secondary'
+        };
+      }
+
+      // Default
+      return {
+        text: 'Continue',
+        route: '/dashboard',
+        disabled: false,
+        variant: 'btn-acon-secondary'
+      };
+    }
   },
   components: { TodoList, BiodataCard, ProgressCard },
 };
 </script>
 
 <template>
-  <div class="container-fluid mt-3 p-5">
-    <!-- User Welcome Header -->
-    <!-- <div class="row mb-4">
-      <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <h2 class="mb-0">Welcome back, {{ user?.firstName }}!</h2>
-            <p class="text-muted mb-0">Application Number: {{ applicationNumber || 'Loading...' }}</p>
-          </div>
-          <button @click="logout" class="btn btn-outline-danger">
-            <i class="bi bi-box-arrow-right"></i> Logout
-          </button>
-        </div>
-      </div>
-    </div> -->
-
+  <div class="container mt-3 px-3 px-md-5 py-5">
     <div class="row g-5">
-      <div class="col-lg-8 col-12">
+      <div class="col-md-8">
         <ProgressCard
           class="mb-4"
           :stages="stages"
           :currentStage="application?.currentStage || 0"
           :name="user?.firstName || 'Student'"
+          :resumeConfig="resumeButtonConfig"
         />
 
-        <!-- To-do -->
-        <TodoList :todos="todos" />
+        <!-- To-do List -->
+          <!-- <TodoList :todos="todos" /> -->
       </div>
 
       <!-- Bio Data Card -->
-      <div class="col-lg-4 col-12">
+      <div class="col-md-4">
         <BiodataCard
           profileImage="https://placehold.co/100"
           :name="user?.fullName || 'Loading...'"
@@ -114,9 +198,9 @@ export default {
           gender="N/A"
           location="N/A"
         />
-        
+
         <!-- Show application prompt if no application -->
-        <div v-if="!application && user?.role === 'applicant'" class="mt-3">
+        <!-- <div v-if="!application && user?.role === 'applicant'" class="mt-3">
           <div class="card border-warning">
             <div class="card-body text-center">
               <i class="bi bi-exclamation-triangle text-warning mb-2" style="font-size: 2rem;"></i>
@@ -127,7 +211,7 @@ export default {
               </button>
             </div>
           </div>
-        </div>
+        </div> -->
       </div>
     </div>
   </div>

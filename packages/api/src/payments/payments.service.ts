@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Payment, PaymentDocument } from '../schemas/payment.schema';
 import { StudentPayment, StudentPaymentDocument, PaymentStatus } from '../schemas/student-payment.schema';
+import { Application, ApplicationDocument } from '../schemas/application.schema';
 
 export interface PaymentSummary {
     id: string;
@@ -10,6 +11,7 @@ export interface PaymentSummary {
     description?: string;
     amount: number;
     isPaid: boolean;
+    paymentCode: string; // Added to identify payment type
     paidAt?: Date;
     reference?: string;
     status?: PaymentStatus;
@@ -38,6 +40,7 @@ export class PaymentsService {
     constructor(
         @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
         @InjectModel(StudentPayment.name) private studentPaymentModel: Model<StudentPaymentDocument>,
+        @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
     ) {}
 
     async getStudentPaymentsSummary(userId: string): Promise<StudentPaymentsSummary> {
@@ -77,6 +80,7 @@ export class PaymentsService {
                     description: payment.description,
                     amount: payment.amount,
                     isPaid: true,
+                    paymentCode: payment.paymentCode,
                     paidAt: studentPayment.paidAt,
                     reference: studentPayment.reference,
                     status: studentPayment.status,
@@ -89,7 +93,8 @@ export class PaymentsService {
                     name: payment.name,
                     description: payment.description,
                     amount: payment.amount,
-                    isPaid: false
+                    isPaid: false,
+                    paymentCode: payment.paymentCode
                 });
             }
         });
@@ -328,12 +333,17 @@ export class PaymentsService {
             studentPayment.fee = transaction.fees ? (transaction.fees / 100) : 0; // Convert from kobo to naira
             studentPayment.gatewayId = transaction.id;
             studentPayment.authorizationCode = transaction.authorization?.authorization_code;
+            
+            await studentPayment.save();
+            
+            // Update application stage after successful payment
+            await this.updateApplicationStageAfterPayment(studentPayment.userId, studentPayment.paymentId);
+            
         } else {
             studentPayment.status = PaymentStatus.FAILED;
             studentPayment.remarks = `Payment failed: ${transaction.gateway_response}`;
+            await studentPayment.save();
         }
-
-        await studentPayment.save();
 
         return {
             status: transaction.status,
@@ -343,6 +353,51 @@ export class PaymentsService {
             paid_at: transaction.paid_at,
             gateway_response: transaction.gateway_response
         };
+    }
+
+    /**
+     * Update application stage after successful payment
+     */
+    private async updateApplicationStageAfterPayment(userId: Types.ObjectId, paymentId: Types.ObjectId): Promise<void> {
+        try {
+            // Get payment details to determine what stage to advance to
+            const payment = await this.paymentModel.findById(paymentId);
+            if (!payment) {
+                console.log('Payment not found for stage progression');
+                return;
+            }
+
+            // Get user's application
+            const application = await this.applicationModel.findOne({ userId });
+            if (!application) {
+                console.log('Application not found for user:', userId);
+                return;
+            }
+
+            // Map payment codes to next stages
+            // Based on the payment code, determine what stage to advance to
+            const stageProgressions: { [key: string]: number } = {
+                'portalFee': 3,          // Portal fee payment (stage 2) -> Application form (stage 3)
+                'acceptanceFee': 6,      // Acceptance fee payment (stage 5) -> Clearance (stage 6)
+                'administrativeFee': 8,  // Administrative fee payment (stage 7) -> School fees (stage 8)
+                'schoolFee': 9           // School fee payment (stage 8) -> Done (stage 9)
+            };
+
+            const nextStage = stageProgressions[payment.paymentCode];
+            
+            if (nextStage && nextStage > application.currentStage) {
+                application.currentStage = nextStage;
+                await application.save();
+                
+                console.log(`Advanced application stage to ${nextStage} after ${payment.paymentCode} payment for user ${userId}`);
+            } else {
+                console.log(`No stage progression needed for payment ${payment.paymentCode}, current stage: ${application.currentStage}`);
+            }
+            
+        } catch (error) {
+            console.error('Error updating application stage after payment:', error);
+            // Don't throw error here to avoid affecting payment verification
+        }
     }
 
     /**
@@ -365,5 +420,29 @@ export class PaymentsService {
         );
 
         console.log(`Marked ${result.modifiedCount} abandoned payments as failed`);
+    }
+
+    /**
+     * Manually advance application stage (for admin use or application form completion)
+     */
+    async advanceApplicationStage(userId: string, targetStage: number): Promise<void> {
+        try {
+            const application = await this.applicationModel.findOne({ 
+                userId: new Types.ObjectId(userId) 
+            });
+            
+            if (!application) {
+                throw new Error('Application not found');
+            }
+
+            if (targetStage > application.currentStage) {
+                application.currentStage = targetStage;
+                await application.save();
+                console.log(`Manually advanced application stage to ${targetStage} for user ${userId}`);
+            }
+        } catch (error) {
+            console.error('Error advancing application stage:', error);
+            throw error;
+        }
     }
 }

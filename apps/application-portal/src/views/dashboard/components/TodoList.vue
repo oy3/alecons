@@ -25,8 +25,8 @@ export default {
     checkScroll() {
       const el = this.$refs.todoContainer;
       if (el) this.showArrows = el.scrollWidth > el.clientWidth;
-    }
-  }
+    },
+  },
 };
 </script>
 
@@ -34,9 +34,17 @@ export default {
   <div>
     <h3>Your To-do</h3>
     <hr />
-    <div ref="todoContainer" class="row flex-nowrap gap-3 overflow-x-scroll py-2">
-      <TodoItem v-for="(item, index) in todos" :key="index" :item="item" />
+
+    <div class="overflow-hidden">
+      <div
+        ref="todoContainer"
+        class="d-flex flex-nowrap overflow-x-auto py-2 todo-container"
+        style="scrollbar-width: thin; gap:1rem;"
+      >
+        <TodoItem v-for="(item, index) in todos" :key="index" :item="item" />
+      </div>
     </div>
+
     <div class="d-flex justify-content-end mt-3" v-if="showArrows">
       <button class="btn btn-outline-acon-primary me-2" @click="scrollLeft">
         <i class="bi bi-chevron-left"></i>
@@ -47,3 +55,29 @@ export default {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Thin scrollbar */
+.todo-container {
+  scrollbar-width: thin;
+  scrollbar-color: #6c757d #e9ecef;
+}
+
+.todo-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.todo-container::-webkit-scrollbar-track {
+  background: #e9ecef;
+  border-radius: 3px;
+}
+
+.todo-container::-webkit-scrollbar-thumb {
+  background: #6c757d;
+  border-radius: 3px;
+}
+
+.todo-container::-webkit-scrollbar-thumb:hover {
+  background: #495057;
+}
+</style>

@@ -3,6 +3,8 @@
  * Handles all backend API calls
  */
 
+import { logger } from '@shared/utils/logger';
+
 const API_BASE_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:8000/api/v1';
 
 class ApiService {
@@ -46,15 +48,17 @@ class ApiService {
         };
 
         try {
-            console.log('Making API request to:', url);
-            console.log('Request config:', config);
-            
+            logger.info('Making API request:', { url, config });
+
             const response = await fetch(url, config);
-            console.log('Response status:', response.status);
-            console.log('Response ok:', response.ok);
-            
+            logger.info('API response received:', {
+                status: response.status,
+                ok: response.ok,
+                url: url
+            });
+
             const data = await response.json();
-            console.log('Response data:', data);
+            logger.debug('Response data:', data);
 
             // Handle authentication errors
             if (response.status === 401) {
@@ -68,16 +72,16 @@ class ApiService {
 
             // If the backend already returns a success/data structure, return it as-is
             if (data.success !== undefined) {
-                console.log('Backend returned success/data structure:', data);
+                logger.debug('Backend returned success/data structure:', data);
                 return data;
             }
 
             // Otherwise wrap it in our standard format
             const wrappedResult = { success: true, data };
-            console.log('Wrapped result:', wrappedResult);
+            logger.debug('Wrapped result:', wrappedResult);
             return wrappedResult;
         } catch (error) {
-            console.error('API Error:', error);
+            logger.error('API Error:', error);
 
             // Handle network errors or other issues
             if (error.message === 'Authentication required') {
@@ -142,7 +146,7 @@ class ApiService {
     }
 
     async login(credentials) {
-        console.log('Login method called with:', credentials);
+        logger.info('Login method called:', { email: credentials.email });
         const result = await this.makeRequest('/auth/login', {
             method: 'POST',
             body: JSON.stringify(credentials),
@@ -150,8 +154,10 @@ class ApiService {
 
         // Store token if login successful
         if (result.success && result.data.access_token) {
-            console.log('Storing token successfully');
+            logger.info('Login successful, storing token');
             this.setToken(result.data.access_token);
+        } else {
+            logger.warn('Login failed:', result);
         }
 
         return result;

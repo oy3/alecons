@@ -10,6 +10,7 @@ import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -219,6 +220,51 @@ export class AuthService {
             };
         } catch (error) {
             throw new BadRequestException('Failed to fetch application details');
+        }
+    }
+
+    async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
+        const { currentPassword, newPassword } = changePasswordDto;
+
+        try {
+            // Find the user
+            const user = await this.userModel.findById(userId);
+            if (!user) {
+                throw new UnauthorizedException('User not found');
+            }
+
+            // Verify current password
+            const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+            if (!isCurrentPasswordValid) {
+                throw new UnauthorizedException('Current password is incorrect');
+            }
+
+            // Check if new password is different from current password
+            const isSamePassword = await bcrypt.compare(newPassword, user.passwordHash);
+            if (isSamePassword) {
+                throw new BadRequestException('New password must be different from current password');
+            }
+
+            // Hash new password
+            const saltRounds = 12;
+            const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+
+            // Update password
+            await this.userModel.findByIdAndUpdate(userId, {
+                passwordHash: hashedNewPassword,
+                updatedAt: new Date()
+            });
+
+            return {
+                success: true,
+                message: 'Password changed successfully'
+            };
+
+        } catch (error) {
+            if (error instanceof UnauthorizedException || error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to change password');
         }
     }
 }

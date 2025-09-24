@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { authManager } from '../services/auth.js'
+import { useAuthStore } from '../stores/auth.js'
 import { logger } from '@shared/utils/logger'
 
 const router = createRouter({
@@ -83,16 +83,34 @@ const router = createRouter({
 })
 
 // Global navigation guard
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   logger.info('Navigation:', { from: from.name, to: to.name });
 
-  // Validate session on every navigation
-  const isAuthenticated = authManager.validateSession();
-  const isApplicant = authManager.isApplicant();
+  const authStore = useAuthStore();
+
+  // Ensure auth store is initialized
+  if (!authStore.isInitialized) {
+    await authStore.initialize();
+  }
+
+  const isAuthenticated = authStore.isAuthenticated;
+  const isApplicant = authStore.isApplicant;
+  const isLoggingOut = authStore.isLoggingOut;
+
+  // Handle logout navigation - bypass guest-only check during logout
+  if (isLoggingOut && to.meta.guestOnly) {
+    logger.info('Logout in progress, allowing navigation to guest route');
+    return next();
+  }
 
   // Handle guest-only routes (login, register)
   if (to.meta.guestOnly && isAuthenticated) {
-    logger.info('Authenticated user trying to access guest-only route, redirecting to dashboard');
+    logger.info('Authenticated user trying to access guest-only route, redirecting to dashboard', {
+      isAuthenticated,
+      hasUser: !!authStore.user,
+      hasToken: !!authStore.token,
+      route: to.name
+    });
     return next({ name: 'Dashboard' });
   }
 

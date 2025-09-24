@@ -1,17 +1,16 @@
 <script lang="js">
-import { useAuth, authManager } from '../services/auth.js';
+import { useAuthStore } from '../stores/auth.js';
 import { useRouter } from 'vue-router';
 import Swal from 'sweetalert2';
 
 export default {
   name: "Navbar",
   setup() {
-    const { user, isAuthenticated } = useAuth();
+    const authStore = useAuthStore();
     const router = useRouter();
 
-    const logout = () => {
-
-      Swal.fire({
+    const logout = async () => {
+      const result = await Swal.fire({
         title: 'Are you sure?',
         text: 'You will be logged out of the application.',
         icon: 'warning',
@@ -19,27 +18,30 @@ export default {
         confirmButtonColor: '#3085d6',
         cancelButtonColor: '#d33',
         confirmButtonText: 'Yes, logout'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          authManager.clearAuth();
-          router.push({ name: 'Login' });
-
-          Swal.fire({
-            toast: true,
-            position: "top-end",
-            icon: "success",
-            title: "Logged out successfully.",
-            showConfirmButton: false,
-            timer: 2000,
-          });
-
-        }
       });
+
+      if (result.isConfirmed) {
+        await authStore.logout();
+        router.push({ name: 'Login' }).then(() => {
+          // Complete the logout process after navigation
+          authStore.completeLogout();
+        });
+
+        Swal.fire({
+          toast: true,
+          position: "top-end",
+          icon: "success",
+          title: "Logged out successfully.",
+          showConfirmButton: false,
+          timer: 2000,
+        });
+      }
     };
 
     return {
-      user,
-      isAuthenticated,
+      authStore,
+      user: authStore.user,
+      isAuthenticated: authStore.isAuthenticated,
       logout
     };
   }

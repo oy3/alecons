@@ -34,6 +34,12 @@ class ApiService {
 
         if (this.token) {
             headers.Authorization = `Bearer ${this.token}`;
+            logger.debug('Authorization header set:', {
+                hasToken: !!this.token,
+                tokenPreview: this.token?.substring(0, 20) + '...'
+            });
+        } else {
+            logger.warn('No token available for authorization header');
         }
 
         return headers;
@@ -62,8 +68,17 @@ class ApiService {
 
             // Handle authentication errors
             if (response.status === 401) {
-                this.handleTokenExpiration();
-                throw new Error('Authentication required');
+                // Check if this is a token expiration or just wrong credentials
+                if (endpoint === '/auth/change-password' && data.message &&
+                    (data.message.includes('Current password is incorrect') ||
+                        data.message.includes('incorrect'))) {
+                    // This is just wrong current password, don't logout
+                    throw new Error(data.message || 'Current password is incorrect');
+                } else {
+                    // This is likely token expiration, handle logout
+                    this.handleTokenExpiration();
+                    throw new Error('Authentication required');
+                }
             }
 
             if (!response.ok) {
@@ -81,7 +96,13 @@ class ApiService {
             logger.debug('Wrapped result:', wrappedResult);
             return wrappedResult;
         } catch (error) {
-            logger.error('API Error:', error);
+            logger.error('API Error:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name,
+                url: url,
+                method: config.method || 'GET'
+            });
 
             // Handle network errors or other issues
             if (error.message === 'Authentication required') {
@@ -132,8 +153,9 @@ class ApiService {
     // Handle token expiration
     handleTokenExpiration() {
         // Import dynamically to avoid circular dependency
-        import('./auth.js').then(({ authManager }) => {
-            authManager.clearAuth();
+        import('../stores/auth.js').then(({ useAuthStore }) => {
+            const authStore = useAuthStore();
+            authStore.handleAuthError();
         });
     }
 

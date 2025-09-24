@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
-import { authManager } from './services/auth.js'
 
 // Import Bootstrap and BootstrapVue CSS files (order is important)
 import '@popperjs/core'
@@ -13,9 +13,8 @@ import '@bootstrap-icons/font/bootstrap-icons.css'
 import '@shared/styles/style.css'
 
 const app = createApp(App)
+const pinia = createPinia()
 
-// Initialize auth manager before mounting
-authManager.initializeFromStorage()
-
+app.use(pinia)
 app.use(router)
 app.mount('#app')

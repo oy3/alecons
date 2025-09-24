@@ -1,13 +1,18 @@
 <script lang="js">
 import BrandLogo from '../../components/BrandLogo.vue';
 import { logger } from '@shared/utils/logger';
-import { apiService } from '../../services/api.js';
-import { authManager } from '../../services/auth.js';
+import { useAuthStore } from '../../stores/auth.js';
 import Swal from 'sweetalert2';
 
 export default {
   name: 'LoginPage',
-  inheritAttrs: false, // Add this to handle non-prop attributes
+  inheritAttrs: false,
+  setup() {
+    const authStore = useAuthStore();
+    return {
+      authStore
+    };
+  },
   data() {
     return {
       email: '',
@@ -39,72 +44,45 @@ export default {
           },
         });
 
-        // Call backend API
-        logger.info('About to call apiService.login...');
+        // Use Pinia store login
+        logger.info('Attempting login with auth store...');
         
-        let result;
-        try {
-          result = await apiService.login({
-            email: this.email,
-            password: this.password,
-          });
-           logger.info('apiService.login completed successfully');
-        } catch (apiError) {
-          logger.error('Error in apiService.login:', apiError);
-          throw apiError;
-        }
-
-        logger.info('Login component received result:', result);
-        logger.info('Result type:', typeof result);
-        logger.info('Result properties:', Object.keys(result || {}));
+        const result = await this.authStore.login({
+          email: this.email,
+          password: this.password,
+        });
 
         if (result.success) {
-          logger.info('Login successful:', result.data.user);
+          logger.info('Login successful');
           
-          try {
-            // Set authentication using auth manager
-            logger.info('Setting auth with:', {
-              user: result.data.user,
-              token: result.data.access_token,
-              application: result.data.application
-            });
-            
-            authManager.setAuth(
-              result.data.user,
-              result.data.access_token,
-              result.data.application
-            );
-            
-            logger.info('Auth set successfully');
-            
-            // Success message
-            await Swal.fire({
-              icon: 'success',
-              title: 'Welcome!',
-              text: `Welcome back, ${result.data.user.firstName}!`,
-              timer: 1500,
-              showConfirmButton: false,
-            });
-            
-            logger.info('About to navigate to dashboard');
-            this.$router.push({ name: 'Dashboard' });
-            
-          } catch (authError) {
-            logger.error('Error during auth setup:', authError);
-            throw authError;
-          }
+          // Success message
+          await Swal.fire({
+            icon: 'success',
+            title: 'Welcome!',
+            text: `Hello ${this.authStore.user?.firstName}!`,
+            confirmButtonColor: '#2d7d7d',
+            timer: 1500,
+            showConfirmButton: false
+          });
+
+          // Navigate to dashboard
+          this.$router.push('/dashboard');
         } else {
-          console.error('Login failed in component:', result);
-          // Handle API errors
+          // Login failed
+          logger.error('Login failed:', result.error);
           await Swal.fire({
             icon: 'error',
             title: 'Login Failed',
-            text: result.error || 'Please check your credentials and try again',
+            text: result.error || 'Invalid email or password',
             confirmButtonColor: '#2d7d7d',
           });
         }
       } catch (error) {
-        logger.error('Login error:', error);
+        logger.error('Login error:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
         
         // Show error message
         await Swal.fire({

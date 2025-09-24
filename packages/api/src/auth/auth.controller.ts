@@ -36,6 +36,32 @@ export class AuthController {
         return this.authService.getApplicationById(id);
     }
 
+    @Get('profile')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get current user profile' })
+    @ApiResponse({ status: 200, description: 'User profile retrieved' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async getProfile(@Request() req) {
+        console.log('Profile controller called - user:', {
+            userId: req.user?._id,
+            email: req.user?.email
+        });
+
+        try {
+            const result = await this.authService.getCurrentUserProfile(req.user._id);
+            console.log('Profile service result:', {
+                success: result.success,
+                hasUser: !!result.data?.user,
+                hasApplication: !!result.data?.application
+            });
+            return result;
+        } catch (error) {
+            console.log('Profile controller error:', error.message);
+            throw error;
+        }
+    }
+
     @Post('change-password')
     @HttpCode(HttpStatus.OK)
     @UseGuards(JwtAuthGuard)

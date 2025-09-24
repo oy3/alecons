@@ -1,15 +1,21 @@
 <script lang="js">
 import BrandLogo from "./BrandLogo.vue";
-import { useAuth, authManager } from "../services/auth.js";
+import { useAuthStore } from "../stores/auth.js";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
 
 export default {
   name: "Sidebar",
   components: { BrandLogo },
+  setup() {
+    const authStore = useAuthStore();
+    return {
+      authStore
+    };
+  },
   methods: {
-    logout() {
-      Swal.fire({
+    async logout() {
+      const result = await Swal.fire({
         title: "Are you sure?",
         text: "You will be logged out of the application.",
         icon: "warning",
@@ -17,11 +23,16 @@ export default {
         confirmButtonColor: "#3085d6",
         cancelButtonColor: "#d33",
         confirmButtonText: "Yes, logout",
-      }).then((result) => {
-        if (result.isConfirmed) {
+      });
+
+      if (result.isConfirmed) {
           logger.info("User confirmed logout");
-          authManager.clearAuth();
-          this.$router.push({ name: "Login" });
+          await this.authStore.logout();
+          
+          this.$router.push({ name: "Login" }).then(() => {
+            // Complete the logout process after navigation
+            this.authStore.completeLogout();
+          });
 
           Swal.fire({
             toast: true,
@@ -32,9 +43,8 @@ export default {
             timer: 2000,
           });
         }
-      });
-    },
-  },
+    }
+  }
 };
 </script>
 

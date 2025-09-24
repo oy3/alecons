@@ -1,11 +1,25 @@
 <script lang="js">
 import { RouterView, useRoute } from 'vue-router';
+import { onMounted } from 'vue';
+import { useAuthStore } from './stores/auth.js';
 import Sidebar from "./components/Sidebar.vue";
 import Navbar from "./components/Navbar.vue";
 import MobileSidebar from "./components/MobileSidebar.vue";
 
 export default {
   name: 'App',
+  setup() {
+    const authStore = useAuthStore();
+
+    onMounted(async () => {
+      // Initialize auth store on app mount
+      await authStore.initialize();
+    });
+
+    return {
+      authStore
+    };
+  },
   methods: {
   },
   computed: {
@@ -39,4 +53,5 @@ export default {
   </div>
 </template>
 
-<style scoped></style>
+<style>
+</style>

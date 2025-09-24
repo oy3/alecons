@@ -1,5 +1,5 @@
 <script lang="js">
-import { useAuth, authManager } from "../../services/auth.js";
+import { useAuthStore } from "../../stores/auth.js";
 import { logger } from '@shared/utils/logger';
 import TodoList from "./components/TodoList.vue";
 import BiodataCard from "./components/BiodataCard.vue";
@@ -8,11 +8,9 @@ import ProgressCard from "./components/ProgressCard.vue";
 export default {
   name: "Dashboard",
   setup() {
-    const { user, isAuthenticated, application } = useAuth();
+    const authStore = useAuthStore();
     return {
-      user,
-      isAuthenticated,
-      application
+      authStore
     };
   },
   data() {
@@ -33,14 +31,21 @@ export default {
   mounted() {
     // Log dashboard access
     logger.info('Dashboard accessed by user:', {
-      userData: this.user,
-      applicationData: this.application,
+      userData: this.authStore.user,
+      applicationData: this.authStore.application,
     });
-
-
   },
   methods: { },
   computed: {
+    user() {
+      return this.authStore.user;
+    },
+    application() {
+      return this.authStore.application;
+    },
+    isAuthenticated() {
+      return this.authStore.isAuthenticated;
+    },
     progressPercent() {
       return ((this.application?.currentStage) / (this.stages.length - 1)) * 100;
     },
@@ -184,7 +189,7 @@ export default {
         />
 
         <!-- To-do List -->
-          <!-- <TodoList :todos="todos" /> -->
+          <TodoList :todos="todos" />
       </div>
 
       <!-- Bio Data Card -->

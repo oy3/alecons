@@ -1,12 +1,18 @@
 <script>
 import BrandLogo from "./BrandLogo.vue";
-import { useAuth, authManager } from "../services/auth.js";
+import { useAuthStore } from "../stores/auth.js";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
 
 export default {
   name: "MobileSidebar",
   components: { BrandLogo },
+  setup() {
+    const authStore = useAuthStore();
+    return {
+      authStore
+    };
+  },
   methods: {
     navigateAndClose(routePath, event) {
       // Prevent default anchor link behavior
@@ -43,8 +49,8 @@ export default {
       }
     },
 
-    logout() {
-      Swal.fire({
+    async logout() {
+      const result = await Swal.fire({
         title: "Are you sure?",
         text: "You will be logged out of the application.",
         icon: "warning",
@@ -52,24 +58,27 @@ export default {
         confirmButtonColor: "#3085d6",
         cancelButtonColor: "#d33",
         confirmButtonText: "Yes, logout",
-      }).then((result) => {
-        if (result.isConfirmed) {
-          logger.info("User confirmed logout");
-          authManager.clearAuth();
-          this.$router.push({ name: "Login" }).then(() => {
-            this.closeOffcanvas();
-          });
-
-          Swal.fire({
-            toast: true,
-            position: "top-end",
-            icon: "success",
-            title: "Logged out successfully.",
-            showConfirmButton: false,
-            timer: 2000,
-          });
-        }
       });
+
+      if (result.isConfirmed) {
+        logger.info("User confirmed logout");
+        await this.authStore.logout();
+        
+        this.$router.push({ name: "Login" }).then(() => {
+          // Complete the logout process after navigation
+          this.authStore.completeLogout();
+          this.closeOffcanvas();
+        });
+
+        Swal.fire({
+          toast: true,
+          position: "top-end",
+          icon: "success",
+          title: "Logged out successfully.",
+          showConfirmButton: false,
+          timer: 2000,
+        });
+      }
     },
   },
 };

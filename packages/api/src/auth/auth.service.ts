@@ -267,4 +267,58 @@ export class AuthService {
             throw new BadRequestException('Failed to change password');
         }
     }
+
+    async getCurrentUserProfile(userId: string) {
+        try {
+            // Find the user
+            const user = await this.userModel.findById(userId).select('-passwordHash');
+            if (!user) {
+                throw new UnauthorizedException('User not found');
+            }
+
+            // Find the user's application if they have one
+            let application = null;
+            if (user.role === UserRole.APPLICANT) {
+                application = await this.applicationModel
+                    .findOne({ userId: user._id })
+                    .populate('programId', 'name code')
+                    .populate('programTypeId', 'type')
+                    .populate('programModeId', 'mode')
+                    .exec();
+            }
+
+            return {
+                success: true,
+                data: {
+                    user: {
+                        id: user._id,
+                        email: user.email,
+                        firstName: user.firstName,
+                        otherName: user.otherName,
+                        lastName: user.lastName,
+                        role: user.role,
+                        isActive: user.isActive,
+                        fullName: user.fullName
+                    },
+                    application: application ? {
+                        id: application._id,
+                        applicationNumber: application.applicationNumber,
+                        currentStage: application.currentStage,
+                        status: application.status,
+                        program: application.programId,
+                        programType: application.programTypeId,
+                        programMode: application.programModeId,
+                        createdAt: application.createdAt,
+                        updatedAt: application.updatedAt
+                    } : null
+                }
+            };
+
+        } catch (error) {
+            if (error instanceof UnauthorizedException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to fetch user profile');
+        }
+    }
 }

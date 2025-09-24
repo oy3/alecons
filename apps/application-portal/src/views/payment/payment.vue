@@ -93,9 +93,17 @@ export default {
           await this.fetchPayments();
 
           // Show success message
-          alert(
-            `Payment for ${fee.name} completed successfully! Reference: ${result.data.reference}`
-          );
+          Swal.fire({
+            toast: true,
+            position: "top-end",
+            icon: "success",
+            title: `Payment for ${fee.name} completed successfully!`,
+            text: `Reference: ${result.data.reference}`,
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true,
+          });
+          
         } else {
           logger.error("Payment failed:", result);
           this.error = result.message || "Payment failed. Please try again.";
@@ -129,10 +137,10 @@ export default {
     isPaymentAvailable(fee) {
       // Map payment codes to their required stages
       const paymentStageMap = {
-        'portalFee': 2,        // Portal fee (Form fee) available at stage 2
-        'acceptanceFee': 5,    // Acceptance fee available at stage 5
-        'administrativeFee': 7, // Administrative fee available at stage 7
-        'schoolFee': 8         // School fee available at stage 8
+        portalFee: 2, // Portal fee (Form fee) available at stage 2
+        acceptanceFee: 5, // Acceptance fee available at stage 5
+        administrativeFee: 7, // Administrative fee available at stage 7
+        schoolFee: 8, // School fee available at stage 8
       };
 
       const requiredStage = paymentStageMap[fee.paymentCode];
@@ -141,12 +149,12 @@ export default {
 
     getRequiredStage(paymentCode) {
       const paymentStageMap = {
-        'portalFee': 2,        // Portal fee (Form fee) available at stage 2
-        'acceptanceFee': 5,    // Acceptance fee available at stage 5
-        'administrativeFee': 7, // Administrative fee available at stage 7
-        'schoolFee': 8         // School fee available at stage 8
+        portalFee: 2, // Portal fee (Form fee) available at stage 2
+        acceptanceFee: 5, // Acceptance fee available at stage 5
+        administrativeFee: 7, // Administrative fee available at stage 7
+        schoolFee: 8, // School fee available at stage 8
       };
-      return paymentStageMap[paymentCode] || 'Unknown';
+      return paymentStageMap[paymentCode] || "Unknown";
     },
   },
   components: {},
@@ -210,14 +218,12 @@ export default {
                 <small v-if="!isPaymentAvailable(fee)" class="text-warning">
                   <i class="bi bi-info-circle"></i>
                   <!-- Available at stage {{ getRequiredStage(fee.paymentCode) }} -->
-                   Not available yet
+                  Not available yet
                 </small>
               </div>
               <button
                 @click="initiatePayment(fee)"
-                :disabled="
-                  isPaymentLoading(fee.id) || !isPaymentAvailable(fee)
-                "
+                :disabled="isPaymentLoading(fee.id) || !isPaymentAvailable(fee)"
                 :class="[
                   'btn',
                   'btn-acon-primary',
@@ -231,10 +237,7 @@ export default {
                   role="status"
                   aria-hidden="true"
                 ></span>
-                {{ 
-                  isPaymentLoading(fee.id) ? "Processing..." : 
-                  "Pay Now" 
-                }}
+                {{ isPaymentLoading(fee.id) ? "Processing..." : "Pay Now" }}
               </button>
             </li>
           </ul>

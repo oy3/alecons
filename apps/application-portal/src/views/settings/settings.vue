@@ -1,5 +1,5 @@
 <script lang="js">
-import { useAuth, authManager } from "../../services/auth.js";
+import { useAuthStore } from "../../stores/auth.js";
 import { logger } from '@shared/utils/logger';
 import Swal from "sweetalert2";
 import { apiService } from "../../services/api.js";
@@ -7,11 +7,9 @@ import { apiService } from "../../services/api.js";
 export default {
   name: "Settings",
   setup() {
-    const { user, isAuthenticated, application } = useAuth();
+    const authStore = useAuthStore();
     return {
-      user,
-      isAuthenticated,
-      application
+      authStore
     };
   },
   data() {
@@ -24,6 +22,17 @@ export default {
       showNewPassword: false,
       isChangingPassword: false
     };
+  },
+  computed: {
+    user() {
+      return this.authStore.user;
+    },
+    isAuthenticated() {
+      return this.authStore.isAuthenticated;
+    },
+    application() {
+      return this.authStore.application;
+    }
   },
   methods: {
     togglePasswordVisibility(field) {

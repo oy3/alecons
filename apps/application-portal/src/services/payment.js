@@ -14,7 +14,7 @@ class PaymentService {
         try {
             logger.info('Fetching payments summary');
             const response = await apiService.get('/payments/summary');
-            
+
             if (response.success) {
                 logger.info('Successfully fetched payments summary');
                 return {
@@ -44,7 +44,7 @@ class PaymentService {
                 paymentId,
                 email
             });
-            
+
             if (response.success) {
                 logger.info('Payment initialized successfully');
                 return {
@@ -70,13 +70,13 @@ class PaymentService {
     async launchPaystackPayment(paymentData) {
         try {
             logger.info('Launching Paystack payment:', paymentData);
-            
+
             // Extract data from the payment object
             const { email, paymentType: paymentId, amount, description } = paymentData;
-            
+
             // Initialize payment first
             const initResult = await this.initializePayment(paymentId, email);
-            
+
             if (!initResult.success) {
                 throw new Error(initResult.message);
             }
@@ -143,9 +143,21 @@ class PaymentService {
         try {
             logger.info('Verifying payment:', { reference });
             const response = await apiService.post(`/payments/verify/${reference}`);
-            
+
             if (response.success) {
                 logger.info('Payment verification successful');
+
+                // Import auth store and refresh user data after successful payment
+                try {
+                    const { useAuthStore } = await import('../stores/auth.js');
+                    const authStore = useAuthStore();
+                    await authStore.refreshUserData();
+                    logger.info('User data refreshed after successful payment');
+                } catch (storeError) {
+                    logger.error('Failed to refresh user data after payment:', storeError);
+                    // Don't fail the payment verification if store refresh fails
+                }
+
                 return {
                     success: true,
                     data: response.data

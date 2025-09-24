@@ -1,9 +1,10 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+    const logger = new Logger('Bootstrap');
     const app = await NestFactory.create(AppModule);
 
     // Enable CORS
@@ -36,8 +37,8 @@ async function bootstrap() {
 
     const port = process.env.PORT || 8000;
     await app.listen(port);
-    console.log(`🚀 Alecons API running on http://localhost:${port}`);
-    console.log(`📚 Swagger docs at http://localhost:${port}/api/docs`);
+    logger.log(`🚀 Alecons API running on http://localhost:${port}`);
+    logger.log(`📚 Swagger docs at http://localhost:${port}/api/docs`);
 }
 
 bootstrap();

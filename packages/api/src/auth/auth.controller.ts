@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Get, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, Param, UseGuards, Request, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
+    private readonly logger = new Logger(AuthController.name);
     constructor(private readonly authService: AuthService) { }
 
     @Post('register')
@@ -43,21 +44,21 @@ export class AuthController {
     @ApiResponse({ status: 200, description: 'User profile retrieved' })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     async getProfile(@Request() req) {
-        console.log('Profile controller called - user:', {
+        this.logger.log('Profile controller called - user:', {
             userId: req.user?._id,
             email: req.user?.email
         });
 
         try {
             const result = await this.authService.getCurrentUserProfile(req.user._id);
-            console.log('Profile service result:', {
+            this.logger.log('Profile service result:', {
                 success: result.success,
                 hasUser: !!result.data?.user,
                 hasApplication: !!result.data?.application
             });
             return result;
         } catch (error) {
-            console.log('Profile controller error:', error.message);
+            this.logger.error('Profile controller error:', error.message);
             throw error;
         }
     }

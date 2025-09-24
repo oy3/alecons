@@ -1,18 +1,20 @@
-import { Controller, Get, Post, Body, Param, Request, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Request, UseGuards, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('payments')
 @UseGuards(JwtAuthGuard)
 export class PaymentsController {
-    constructor(private readonly paymentsService: PaymentsService) {}
+    private readonly logger = new Logger(PaymentsController.name);
+
+    constructor(private readonly paymentsService: PaymentsService) { }
 
     @Get('summary')
     async getStudentPaymentsSummary(@Request() req) {
         try {
             const userId = req.user._id.toString(); // User ID from authenticated user
             const summary = await this.paymentsService.getStudentPaymentsSummary(userId);
-            
+
             return {
                 success: true,
                 data: summary
@@ -35,19 +37,19 @@ export class PaymentsController {
         @Body() body: { paymentId: string; email: string }
     ) {
         try {
-            console.log('Initialize payment request:', {
+            this.logger.log('Initialize payment request:', {
                 userId: req.user?._id,
                 body: body,
                 user: req.user
             });
-            
+
             const userId = req.user._id.toString();
             const result = await this.paymentsService.initializePayment(
                 userId,
                 body.paymentId,
                 body.email
             );
-            
+
             return {
                 success: true,
                 data: result
@@ -68,7 +70,7 @@ export class PaymentsController {
     async verifyPayment(@Param('reference') reference: string) {
         try {
             const result = await this.paymentsService.verifyPayment(reference);
-            
+
             return {
                 success: true,
                 data: result

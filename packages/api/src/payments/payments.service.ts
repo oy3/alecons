@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Payment, PaymentDocument } from '../schemas/payment.schema';
@@ -34,6 +34,7 @@ export interface PaystackInitializeResponse {
 
 @Injectable()
 export class PaymentsService {
+    private readonly logger = new Logger(PaymentsService.name);
     private readonly paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
     private readonly paystackBaseUrl = 'https://api.paystack.co';
 
@@ -41,7 +42,7 @@ export class PaymentsService {
         @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
         @InjectModel(StudentPayment.name) private studentPaymentModel: Model<StudentPaymentDocument>,
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
-    ) {}
+    ) { }
 
     async getStudentPaymentsSummary(userId: string): Promise<StudentPaymentsSummary> {
         const userObjectId = new Types.ObjectId(userId);
@@ -69,7 +70,7 @@ export class PaymentsService {
 
         allPayments.forEach(payment => {
             const paymentId = payment._id.toString();
-            const studentPayment = studentPayments.find(sp => 
+            const studentPayment = studentPayments.find(sp =>
                 sp.paymentId._id.toString() === paymentId
             );
 
@@ -112,20 +113,20 @@ export class PaymentsService {
 
     async initializePayment(userId: string, paymentId: string, email: string): Promise<PaystackInitializeResponse> {
         try {
-            console.log('initializePayment called with:', { userId, paymentId, email });
-            
+            this.logger.log('initializePayment called with:', { userId, paymentId, email });
+
             // Ensure paymentId is a valid ObjectId
             if (!Types.ObjectId.isValid(paymentId)) {
-                console.log('Invalid ObjectId format:', paymentId);
+                this.logger.log('Invalid ObjectId format:', paymentId);
                 throw new Error('Invalid payment ID format');
             }
-            
+
             // Get payment details
             const payment = await this.paymentModel.findById(new Types.ObjectId(paymentId));
-            console.log('Payment found:', payment);
-            
+            this.logger.log('Payment found:', payment);
+
             if (!payment) {
-                console.log('Payment not found for ID:', paymentId);
+                this.logger.log('Payment not found for ID:', paymentId);
                 throw new Error('Payment not found');
             }
 
@@ -151,14 +152,14 @@ export class PaymentsService {
             let paystackData: any;
 
             if (existingAttempt) {
-                console.log('Found existing payment attempt:', {
+                this.logger.log('Found existing payment attempt:', {
                     status: existingAttempt.status,
                     reference: existingAttempt.reference,
                     createdAt: existingAttempt.createdAt
                 });
 
                 reference = existingAttempt.reference;
-                
+
                 // Check the actual status with Paystack first
                 try {
                     const verifyResponse = await fetch(`${this.paystackBaseUrl}/transaction/verify/${reference}`, {
@@ -167,7 +168,7 @@ export class PaymentsService {
                         }
                     });
                     const verifyData = await verifyResponse.json();
-                    
+
                     if (verifyData.status) {
                         if (verifyData.data.status === 'success') {
                             // Payment was successful, update our record
@@ -178,19 +179,19 @@ export class PaymentsService {
                             existingAttempt.gatewayId = verifyData.data.id;
                             existingAttempt.authorizationCode = verifyData.data.authorization?.authorization_code;
                             await existingAttempt.save();
-                            
+
                             throw new Error('Payment has already been completed successfully');
                         } else if (verifyData.data.status === 'abandoned' || verifyData.data.status === 'failed') {
                             // Payment was abandoned/failed, mark as failed
                             existingAttempt.status = PaymentStatus.FAILED;
                             existingAttempt.remarks = `Payment ${verifyData.data.status}: ${verifyData.data.gateway_response || 'User abandoned payment'}`;
                             await existingAttempt.save();
-                            console.log('Payment was marked as failed based on Paystack status');
+                            this.logger.log('Payment was marked as failed based on Paystack status');
                         }
                         // For pending status, we'll continue to reuse
                     }
                 } catch (verifyError) {
-                    console.log('Error verifying existing payment:', verifyError.message);
+                    this.logger.error('Error verifying existing payment:', verifyError.message);
                     // Continue with the existing reference anyway
                 }
 
@@ -200,22 +201,22 @@ export class PaymentsService {
                     existingAttempt.retryCount = (existingAttempt.retryCount || 0) + 1;
                     existingAttempt.remarks = `Payment retry attempt x${existingAttempt.retryCount} - awaiting user action`;
                     await existingAttempt.save();
-                    console.log(`Updated failed payment attempt to pending for retry #${existingAttempt.retryCount}`);
+                    this.logger.log(`Updated failed payment attempt to pending for retry #${existingAttempt.retryCount}`);
                 } else if (existingAttempt.status === PaymentStatus.PENDING) {
                     // Update remarks to show it's being retried
                     existingAttempt.retryCount = (existingAttempt.retryCount || 0) + 1;
                     existingAttempt.remarks = `Payment re-initialized with new reference x${existingAttempt.retryCount} - awaiting user action`;
                     await existingAttempt.save();
-                    console.log(`Updated pending payment attempt remarks for retry #${existingAttempt.retryCount}`);
+                    this.logger.log(`Updated pending payment attempt remarks for retry #${existingAttempt.retryCount}`);
                 }
 
                 // For existing attempts, we need to create a NEW Paystack transaction with a NEW reference
                 // because Paystack references are unique and cannot be reused
                 const newReference = `alc${Date.now()}`;
-                console.log('Creating new Paystack transaction with new reference:', newReference);
-                
+                this.logger.log('Creating new Paystack transaction with new reference:', newReference);
+
                 paystackData = await this.createPaystackTransaction(payment, email, newReference, userId, paymentId);
-                
+
                 // Update the existing record with the new reference
                 existingAttempt.reference = newReference;
                 existingAttempt.status = PaymentStatus.PENDING;
@@ -231,7 +232,7 @@ export class PaymentsService {
                 // No existing attempt found, create new payment attempt
                 reference = `alc${Date.now()}`;
                 paystackData = await this.createPaystackTransaction(payment, email, reference, userId, paymentId);
-                
+
                 // Create new payment attempt record
                 await this.studentPaymentModel.create({
                     userId: new Types.ObjectId(userId),
@@ -250,13 +251,13 @@ export class PaymentsService {
                 };
             }
         } catch (error) {
-            console.error('Error in initializePayment:', error);
+            this.logger.error('Error in initializePayment:', error);
             throw error;
         }
     }
 
     private async createPaystackTransaction(payment: any, email: string, reference: string, userId: string, paymentId: string) {
-        console.log('Creating new Paystack transaction:', {
+        this.logger.log('Creating new Paystack transaction:', {
             paymentId,
             amount: payment.amount,
             amountInKobo: payment.amount * 100,
@@ -284,8 +285,8 @@ export class PaymentsService {
         });
 
         const data = await response.json();
-        
-        console.log('Paystack response:', data);
+
+        this.logger.log('Paystack response:', data);
 
         if (!data.status) {
             throw new Error(data.message || 'Failed to initialize payment');
@@ -302,7 +303,7 @@ export class PaymentsService {
         studentPayment.gatewayId = transactionData.id;
         studentPayment.authorizationCode = transactionData.authorization?.authorization_code;
         await studentPayment.save();
-    }    async verifyPayment(reference: string): Promise<any> {
+    } async verifyPayment(reference: string): Promise<any> {
         // Verify with Paystack
         const response = await fetch(`${this.paystackBaseUrl}/transaction/verify/${reference}`, {
             headers: {
@@ -333,12 +334,12 @@ export class PaymentsService {
             studentPayment.fee = transaction.fees ? (transaction.fees / 100) : 0; // Convert from kobo to naira
             studentPayment.gatewayId = transaction.id;
             studentPayment.authorizationCode = transaction.authorization?.authorization_code;
-            
+
             await studentPayment.save();
-            
+
             // Update application stage after successful payment
             await this.updateApplicationStageAfterPayment(studentPayment.userId, studentPayment.paymentId);
-            
+
         } else {
             studentPayment.status = PaymentStatus.FAILED;
             studentPayment.remarks = `Payment failed: ${transaction.gateway_response}`;
@@ -363,14 +364,14 @@ export class PaymentsService {
             // Get payment details to determine what stage to advance to
             const payment = await this.paymentModel.findById(paymentId);
             if (!payment) {
-                console.log('Payment not found for stage progression');
+                this.logger.log('Payment not found for stage progression');
                 return;
             }
 
             // Get user's application
             const application = await this.applicationModel.findOne({ userId });
             if (!application) {
-                console.log('Application not found for user:', userId);
+                this.logger.log('Application not found for user:', userId);
                 return;
             }
 
@@ -384,18 +385,18 @@ export class PaymentsService {
             };
 
             const nextStage = stageProgressions[payment.paymentCode];
-            
+
             if (nextStage && nextStage > application.currentStage) {
                 application.currentStage = nextStage;
                 await application.save();
-                
-                console.log(`Advanced application stage to ${nextStage} after ${payment.paymentCode} payment for user ${userId}`);
+
+                this.logger.log(`Advanced application stage to ${nextStage} after ${payment.paymentCode} payment for user ${userId}`);
             } else {
-                console.log(`No stage progression needed for payment ${payment.paymentCode}, current stage: ${application.currentStage}`);
+                this.logger.log(`No stage progression needed for payment ${payment.paymentCode}, current stage: ${application.currentStage}`);
             }
-            
+
         } catch (error) {
-            console.error('Error updating application stage after payment:', error);
+            this.logger.error('Error updating application stage after payment:', error);
             // Don't throw error here to avoid affecting payment verification
         }
     }
@@ -405,21 +406,21 @@ export class PaymentsService {
      */
     async markAbandonedPaymentsAsFailed(): Promise<void> {
         const thirtyMinutesAgo = new Date(Date.now() - (30 * 60 * 1000));
-        
+
         const result = await this.studentPaymentModel.updateMany(
-            { 
+            {
                 status: PaymentStatus.PENDING,
                 createdAt: { $lt: thirtyMinutesAgo }
             },
-            { 
-                $set: { 
+            {
+                $set: {
                     status: PaymentStatus.FAILED,
                     remarks: 'Payment timed out - user did not complete payment within 30 minutes'
                 }
             }
         );
 
-        console.log(`Marked ${result.modifiedCount} abandoned payments as failed`);
+        this.logger.log(`Marked ${result.modifiedCount} abandoned payments as failed`);
     }
 
     /**
@@ -427,10 +428,10 @@ export class PaymentsService {
      */
     async advanceApplicationStage(userId: string, targetStage: number): Promise<void> {
         try {
-            const application = await this.applicationModel.findOne({ 
-                userId: new Types.ObjectId(userId) 
+            const application = await this.applicationModel.findOne({
+                userId: new Types.ObjectId(userId)
             });
-            
+
             if (!application) {
                 throw new Error('Application not found');
             }
@@ -438,10 +439,10 @@ export class PaymentsService {
             if (targetStage > application.currentStage) {
                 application.currentStage = targetStage;
                 await application.save();
-                console.log(`Manually advanced application stage to ${targetStage} for user ${userId}`);
+                this.logger.log(`Manually advanced application stage to ${targetStage} for user ${userId}`);
             }
         } catch (error) {
-            console.error('Error advancing application stage:', error);
+            this.logger.error('Error advancing application stage:', error);
             throw error;
         }
     }

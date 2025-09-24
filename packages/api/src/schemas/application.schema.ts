@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document as MongooseDocument, Types } from 'mongoose';
+import { Logger } from '@nestjs/common';
 
 export type ApplicationDocument = Application & MongooseDocument;
 
@@ -213,7 +214,8 @@ ApplicationSchema.pre('save', async function (next) {
             // Generate: ALEC{yy}{program.code}{0001}
             this.applicationNumber = `ALEC${yearString}${programCode}${String(count + 1).padStart(4, '0')}`;
         } catch (error) {
-            console.error('Error generating application number:', error);
+            const logger = new Logger('ApplicationSchema');
+            logger.error('Error generating application number:', error);
             // Fallback to basic numbering if program lookup fails
             const ApplicationModel = this.constructor as any;
             const count = await ApplicationModel.countDocuments();

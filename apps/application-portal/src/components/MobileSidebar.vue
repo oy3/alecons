@@ -30,7 +30,7 @@ export default {
         .catch((error) => {
           // Handle navigation errors (e.g., if already on the same route)
           if (error.name !== "NavigationDuplicated") {
-            console.error("Navigation error:", error);
+            logger.error("Navigation error:", error);
           } else {
             // Even if we're already on the route, still close the offcanvas
             this.closeOffcanvas();

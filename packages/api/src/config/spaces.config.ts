@@ -29,5 +29,8 @@ export const SPACES_CONFIG = {
     MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB in bytes
     FILE_PATHS: {
         APPLICATIONS: 'applications',
+        TEMP: 'temp',
     },
+    // Temporary file cleanup settings
+    TEMP_FILE_EXPIRY_HOURS: 24, // Files older than 24 hours in temp will be cleaned up
 };

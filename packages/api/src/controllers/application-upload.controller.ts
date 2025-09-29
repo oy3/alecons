@@ -77,16 +77,20 @@ export class ApplicationUploadController {
                 hasBuffer: !!file.buffer
             });
 
-            // Check if user already has an application to use its ID for file organization
-            // If not, use temp structure but organize files properly
+            // Check if user already has an application to get application number
             let application = await this.applicationModel.findOne({ userId: new Types.ObjectId(userId) });
-            const applicationId = application ? application._id.toString() : `temp_${userId}_${Date.now()}`;
+            const applicationNumber = application ? application.applicationNumber : null;
 
-            // Upload to DigitalOcean Spaces (but don't save to MongoDB yet)
+            if (!applicationNumber) {
+                throw new BadRequestException('Application not found. Please complete registration first.');
+            }
+
+            // Upload to DigitalOcean Spaces temp storage using application number
             const uploadResult = await this.uploadService.uploadToSpaces(
                 file,
-                applicationId,
-                uploadData.fileType
+                applicationNumber,
+                uploadData.fileType,
+                true // isTemp = true for initial uploads
             );
 
             // Prepare file metadata for frontend storage
@@ -246,17 +250,50 @@ export class ApplicationUploadController {
 
             this.logger.log('Updating existing application:', application._id.toString());
 
-            // Prepare documents array from uploaded files
-            const documents = applicationData.uploadedFiles.map(file => ({
-                type: file.type,
-                url: file.url,
-                uploadedAt: new Date(file.uploadedAt),
-                ...(file.sittingIndex !== undefined && { sittingIndex: file.sittingIndex }),
-                ...(file.referenceIndex !== undefined && { referenceIndex: file.referenceIndex })
-            }));
+            // Move files from temp to final location and prepare documents array
+            const movedFiles = [];
+            const documents = [];
 
-            // Find profile picture URL for profileImageUrl field
-            const profilePicture = applicationData.uploadedFiles.find(f => f.type === 'profile_picture');
+            for (const file of applicationData.uploadedFiles) {
+                try {
+                    // Move file from temp to final location using application number
+                    const movedFile = await this.uploadService.moveFromTempToFinal(
+                        file.key,
+                        application.applicationNumber,
+                        file.type
+                    );
+
+                    movedFiles.push(movedFile);
+
+                    documents.push({
+                        type: file.type,
+                        url: movedFile.url, // Use new final URL
+                        uploadedAt: new Date(file.uploadedAt),
+                        ...(file.sittingIndex !== undefined && { sittingIndex: file.sittingIndex }),
+                        ...(file.referenceIndex !== undefined && { referenceIndex: file.referenceIndex })
+                    });
+
+                } catch (moveError) {
+                    this.logger.error('Failed to move file from temp to final location:', {
+                        tempKey: file.key,
+                        applicationNumber: application.applicationNumber,
+                        error: moveError.message
+                    });
+
+                    // If moving fails, still use the temp file (fallback)
+                    documents.push({
+                        type: file.type,
+                        url: file.url,
+                        uploadedAt: new Date(file.uploadedAt),
+                        ...(file.sittingIndex !== undefined && { sittingIndex: file.sittingIndex }),
+                        ...(file.referenceIndex !== undefined && { referenceIndex: file.referenceIndex })
+                    });
+                }
+            }
+
+            // Find profile picture URL for profileImageUrl field (use moved file URL if available)
+            const profilePicture = movedFiles.find(f => f.type === 'profile_picture') ||
+                applicationData.uploadedFiles.find(f => f.type === 'profile_picture');
 
             // Prepare examinations data - frontend sends examinations array directly
             const examinations = (applicationData.academicInfo.examinations || [])
@@ -366,25 +403,36 @@ export class ApplicationUploadController {
                 };
 
             } catch (dbError) {
-                this.logger.error('Database save failed, cleaning up uploaded files:', {
+                this.logger.error('Database save failed, cleaning up temp files:', {
                     userId: req.user._id,
+                    applicationNumber: application.applicationNumber,
                     error: dbError.message,
                     stack: dbError.stack,
                     validationErrors: dbError.errors,
-                    filesToCleanup: applicationData.uploadedFiles.map(f => f.key)
+                    tempFilesToCleanup: applicationData.uploadedFiles.map(f => f.key)
                 });
 
                 // Log the full error details for debugging
                 this.logger.error('Full database error:', dbError);
 
-                // Cleanup uploaded files from Spaces since DB save failed
+                // Cleanup temp files from Spaces since DB save failed
                 const cleanupPromises = applicationData.uploadedFiles.map(file =>
                     this.uploadService.deleteFromSpaces(file.key).catch(err =>
-                        this.logger.error('Failed to cleanup file:', { key: file.key, error: err.message })
+                        this.logger.error('Failed to cleanup temp file:', { key: file.key, error: err.message })
                     )
                 );
 
                 await Promise.all(cleanupPromises);
+
+                // Also cleanup any moved files if they exist
+                if (movedFiles && movedFiles.length > 0) {
+                    const movedFileCleanup = movedFiles.map(file =>
+                        this.uploadService.deleteFromSpaces(file.key).catch(err =>
+                            this.logger.error('Failed to cleanup moved file:', { key: file.key, error: err.message })
+                        )
+                    );
+                    await Promise.all(movedFileCleanup);
+                }
 
                 throw new HttpException(
                     {
@@ -412,76 +460,6 @@ export class ApplicationUploadController {
                 {
                     success: false,
                     message: 'Application submission failed',
-                    error: error.message
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR
-            );
-        }
-    }
-
-    @Post('cleanup-temp-files')
-    async cleanupTempFiles(
-        @Body() cleanupData: {
-            filesToCleanup: Array<{
-                key: string;
-                url: string;
-            }>
-        },
-        @Request() req
-    ) {
-        this.logger.log('Cleanup temp files request:', {
-            userId: req.user._id.toString(),
-            filesToCleanup: cleanupData.filesToCleanup?.length || 0
-        });
-
-        try {
-            if (!cleanupData.filesToCleanup || cleanupData.filesToCleanup.length === 0) {
-                return {
-                    success: true,
-                    message: 'No files to cleanup'
-                };
-            }
-
-            // Clean up files from DigitalOcean Spaces
-            const cleanupPromises = cleanupData.filesToCleanup.map(file =>
-                this.uploadService.deleteFromSpaces(file.key).catch(err => {
-                    this.logger.error('Failed to cleanup file:', {
-                        key: file.key,
-                        error: err.message
-                    });
-                    return { key: file.key, error: err.message };
-                })
-            );
-
-            const results = await Promise.all(cleanupPromises);
-            const failures = results.filter(result => result && result.error);
-
-            this.logger.log('Temp files cleanup completed:', {
-                userId: req.user._id.toString(),
-                totalFiles: cleanupData.filesToCleanup.length,
-                failures: failures.length
-            });
-
-            return {
-                success: true,
-                data: {
-                    cleaned: cleanupData.filesToCleanup.length - failures.length,
-                    failed: failures.length,
-                    failures: failures
-                },
-                message: `Cleaned up ${cleanupData.filesToCleanup.length - failures.length} files`
-            };
-
-        } catch (error) {
-            this.logger.error('Cleanup temp files failed:', {
-                userId: req.user._id.toString(),
-                error: error.message
-            });
-
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Cleanup failed',
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR
@@ -594,6 +572,108 @@ export class ApplicationUploadController {
                 {
                     success: false,
                     message: 'Failed to remove document',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Post('cleanup-temp-files')
+    async cleanupTempFiles(
+        @Body() cleanupData: {
+            applicationNumber?: string; // Optional: cleanup specific application's temp files
+            maxAgeHours?: number; // Optional: override default expiry time
+        },
+        @Request() req
+    ) {
+        this.logger.log('Cleanup temp files request:', {
+            userId: req.user._id.toString(),
+            applicationNumber: cleanupData.applicationNumber,
+            maxAgeHours: cleanupData.maxAgeHours
+        });
+
+        try {
+            // If specific application number provided, clean only that application's temp files
+            if (cleanupData.applicationNumber) {
+                await this.uploadService.cleanupTempFiles(
+                    cleanupData.applicationNumber,
+                    cleanupData.maxAgeHours
+                );
+
+                return {
+                    success: true,
+                    message: `Temp files cleaned up for application ${cleanupData.applicationNumber}`
+                };
+            }
+
+            // Otherwise, clean all expired temp files
+            await this.uploadService.cleanupTempFiles(
+                undefined,
+                cleanupData.maxAgeHours
+            );
+
+            return {
+                success: true,
+                message: 'Expired temp files cleaned up successfully'
+            };
+
+        } catch (error) {
+            this.logger.error('Temp file cleanup failed:', {
+                userId: req.user._id.toString(),
+                error: error.message,
+                stack: error.stack
+            });
+
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Temp file cleanup failed',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Post('cleanup-user-temp-files')
+    async cleanupUserTempFiles(@Request() req) {
+        this.logger.log('Cleanup user temp files request:', {
+            userId: req.user._id.toString()
+        });
+
+        try {
+            // Get user's application number
+            const application = await this.applicationModel.findOne({
+                userId: new Types.ObjectId(req.user._id)
+            });
+
+            if (!application) {
+                return {
+                    success: true,
+                    message: 'No application found, nothing to cleanup'
+                };
+            }
+
+            // Cleanup temp files for this specific application
+            await this.uploadService.cleanupTempFiles(application.applicationNumber);
+
+            return {
+                success: true,
+                message: 'Your temp files have been cleaned up successfully'
+            };
+
+        } catch (error) {
+            this.logger.error('User temp file cleanup failed:', {
+                userId: req.user._id.toString(),
+                error: error.message,
+                stack: error.stack
+            });
+
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to cleanup your temp files',
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR

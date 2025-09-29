@@ -149,16 +149,18 @@ export class ApplicationUploadController {
             programTypeId: string;
             programModeId: string;
             personalInfo: {
+                firstName?: string;
+                middleName?: string;
+                lastName?: string;
                 dob: string;
                 gender: string;
                 phone: string;
+                email?: string;
                 religion: string;
                 maritalStatus: string;
                 address: string;
-                selectedCountry: string;
-                selectedState: string;
-                selectedCity: string;
                 lga: string;
+                stateOfOrigin: string;
                 nationality: string;
             };
             academicInfo: {
@@ -289,7 +291,7 @@ export class ApplicationUploadController {
                 application.religion = applicationData.personalInfo.religion;
                 application.maritalStatus = applicationData.personalInfo.maritalStatus;
                 application.address = applicationData.personalInfo.address;
-                application.stateOfOrigin = applicationData.personalInfo.selectedState;
+                application.stateOfOrigin = applicationData.personalInfo.stateOfOrigin;
                 application.lga = applicationData.personalInfo.lga;
                 application.nationality = applicationData.personalInfo.nationality;
 

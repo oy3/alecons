@@ -36,8 +36,8 @@ export default {
       applicationData: this.authStore.application,
     });
 
-    // Check if we need to refresh user data (e.g., after email verification)
-    this.checkAndRefreshUserData();
+    // Always refresh user data when dashboard is mounted to ensure latest state
+    this.refreshUserData();
 
     // Add window focus listener to refresh data when user returns to tab
     window.addEventListener('focus', this.onWindowFocus);
@@ -49,6 +49,28 @@ export default {
   },
 
   methods: {
+    async refreshUserData() {
+      // Always refresh user data to get the latest application state
+      if (this.authStore.isAuthenticated) {
+        logger.info('Refreshing user data on dashboard mount...');
+        try {
+          await this.authStore.refreshUserData();
+                    logger.info('User data refreshed successfully', {
+            currentStage: this.authStore.application?.currentStage,
+            applicationNumber: this.authStore.application?.applicationNumber,
+            nationality: this.authStore.application?.nationality,
+            stateOfOrigin: this.authStore.application?.stateOfOrigin,
+            applicationPhone: this.authStore.application?.phone,
+            userPhone: this.authStore.user?.phone,
+            profileImageUrl: this.authStore.application?.profileImageUrl,
+            allApplicationKeys: this.authStore.application ? Object.keys(this.authStore.application) : []
+          });
+        } catch (error) {
+          logger.error('Failed to refresh user data:', error);
+        }
+      }
+    },
+
     async checkAndRefreshUserData() {
       // If user is authenticated but we don't have complete user data, refresh it
       if (this.authStore.isAuthenticated && (!this.user || this.user.isEmailVerified === undefined)) {
@@ -89,6 +111,42 @@ export default {
 
     currentStage() {
       return this.application?.currentStage;
+    },
+
+    // Computed properties for BiodataCard data
+    userDisplayName() {
+      return this.user?.fullName || 
+             `${this.user?.firstName || ''} ${this.user?.lastName || ''}`.trim() || 
+             'Loading...';
+    },
+
+    userPhone() {
+      // Phone number is stored in application object
+      const applicationPhone = this.application?.phone;
+      
+      logger.info('Phone data check:', {
+        applicationPhone,
+        hasApplication: !!this.application,
+        applicationKeys: this.application ? Object.keys(this.application) : []
+      });
+      
+      return applicationPhone || 'N/A';
+    },
+
+    userLocation() {
+      // Check application nationality field
+      const nationality = this.application?.nationality;
+      const stateOfOrigin = this.application?.stateOfOrigin;
+      const location = nationality || stateOfOrigin;
+      
+      logger.info('Location data check:', {
+        applicationNationality: nationality,
+        applicationStateOfOrigin: stateOfOrigin,
+        finalLocation: location,
+        applicationKeys: this.application ? Object.keys(this.application) : []
+      });
+      
+      return location || 'N/A';
     },
 
     todos() {
@@ -235,13 +293,13 @@ export default {
       <!-- Bio Data Card -->
       <div class="col-md-4">
         <BiodataCard
-          :profileImage="application.profileImageUrl || 'https://placehold.co/100?text=IMG'"
-          :name="user?.fullName || 'Loading...'"
+          :profileImage="application?.profileImageUrl || 'https://placehold.co/100?text=IMG'"
+          :name="userDisplayName"
           :appNo="application?.applicationNumber || 'Not Started'"
           :email="user?.email || 'Loading...'"
-          :phone="application?.phone || 'N/A'"
+          :phone="userPhone"
           :gender="application?.gender || 'N/A'"
-          :location="application?.nationality || 'N/A'"
+          :location="userLocation"
         />
 
         <!-- Show application prompt if no application -->

@@ -80,8 +80,13 @@ class ApiService {
 
             // Handle authentication errors
             if (response.status === 401) {
+                // Check if this is a login attempt with wrong credentials
+                if (endpoint === '/auth/login') {
+                    // This is wrong login credentials, not token expiration
+                    throw new Error(data.message || 'Invalid email or password');
+                }
                 // Check if this is a token expiration or just wrong credentials
-                if (endpoint === '/auth/change-password' && data.message &&
+                else if (endpoint === '/auth/change-password' && data.message &&
                     (data.message.includes('Current password is incorrect') ||
                         data.message.includes('incorrect'))) {
                     // This is just wrong current password, don't logout

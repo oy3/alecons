@@ -196,9 +196,13 @@ export class AuthService {
                     // Include personal data for form prefilling
                     dob: application.dob,
                     gender: application.gender,
+                    phone: application.phone,
                     religion: application.religion,
                     maritalStatus: application.maritalStatus,
                     address: application.address,
+                    nationality: application.nationality,
+                    stateOfOrigin: application.stateOfOrigin,
+                    lga: application.lga,
                     profileImageUrl: application.profileImageUrl,
                     // Include nested data structures
                     nextOfKin: application.nextOfKin,
@@ -366,9 +370,13 @@ export class AuthService {
                         // Include personal data for form prefilling
                         dob: application.dob,
                         gender: application.gender,
+                        phone: application.phone,
                         religion: application.religion,
                         maritalStatus: application.maritalStatus,
                         address: application.address,
+                        nationality: application.nationality,
+                        stateOfOrigin: application.stateOfOrigin,
+                        lga: application.lga,
                         profileImageUrl: application.profileImageUrl,
                         // Include nested data structures
                         nextOfKin: application.nextOfKin,

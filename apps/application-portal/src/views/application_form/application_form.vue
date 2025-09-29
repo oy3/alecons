@@ -185,6 +185,24 @@ export default {
     this.loadCountries();
     this.prefillUserData();
   },
+  async mounted() {
+    // Check if user has already completed the application form
+    if (this.application && this.application.currentStage > 3) {
+      logger.info('User has already completed application form, redirecting to dashboard', {
+        currentStage: this.application.currentStage
+      });
+      
+      await Swal.fire({
+        title: 'Application Already Submitted',
+        text: 'You have already completed your application form.',
+        icon: 'info',
+        confirmButtonText: 'Go to Dashboard'
+      });
+      
+      this.$router.push('/dashboard');
+      return;
+    }
+  },
   methods: {
     generateYears() {
       const currentYear = new Date().getFullYear();
@@ -302,15 +320,70 @@ export default {
       }
 
       if (stageIndex === 1) { // Academic Information
-        if (!this.secondarySchool || this.secondarySchool.trim() === '') {
-          this.validationErrors.secondarySchool = 'Secondary school is required';
+        // Validate primary school fields
+        if (!this.primarySchool || this.primarySchool.trim() === '') {
+          this.validationErrors.primarySchool = 'Primary school name is required';
           isValid = false;
+        }
+
+        if (!this.primarySchoolStart || this.primarySchoolStart.trim() === '') {
+          this.validationErrors.primarySchoolStart = 'Primary school start date is required';
+          isValid = false;
+        }
+
+        if (!this.primarySchoolEnd || this.primarySchoolEnd.trim() === '') {
+          this.validationErrors.primarySchoolEnd = 'Primary school end date is required';
+          isValid = false;
+        }
+
+        // Validate date logic for primary school
+        if (this.primarySchoolStart && this.primarySchoolEnd) {
+          const startDate = new Date(this.primarySchoolStart);
+          const endDate = new Date(this.primarySchoolEnd);
+          if (startDate >= endDate) {
+            this.validationErrors.primarySchoolEnd = 'End date must be after start date';
+            isValid = false;
+          }
+        }
+
+        // Validate secondary school fields
+        if (!this.secondarySchool || this.secondarySchool.trim() === '') {
+          this.validationErrors.secondarySchool = 'Secondary school name is required';
+          isValid = false;
+        }
+
+        if (!this.secondarySchoolStart || this.secondarySchoolStart.trim() === '') {
+          this.validationErrors.secondarySchoolStart = 'Secondary school start date is required';
+          isValid = false;
+        }
+
+        if (!this.secondarySchoolEnd || this.secondarySchoolEnd.trim() === '') {
+          this.validationErrors.secondarySchoolEnd = 'Secondary school end date is required';
+          isValid = false;
+        }
+
+        // Validate date logic for secondary school
+        if (this.secondarySchoolStart && this.secondarySchoolEnd) {
+          const startDate = new Date(this.secondarySchoolStart);
+          const endDate = new Date(this.secondarySchoolEnd);
+          if (startDate >= endDate) {
+            this.validationErrors.secondarySchoolEnd = 'End date must be after start date';
+            isValid = false;
+          }
         }
 
         // Validate sittings
         this.sittings.forEach((sitting, index) => {
-          if (!sitting.examType || !sitting.examYear || !sitting.examNumber) {
-            this.validationErrors[`sitting_${index}`] = 'All sitting fields are required';
+          if (!sitting.examType || sitting.examType.trim() === '') {
+            this.validationErrors[`sitting_${index}_examType`] = `Sitting ${index + 1}: Exam type is required`;
+            isValid = false;
+          }
+          if (!sitting.examYear || sitting.examYear.toString().trim() === '') {
+            this.validationErrors[`sitting_${index}_examYear`] = `Sitting ${index + 1}: Exam year is required`;
+            isValid = false;
+          }
+          if (!sitting.examNumber || sitting.examNumber.trim() === '') {
+            this.validationErrors[`sitting_${index}_examNumber`] = `Sitting ${index + 1}: Exam number is required`;
             isValid = false;
           }
         });
@@ -322,12 +395,53 @@ export default {
           isValid = false;
         }
 
+        // Validate each subject individually
+        this.subjects.forEach((subject, index) => {
+          if (subject.subject && subject.subject.trim() !== '') {
+            if (!subject.grade || subject.grade.trim() === '') {
+              this.validationErrors[`subject_${index}_grade`] = `Grade is required for ${subject.subject}`;
+              isValid = false;
+            }
+            if (!subject.sitting || subject.sitting.trim() === '') {
+              this.validationErrors[`subject_${index}_sitting`] = `Sitting is required for ${subject.subject}`;
+              isValid = false;
+            }
+          }
+        });
+
         // Check English and Math grades
         const englishSubject = this.subjects.find(s => s.subject === 'English Language');
         const mathSubject = this.subjects.find(s => s.subject === 'Mathematics');
 
         if (!englishSubject?.grade || !mathSubject?.grade) {
           this.validationErrors.coreSubjects = 'English Language and Mathematics grades are required';
+          isValid = false;
+        }
+      }
+
+      if (stageIndex === 2) { // Upload Stage
+        // Validate profile picture upload
+        if (!this.uploadedDocuments.profile) {
+          this.validationErrors.profilePicture = 'Profile picture is required';
+          isValid = false;
+        }
+
+        // Validate O'Level result uploads for each sitting
+        this.sittings.forEach((sitting, index) => {
+          if (!this.uploadedDocuments.olevels[index]) {
+            this.validationErrors[`olevel_${index}`] = `O'Level result upload is required for Sitting ${index + 1}`;
+            isValid = false;
+          }
+        });
+
+        // Validate reference letter uploads
+        if (!this.uploadedDocuments.references[0]) {
+          this.validationErrors.reference1 = 'Reference letter 1 is required';
+          isValid = false;
+        }
+
+        if (!this.uploadedDocuments.references[1]) {
+          this.validationErrors.reference2 = 'Reference letter 2 is required';
           isValid = false;
         }
       }
@@ -719,9 +833,9 @@ export default {
     async submitApplication() {
       try {
         this.isSubmitting = true;
-        
+
         logger.info('Starting application submission...');
-        
+
         // Debug: Check program selections
         logger.info('Program selections:', {
           selectedProgram: this.selectedProgram,
@@ -736,7 +850,7 @@ export default {
 
         if (!programId || !programTypeId || !programModeId) {
           logger.info('No program selected, fetching default programs from API...');
-          
+
           try {
             const [programsResponse, typesResponse, modesResponse] = await Promise.all([
               apiService.get('/programs'),
@@ -763,17 +877,17 @@ export default {
 
         // Collect all uploaded files into a single array
         const uploadedFiles = [];
-        
+
         // Add profile picture if uploaded
         if (this.uploadedDocuments.profile) {
           uploadedFiles.push(this.uploadedDocuments.profile);
         }
-        
+
         // Add O'Level results
         Object.values(this.uploadedDocuments.olevels).forEach(doc => {
           if (doc) uploadedFiles.push(doc);
         });
-        
+
         // Add reference letters
         Object.values(this.uploadedDocuments.references).forEach(doc => {
           if (doc) uploadedFiles.push(doc);
@@ -788,17 +902,15 @@ export default {
             firstName: this.firstName,
             middleName: this.middleName,
             lastName: this.lastName,
-            dateOfBirth: this.dateOfBirth,
+            dob: this.dateOfBirth, // Backend expects 'dob' field
             gender: this.gender,
             phone: this.phone,
             email: this.email,
             religion: this.religion,
             maritalStatus: this.maritalStatus,
             address: this.address,
-            selectedCountry: this.selectedCountry,
-            selectedState: this.selectedState,
-            selectedCity: this.selectedCity,
             lga: this.lga,
+            stateOfOrigin: this.state,
             nationality: this.nationality
           },
           academicInfo: {
@@ -812,8 +924,17 @@ export default {
               startDate: this.secondarySchoolStart,
               endDate: this.secondarySchoolEnd
             },
-            sittings: this.sittings,
-            subjects: this.subjects.filter(s => s.subject && s.grade), // Only include filled subjects
+            examinations: this.sittings.map((sitting, sittingIndex) => ({
+              examType: sitting.examType,
+              examYear: sitting.examYear,
+              examNumber: sitting.examNumber,
+              subjects: this.subjects.filter(s => {
+                // Match subjects to sitting by sitting type or index
+                const sittingMatch = s.sitting === sitting.examType || 
+                                   s.sitting === `Sitting ${sittingIndex + 1}`;
+                return s.subject && s.grade && sittingMatch;
+              })
+            })),
             nextOfKin: {
               name: this.nextOfKinName,
               phone: this.nextOfKinPhone,
@@ -841,7 +962,11 @@ export default {
           programId: applicationData.programId,
           uploadedFilesCount: uploadedFiles.length,
           personalInfo: !!applicationData.personalInfo,
-          academicInfo: !!applicationData.academicInfo
+          academicInfo: !!applicationData.academicInfo,
+          dob: applicationData.personalInfo.dob,
+          stateOfOrigin: applicationData.personalInfo.stateOfOrigin,
+          examinationsCount: applicationData.academicInfo.examinations.length,
+          totalSubjects: applicationData.academicInfo.examinations.reduce((total, exam) => total + exam.subjects.length, 0)
         });
 
         // Submit application
@@ -849,7 +974,13 @@ export default {
 
         if (response.success) {
           logger.info('Application submitted successfully:', response.data);
+
+          // Update auth store with new application data
+          await this.authStore.updateApplication(response.data);
           
+          // Refresh user data to get updated currentStage
+          await this.authStore.refreshUserData();
+
           // Show success message
           await Swal.fire({
             title: 'Application Submitted!',
@@ -869,14 +1000,14 @@ export default {
 
           // Redirect to dashboard
           this.$router.push('/dashboard');
-          
+
         } else {
           throw new Error(response.error || 'Application submission failed');
         }
 
       } catch (error) {
         logger.error('Application submission failed:', error);
-        
+
         // Show error message
         await Swal.fire({
           title: 'Submission Failed',
@@ -910,34 +1041,17 @@ export default {
     <h4 class="fw-bold mb-5 text-center">Application form for 2025/2026</h4>
 
     <div class="position-relative mb-5 mx-md-5">
-      <div
-        class="progress"
-        role="progressbar"
-        :aria-valuenow="progressPercent"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        style="height: 2px"
-      >
-        <div
-          class="progress-bar acon-bg-primary"
-          :style="{ width: progressPercent + '%' }"
-        ></div>
+      <div class="progress" role="progressbar" :aria-valuenow="progressPercent" aria-valuemin="0" aria-valuemax="100"
+        style="height: 2px">
+        <div class="progress-bar acon-bg-primary" :style="{ width: progressPercent + '%' }"></div>
 
         <!-- Dots -->
-        <div
-          class="dots-overlay d-flex justify-content-between position-absolute start-0 w-100"
-        >
-          <div
-            v-for="(stage, index) in stages"
-            :key="index"
-            class="d-flex flex-column align-items-center"
-            style="width: 0"
-          >
+        <div class="dots-overlay d-flex justify-content-between position-absolute start-0 w-100">
+          <div v-for="(stage, index) in stages" :key="index" class="d-flex flex-column align-items-center"
+            style="width: 0">
             <!-- Dot with number inside -->
-            <span
-              class="dot d-flex align-items-center justify-content-center"
-              :class="{ completed: index <= currentStage }"
-            >
+            <span class="dot d-flex align-items-center justify-content-center"
+              :class="{ completed: index <= currentStage }">
               {{ index + 1 }}
             </span>
             <!-- Label -->
@@ -953,10 +1067,7 @@ export default {
         <div class="d-flex justify-content-between">
           <h6 class="fw-semibold">Personal details</h6>
           <p class="small">
-            Mandatory fields are marked with an asterisk(<span
-              class="text-danger"
-              >*</span
-            >)
+            Mandatory fields are marked with an asterisk(<span class="text-danger">*</span>)
           </p>
         </div>
 
@@ -966,68 +1077,33 @@ export default {
               <label for="firstName" class="form-label small">
                 First Name <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="firstName"
-                v-model="firstName"
-                :disabled="true"
-                readonly
-              />
-              <small class="text-muted"
-                >This field is auto-filled from your account</small
-              >
+              <input type="text" class="form-control" id="firstName" v-model="firstName" :disabled="true" readonly />
+              <small class="text-muted">This field is auto-filled from your account</small>
             </div>
 
             <div class="col-md-4">
               <label for="middleName" class="form-label small">
                 Middle Name <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="middleName"
-                v-model="middleName"
-                :disabled="true"
-                readonly
-              />
-              <small class="text-muted"
-                >This field is auto-filled from your account</small
-              >
+              <input type="text" class="form-control" id="middleName" v-model="middleName" :disabled="true" readonly />
+              <small class="text-muted">This field is auto-filled from your account</small>
             </div>
 
             <div class="col-md-4">
               <label for="lastName" class="form-label small">
                 Last Name <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="lastName"
-                v-model="lastName"
-                :disabled="true"
-                readonly
-              />
-              <small class="text-muted"
-                >This field is auto-filled from your account</small
-              >
+              <input type="text" class="form-control" id="lastName" v-model="lastName" :disabled="true" readonly />
+              <small class="text-muted">This field is auto-filled from your account</small>
             </div>
 
             <div class="col-md-6">
               <label for="dateOfBirth" class="form-label small">
                 Date of Birth <span class="text-danger">*</span>
               </label>
-              <input
-                type="date"
-                class="form-control"
-                id="dateOfBirth"
-                v-model="dateOfBirth"
-                :disabled="true"
-                readonly
-              />
-              <small class="text-muted"
-                >This field is auto-filled from your account</small
-              >
+              <input type="date" class="form-control" id="dateOfBirth" v-model="dateOfBirth" :disabled="true"
+                readonly />
+              <small class="text-muted">This field is auto-filled from your account</small>
             </div>
 
             <div class="col-md-6">
@@ -1036,69 +1112,37 @@ export default {
               </label>
               <div class="d-flex justify-content-between">
                 <div class="form-check">
-                  <input
-                    class="form-check-input"
-                    type="radio"
-                    name="gender"
-                    id="genderMale"
-                    value="male"
-                    v-model="gender"
-                    disabled
-                  />
+                  <input class="form-check-input" type="radio" name="gender" id="genderMale" value="male"
+                    v-model="gender" disabled />
                   <label class="form-check-label" for="genderMale">
                     Male
                   </label>
                 </div>
                 <div class="form-check">
-                  <input
-                    class="form-check-input"
-                    type="radio"
-                    name="gender"
-                    id="genderFemale"
-                    value="female"
-                    v-model="gender"
-                    disabled
-                  />
+                  <input class="form-check-input" type="radio" name="gender" id="genderFemale" value="female"
+                    v-model="gender" disabled />
                   <label class="form-check-label" for="genderFemale">
                     Female
                   </label>
                 </div>
                 <div class="form-check">
-                  <input
-                    class="form-check-input"
-                    type="radio"
-                    name="gender"
-                    id="genderOther"
-                    value="other"
-                    v-model="gender"
-                    disabled
-                  />
+                  <input class="form-check-input" type="radio" name="gender" id="genderOther" value="other"
+                    v-model="gender" disabled />
                   <label class="form-check-label" for="genderOther">
                     Others
                   </label>
                 </div>
               </div>
-              <small class="text-muted"
-                >This field is auto-filled from your account</small
-              >
+              <small class="text-muted">This field is auto-filled from your account</small>
             </div>
 
             <div class="col-md-6">
               <label for="phone" class="form-label small">
                 Phone <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="phone"
-                v-model="phone"
-                :class="{ 'is-invalid': validationErrors.phone }"
-                :disabled="!!user?.phone"
-                :readonly="!!user?.phone"
-              />
-              <small v-if="user?.phone" class="text-muted"
-                >This field is auto-filled from your account</small
-              >
+              <input type="text" class="form-control" id="phone" v-model="phone"
+                :class="{ 'is-invalid': validationErrors.phone }" :disabled="!!user?.phone" :readonly="!!user?.phone" />
+              <small v-if="user?.phone" class="text-muted">This field is auto-filled from your account</small>
               <div v-if="validationErrors.phone" class="invalid-feedback">
                 {{ validationErrors.phone }}
               </div>
@@ -1108,18 +1152,9 @@ export default {
               <label for="email" class="form-label small">
                 Email <span class="text-danger">*</span>
               </label>
-              <input
-                type="email"
-                class="form-control"
-                id="email"
-                v-model="email"
-                :class="{ 'is-invalid': validationErrors.email }"
-                :disabled="true"
-                readonly
-              />
-              <small class="text-muted"
-                >This field is auto-filled from your account</small
-              >
+              <input type="email" class="form-control" id="email" v-model="email"
+                :class="{ 'is-invalid': validationErrors.email }" :disabled="true" readonly />
+              <small class="text-muted">This field is auto-filled from your account</small>
               <div v-if="validationErrors.email" class="invalid-feedback">
                 {{ validationErrors.email }}
               </div>
@@ -1129,19 +1164,10 @@ export default {
               <label for="religion" class="form-label small">
                 Religion <span class="text-danger">*</span>
               </label>
-              <select
-                class="form-select"
-                id="religion"
-                v-model="religion"
-                :class="{ 'is-invalid': validationErrors.religion }"
-                required
-              >
+              <select class="form-select" id="religion" v-model="religion"
+                :class="{ 'is-invalid': validationErrors.religion }" required>
                 <option value="">--Select Religion--</option>
-                <option
-                  v-for="religionItem in religionOptions"
-                  :key="religionItem"
-                  :value="religionItem"
-                >
+                <option v-for="religionItem in religionOptions" :key="religionItem" :value="religionItem">
                   {{ religionItem }}
                 </option>
               </select>
@@ -1154,13 +1180,8 @@ export default {
               <label for="maritalStatus" class="form-label small">
                 Marital Status <span class="text-danger">*</span>
               </label>
-              <select
-                class="form-select"
-                id="maritalStatus"
-                v-model="maritalStatus"
-                :class="{ 'is-invalid': validationErrors.maritalStatus }"
-                required
-              >
+              <select class="form-select" id="maritalStatus" v-model="maritalStatus"
+                :class="{ 'is-invalid': validationErrors.maritalStatus }" required>
                 <option value="">--Select Marital Status--</option>
                 <option value="Single">Single</option>
                 <option value="Married">Married</option>
@@ -1176,19 +1197,10 @@ export default {
               <label for="nationality" class="form-label small">
                 Nationality <span class="text-danger">*</span>
               </label>
-              <select
-                class="form-select"
-                id="nationality"
-                v-model="nationality"
-                :class="{ 'is-invalid': validationErrors.nationality }"
-                required
-              >
+              <select class="form-select" id="nationality" v-model="nationality"
+                :class="{ 'is-invalid': validationErrors.nationality }" required>
                 <option value="">--Select Nationality--</option>
-                <option
-                  v-for="country in countries"
-                  :key="country.isoCode"
-                  :value="country.name"
-                >
+                <option v-for="country in countries" :key="country.isoCode" :value="country.name">
                   {{ country.name }}
                 </option>
               </select>
@@ -1201,14 +1213,8 @@ export default {
               <label for="state" class="form-label small">
                 State of Origin <span class="text-danger">*</span>
               </label>
-              <select
-                class="form-select"
-                id="state"
-                v-model="state"
-                :class="{ 'is-invalid': validationErrors.state }"
-                :disabled="!nationality"
-                required
-              >
+              <select class="form-select" id="state" v-model="state" :class="{ 'is-invalid': validationErrors.state }"
+                :disabled="!nationality" required>
                 <option value="">
                   {{
                     nationality
@@ -1216,11 +1222,7 @@ export default {
                       : "Select nationality first"
                   }}
                 </option>
-                <option
-                  v-for="stateItem in states"
-                  :key="stateItem.isoCode"
-                  :value="stateItem.name"
-                >
+                <option v-for="stateItem in states" :key="stateItem.isoCode" :value="stateItem.name">
                   {{ stateItem.name }}
                 </option>
               </select>
@@ -1233,22 +1235,12 @@ export default {
               <label for="lga" class="form-label small">
                 Local Government Area <span class="text-danger">*</span>
               </label>
-              <select
-                class="form-select"
-                id="lga"
-                v-model="lga"
-                :class="{ 'is-invalid': validationErrors.lga }"
-                :disabled="!state"
-                required
-              >
+              <select class="form-select" id="lga" v-model="lga" :class="{ 'is-invalid': validationErrors.lga }"
+                :disabled="!state" required>
                 <option value="">
                   {{ state ? "--Select LGA--" : "Select state first" }}
                 </option>
-                <option
-                  v-for="city in cities"
-                  :key="city.name"
-                  :value="city.name"
-                >
+                <option v-for="city in cities" :key="city.name" :value="city.name">
                   {{ city.name }}
                 </option>
               </select>
@@ -1261,14 +1253,8 @@ export default {
               <label for="address" class="form-label small">
                 Contact Address <span class="text-danger">*</span>
               </label>
-              <textarea
-                class="form-control"
-                id="address"
-                rows="3"
-                v-model="address"
-                :class="{ 'is-invalid': validationErrors.address }"
-                required
-              ></textarea>
+              <textarea class="form-control" id="address" rows="3" v-model="address"
+                :class="{ 'is-invalid': validationErrors.address }" required></textarea>
               <div v-if="validationErrors.address" class="invalid-feedback">
                 {{ validationErrors.address }}
               </div>
@@ -1281,16 +1267,9 @@ export default {
           <div class="row g-3">
             <div class="col-md-4">
               <label for="nextOfKinName" class="form-label small">
-                Next of Kin Name <span class="text-danger">*</span></label
-              >
-              <input
-                type="text"
-                class="form-control"
-                id="nextOfKinName"
-                v-model="nextOfKinName"
-                :class="{ 'is-invalid': validationErrors.nextOfKinName }"
-                required
-              />
+                Next of Kin Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="nextOfKinName" v-model="nextOfKinName"
+                :class="{ 'is-invalid': validationErrors.nextOfKinName }" required />
               <div v-if="validationErrors.nextOfKinName" class="invalid-feedback">
                 {{ validationErrors.nextOfKinName }}
               </div>
@@ -1300,14 +1279,8 @@ export default {
               <label for="nextOfKinPhone" class="form-label small">
                 Next of Kin Phone <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="nextOfKinPhone"
-                v-model="nextOfKinPhone"
-                :class="{ 'is-invalid': validationErrors.nextOfKinPhone }"
-                required
-              />
+              <input type="text" class="form-control" id="nextOfKinPhone" v-model="nextOfKinPhone"
+                :class="{ 'is-invalid': validationErrors.nextOfKinPhone }" required />
               <div v-if="validationErrors.nextOfKinPhone" class="invalid-feedback">
                 {{ validationErrors.nextOfKinPhone }}
               </div>
@@ -1317,14 +1290,8 @@ export default {
               <label for="nextOfKinEmail" class="form-label small">
                 Next of Kin Email <span class="text-danger">*</span>
               </label>
-              <input
-                type="email"
-                class="form-control"
-                id="nextOfKinEmail"
-                v-model="nextOfKinEmail"
-                :class="{ 'is-invalid': validationErrors.nextOfKinEmail }"
-                required
-              />
+              <input type="email" class="form-control" id="nextOfKinEmail" v-model="nextOfKinEmail"
+                :class="{ 'is-invalid': validationErrors.nextOfKinEmail }" required />
               <div v-if="validationErrors.nextOfKinEmail" class="invalid-feedback">
                 {{ validationErrors.nextOfKinEmail }}
               </div>
@@ -1334,28 +1301,15 @@ export default {
               <label for="nextOfKinRelationship" class="form-label small">
                 Next of Kin Relationship <span class="text-danger">*</span>
               </label>
-              <select
-                class="form-select"
-                id="nextOfKinRelationship"
-                v-model="nextOfKinRelationship"
-                :class="{
-                  'is-invalid': validationErrors.nextOfKinRelationship,
-                }"
-                required
-              >
+              <select class="form-select" id="nextOfKinRelationship" v-model="nextOfKinRelationship" :class="{
+                'is-invalid': validationErrors.nextOfKinRelationship,
+              }" required>
                 <option value="">--Select Relationship--</option>
-                <option
-                  v-for="relationship in relationshipOptions"
-                  :key="relationship"
-                  :value="relationship"
-                >
+                <option v-for="relationship in relationshipOptions" :key="relationship" :value="relationship">
                   {{ relationship }}
                 </option>
               </select>
-              <div
-                v-if="validationErrors.nextOfKinRelationship"
-                class="invalid-feedback"
-              >
+              <div v-if="validationErrors.nextOfKinRelationship" class="invalid-feedback">
                 {{ validationErrors.nextOfKinRelationship }}
               </div>
             </div>
@@ -1364,14 +1318,8 @@ export default {
               <label for="nextOfKinAddress" class="form-label small">
                 Next of Kin Address <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="nextOfKinAddress"
-                v-model="nextOfKinAddress"
-                :class="{ 'is-invalid': validationErrors.nextOfKinAddress }"
-                required
-              />
+              <input type="text" class="form-control" id="nextOfKinAddress" v-model="nextOfKinAddress"
+                :class="{ 'is-invalid': validationErrors.nextOfKinAddress }" required />
               <div v-if="validationErrors.nextOfKinAddress" class="invalid-feedback">
                 {{ validationErrors.nextOfKinAddress }}
               </div>
@@ -1381,14 +1329,8 @@ export default {
               <label for="referee1Name" class="form-label small">
                 Referee 1 Name <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="referee1Name"
-                v-model="referee1Name"
-                :class="{ 'is-invalid': validationErrors.referee1Name }"
-                required
-              />
+              <input type="text" class="form-control" id="referee1Name" v-model="referee1Name"
+                :class="{ 'is-invalid': validationErrors.referee1Name }" required />
               <div v-if="validationErrors.referee1Name" class="invalid-feedback">
                 {{ validationErrors.referee1Name }}
               </div>
@@ -1398,14 +1340,8 @@ export default {
               <label for="referee1Phone" class="form-label small">
                 Referee 1 Phone <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="referee1Phone"
-                v-model="referee1Phone"
-                :class="{ 'is-invalid': validationErrors.referee1Phone }"
-                required
-              />
+              <input type="text" class="form-control" id="referee1Phone" v-model="referee1Phone"
+                :class="{ 'is-invalid': validationErrors.referee1Phone }" required />
               <div v-if="validationErrors.referee1Phone" class="invalid-feedback">
                 {{ validationErrors.referee1Phone }}
               </div>
@@ -1415,14 +1351,8 @@ export default {
               <label for="referee1Email" class="form-label small">
                 Referee 1 Email <span class="text-danger">*</span>
               </label>
-              <input
-                type="email"
-                class="form-control"
-                id="referee1Email"
-                v-model="referee1Email"
-                :class="{ 'is-invalid': validationErrors.referee1Email }"
-                required
-              />
+              <input type="email" class="form-control" id="referee1Email" v-model="referee1Email"
+                :class="{ 'is-invalid': validationErrors.referee1Email }" required />
               <div v-if="validationErrors.referee1Email" class="invalid-feedback">
                 {{ validationErrors.referee1Email }}
               </div>
@@ -1432,14 +1362,8 @@ export default {
               <label for="referee2Name" class="form-label small">
                 Referee 2 Name <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="referee2Name"
-                v-model="referee2Name"
-                :class="{ 'is-invalid': validationErrors.referee2Name }"
-                required
-              />
+              <input type="text" class="form-control" id="referee2Name" v-model="referee2Name"
+                :class="{ 'is-invalid': validationErrors.referee2Name }" required />
               <div v-if="validationErrors.referee2Name" class="invalid-feedback">
                 {{ validationErrors.referee2Name }}
               </div>
@@ -1449,14 +1373,8 @@ export default {
               <label for="referee2Phone" class="form-label small">
                 Referee 2 Phone <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="referee2Phone"
-                v-model="referee2Phone"
-                :class="{ 'is-invalid': validationErrors.referee2Phone }"
-                required
-              />
+              <input type="text" class="form-control" id="referee2Phone" v-model="referee2Phone"
+                :class="{ 'is-invalid': validationErrors.referee2Phone }" required />
               <div v-if="validationErrors.referee2Phone" class="invalid-feedback">
                 {{ validationErrors.referee2Phone }}
               </div>
@@ -1466,14 +1384,8 @@ export default {
               <label for="referee2Email" class="form-label small">
                 Referee 2 Email <span class="text-danger">*</span>
               </label>
-              <input
-                type="email"
-                class="form-control"
-                id="referee2Email"
-                v-model="referee2Email"
-                :class="{ 'is-invalid': validationErrors.referee2Email }"
-                required
-              />
+              <input type="email" class="form-control" id="referee2Email" v-model="referee2Email"
+                :class="{ 'is-invalid': validationErrors.referee2Email }" required />
               <div v-if="validationErrors.referee2Email" class="invalid-feedback">
                 {{ validationErrors.referee2Email }}
               </div>
@@ -1491,78 +1403,66 @@ export default {
               <label for="primarySchool" class="form-label small">
                 Primary School <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="primarySchool"
-                v-model="primarySchool"
-                required
-              />
+              <input type="text" class="form-control" id="primarySchool" v-model="primarySchool"
+                :class="{ 'is-invalid': validationErrors.primarySchool }" required />
+              <div v-if="validationErrors.primarySchool" class="invalid-feedback">
+                {{ validationErrors.primarySchool }}
+              </div>
             </div>
 
             <div class="col-md-3">
               <label for="primarySchoolStart" class="form-label small">
                 Start Date <span class="text-danger">*</span>
               </label>
-              <input
-                type="date"
-                class="form-control"
-                id="primarySchoolStart"
-                v-model="primarySchoolStart"
-                required
-              />
+              <input type="date" class="form-control" id="primarySchoolStart" v-model="primarySchoolStart"
+                :class="{ 'is-invalid': validationErrors.primarySchoolStart }" required />
+              <div v-if="validationErrors.primarySchoolStart" class="invalid-feedback">
+                {{ validationErrors.primarySchoolStart }}
+              </div>
             </div>
 
             <div class="col-md-3">
               <label for="primarySchoolEnd" class="form-label small">
                 End Date <span class="text-danger">*</span>
               </label>
-              <input
-                type="date"
-                class="form-control"
-                id="primarySchoolEnd"
-                v-model="primarySchoolEnd"
-                required
-              />
+              <input type="date" class="form-control" id="primarySchoolEnd" v-model="primarySchoolEnd"
+                :class="{ 'is-invalid': validationErrors.primarySchoolEnd }" required />
+              <div v-if="validationErrors.primarySchoolEnd" class="invalid-feedback">
+                {{ validationErrors.primarySchoolEnd }}
+              </div>
             </div>
 
             <div class="col-md-6">
               <label for="secondarySchool" class="form-label small">
                 Secondary School <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                id="secondarySchool"
-                v-model="secondarySchool"
-                required
-              />
+              <input type="text" class="form-control" id="secondarySchool" v-model="secondarySchool"
+                :class="{ 'is-invalid': validationErrors.secondarySchool }" required />
+              <div v-if="validationErrors.secondarySchool" class="invalid-feedback">
+                {{ validationErrors.secondarySchool }}
+              </div>
             </div>
 
             <div class="col-md-3">
               <label for="secondarySchoolStart" class="form-label small">
                 Start Date <span class="text-danger">*</span>
               </label>
-              <input
-                type="date"
-                class="form-control"
-                id="secondarySchoolStart"
-                v-model="secondarySchoolStart"
-                required
-              />
+              <input type="date" class="form-control" id="secondarySchoolStart" v-model="secondarySchoolStart"
+                :class="{ 'is-invalid': validationErrors.secondarySchoolStart }" required />
+              <div v-if="validationErrors.secondarySchoolStart" class="invalid-feedback">
+                {{ validationErrors.secondarySchoolStart }}
+              </div>
             </div>
 
             <div class="col-md-3">
               <label for="secondarySchoolEnd" class="form-label small">
                 End Date <span class="text-danger">*</span>
               </label>
-              <input
-                type="date"
-                class="form-control"
-                id="secondarySchoolEnd"
-                v-model="secondarySchoolEnd"
-                required
-              />
+              <input type="date" class="form-control" id="secondarySchoolEnd" v-model="secondarySchoolEnd"
+                :class="{ 'is-invalid': validationErrors.secondarySchoolEnd }" required />
+              <div v-if="validationErrors.secondarySchoolEnd" class="invalid-feedback">
+                {{ validationErrors.secondarySchoolEnd }}
+              </div>
             </div>
           </div>
         </div>
@@ -1570,36 +1470,22 @@ export default {
         <div class="d-flex justify-content-between mt-5 mb-1">
           <h6 class="fw-semibold">
             Post Secondary School
-            <span class="fw-light small"
-              >(e.g. WAEC/SSCE, NECO, NABTEB, etc)</span
-            >
+            <span class="fw-light small">(e.g. WAEC/SSCE, NECO, NABTEB, etc)</span>
           </h6>
 
-          <button
-            class="btn btn-acon-dark btn-sm"
-            @click="addSitting"
-            :disabled="sittings.length >= maxSittings"
-          >
+          <button class="btn btn-acon-dark btn-sm" @click="addSitting" :disabled="sittings.length >= maxSittings">
             <i class="bi bi-plus"></i> Add Sitting
           </button>
         </div>
 
         <!-- Render Each Sitting -->
         <div class="card border-0 acon-bg-light p-3">
-          <div
-            v-for="(sitting, index) in sittings"
-            :key="index"
-            class="row g-3 mb-3"
-          >
+          <div v-for="(sitting, index) in sittings" :key="index" class="row g-3 mb-3">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <p class="small text-secondary mb-0">Sitting {{ index + 1 }}</p>
 
               <!-- Remove button (only show if more than 1 sitting) -->
-              <button
-                v-if="sittings.length > 1"
-                class="btn btn-sm btn-danger"
-                @click="removeSitting(index)"
-              >
+              <button v-if="sittings.length > 1" class="btn btn-sm btn-danger" @click="removeSitting(index)">
                 <i class="bi bi-trash"></i>
               </button>
             </div>
@@ -1608,44 +1494,46 @@ export default {
               <label for="examType" class="form-label small">
                 Exam Type <span class="text-danger">*</span>
               </label>
-              <select
-                v-model="sitting.examType"
-                class="form-select"
-                id="examType"
-              >
+              <select v-model="sitting.examType" class="form-select" :class="{
+                'is-invalid': validationErrors[`sitting_${index}_examType`],
+              }" id="examType">
                 <option disabled value="">--Select Exam Type--</option>
                 <option v-for="(type, i) in examTypes" :key="i" :value="type">
                   {{ type }}
                 </option>
               </select>
+              <div v-if="validationErrors[`sitting_${index}_examType`]" class="invalid-feedback">
+                {{ validationErrors[`sitting_${index}_examType`] }}
+              </div>
             </div>
 
             <div class="col-md-4 mt-0">
               <label for="examYear" class="form-label small">
                 Exam Year <span class="text-danger">*</span>
               </label>
-              <select
-                v-model="sitting.examYear"
-                class="form-select"
-                id="examYear"
-              >
+              <select v-model="sitting.examYear" class="form-select" :class="{
+                'is-invalid': validationErrors[`sitting_${index}_examYear`],
+              }" id="examYear">
                 <option disabled value="">--Select Year--</option>
                 <option v-for="year in years" :key="year" :value="year">
                   {{ year }}
                 </option>
               </select>
+              <div v-if="validationErrors[`sitting_${index}_examYear`]" class="invalid-feedback">
+                {{ validationErrors[`sitting_${index}_examYear`] }}
+              </div>
             </div>
 
             <div class="col-md-4 mt-0">
               <label for="examNumber" class="form-label small">
                 Exam Number <span class="text-danger">*</span>
               </label>
-              <input
-                type="text"
-                class="form-control"
-                v-model="sitting.examNumber"
-                id="examNumber"
-              />
+              <input type="text" class="form-control" v-model="sitting.examNumber" :class="{
+                'is-invalid': validationErrors[`sitting_${index}_examNumber`],
+              }" id="examNumber" />
+              <div v-if="validationErrors[`sitting_${index}_examNumber`]" class="invalid-feedback">
+                {{ validationErrors[`sitting_${index}_examNumber`] }}
+              </div>
             </div>
           </div>
         </div>
@@ -1653,48 +1541,29 @@ export default {
         <div class="d-flex justify-content-between mt-5 mb-1">
           <h6 class="fw-semibold">
             O'Level Result
-            <span class="fw-light small"
-              >(5 Credits not more than two sittings)</span
-            >
+            <span class="fw-light small">(5 Credits not more than two sittings)</span>
           </h6>
 
-          <button
-            class="btn btn-acon-dark btn-sm"
-            @click="addSubject"
-            :disabled="subjects.length >= maxSubjects"
-          >
+          <button class="btn btn-acon-dark btn-sm" @click="addSubject" :disabled="subjects.length >= maxSubjects">
             <i class="bi bi-plus"></i> Add Subject
           </button>
         </div>
 
         <div class="card border-0 acon-bg-light p-3">
-          <div
-            class="row g-3 mb-3"
-            v-for="(row, index) in subjects"
-            :key="index"
-          >
+          <div class="row g-3 mb-3" v-for="(row, index) in subjects" :key="index">
             <div class="col-md-5">
               <label class="form-label small">
                 Subject <span class="text-danger">*</span>
               </label>
 
-              <select
-                v-model="row.subject"
-                class="form-select"
-                :disabled="row.locked"
-              >
+              <select v-model="row.subject" class="form-select" :disabled="row.locked">
                 <option disabled value="">--Select Subject--</option>
                 <!-- Show the locked subject's value if it's locked -->
                 <option v-if="row.locked" :value="row.subject" selected>
                   {{ row.subject }}
                 </option>
                 <!-- Show all available options for unlocked subjects -->
-                <option
-                  v-for="subject in subjectOptions"
-                  :key="subject"
-                  :value="subject"
-                  v-show="!row.locked"
-                >
+                <option v-for="subject in subjectOptions" :key="subject" :value="subject" v-show="!row.locked">
                   {{ subject }}
                 </option>
               </select>
@@ -1704,12 +1573,17 @@ export default {
               <label for="grade" class="form-label small">
                 Grade <span class="text-danger">*</span>
               </label>
-              <select v-model="row.grade" class="form-select">
+              <select v-model="row.grade" class="form-select" :class="{
+                'is-invalid': validationErrors[`subject_${index}_grade`],
+              }">
                 <option disabled value="">--Select Grade--</option>
                 <option v-for="grade in grades" :key="grade" :value="grade">
                   {{ grade }}
                 </option>
               </select>
+              <div v-if="validationErrors[`subject_${index}_grade`]" class="invalid-feedback">
+                {{ validationErrors[`subject_${index}_grade`] }}
+              </div>
             </div>
 
             <div class="col-md-3">
@@ -1717,36 +1591,43 @@ export default {
                 Sitting <span class="text-danger">*</span>
               </label>
 
-              <select v-model="row.sitting" class="form-select">
+              <select v-model="row.sitting" class="form-select" :class="{
+                'is-invalid': validationErrors[`subject_${index}_sitting`],
+              }">
                 <option disabled value="">--Select Sitting--</option>
-                <option
-                  v-for="(s, i) in sittings"
-                  :key="i"
-                  :value="'Sitting ' + (i + 1)"
-                >
+                <option v-for="(s, i) in sittings" :key="i" :value="'Sitting ' + (i + 1)">
                   Sitting {{ i + 1 }}
                 </option>
               </select>
+              <div v-if="validationErrors[`subject_${index}_sitting`]" class="invalid-feedback">
+                {{ validationErrors[`subject_${index}_sitting`] }}
+              </div>
             </div>
 
-            <button
-              v-if="!row.locked"
-              class="btn btn-danger btn-sm col-md-1"
-              @click="removeSubject(index)"
-            >
-              <i class="bi bi-x h3"></i>
-            </button>
+            <div class="col-md-1 d-flex align-items-end">
+              <button v-if="!row.locked" class="btn btn-danger btn-sm" @click="removeSubject(index)">
+                <i class="bi bi-x h3"></i>
+              </button>
+            </div>
           </div>
+        </div>
+
+        <!-- General validation errors for Stage 2 -->
+        <div v-if="validationErrors.subjects || validationErrors.coreSubjects" class="mt-3">
+          <div v-if="validationErrors.subjects" class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle"></i>
+            {{ validationErrors.subjects }}
+          </div>
+          <!-- <div v-if="validationErrors.coreSubjects" class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle"></i> {{ validationErrors.coreSubjects }}
+          </div> -->
         </div>
       </div>
 
       <!-- Stage 3: Upload -->
       <div v-if="currentStage === 2">
         <!-- Loading indicator -->
-        <div
-          v-if="isUploading"
-          class="alert alert-info d-flex align-items-center"
-        >
+        <div v-if="isUploading" class="alert alert-info d-flex align-items-center">
           <div class="spinner-border spinner-border-sm me-2" role="status">
             <span class="visually-hidden">Loading...</span>
           </div>
@@ -1758,48 +1639,36 @@ export default {
           <div class="row g-3 mb-3">
             <div class="d-flex align-items-center">
               <div class="me-3 position-relative">
-                <img
-                  v-if="profilePreview"
-                  :src="profilePreview"
-                  alt="Profile Preview"
-                  class="rounded-circle border"
-                  style="width: 100px; height: 100px; object-fit: cover"
-                />
-                <div
-                  v-else
+                <img v-if="profilePreview" :src="profilePreview" alt="Profile Preview" class="rounded-circle border"
+                  style="width: 100px; height: 100px; object-fit: cover" />
+                <div v-else
                   class="rounded-circle d-flex align-items-center justify-content-center bg-secondary text-white"
-                  style="width: 100px; height: 100px"
-                >
+                  style="width: 100px; height: 100px">
                   <i class="bi bi-person h2 mb-0"></i>
                 </div>
 
                 <!-- Remove button for profile picture -->
-                <button
-                  v-if="profilePreview && !isUploading"
-                  @click="
-                    removeDocument(
-                      'profile_picture',
-                      uploadedDocuments.profile?.url
-                    )
-                  "
-                  class="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle"
-                  style="width: 25px; height: 25px; padding: 0; line-height: 1"
-                  title="Remove profile picture"
-                >
+                <button v-if="profilePreview && !isUploading" @click="
+                  removeDocument(
+                    'profile_picture',
+                    uploadedDocuments.profile?.url
+                  )
+                  " class="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle"
+                  style="width: 25px; height: 25px; padding: 0; line-height: 1" title="Remove profile picture">
                   <i class="bi bi-x" style="font-size: 14px"></i>
                 </button>
               </div>
               <div class="flex-grow-1">
-                <input
-                  type="file"
-                  accept="image/jpeg,image/jpg"
-                  class="form-control"
-                  @change="handleProfileUpload"
-                  :disabled="isUploading"
-                />
+                <input type="file" accept="image/jpeg,image/jpg" class="form-control"
+                  :class="{ 'is-invalid': validationErrors.profilePicture }" @change="handleProfileUpload"
+                  :disabled="isUploading" required />
                 <small class="text-muted">
                   Upload a clear passport photograph (JPG/JPEG, Max: 5MB)
                 </small>
+
+                <div v-if="validationErrors.profilePicture" class="invalid-feedback">
+                  {{ validationErrors.profilePicture }}
+                </div>
 
                 <!-- File info display -->
                 <div v-if="profileFileInfo" class="mt-2 p-2 bg-light rounded">
@@ -1813,10 +1682,7 @@ export default {
                         {{ profileFileInfo.size }}
                       </div>
                     </div>
-                    <i
-                      class="bi bi-check-circle-fill text-success ms-auto"
-                      title="Uploaded successfully"
-                    ></i>
+                    <i class="bi bi-check-circle-fill text-success ms-auto" title="Uploaded successfully"></i>
                   </div>
                 </div>
               </div>
@@ -1827,11 +1693,7 @@ export default {
         <!-- O'Level Uploads -->
         <h6 class="fw-semibold mt-5">O'Level Result Uploads</h6>
         <div class="card border-0 acon-bg-light p-3">
-          <div
-            class="row g-3 mb-3"
-            v-for="(sitting, index) in sittings"
-            :key="index"
-          >
+          <div class="row g-3 mb-3" v-for="(sitting, index) in sittings" :key="index">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <p class="small text-secondary mb-0">
                 Sitting {{ index + 1 }} -
@@ -1839,92 +1701,73 @@ export default {
               </p>
 
               <!-- Remove uploaded document -->
-              <button
-                v-if="uploadedDocuments.olevels[index] && !isUploading"
-                @click="
-                  removeDocument(
-                    'olevel_result',
-                    uploadedDocuments.olevels[index].url
-                  )
-                "
-                class="btn btn-sm btn-outline-danger"
-              >
+              <button v-if="uploadedDocuments.olevels[index] && !isUploading" @click="
+                removeDocument(
+                  'olevel_result',
+                  uploadedDocuments.olevels[index].url
+                )
+                " class="btn btn-sm btn-outline-danger">
                 <i class="bi bi-trash"></i> Remove
               </button>
             </div>
 
             <!-- Show uploaded file info -->
-            <div
-              v-if="uploadedDocuments.olevels[index]"
-              class="alert alert-success py-2"
-            >
+            <div v-if="uploadedDocuments.olevels[index]" class="alert alert-success py-2">
               <i class="bi bi-check-circle-fill me-2"></i>
               <strong>Uploaded:</strong>
               {{ uploadedDocuments.olevels[index].name }}
             </div>
 
-            <input
-              type="file"
-              accept="application/pdf"
-              class="form-control"
-              @change="handleOLevelUpload($event, index)"
-              :disabled="isUploading"
-            />
+            <input type="file" accept="application/pdf" class="form-control"
+              :class="{ 'is-invalid': validationErrors[`olevel_${index}`] }" @change="handleOLevelUpload($event, index)"
+              :disabled="isUploading" required />
             <small class="text-muted">
               Upload O'Level result for this sitting (PDF only, Max: 5MB)
             </small>
+
+            <div v-if="validationErrors[`olevel_${index}`]" class="invalid-feedback">
+              {{ validationErrors[`olevel_${index}`] }}
+            </div>
           </div>
         </div>
 
         <!-- Reference Letters -->
         <h6 class="fw-semibold mt-5">Reference Letters</h6>
         <div class="card border-0 acon-bg-light p-3">
-          <div
-            class="row g-3 mb-3"
-            v-for="(ref, index) in referenceLetters"
-            :key="index"
-          >
+          <div class="row g-3 mb-3" v-for="(ref, index) in referenceLetters" :key="index">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <p class="small text-secondary mb-0">
                 Reference Letter {{ index + 1 }}
               </p>
 
               <!-- Remove uploaded document -->
-              <button
-                v-if="uploadedDocuments.references[index] && !isUploading"
-                @click="
-                  removeDocument(
-                    'reference_letter',
-                    uploadedDocuments.references[index].url
-                  )
-                "
-                class="btn btn-sm btn-outline-danger"
-              >
+              <button v-if="uploadedDocuments.references[index] && !isUploading" @click="
+                removeDocument(
+                  'reference_letter',
+                  uploadedDocuments.references[index].url
+                )
+                " class="btn btn-sm btn-outline-danger">
                 <i class="bi bi-trash"></i> Remove
               </button>
             </div>
 
             <!-- Show uploaded file info -->
-            <div
-              v-if="uploadedDocuments.references[index]"
-              class="alert alert-success py-2"
-            >
+            <div v-if="uploadedDocuments.references[index]" class="alert alert-success py-2">
               <i class="bi bi-check-circle-fill me-2"></i>
               <strong>Uploaded:</strong>
               {{ uploadedDocuments.references[index].name }}
             </div>
 
-            <input
-              type="file"
-              accept="application/pdf"
-              class="form-control mt-0"
-              @change="handleReferenceUpload($event, index)"
-              :disabled="isUploading"
-            />
+            <input type="file" accept="application/pdf" class="form-control mt-0"
+              :class="{ 'is-invalid': validationErrors[`reference${index + 1}`] }"
+              @change="handleReferenceUpload($event, index)" :disabled="isUploading" required />
             <small class="text-muted mt-2">
               Mandatory: upload referee letter {{ index + 1 }} (PDF only, Max:
               5MB)
             </small>
+            <div v-if="validationErrors[`reference${index + 1}`]" class="invalid-feedback">
+              {{ validationErrors[`reference${index + 1}`] }}
+            </div>
           </div>
         </div>
       </div>
@@ -2077,10 +1920,7 @@ export default {
             <div class="mt-3">
               <h6 class="small fw-semibold">Subjects</h6>
               <div class="table-responsive">
-                <table
-                  class="table table-bordered table-sm"
-                  style="--bs-table-bg: #f0f8f8"
-                >
+                <table class="table table-bordered table-sm" style="--bs-table-bg: #f0f8f8">
                   <thead>
                     <tr>
                       <th>Subject</th>
@@ -2107,16 +1947,9 @@ export default {
               <!-- Profile Picture -->
               <div class="col-md-6">
                 <p class="small text-muted mb-1">Profile Picture:</p>
-                <div
-                  v-if="uploadedDocuments.profile"
-                  class="d-flex align-items-center"
-                >
-                  <img
-                    :src="uploadedDocuments.profile.url"
-                    alt="Profile"
-                    class="img-thumbnail me-2"
-                    style="width: 60px; height: 60px; object-fit: cover"
-                  />
+                <div v-if="uploadedDocuments.profile" class="d-flex align-items-center">
+                  <img :src="uploadedDocuments.profile.url" alt="Profile" class="img-thumbnail me-2"
+                    style="width: 60px; height: 60px; object-fit: cover" />
                   <div>
                     <p class="mb-0 small text-success">
                       <i class="bi bi-check-circle-fill me-1"></i>Uploaded
@@ -2132,19 +1965,9 @@ export default {
               <!-- O'Level Results -->
               <div class="col-12">
                 <h6 class="small fw-semibold">O'Level Results</h6>
-                <div
-                  v-for="(sitting, index) in sittings"
-                  :key="index"
-                  class="mb-2"
-                >
-                  <div
-                    v-if="uploadedDocuments.olevels[index]"
-                    class="d-flex align-items-center"
-                  >
-                    <i
-                      class="bi bi-file-earmark-pdf text-danger me-2"
-                      style="font-size: 1.2em"
-                    ></i>
+                <div v-for="(sitting, index) in sittings" :key="index" class="mb-2">
+                  <div v-if="uploadedDocuments.olevels[index]" class="d-flex align-items-center">
+                    <i class="bi bi-file-earmark-pdf text-danger me-2" style="font-size: 1.2em"></i>
                     <div>
                       <p class="mb-0 small">
                         <strong>Sitting {{ index + 1 }}:</strong>
@@ -2165,19 +1988,9 @@ export default {
               <!-- Reference Letters -->
               <div class="col-12">
                 <h6 class="small fw-semibold">Reference Letters</h6>
-                <div
-                  v-for="(ref, index) in referenceLetters"
-                  :key="index"
-                  class="mb-2"
-                >
-                  <div
-                    v-if="uploadedDocuments.references[index]"
-                    class="d-flex align-items-center"
-                  >
-                    <i
-                      class="bi bi-file-earmark-pdf text-danger me-2"
-                      style="font-size: 1.2em"
-                    ></i>
+                <div v-for="(ref, index) in referenceLetters" :key="index" class="mb-2">
+                  <div v-if="uploadedDocuments.references[index]" class="d-flex align-items-center">
+                    <i class="bi bi-file-earmark-pdf text-danger me-2" style="font-size: 1.2em"></i>
                     <div>
                       <p class="mb-0 small">
                         <strong>Reference Letter {{ index + 1 }}:</strong>
@@ -2200,12 +2013,7 @@ export default {
           <!-- Declaration -->
           <div class="mb-4">
             <div class="form-check">
-              <input
-                class="form-check-input"
-                type="checkbox"
-                v-model="declaration"
-                id="declaration"
-              />
+              <input class="form-check-input" type="checkbox" v-model="declaration" id="declaration" />
               <label class="form-check-label small" for="declaration">
                 I declare that the information provided above is true and
                 correct to the best of my knowledge.
@@ -2217,29 +2025,18 @@ export default {
     </div>
 
     <div class="d-flex justify-content-between mt-5">
-      <button
-        class="col-md-4 btn btn-outline-acon-primary px-md-5 d-flex align-items-center justify-content-center"
-        v-if="currentStage > 0"
-        @click="prevStage"
-      >
+      <button class="col-md-4 btn btn-outline-acon-primary px-md-5 d-flex align-items-center justify-content-center"
+        v-if="currentStage > 0" @click="prevStage">
         <i class="bi bi-arrow-left-short h4 mb-0"></i> Previous
       </button>
 
-      <button
-        class="col-md-4 btn btn-acon-primary px-md-5 d-flex align-items-center justify-content-center"
-        v-if="currentStage < stages.length - 1"
-        @click="nextStage"
-      >
+      <button class="col-md-4 btn btn-acon-primary px-md-5 d-flex align-items-center justify-content-center"
+        v-if="currentStage < stages.length - 1" @click="nextStage">
         Next step <i class="bi bi-arrow-right-short h4 mb-0"></i>
       </button>
 
-      <button
-        class="col-md-4 btn btn-acon-secondary px-md-5"
-        v-if="currentStage === stages.length - 1"
-        type="button"
-        :disabled="isSubmitting"
-        @click="submitApplication"
-      >
+      <button class="col-md-4 btn btn-acon-secondary px-md-5" v-if="currentStage === stages.length - 1" type="button"
+        :disabled="isSubmitting" @click="submitApplication">
         <span v-if="isSubmitting">
           <i class="spinner-border spinner-border-sm me-2" role="status"></i>
           Submitting...
@@ -2278,5 +2075,14 @@ export default {
   /* primary */
   color: #fff;
   /* white text */
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+  display: block;
+  color: transparent;
+  background: url("https://cdn.jsdelivr.net/npm/bootstrap-icons/icons/calendar-date.svg") no-repeat center;
+  background-size: 1rem 1rem;
 }
 </style>

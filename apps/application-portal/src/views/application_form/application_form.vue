@@ -348,14 +348,9 @@ export default {
           isValid = false;
         }
 
-        // Validate date logic for primary school
-        if (this.primarySchoolStart && this.primarySchoolEnd) {
-          const startDate = new Date(this.primarySchoolStart);
-          const endDate = new Date(this.primarySchoolEnd);
-          if (startDate >= endDate) {
-            this.validationErrors.primarySchoolEnd = 'End date must be after start date';
-            isValid = false;
-          }
+        // Comprehensive date validation for primary school
+        if (!this.validateDateRange(this.primarySchoolStart, this.primarySchoolEnd, 'primarySchoolStart', 'primarySchoolEnd', 'Primary school')) {
+          isValid = false;
         }
 
         // Validate secondary school fields
@@ -374,14 +369,14 @@ export default {
           isValid = false;
         }
 
-        // Validate date logic for secondary school
-        if (this.secondarySchoolStart && this.secondarySchoolEnd) {
-          const startDate = new Date(this.secondarySchoolStart);
-          const endDate = new Date(this.secondarySchoolEnd);
-          if (startDate >= endDate) {
-            this.validationErrors.secondarySchoolEnd = 'End date must be after start date';
-            isValid = false;
-          }
+        // Comprehensive date validation for secondary school
+        if (!this.validateDateRange(this.secondarySchoolStart, this.secondarySchoolEnd, 'secondarySchoolStart', 'secondarySchoolEnd', 'Secondary school')) {
+          isValid = false;
+        }
+
+        // Validate education progression logic
+        if (!this.validateEducationProgression()) {
+          isValid = false;
         }
 
         // Validate sittings
@@ -626,6 +621,128 @@ export default {
     removeSubject(index) {
       if (this.subjects.length > 2) {
         this.subjects.splice(index, 1);
+      }
+    },
+
+    // Date validation methods
+    validateDateInput(dateString, fieldName) {
+      if (!dateString) return true; // Empty dates will be caught by required validation
+      
+      const date = new Date(dateString);
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        this.validationErrors[fieldName] = 'Please enter a valid date';
+        return false;
+      }
+      
+      // Check if date is not in the future
+      if (date > today) {
+        this.validationErrors[fieldName] = 'Date cannot be in the future';
+        return false;
+      }
+      
+      // Check reasonable date ranges for education
+      const year = date.getFullYear();
+      if (year < 1950 || year > currentYear) {
+        this.validationErrors[fieldName] = `Year must be between 1950 and ${currentYear}`;
+        return false;
+      }
+      
+      // Clear any existing error for this field
+      delete this.validationErrors[fieldName];
+      return true;
+    },
+
+    validateDateRange(startDate, endDate, startFieldName, endFieldName, schoolType) {
+      if (!startDate || !endDate) return true;
+      
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // Validate individual dates first
+      if (!this.validateDateInput(startDate, startFieldName) || 
+          !this.validateDateInput(endDate, endFieldName)) {
+        return false;
+      }
+      
+      // Check if end date is after start date
+      if (start >= end) {
+        this.validationErrors[endFieldName] = `${schoolType} end date must be after start date`;
+        return false;
+      }
+      
+      // Check reasonable duration (minimum 1 year, maximum 15 years)
+      const yearsDiff = (end - start) / (1000 * 60 * 60 * 24 * 365.25);
+      if (yearsDiff < 1) {
+        this.validationErrors[endFieldName] = `${schoolType} duration must be at least 1 year`;
+        return false;
+      }
+      if (yearsDiff > 15) {
+        this.validationErrors[endFieldName] = `${schoolType} duration cannot exceed 15 years`;
+        return false;
+      }
+      
+      // Clear errors if validation passes
+      delete this.validationErrors[startFieldName];
+      delete this.validationErrors[endFieldName];
+      return true;
+    },
+
+    validateEducationProgression() {
+      if (!this.primarySchoolEnd || !this.secondarySchoolStart) return true;
+      
+      const primaryEnd = new Date(this.primarySchoolEnd);
+      const secondaryStart = new Date(this.secondarySchoolStart);
+      
+      // Secondary school should start after primary school ends (allow same year)
+      if (secondaryStart < primaryEnd) {
+        this.validationErrors.secondarySchoolStart = 'Secondary school start date should be after primary school end date';
+        return false;
+      }
+      
+      // Check for reasonable gap (not more than 5 years gap)
+      const yearsDiff = (secondaryStart - primaryEnd) / (1000 * 60 * 60 * 24 * 365.25);
+      if (yearsDiff > 5) {
+        this.validationErrors.secondarySchoolStart = 'Gap between primary and secondary school cannot exceed 5 years';
+        return false;
+      }
+      
+      delete this.validationErrors.secondarySchoolStart;
+      return true;
+    },
+
+    // Real-time validation handlers
+    onPrimaryStartDateChange() {
+      this.validateDateInput(this.primarySchoolStart, 'primarySchoolStart');
+      if (this.primarySchoolEnd) {
+        this.validateDateRange(this.primarySchoolStart, this.primarySchoolEnd, 'primarySchoolStart', 'primarySchoolEnd', 'Primary school');
+      }
+      this.validateEducationProgression();
+    },
+
+    onPrimaryEndDateChange() {
+      this.validateDateInput(this.primarySchoolEnd, 'primarySchoolEnd');
+      if (this.primarySchoolStart) {
+        this.validateDateRange(this.primarySchoolStart, this.primarySchoolEnd, 'primarySchoolStart', 'primarySchoolEnd', 'Primary school');
+      }
+      this.validateEducationProgression();
+    },
+
+    onSecondaryStartDateChange() {
+      this.validateDateInput(this.secondarySchoolStart, 'secondarySchoolStart');
+      if (this.secondarySchoolEnd) {
+        this.validateDateRange(this.secondarySchoolStart, this.secondarySchoolEnd, 'secondarySchoolStart', 'secondarySchoolEnd', 'Secondary school');
+      }
+      this.validateEducationProgression();
+    },
+
+    onSecondaryEndDateChange() {
+      this.validateDateInput(this.secondarySchoolEnd, 'secondarySchoolEnd');
+      if (this.secondarySchoolStart) {
+        this.validateDateRange(this.secondarySchoolStart, this.secondarySchoolEnd, 'secondarySchoolStart', 'secondarySchoolEnd', 'Secondary school');
       }
     },
 
@@ -1427,7 +1544,11 @@ export default {
                 Start Date <span class="text-danger">*</span>
               </label>
               <input type="date" class="form-control" id="primarySchoolStart" v-model="primarySchoolStart"
-                :class="{ 'is-invalid': validationErrors.primarySchoolStart }" required />
+                :class="{ 'is-invalid': validationErrors.primarySchoolStart }" 
+                :max="primarySchoolEnd || new Date().toISOString().split('T')[0]"
+                @change="onPrimaryStartDateChange" 
+                @blur="onPrimaryStartDateChange" 
+                required />
               <div v-if="validationErrors.primarySchoolStart" class="invalid-feedback">
                 {{ validationErrors.primarySchoolStart }}
               </div>
@@ -1438,7 +1559,12 @@ export default {
                 End Date <span class="text-danger">*</span>
               </label>
               <input type="date" class="form-control" id="primarySchoolEnd" v-model="primarySchoolEnd"
-                :class="{ 'is-invalid': validationErrors.primarySchoolEnd }" required />
+                :class="{ 'is-invalid': validationErrors.primarySchoolEnd }" 
+                :min="primarySchoolStart"
+                :max="secondarySchoolStart || new Date().toISOString().split('T')[0]"
+                @change="onPrimaryEndDateChange" 
+                @blur="onPrimaryEndDateChange" 
+                required />
               <div v-if="validationErrors.primarySchoolEnd" class="invalid-feedback">
                 {{ validationErrors.primarySchoolEnd }}
               </div>
@@ -1460,7 +1586,12 @@ export default {
                 Start Date <span class="text-danger">*</span>
               </label>
               <input type="date" class="form-control" id="secondarySchoolStart" v-model="secondarySchoolStart"
-                :class="{ 'is-invalid': validationErrors.secondarySchoolStart }" required />
+                :class="{ 'is-invalid': validationErrors.secondarySchoolStart }" 
+                :min="primarySchoolEnd"
+                :max="secondarySchoolEnd || new Date().toISOString().split('T')[0]"
+                @change="onSecondaryStartDateChange" 
+                @blur="onSecondaryStartDateChange" 
+                required />
               <div v-if="validationErrors.secondarySchoolStart" class="invalid-feedback">
                 {{ validationErrors.secondarySchoolStart }}
               </div>
@@ -1471,7 +1602,12 @@ export default {
                 End Date <span class="text-danger">*</span>
               </label>
               <input type="date" class="form-control" id="secondarySchoolEnd" v-model="secondarySchoolEnd"
-                :class="{ 'is-invalid': validationErrors.secondarySchoolEnd }" required />
+                :class="{ 'is-invalid': validationErrors.secondarySchoolEnd }" 
+                :min="secondarySchoolStart"
+                :max="new Date().toISOString().split('T')[0]"
+                @change="onSecondaryEndDateChange" 
+                @blur="onSecondaryEndDateChange" 
+                required />
               <div v-if="validationErrors.secondarySchoolEnd" class="invalid-feedback">
                 {{ validationErrors.secondarySchoolEnd }}
               </div>

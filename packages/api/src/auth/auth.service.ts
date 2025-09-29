@@ -149,14 +149,18 @@ export class AuthService {
 
         // Find user by email
         const user = await this.userModel.findOne({ email });
-        if (!user || !user.isActive) {
-            throw new UnauthorizedException('Invalid credentials');
+        if (!user) {
+            throw new UnauthorizedException('No account found with this email address');
+        }
+
+        if (!user.isActive) {
+            throw new UnauthorizedException('Your account has been deactivated. Please contact support');
         }
 
         // Check password
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {
-            throw new UnauthorizedException('Invalid credentials');
+            throw new UnauthorizedException('Incorrect password. Please try again');
         }
 
         // Generate JWT token

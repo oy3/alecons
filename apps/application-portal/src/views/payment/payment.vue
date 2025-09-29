@@ -2,6 +2,7 @@
 import { paymentService } from "../../services/payment.js";
 import { useAuthStore } from "../../stores/auth.js";
 import { logger } from "@shared/utils/logger";
+import Swal from "sweetalert2";
 
 export default {
   name: "Payment",
@@ -76,7 +77,12 @@ export default {
         }
       } catch (error) {
         this.error = "An error occurred while loading payment data";
-        logger.error("Error in fetchPayments:", error);
+        logger.error("Error in fetchPayments:", {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          error: error
+        });
       } finally {
         this.loading = false;
       }
@@ -110,7 +116,15 @@ export default {
         if (result.success) {
           logger.info("Payment completed successfully:", result);
 
-          // Refresh payment data to show updated status
+          // Refresh user/application data first (payment might have advanced stage)
+          try {
+            await this.authStore.fetchUserData();
+            logger.info("User data refreshed after successful payment");
+          } catch (refreshError) {
+            logger.warn("Failed to refresh user data after payment:", refreshError);
+          }
+
+          // Then refresh payment data to show updated status
           await this.fetchPayments();
 
           // Show success message
@@ -130,7 +144,12 @@ export default {
           this.error = result.message || "Payment failed. Please try again.";
         }
       } catch (error) {
-        logger.error("Error initiating payment:", error);
+        logger.error("Error initiating payment:", {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          error: error
+        });
         this.error = "Failed to initiate payment. Please try again.";
       } finally {
         // Clear loading state for this payment

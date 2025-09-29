@@ -184,6 +184,15 @@ export class ApplicationUploadController {
                     grade: string;
                     sitting: string;
                 }>;
+                examinations: Array<{
+                    examType: string;
+                    examYear: string;
+                    examNumber: string;
+                    subjects: Array<{
+                        subject: string;
+                        grade: string;
+                    }>;
+                }>;
                 nextOfKin: {
                     name: string;
                     phone: string;
@@ -249,28 +258,23 @@ export class ApplicationUploadController {
             // Find profile picture URL for profileImageUrl field
             const profilePicture = applicationData.uploadedFiles.find(f => f.type === 'profile_picture');
 
-            // Prepare examinations data from sittings and subjects
-            const examinations = applicationData.academicInfo.sittings
-                .filter(sitting => sitting.examType && sitting.examYear && sitting.examNumber)
-                .map(sitting => {
-                    // Get subjects for this sitting
-                    const sittingSubjects = applicationData.academicInfo.subjects
-                        .filter(subject => subject.sitting === sitting.examType && subject.subject && subject.grade)
+            // Prepare examinations data - frontend sends examinations array directly
+            const examinations = (applicationData.academicInfo.examinations || [])
+                .filter(exam => exam.examType && exam.examYear && exam.examNumber)
+                .map(exam => ({
+                    examType: exam.examType,
+                    examYear: exam.examYear,
+                    examNumber: exam.examNumber,
+                    subjects: (exam.subjects || [])
+                        .filter(subject => subject.subject && subject.grade)
                         .map(subject => ({
                             subject: subject.subject,
                             grade: subject.grade
-                        }));
-
-                    return {
-                        examType: sitting.examType,
-                        examYear: sitting.examYear,
-                        examNumber: sitting.examNumber,
-                        subjects: sittingSubjects
-                    };
-                });
+                        }))
+                }));
 
             // Filter valid referees (must have name, phone, and email)
-            const referees = applicationData.academicInfo.referees
+            const referees = (applicationData.academicInfo.referees || [])
                 .filter(referee => referee.name && referee.phone && referee.email)
                 .map(referee => ({
                     name: referee.name,
@@ -296,21 +300,23 @@ export class ApplicationUploadController {
                 application.nationality = applicationData.personalInfo.nationality;
 
                 // Academic background
-                application.academicBackground = {
-                    primary: {
-                        name: applicationData.academicInfo.primarySchool.name,
-                        startDate: applicationData.academicInfo.primarySchool.startDate,
-                        endDate: applicationData.academicInfo.primarySchool.endDate
-                    },
-                    secondary: {
-                        name: applicationData.academicInfo.secondarySchool.name,
-                        startDate: applicationData.academicInfo.secondarySchool.startDate,
-                        endDate: applicationData.academicInfo.secondarySchool.endDate
-                    }
-                };
+                if (applicationData.academicInfo.primarySchool && applicationData.academicInfo.secondarySchool) {
+                    application.academicBackground = {
+                        primary: {
+                            name: applicationData.academicInfo.primarySchool.name,
+                            startDate: applicationData.academicInfo.primarySchool.startDate,
+                            endDate: applicationData.academicInfo.primarySchool.endDate
+                        },
+                        secondary: {
+                            name: applicationData.academicInfo.secondarySchool.name,
+                            startDate: applicationData.academicInfo.secondarySchool.startDate,
+                            endDate: applicationData.academicInfo.secondarySchool.endDate
+                        }
+                    };
+                }
 
                 // Next of kin
-                if (applicationData.academicInfo.nextOfKin.name && applicationData.academicInfo.nextOfKin.phone) {
+                if (applicationData.academicInfo.nextOfKin && applicationData.academicInfo.nextOfKin.name && applicationData.academicInfo.nextOfKin.phone) {
                     application.nextOfKin = {
                         name: applicationData.academicInfo.nextOfKin.name,
                         phone: applicationData.academicInfo.nextOfKin.phone,
@@ -485,7 +491,7 @@ export class ApplicationUploadController {
 
     @Post('remove-document')
     async removeDocument(
-        @Body() removeData: { documentType: string; documentUrl: string },
+        @Body() removeData: { applicationId?: string; documentType: string; documentUrl: string },
         @Request() req
     ) {
         try {
@@ -493,14 +499,54 @@ export class ApplicationUploadController {
 
             this.logger.log('Document removal request:', {
                 userId,
+                applicationId: removeData.applicationId,
                 documentType: removeData.documentType,
                 documentUrl: removeData.documentUrl
             });
 
-            // Get user's application
-            const application = await this.applicationModel.findOne({ userId });
+            // Get user's application - try by applicationId first, then fallback to userId
+            let application;
+            const userObjectId = new Types.ObjectId(userId);
+
+            if (removeData.applicationId) {
+                this.logger.log('Searching for application by ID:', {
+                    applicationId: removeData.applicationId,
+                    userId: userId
+                });
+
+                application = await this.applicationModel.findOne({
+                    _id: removeData.applicationId,
+                    userId: userObjectId  // Convert to ObjectId for proper comparison
+                });
+            } else {
+                this.logger.log('Searching for application by userId:', { userId });
+                // Fallback to old method for backward compatibility
+                application = await this.applicationModel.findOne({ userId: userObjectId });
+            }
+
+            this.logger.log('Application search result:', {
+                found: !!application,
+                applicationId: application?._id?.toString(),
+                userId: application?.userId?.toString()
+            });
+
             if (!application) {
-                throw new BadRequestException('No application found for this user');
+                this.logger.error('Document removal failed:', {
+                    userId: userObjectId,
+                    applicationId: removeData.applicationId,
+                    documentType: removeData.documentType,
+                    error: 'No application found for this user',
+                    searchCriteria: removeData.applicationId ?
+                        { _id: removeData.applicationId, userId: userObjectId } :
+                        { userId: userObjectId }
+                });
+
+                // Return more specific error message
+                const errorMessage = removeData.applicationId ?
+                    'Application not found or you do not have permission to modify it' :
+                    'No application found for this user. Please save your application first.';
+
+                throw new BadRequestException(errorMessage);
             }
 
             // Extract key from URL for Spaces deletion

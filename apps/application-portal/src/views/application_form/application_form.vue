@@ -746,6 +746,25 @@ export default {
       }
     },
 
+    // Helper method to clear file input
+    clearFileInput(inputId) {
+      try {
+        // Use getElementById which is more reliable for dynamic elements
+        const fileInput = document.getElementById(inputId);
+        
+        if (fileInput && fileInput.type === 'file') {
+          fileInput.value = '';
+          // Trigger change event to ensure any bound data is updated
+          fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+          logger.info(`Successfully cleared file input: ${inputId}`);
+        } else {
+          logger.warn(`File input not found or invalid: ${inputId}`);
+        }
+      } catch (error) {
+        logger.warn(`Failed to clear file input ${inputId}:`, error);
+      }
+    },
+
     // File upload methods
     async handleProfileUpload(event) {
       const file = event.target.files[0];
@@ -935,7 +954,21 @@ export default {
 
     async removeDocument(documentType, documentUrl) {
       try {
+        // Check if we have an application - if not, try to get it
+        let applicationId = this.application?.id;
+        
+        if (!applicationId) {
+          // Try to refresh the auth store to get the latest application data
+          await this.authStore.refreshUserData();
+          applicationId = this.application?.id;
+        }
+
+        if (!applicationId) {
+          throw new Error('No application found. Please save your application first before removing documents.');
+        }
+
         const response = await apiService.post('/applications/remove-document', {
+          applicationId,
           documentType,
           documentUrl
         });
@@ -946,6 +979,31 @@ export default {
             case 'profile_picture':
               this.profilePreview = null;
               this.uploadedDocuments.profile = null;
+              this.profileFileInfo = null;
+              // Clear the file input
+              this.clearFileInput('profileFileInput');
+              break;
+            case 'olevel_result':
+              // Find which sitting this document belongs to
+              for (let index in this.uploadedDocuments.olevels) {
+                if (this.uploadedDocuments.olevels[index]?.url === documentUrl) {
+                  this.uploadedDocuments.olevels[index] = null;
+                  // Clear the corresponding file input
+                  this.clearFileInput(`olevelFileInput_${index}`);
+                  break;
+                }
+              }
+              break;
+            case 'reference_letter':
+              // Find which reference this document belongs to
+              for (let index in this.uploadedDocuments.references) {
+                if (this.uploadedDocuments.references[index]?.url === documentUrl) {
+                  this.uploadedDocuments.references[index] = null;
+                  // Clear the corresponding file input
+                  this.clearFileInput(`referenceFileInput_${index}`);
+                  break;
+                }
+              }
               break;
           }
 
@@ -1808,6 +1866,8 @@ export default {
               </div>
               <div class="flex-grow-1">
                 <input type="file" accept="image/jpeg,image/jpg" class="form-control"
+                  ref="profileFileInput"
+                  id="profileFileInput"
                   :class="{ 'is-invalid': validationErrors.profilePicture }" @change="handleProfileUpload"
                   :disabled="isUploading" required />
                 <small class="text-muted">
@@ -1867,6 +1927,8 @@ export default {
             </div>
 
             <input type="file" accept="application/pdf" class="form-control"
+              :ref="`olevelFileInput_${index}`"
+              :id="`olevelFileInput_${index}`"
               :class="{ 'is-invalid': validationErrors[`olevel_${index}`] }" @change="handleOLevelUpload($event, index)"
               :disabled="isUploading" required />
             <small class="text-muted">
@@ -1907,6 +1969,8 @@ export default {
             </div>
 
             <input type="file" accept="application/pdf" class="form-control mt-0"
+              :ref="`referenceFileInput_${index}`"
+              :id="`referenceFileInput_${index}`"
               :class="{ 'is-invalid': validationErrors[`reference${index + 1}`] }"
               @change="handleReferenceUpload($event, index)" :disabled="isUploading" required />
             <small class="text-muted mt-2">

@@ -83,19 +83,12 @@ class PaymentService {
 
             const { reference, access_code } = initResult.data;
 
-            // Launch Paystack popup
+            // Launch Paystack popup using modern API
             return new Promise((resolve, reject) => {
-                const popup = PaystackPop.setup({
-                    key: this.paystackPublicKey,
-                    email: email,
-                    amount: amount * 100, // Convert to kobo
-                    currency: 'NGN',
-                    ref: reference,
-                    metadata: {
-                        paymentName: description,
-                        paymentId: paymentId
-                    },
-                    callback: (response) => {
+                const popup = new PaystackPop();
+
+                popup.resumeTransaction(access_code, {
+                    onSuccess: (response) => {
                         logger.info('Payment successful:', response);
                         this.verifyPayment(response.reference).then(verificationResult => {
                             resolve({
@@ -114,6 +107,13 @@ class PaymentService {
                             });
                         });
                     },
+                    onCancel: () => {
+                        logger.info('Payment cancelled by user');
+                        resolve({
+                            success: false,
+                            message: 'Payment cancelled by user'
+                        });
+                    },
                     onClose: () => {
                         logger.info('Payment popup closed');
                         resolve({
@@ -122,8 +122,6 @@ class PaymentService {
                         });
                     }
                 });
-
-                popup.openIframe();
             });
 
         } catch (error) {

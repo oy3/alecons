@@ -4,9 +4,14 @@ import { apiService } from '../../services/api.js';
 import { logger } from '@shared/utils/logger';
 import { Country, State, City } from 'country-state-city';
 import Swal from 'sweetalert2';
+import vSelect from 'vue-select';
+import 'vue-select/dist/vue-select.css';
 
 export default {
   name: "ApplicationForm",
+  components: {
+    vSelect
+  },
   setup() {
     const authStore = useAuthStore();
     return {
@@ -155,6 +160,16 @@ export default {
     },
     selectedState() {
       return this.states.find(state => state.name === this.state);
+    },
+    // For vue-select display, we need the actual selected objects
+    selectedNationalityObject() {
+      return this.countries.find(country => country.name === this.nationality);
+    },
+    selectedStateObject() {
+      return this.states.find(state => state.name === this.state);
+    },
+    selectedLgaObject() {
+      return this.cities.find(city => city.name === this.lga);
     },
     // Filter available subjects to exclude already selected ones
     getAvailableSubjectsFor() {
@@ -744,6 +759,24 @@ export default {
       if (this.secondarySchoolStart) {
         this.validateDateRange(this.secondarySchoolStart, this.secondarySchoolEnd, 'secondarySchoolStart', 'secondarySchoolEnd', 'Secondary school');
       }
+    },
+
+    // Location selection handlers
+    onNationalityChange(selectedCountry) {
+      this.nationality = selectedCountry ? selectedCountry.name : '';
+      this.state = '';
+      this.lga = '';
+      this.loadStatesForCountry();
+    },
+
+    onStateChange(selectedState) {
+      this.state = selectedState ? selectedState.name : '';
+      this.lga = '';
+      this.loadCitiesForState();
+    },
+
+    onLgaChange(selectedCity) {
+      this.lga = selectedCity ? selectedCity.name : '';
     },
 
     // Helper method to clear file input
@@ -1384,13 +1417,17 @@ export default {
               <label for="nationality" class="form-label small">
                 Nationality <span class="text-danger">*</span>
               </label>
-              <select class="form-select" id="nationality" v-model="nationality"
-                :class="{ 'is-invalid': validationErrors.nationality }" required>
-                <option value="">--Select Nationality--</option>
-                <option v-for="country in countries" :key="country.isoCode" :value="country.name">
-                  {{ country.name }}
-                </option>
-              </select>
+              <v-select
+                v-model="selectedNationalityObject"
+                :options="countries"
+                label="name"
+                :searchable="true"
+                :clearable="false"
+                placeholder="--Select nationality--"
+                :class="{ 'is-invalid': validationErrors.nationality }"
+                class="vue-select-custom"
+                @update:modelValue="onNationalityChange"
+              />
               <div v-if="validationErrors.nationality" class="invalid-feedback">
                 {{ validationErrors.nationality }}
               </div>
@@ -1400,19 +1437,18 @@ export default {
               <label for="state" class="form-label small">
                 State of Origin <span class="text-danger">*</span>
               </label>
-              <select class="form-select" id="state" v-model="state" :class="{ 'is-invalid': validationErrors.state }"
-                :disabled="!nationality" required>
-                <option value="">
-                  {{
-                    nationality
-                      ? "--Select State--"
-                      : "Select nationality first"
-                  }}
-                </option>
-                <option v-for="stateItem in states" :key="stateItem.isoCode" :value="stateItem.name">
-                  {{ stateItem.name }}
-                </option>
-              </select>
+              <v-select
+                v-model="selectedStateObject"
+                :options="states"
+                label="name"
+                :searchable="true"
+                :clearable="false"
+                :disabled="!nationality"
+                :placeholder="nationality ? '--Select State--' : 'Select nationality first'"
+                :class="{ 'is-invalid': validationErrors.state }"
+                class="vue-select-custom"
+                @update:modelValue="onStateChange"
+              />
               <div v-if="validationErrors.state" class="invalid-feedback">
                 {{ validationErrors.state }}
               </div>
@@ -1422,15 +1458,18 @@ export default {
               <label for="lga" class="form-label small">
                 Local Government Area <span class="text-danger">*</span>
               </label>
-              <select class="form-select" id="lga" v-model="lga" :class="{ 'is-invalid': validationErrors.lga }"
-                :disabled="!state" required>
-                <option value="">
-                  {{ state ? "--Select LGA--" : "Select state first" }}
-                </option>
-                <option v-for="city in cities" :key="city.name" :value="city.name">
-                  {{ city.name }}
-                </option>
-              </select>
+              <v-select
+                v-model="selectedLgaObject"
+                :options="cities"
+                label="name"
+                :searchable="true"
+                :clearable="false"
+                :disabled="!state"
+                :placeholder="state ? '--Select LGA--' : 'Select state first'"
+                :class="{ 'is-invalid': validationErrors.lga }"
+                class="vue-select-custom"
+                @update:modelValue="onLgaChange"
+              />
               <div v-if="validationErrors.lga" class="invalid-feedback">
                 {{ validationErrors.lga }}
               </div>
@@ -2296,5 +2335,114 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: transparent;
   background: url("https://cdn.jsdelivr.net/npm/bootstrap-icons/icons/calendar-date.svg") no-repeat center;
   background-size: 1rem 1rem;
+}
+
+/* Vue Select Custom Styling */
+.vue-select-custom {
+  font-size: 1rem;
+}
+
+.vue-select-custom :deep(.vs__dropdown-toggle) {
+  border: 1px solid #ced4da;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  min-height: calc(1.5em + 0.75rem + 2px);
+  background-color: #fff;
+}
+
+.vue-select-custom :deep(.vs__dropdown-toggle):hover {
+  border-color: #86b7fe;
+}
+
+.vue-select-custom :deep(.vs__dropdown-toggle):focus-within {
+  border-color: #86b7fe;
+  outline: 0;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.vue-select-custom.is-invalid :deep(.vs__dropdown-toggle) {
+  border-color: #dc3545;
+}
+
+.vue-select-custom.is-invalid :deep(.vs__dropdown-toggle):focus-within {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+}
+
+.vue-select-custom :deep(.vs__selected-options) {
+  padding: 0;
+  margin: 0;
+}
+
+.vue-select-custom :deep(.vs__selected) {
+  margin: 0;
+  padding: 0;
+  color: #212529;
+  font-size: 1rem;
+}
+
+.vue-select-custom :deep(.vs__search) {
+  margin: 0;
+  padding: 0;
+  font-size: 0.875rem;
+  color: #212529;
+}
+
+.vue-select-custom :deep(.vs__search::placeholder) {
+  color: #6c757d;
+}
+
+.vue-select-custom :deep(.vs__dropdown-menu) {
+  border: 1px solid #ced4da;
+  border-radius: 0.375rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  font-size: 0.875rem;
+  z-index: 1050;
+}
+
+.vue-select-custom :deep(.vs__dropdown-option) {
+  padding: 0.5rem 0.75rem;
+  color: #212529;
+}
+
+.vue-select-custom :deep(.vs__dropdown-option--highlight) {
+  background-color: #0d6efd;
+  color: white;
+}
+
+.vue-select-custom :deep(.vs__no-options) {
+  padding: 0.5rem 0.75rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.vue-select-custom :deep(.vs__spinner) {
+  border-color: #0d6efd transparent transparent;
+}
+
+/* Disabled state */
+.vue-select-custom :deep(.vs--disabled .vs__dropdown-toggle) {
+  background-color: #6c757d !important;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.vue-select-custom :deep(.vs--disabled .vs__selected) {
+  color: #6c757d;
+}
+
+.vue-select-custom :deep(.vs--disabled .vs__search) {
+  background-color: transparent;
+  cursor: not-allowed;
+}
+
+/* Clear button styling */
+.vue-select-custom :deep(.vs__clear) {
+  margin-right: 8px;
+}
+
+.vue-select-custom :deep(.vs__open-indicator) {
+  fill: #6c757d;
+  margin-right: 4px;
 }
 </style>

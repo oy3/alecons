@@ -6,6 +6,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { EmailService } from '../services/email.service';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { Program, ProgramSchema } from '../schemas/program.schema';
@@ -34,7 +35,7 @@ import { ProgramMode, ProgramModeSchema } from '../schemas/program-mode.schema';
         }),
     ],
     controllers: [AuthController],
-    providers: [AuthService, JwtStrategy],
+    providers: [AuthService, JwtStrategy, EmailService],
     exports: [AuthService, JwtStrategy],
 })
 export class AuthModule { }

@@ -153,7 +153,7 @@ export default {
       <div class="col-md-8">
         <div class="d-flex align-items-center mb-5">
           <img
-            src="https://placehold.co/100"
+            :src="application.profileImageUrl || 'https://placehold.co/100?text=IMG'"
             class="rounded-circle me-3"
             width="100"
             height="100"

@@ -74,4 +74,22 @@ export class AuthController {
     async changePassword(@Body() changePasswordDto: ChangePasswordDto, @Request() req) {
         return this.authService.changePassword(req.user._id, changePasswordDto);
     }
+
+    @Post('verify-email')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Verify email address' })
+    @ApiResponse({ status: 200, description: 'Email successfully verified' })
+    @ApiResponse({ status: 400, description: 'Invalid or expired token' })
+    async verifyEmail(@Body() body: { token: string }) {
+        return this.authService.verifyEmail(body.token);
+    }
+
+    @Post('resend-verification')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Resend email verification' })
+    @ApiResponse({ status: 200, description: 'Verification email sent' })
+    @ApiResponse({ status: 400, description: 'User not found or email already verified' })
+    async resendVerification(@Body() body: { email: string }) {
+        return this.authService.resendVerificationEmail(body.email);
+    }
 }

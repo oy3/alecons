@@ -34,6 +34,15 @@ export class User {
     @Prop({ default: true })
     isActive: boolean;
 
+    @Prop({ default: false })
+    isEmailVerified: boolean;
+
+    @Prop()
+    emailVerificationToken?: string;
+
+    @Prop()
+    emailVerificationTokenExpires?: Date;
+
     // Virtual for full name
     get fullName(): string {
         return `${this.firstName} ${this.otherName ? this.otherName + ' ' : ''}${this.lastName}`;

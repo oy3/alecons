@@ -98,6 +98,18 @@ export class Application {
     gender?: string;
 
     @Prop()
+    phone?: string;
+
+    @Prop()
+    stateOfOrigin?: string;
+
+    @Prop()
+    lga?: string;
+
+    @Prop()
+    nationality?: string;
+
+    @Prop()
     maritalStatus?: string;
 
     @Prop()
@@ -171,9 +183,11 @@ export class Application {
 
     @Prop({
         type: [{
-            type: String,
-            url: String,
+            type: { type: String, required: true }, // Document type (profile_picture, olevel_result, reference_letter)
+            url: { type: String, required: true },  // File URL
             uploadedAt: { type: Date, default: Date.now },
+            sittingIndex: { type: Number }, // For olevel results
+            referenceIndex: { type: Number } // For reference letters
         }]
     })
     documents: ApplicationDoc[];

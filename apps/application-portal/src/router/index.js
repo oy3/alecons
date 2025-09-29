@@ -24,6 +24,14 @@ const router = createRouter({
       }
     },
     {
+      path: '/verify-email',
+      name: 'EmailVerification',
+      component: () => import('../views/auth/EmailVerification.vue'),
+      meta: {
+        requiresAuth: false
+      }
+    },
+    {
       path: '/dashboard',
       name: 'Dashboard',
       component: () => import('../views/dashboard/dashboard.vue'),

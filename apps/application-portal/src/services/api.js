@@ -48,13 +48,25 @@ class ApiService {
     // Generic API call method
     async makeRequest(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
+
+        // Handle FormData differently - don't set Content-Type header
+        let headers;
+        if (options.body instanceof FormData) {
+            headers = {};
+            if (this.token) {
+                headers.Authorization = `Bearer ${this.token}`;
+            }
+        } else {
+            headers = this.getHeaders();
+        }
+
         const config = {
-            headers: this.getHeaders(),
+            headers,
             ...options,
         };
 
         try {
-            logger.info('Making API request:', { url, config });
+            logger.info('Making API request:', { url, method: config.method || 'GET' });
 
             const response = await fetch(url, config);
             logger.info('API response received:', {
@@ -125,11 +137,25 @@ class ApiService {
         return this.makeRequest(endpoint, { method: 'GET' });
     }
 
-    async post(endpoint, data = {}) {
-        return this.makeRequest(endpoint, {
+    async post(endpoint, data = {}, customOptions = {}) {
+        const options = {
             method: 'POST',
             body: JSON.stringify(data),
-        });
+            ...customOptions
+        };
+
+        // If custom headers are provided, merge them but don't override Content-Type for FormData
+        if (customOptions.headers) {
+            // For FormData uploads, don't set Content-Type (let browser set it)
+            if (data instanceof FormData) {
+                delete options.headers; // Let browser set proper Content-Type with boundary
+                options.body = data; // Don't JSON.stringify FormData
+            } else {
+                options.headers = { ...this.getHeaders(), ...customOptions.headers };
+            }
+        }
+
+        return this.makeRequest(endpoint, options);
     }
 
     async put(endpoint, data = {}) {

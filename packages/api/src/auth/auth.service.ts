@@ -1,19 +1,23 @@
-import { Injectable, ConflictException, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Application, ApplicationDocument } from '../schemas/application.schema';
 import { Program, ProgramDocument } from '../schemas/program.schema';
 import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
+import { EmailService } from '../services/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
+
     constructor(
         @InjectModel(User.name) private userModel: Model<UserDocument>,
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
@@ -21,6 +25,7 @@ export class AuthService {
         @InjectModel(ProgramType.name) private programTypeModel: Model<ProgramTypeDocument>,
         @InjectModel(ProgramMode.name) private programModeModel: Model<ProgramModeDocument>,
         private jwtService: JwtService,
+        private emailService: EmailService,
     ) { }
 
     async register(registerDto: RegisterDto) {
@@ -60,6 +65,10 @@ export class AuthService {
             throw new BadRequestException('Invalid program mode selected');
         }
 
+        // Generate email verification token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
         // Create new user
         const user = new this.userModel({
             email,
@@ -69,6 +78,9 @@ export class AuthService {
             lastName,
             phone,
             role: UserRole.APPLICANT,
+            isEmailVerified: false,
+            emailVerificationToken: verificationToken,
+            emailVerificationTokenExpires: tokenExpires,
         });
 
         await user.save();
@@ -119,6 +131,14 @@ export class AuthService {
         const payload = { email: user.email, sub: user._id, role: user.role };
         const access_token = this.jwtService.sign(payload);
 
+        // Send verification email
+        try {
+            await this.emailService.sendVerificationEmail(email, firstName, verificationToken);
+        } catch (error) {
+            this.logger.warn('Failed to send verification email:', error);
+            // Don't fail registration if email sending fails
+        }
+
         return {
             access_token,
             user: {
@@ -130,6 +150,7 @@ export class AuthService {
                 role: user.role,
                 fullName: user.fullName,
                 phone: phone,
+                isEmailVerified: user.isEmailVerified,
             },
             applicationId: application._id,
             applicationNumber: application.applicationNumber,
@@ -156,13 +177,35 @@ export class AuthService {
         // Get application if user is an applicant
         let applicationData = null;
         if (user.role === UserRole.APPLICANT) {
-            const application = await this.applicationModel.findOne({ userId: user._id });
+            const application = await this.applicationModel
+                .findOne({ userId: user._id })
+                .populate('programId', 'name code')
+                .populate('programTypeId', 'type')
+                .populate('programModeId', 'mode')
+                .exec();
+
             if (application) {
                 applicationData = {
                     id: application._id,
                     applicationNumber: application.applicationNumber,
                     currentStage: application.currentStage,
-                    status: application.status
+                    status: application.status,
+                    program: application.programId,
+                    programType: application.programTypeId,
+                    programMode: application.programModeId,
+                    // Include personal data for form prefilling
+                    dob: application.dob,
+                    gender: application.gender,
+                    religion: application.religion,
+                    maritalStatus: application.maritalStatus,
+                    address: application.address,
+                    profileImageUrl: application.profileImageUrl,
+                    // Include nested data structures
+                    nextOfKin: application.nextOfKin,
+                    referees: application.referees,
+                    academicBackground: application.academicBackground,
+                    examinations: application.examinations,
+                    documents: application.documents
                 };
             }
         }
@@ -177,6 +220,7 @@ export class AuthService {
                 lastName: user.lastName,
                 role: user.role,
                 fullName: user.fullName,
+                isEmailVerified: user.isEmailVerified,
             },
             application: applicationData,
             // Keep backward compatibility
@@ -285,6 +329,16 @@ export class AuthService {
                     .populate('programTypeId', 'type')
                     .populate('programModeId', 'mode')
                     .exec();
+
+                this.logger.log('Application data found for user profile:', {
+                    userId,
+                    hasApplication: !!application,
+                    applicationId: application?._id,
+                    hasDob: !!application?.dob,
+                    hasGender: !!application?.gender,
+                    dobValue: application?.dob,
+                    genderValue: application?.gender
+                });
             }
 
             return {
@@ -298,6 +352,7 @@ export class AuthService {
                         lastName: user.lastName,
                         role: user.role,
                         isActive: user.isActive,
+                        isEmailVerified: user.isEmailVerified,
                         fullName: user.fullName
                     },
                     application: application ? {
@@ -308,6 +363,19 @@ export class AuthService {
                         program: application.programId,
                         programType: application.programTypeId,
                         programMode: application.programModeId,
+                        // Include personal data for form prefilling
+                        dob: application.dob,
+                        gender: application.gender,
+                        religion: application.religion,
+                        maritalStatus: application.maritalStatus,
+                        address: application.address,
+                        profileImageUrl: application.profileImageUrl,
+                        // Include nested data structures
+                        nextOfKin: application.nextOfKin,
+                        referees: application.referees,
+                        academicBackground: application.academicBackground,
+                        examinations: application.examinations,
+                        documents: application.documents,
                         createdAt: application.createdAt,
                         updatedAt: application.updatedAt
                     } : null
@@ -319,6 +387,98 @@ export class AuthService {
                 throw error;
             }
             throw new BadRequestException('Failed to fetch user profile');
+        }
+    }
+
+    async verifyEmail(token: string) {
+        try {
+            // Find user with valid verification token
+            const user = await this.userModel.findOne({
+                emailVerificationToken: token,
+                emailVerificationTokenExpires: { $gt: new Date() },
+                isEmailVerified: false
+            });
+
+            if (!user) {
+                throw new BadRequestException('Invalid or expired verification token');
+            }
+
+            // Mark email as verified and clear token
+            user.isEmailVerified = true;
+            user.emailVerificationToken = undefined;
+            user.emailVerificationTokenExpires = undefined;
+            await user.save();
+
+            // Update application stage from 1 to 2
+            const application = await this.applicationModel.findOne({ userId: user._id });
+            if (application && application.currentStage === 1) {
+                application.currentStage = 2;
+                await application.save();
+                this.logger.log(`Advanced user ${user._id} from stage 1 to stage 2 after email verification`);
+            }
+
+            // Send welcome email
+            try {
+                await this.emailService.sendWelcomeEmail(user.email, user.firstName);
+            } catch (error) {
+                this.logger.warn('Failed to send welcome email:', error);
+                // Don't fail verification if welcome email fails
+            }
+
+            return {
+                success: true,
+                message: 'Email verified successfully',
+                user: {
+                    id: user._id,
+                    email: user.email,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    isEmailVerified: true
+                }
+            };
+
+        } catch (error) {
+            this.logger.error('Email verification failed:', error);
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new BadRequestException('Email verification failed');
+        }
+    }
+
+    async resendVerificationEmail(email: string) {
+        try {
+            const user = await this.userModel.findOne({
+                email,
+                isEmailVerified: false
+            });
+
+            if (!user) {
+                throw new BadRequestException('User not found or email already verified');
+            }
+
+            // Generate new verification token
+            const verificationToken = crypto.randomBytes(32).toString('hex');
+            const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+            user.emailVerificationToken = verificationToken;
+            user.emailVerificationTokenExpires = tokenExpires;
+            await user.save();
+
+            // Send verification email
+            await this.emailService.sendVerificationEmail(email, user.firstName, verificationToken);
+
+            return {
+                success: true,
+                message: 'Verification email sent successfully'
+            };
+
+        } catch (error) {
+            this.logger.error('Resend verification email failed:', error);
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to resend verification email');
         }
     }
 }

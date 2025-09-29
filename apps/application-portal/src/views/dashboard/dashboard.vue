@@ -4,6 +4,7 @@ import { logger } from '@shared/utils/logger';
 import TodoList from "./components/TodoList.vue";
 import BiodataCard from "./components/BiodataCard.vue";
 import ProgressCard from "./components/ProgressCard.vue";
+import EmailVerificationAlert from "./components/EmailVerificationAlert.vue";
 
 export default {
   name: "Dashboard",
@@ -34,8 +35,44 @@ export default {
       userData: this.authStore.user,
       applicationData: this.authStore.application,
     });
+
+    // Check if we need to refresh user data (e.g., after email verification)
+    this.checkAndRefreshUserData();
+
+    // Add window focus listener to refresh data when user returns to tab
+    window.addEventListener('focus', this.onWindowFocus);
   },
-  methods: { },
+  
+  beforeUnmount() {
+    // Clean up event listener
+    window.removeEventListener('focus', this.onWindowFocus);
+  },
+
+  methods: {
+    async checkAndRefreshUserData() {
+      // If user is authenticated but we don't have complete user data, refresh it
+      if (this.authStore.isAuthenticated && (!this.user || this.user.isEmailVerified === undefined)) {
+        logger.info('User data seems incomplete, refreshing...');
+        try {
+          await this.authStore.fetchUserData();
+        } catch (error) {
+          logger.error('Failed to refresh user data:', error);
+        }
+      }
+    },
+
+    async onWindowFocus() {
+      // Refresh user data when window regains focus (in case user verified email in another tab)
+      if (this.authStore.isAuthenticated && this.user && this.user.isEmailVerified === false) {
+        logger.info('Window focused, checking for email verification updates...');
+        try {
+          await this.authStore.fetchUserData();
+        } catch (error) {
+          logger.error('Failed to refresh user data on focus:', error);
+        }
+      }
+    }
+  },
   computed: {
     user() {
       return this.authStore.user;
@@ -59,8 +96,8 @@ export default {
       const stageDefinitions = [
         {
           stage: 1,
-          title: "Complete Registration",
-          description: "Create your account and verify email",
+          title: "Verify Email Address", 
+          description: "Check your email and click the verification link",
           paymentStage: false
         },
         {
@@ -149,7 +186,7 @@ export default {
       // Waiting stages: 1, 4, 6, 9
       if ([1, 4, 6, 9].includes(stage)) {
         const waitingMessages = {
-          1: 'Registration Complete',
+          1: 'Check Your Email',
           4: 'Awaiting Admission Decision',
           6: 'Awaiting Clearance',
           9: 'Application Complete!'
@@ -172,7 +209,7 @@ export default {
       };
     }
   },
-  components: { TodoList, BiodataCard, ProgressCard },
+  components: { TodoList, BiodataCard, ProgressCard, EmailVerificationAlert },
 };
 </script>
 
@@ -180,6 +217,9 @@ export default {
   <div class="container mt-3 px-3 px-md-5 py-5">
     <div class="row gy-5">
       <div class="col-md-8">
+        <!-- Email Verification Alert -->
+        <EmailVerificationAlert v-if="user && user.isEmailVerified === false" :user="user" />
+        
         <ProgressCard
           class="mb-4"
           :stages="stages"
@@ -189,19 +229,19 @@ export default {
         />
 
         <!-- To-do List -->
-          <TodoList :todos="todos" />
+          <!-- <TodoList :todos="todos" /> -->
       </div>
 
       <!-- Bio Data Card -->
       <div class="col-md-4">
         <BiodataCard
-          profileImage="https://placehold.co/100"
+          :profileImage="application.profileImageUrl || 'https://placehold.co/100?text=IMG'"
           :name="user?.fullName || 'Loading...'"
           :appNo="application?.applicationNumber || 'Not Started'"
           :email="user?.email || 'Loading...'"
-          :phone="user?.phone || 'N/A'"
-          gender="N/A"
-          location="N/A"
+          :phone="application?.phone || 'N/A'"
+          :gender="application?.gender || 'N/A'"
+          :location="application?.nationality || 'N/A'"
         />
 
         <!-- Show application prompt if no application -->

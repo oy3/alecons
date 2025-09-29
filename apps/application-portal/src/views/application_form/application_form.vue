@@ -155,6 +155,18 @@ export default {
     },
     selectedState() {
       return this.states.find(state => state.name === this.state);
+    },
+    // Filter available subjects to exclude already selected ones
+    getAvailableSubjectsFor() {
+      return (currentIndex) => {
+        // Get all selected subjects except the current row being edited
+        const selectedSubjects = this.subjects
+          .map((subject, index) => index !== currentIndex ? subject.subject : null)
+          .filter(subject => subject && subject.trim() !== '');
+        
+        // Return subjects that haven't been selected yet
+        return this.subjectOptions.filter(subject => !selectedSubjects.includes(subject));
+      };
     }
   },
   watch: {
@@ -1562,8 +1574,8 @@ export default {
                 <option v-if="row.locked" :value="row.subject" selected>
                   {{ row.subject }}
                 </option>
-                <!-- Show all available options for unlocked subjects -->
-                <option v-for="subject in subjectOptions" :key="subject" :value="subject" v-show="!row.locked">
+                <!-- Show available options for unlocked subjects (excluding already selected) -->
+                <option v-for="subject in getAvailableSubjectsFor(index)" :key="subject" :value="subject" v-show="!row.locked">
                   {{ subject }}
                 </option>
               </select>

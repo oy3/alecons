@@ -228,12 +228,23 @@ export default {
           gender: 'Gender is required',
           phone: 'Phone number is required',
           email: 'Email is required',
+          religion: 'Religion is required',
+          maritalStatus: 'Marital status is required',
           nationality: 'Nationality is required',
           state: 'State is required',
-          address: 'Address is required',
+          lga: 'Local government area is required',
+          address: 'Contact address is required',
           nextOfKinName: 'Next of kin name is required',
           nextOfKinPhone: 'Next of kin phone is required',
-          nextOfKinRelationship: 'Next of kin relationship is required'
+          nextOfKinEmail: 'Next of kin email is required',
+          nextOfKinRelationship: 'Next of kin relationship is required',
+          nextOfKinAddress: 'Next of kin address is required',
+          referee1Name: 'Referee 1 name is required',
+          referee1Phone: 'Referee 1 phone is required',
+          referee1Email: 'Referee 1 email is required',
+          referee2Name: 'Referee 2 name is required',
+          referee2Phone: 'Referee 2 phone is required',
+          referee2Email: 'Referee 2 email is required'
         };
 
         for (const [field, message] of Object.entries(requiredFields)) {
@@ -249,9 +260,43 @@ export default {
           isValid = false;
         }
 
+        // Next of Kin email validation
+        if (this.nextOfKinEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.nextOfKinEmail)) {
+          this.validationErrors.nextOfKinEmail = 'Please enter a valid email address for next of kin';
+          isValid = false;
+        }
+
+        // Referee emails validation
+        if (this.referee1Email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.referee1Email)) {
+          this.validationErrors.referee1Email = 'Please enter a valid email address for referee 1';
+          isValid = false;
+        }
+
+        if (this.referee2Email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.referee2Email)) {
+          this.validationErrors.referee2Email = 'Please enter a valid email address for referee 2';
+          isValid = false;
+        }
+
         // Phone validation (basic)
         if (this.phone && !/^\+?[\d\s-()]{10,}$/.test(this.phone)) {
           this.validationErrors.phone = 'Please enter a valid phone number';
+          isValid = false;
+        }
+
+        // Next of Kin phone validation
+        if (this.nextOfKinPhone && !/^\+?[\d\s-()]{10,}$/.test(this.nextOfKinPhone)) {
+          this.validationErrors.nextOfKinPhone = 'Please enter a valid phone number for next of kin';
+          isValid = false;
+        }
+
+        // Referee phone validation
+        if (this.referee1Phone && !/^\+?[\d\s-()]{10,}$/.test(this.referee1Phone)) {
+          this.validationErrors.referee1Phone = 'Please enter a valid phone number for referee 1';
+          isValid = false;
+        }
+
+        if (this.referee2Phone && !/^\+?[\d\s-()]{10,}$/.test(this.referee2Phone)) {
+          this.validationErrors.referee2Phone = 'Please enter a valid phone number for referee 2';
           isValid = false;
         }
       }
@@ -1088,6 +1133,7 @@ export default {
                 class="form-select"
                 id="religion"
                 v-model="religion"
+                :class="{ 'is-invalid': validationErrors.religion }"
                 required
               >
                 <option value="">--Select Religion--</option>
@@ -1099,6 +1145,9 @@ export default {
                   {{ religionItem }}
                 </option>
               </select>
+              <div v-if="validationErrors.religion" class="invalid-feedback">
+                {{ validationErrors.religion }}
+              </div>
             </div>
 
             <div class="col-md-6">
@@ -1109,6 +1158,8 @@ export default {
                 class="form-select"
                 id="maritalStatus"
                 v-model="maritalStatus"
+                :class="{ 'is-invalid': validationErrors.maritalStatus }"
+                required
               >
                 <option value="">--Select Marital Status--</option>
                 <option value="Single">Single</option>
@@ -1116,6 +1167,9 @@ export default {
                 <option value="Divorced">Divorced</option>
                 <option value="Widowed">Widowed</option>
               </select>
+              <div v-if="validationErrors.maritalStatus" class="invalid-feedback">
+                {{ validationErrors.maritalStatus }}
+              </div>
             </div>
 
             <div class="col-md-4">
@@ -1183,6 +1237,7 @@ export default {
                 class="form-select"
                 id="lga"
                 v-model="lga"
+                :class="{ 'is-invalid': validationErrors.lga }"
                 :disabled="!state"
                 required
               >
@@ -1197,6 +1252,9 @@ export default {
                   {{ city.name }}
                 </option>
               </select>
+              <div v-if="validationErrors.lga" class="invalid-feedback">
+                {{ validationErrors.lga }}
+              </div>
             </div>
 
             <div class="col-md-12">
@@ -1208,8 +1266,12 @@ export default {
                 id="address"
                 rows="3"
                 v-model="address"
+                :class="{ 'is-invalid': validationErrors.address }"
                 required
               ></textarea>
+              <div v-if="validationErrors.address" class="invalid-feedback">
+                {{ validationErrors.address }}
+              </div>
             </div>
           </div>
         </div>
@@ -1226,8 +1288,12 @@ export default {
                 class="form-control"
                 id="nextOfKinName"
                 v-model="nextOfKinName"
+                :class="{ 'is-invalid': validationErrors.nextOfKinName }"
                 required
               />
+              <div v-if="validationErrors.nextOfKinName" class="invalid-feedback">
+                {{ validationErrors.nextOfKinName }}
+              </div>
             </div>
 
             <div class="col-md-4">
@@ -1239,8 +1305,12 @@ export default {
                 class="form-control"
                 id="nextOfKinPhone"
                 v-model="nextOfKinPhone"
+                :class="{ 'is-invalid': validationErrors.nextOfKinPhone }"
                 required
               />
+              <div v-if="validationErrors.nextOfKinPhone" class="invalid-feedback">
+                {{ validationErrors.nextOfKinPhone }}
+              </div>
             </div>
 
             <div class="col-md-4">
@@ -1252,8 +1322,12 @@ export default {
                 class="form-control"
                 id="nextOfKinEmail"
                 v-model="nextOfKinEmail"
+                :class="{ 'is-invalid': validationErrors.nextOfKinEmail }"
                 required
               />
+              <div v-if="validationErrors.nextOfKinEmail" class="invalid-feedback">
+                {{ validationErrors.nextOfKinEmail }}
+              </div>
             </div>
 
             <div class="col-md-4">
@@ -1295,8 +1369,12 @@ export default {
                 class="form-control"
                 id="nextOfKinAddress"
                 v-model="nextOfKinAddress"
+                :class="{ 'is-invalid': validationErrors.nextOfKinAddress }"
                 required
               />
+              <div v-if="validationErrors.nextOfKinAddress" class="invalid-feedback">
+                {{ validationErrors.nextOfKinAddress }}
+              </div>
             </div>
 
             <div class="col-md-4">
@@ -1308,8 +1386,12 @@ export default {
                 class="form-control"
                 id="referee1Name"
                 v-model="referee1Name"
+                :class="{ 'is-invalid': validationErrors.referee1Name }"
                 required
               />
+              <div v-if="validationErrors.referee1Name" class="invalid-feedback">
+                {{ validationErrors.referee1Name }}
+              </div>
             </div>
 
             <div class="col-md-4">
@@ -1321,8 +1403,12 @@ export default {
                 class="form-control"
                 id="referee1Phone"
                 v-model="referee1Phone"
+                :class="{ 'is-invalid': validationErrors.referee1Phone }"
                 required
               />
+              <div v-if="validationErrors.referee1Phone" class="invalid-feedback">
+                {{ validationErrors.referee1Phone }}
+              </div>
             </div>
 
             <div class="col-md-4">
@@ -1334,7 +1420,12 @@ export default {
                 class="form-control"
                 id="referee1Email"
                 v-model="referee1Email"
+                :class="{ 'is-invalid': validationErrors.referee1Email }"
+                required
               />
+              <div v-if="validationErrors.referee1Email" class="invalid-feedback">
+                {{ validationErrors.referee1Email }}
+              </div>
             </div>
 
             <div class="col-md-4">
@@ -1346,8 +1437,12 @@ export default {
                 class="form-control"
                 id="referee2Name"
                 v-model="referee2Name"
+                :class="{ 'is-invalid': validationErrors.referee2Name }"
                 required
               />
+              <div v-if="validationErrors.referee2Name" class="invalid-feedback">
+                {{ validationErrors.referee2Name }}
+              </div>
             </div>
 
             <div class="col-md-4">
@@ -1359,8 +1454,12 @@ export default {
                 class="form-control"
                 id="referee2Phone"
                 v-model="referee2Phone"
+                :class="{ 'is-invalid': validationErrors.referee2Phone }"
                 required
               />
+              <div v-if="validationErrors.referee2Phone" class="invalid-feedback">
+                {{ validationErrors.referee2Phone }}
+              </div>
             </div>
 
             <div class="col-md-4">
@@ -1372,8 +1471,12 @@ export default {
                 class="form-control"
                 id="referee2Email"
                 v-model="referee2Email"
+                :class="{ 'is-invalid': validationErrors.referee2Email }"
                 required
               />
+              <div v-if="validationErrors.referee2Email" class="invalid-feedback">
+                {{ validationErrors.referee2Email }}
+              </div>
             </div>
           </div>
         </div>

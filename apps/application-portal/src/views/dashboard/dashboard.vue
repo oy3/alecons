@@ -229,7 +229,7 @@ export default {
         />
 
         <!-- To-do List -->
-          <!-- <TodoList :todos="todos" /> -->
+          <TodoList :todos="todos" />
       </div>
 
       <!-- Bio Data Card -->

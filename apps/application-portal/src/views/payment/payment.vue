@@ -1,17 +1,26 @@
 <script>
 import { paymentService } from "../../services/payment.js";
-import { useAuth } from "../../services/auth.js";
+import { useAuthStore } from "../../stores/auth.js";
 import { logger } from "@shared/utils/logger";
 
 export default {
   name: "Payment",
   setup() {
-    const { user, isAuthenticated, application } = useAuth();
+    const authStore = useAuthStore();
     return {
-      user,
-      isAuthenticated,
-      application,
+      authStore
     };
+  },
+  computed: {
+    user() {
+      return this.authStore.user;
+    },
+    application() {
+      return this.authStore.application;
+    },
+    isAuthenticated() {
+      return this.authStore.isAuthenticated;
+    }
   },
   data() {
     return {
@@ -26,6 +35,16 @@ export default {
     };
   },
   async mounted() {
+    // Ensure we have fresh user data before loading payments
+    if (!this.application && this.isAuthenticated) {
+      logger.info('No application data found, refreshing user data...');
+      try {
+        await this.authStore.fetchUserData();
+      } catch (error) {
+        logger.error('Failed to refresh user data:', error);
+      }
+    }
+    
     await this.fetchPayments();
   },
   methods: {
@@ -48,6 +67,8 @@ export default {
             unpaidCount: this.unpaidFees.length,
             totalPaid: this.totalPaid,
             totalUnpaid: this.totalUnpaid,
+            unpaidFeeCodes: this.unpaidFees.map(f => ({ code: f.paymentCode, name: f.name })),
+            currentStage: this.application?.currentStage
           });
         } else {
           this.error = result.message || "Failed to load payment data";
@@ -144,7 +165,18 @@ export default {
       };
 
       const requiredStage = paymentStageMap[fee.paymentCode];
-      return requiredStage && this.application?.currentStage === requiredStage;
+      const currentStage = this.application?.currentStage;
+      
+      // Debug logging
+      logger.info('Payment availability check:', {
+        feePaymentCode: fee.paymentCode,
+        requiredStage,
+        currentStage,
+        isAvailable: requiredStage && currentStage === requiredStage,
+        applicationExists: !!this.application
+      });
+      
+      return requiredStage && currentStage === requiredStage;
     },
 
     getRequiredStage(paymentCode) {
@@ -184,6 +216,21 @@ export default {
 
     <!-- Payment Data -->
     <div v-else class="row">
+      <!-- Debug Info (remove in production) -->
+      <!-- <div class="col-12 mb-3">
+        <div class="alert alert-info small">
+          <strong>Debug Info:</strong> 
+          Current Stage: {{ application?.currentStage || 'N/A' }} | 
+          Application ID: {{ application?.id || 'N/A' }} |
+          Unpaid Fees: {{ unpaidFees.length }}
+          <br>
+          <strong>Unpaid Fee Codes:</strong> 
+          <span v-for="fee in unpaidFees" :key="fee.id">
+            {{ fee.paymentCode }}({{ fee.name }}) 
+          </span>
+        </div>
+      </div> -->
+      
       <div class="col-md-8 mx-auto">
         <!-- Unpaid Charges -->
         <div class="mb-5">

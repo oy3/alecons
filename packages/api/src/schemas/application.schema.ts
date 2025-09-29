@@ -198,43 +198,5 @@ export class Application {
 
 export const ApplicationSchema = SchemaFactory.createForClass(Application);
 
-// Generate application number before saving
-ApplicationSchema.pre('save', async function (next) {
-    if (this.isNew && !this.applicationNumber && this.programId) {
-        try {
-            const ApplicationModel = this.constructor as any;
-            const currentYear = new Date().getFullYear();
-            const yearString = currentYear.toString().slice(-2); // Get last 2 digits
-
-            // Get program details to get the code
-            const Program = this.db.model('Program');
-            const program = await Program.findById(this.programId);
-
-            if (!program) {
-                throw new Error('Program not found for application number generation');
-            }
-
-            const programCode = String(program.code).padStart(2, '0'); // Ensure 2 digits
-
-            // Count applications for this program in current year
-            const count = await ApplicationModel.countDocuments({
-                programId: this.programId,
-                createdAt: {
-                    $gte: new Date(currentYear, 0, 1),
-                    $lt: new Date(currentYear + 1, 0, 1)
-                }
-            });
-
-            // Generate: ALEC{yy}{program.code}{0001}
-            this.applicationNumber = `ALEC${yearString}${programCode}${String(count + 1).padStart(4, '0')}`;
-        } catch (error) {
-            const logger = new Logger('ApplicationSchema');
-            logger.error('Error generating application number:', error);
-            // Fallback to basic numbering if program lookup fails
-            const ApplicationModel = this.constructor as any;
-            const count = await ApplicationModel.countDocuments();
-            this.applicationNumber = `ALEC${new Date().getFullYear()}${String(count + 1).padStart(6, '0')}`;
-        }
-    }
-    next();
-});
+// Note: Application number generation is now handled by ApplicationNumberService
+// to ensure uniqueness and avoid race conditions.

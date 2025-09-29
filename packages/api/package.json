@@ -7,7 +7,9 @@
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
-    "start:dev": "nest start --watch",
+    "start:dev": "NODE_NO_WARNINGS=1 nest start --watch",
+    "start:dev:safe": "tsc-watch --onSuccess \"node dist/main.js\"",
+    "start:dev:verbose": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "test": "echo \"No tests yet\""
@@ -53,6 +55,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
     "ts-node": "^10.9.2",
+    "tsc-watch": "^7.2.0",
     "typescript": "^5.9.2"
   }
 }

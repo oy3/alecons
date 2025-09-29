@@ -4,9 +4,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
+import { ApplicationNumberController } from '../controllers/application-number.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EmailService } from '../services/email.service';
+import { ApplicationNumberService } from '../services/application-number.service';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { Program, ProgramSchema } from '../schemas/program.schema';
@@ -34,8 +36,8 @@ import { ProgramMode, ProgramModeSchema } from '../schemas/program-mode.schema';
             inject: [ConfigService],
         }),
     ],
-    controllers: [AuthController],
-    providers: [AuthService, JwtStrategy, EmailService],
+    controllers: [AuthController, ApplicationNumberController],
+    providers: [AuthService, JwtStrategy, EmailService, ApplicationNumberService],
     exports: [AuthService, JwtStrategy],
 })
 export class AuthModule { }

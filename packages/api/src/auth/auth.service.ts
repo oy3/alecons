@@ -10,6 +10,7 @@ import { Program, ProgramDocument } from '../schemas/program.schema';
 import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
 import { EmailService } from '../services/email.service';
+import { ApplicationNumberService } from '../services/application-number.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -26,6 +27,7 @@ export class AuthService {
         @InjectModel(ProgramMode.name) private programModeModel: Model<ProgramModeDocument>,
         private jwtService: JwtService,
         private emailService: EmailService,
+        private applicationNumberService: ApplicationNumberService,
     ) { }
 
     async register(registerDto: RegisterDto) {
@@ -85,26 +87,13 @@ export class AuthService {
 
         await user.save();
 
-        // Generate application number manually
-        const currentYear = new Date().getFullYear();
-        const yearString = currentYear.toString().slice(-2); // Get last 2 digits
-        const programCode = String(program.code).padStart(2, '0'); // Ensure 2 digits
+        // Generate unique application number using the service
+        const applicationNumber = await this.applicationNumberService.generateApplicationNumber(programId);
 
         // Convert string IDs to ObjectIds
         const programObjectId = new Types.ObjectId(programId);
         const programTypeObjectId = new Types.ObjectId(programTypeId);
         const programModeObjectId = new Types.ObjectId(programModeId);
-
-        // Count applications for this program in current year
-        const applicationCount = await this.applicationModel.countDocuments({
-            programId: programObjectId,
-            createdAt: {
-                $gte: new Date(currentYear, 0, 1),
-                $lt: new Date(currentYear + 1, 0, 1)
-            }
-        });
-
-        const applicationNumber = `ALEC${yearString}${programCode}${String(applicationCount + 1).padStart(4, '0')}`;
 
         // Create application record with all required data
         const applicationData: any = {

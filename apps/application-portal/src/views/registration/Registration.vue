@@ -439,4 +439,14 @@ export default {
     z-index: 10;
   }
 } */
+
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+  display: block;
+  color: transparent;
+  background: url("https://cdn.jsdelivr.net/npm/bootstrap-icons/icons/calendar-date.svg") no-repeat center;
+  background-size: 1rem 1rem;
+}
 </style>

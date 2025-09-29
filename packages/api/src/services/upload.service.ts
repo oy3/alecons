@@ -30,9 +30,16 @@ export class UploadService {
      * Validates file based on type and size constraints
      */
     validateFile(file: Express.Multer.File, fileType: 'PROFILE_PICTURE' | 'DOCUMENT'): void {
-        // Check file size
-        if (file.size > SPACES_CONFIG.MAX_FILE_SIZE) {
-            throw new BadRequestException(`File size exceeds 5MB limit. File size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+        // Get specific size limit for this file type
+        const maxFileSize = SPACES_CONFIG.MAX_FILE_SIZE[fileType];
+        const maxSizeMB = (maxFileSize / (1024 * 1024)).toFixed(0);
+
+        // Check file size against specific limit
+        if (file.size > maxFileSize) {
+            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            throw new BadRequestException(
+                `File size exceeds ${maxSizeMB}MB limit for ${fileType}. Your file size: ${fileSizeMB}MB`
+            );
         }
 
         // Check file extension
@@ -48,6 +55,7 @@ export class UploadService {
         this.logger.log(`File validation passed for ${fileType}:`, {
             originalName: file.originalname,
             size: `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+            maxAllowed: `${maxSizeMB}MB`,
             extension: fileExtension
         });
     }

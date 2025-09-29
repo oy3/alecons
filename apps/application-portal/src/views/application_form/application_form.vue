@@ -841,11 +841,20 @@ export default {
           options
         });
 
-        // Validate file size (5MB max)
-        if (file.size > 5 * 1024 * 1024) {
+        // Validate file size based on type
+        const fileSizeLimits = {
+          'profile_picture': 2 * 1024 * 1024, // 2MB for profile pictures
+          'olevel_result': 3 * 1024 * 1024,   // 3MB for documents
+          'reference_letter': 3 * 1024 * 1024 // 3MB for documents
+        };
+        
+        const maxSize = fileSizeLimits[fileType];
+        const maxSizeMB = (maxSize / (1024 * 1024)).toFixed(0);
+        
+        if (file.size > maxSize) {
           await Swal.fire({
             title: 'File Too Large',
-            text: `File size exceeds 5MB limit. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+            text: `File size exceeds ${maxSizeMB}MB limit for ${fileType.replace('_', ' ')}. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`,
             icon: 'error',
             confirmButtonText: 'OK'
           });
@@ -1910,7 +1919,7 @@ export default {
                   :class="{ 'is-invalid': validationErrors.profilePicture }" @change="handleProfileUpload"
                   :disabled="isUploading" required />
                 <small class="text-muted">
-                  Upload a clear passport photograph (JPG/JPEG, Max: 5MB)
+                  Upload a clear passport photograph (JPG/JPEG, Max: 2MB)
                 </small>
 
                 <div v-if="validationErrors.profilePicture" class="invalid-feedback">
@@ -1971,7 +1980,7 @@ export default {
               :class="{ 'is-invalid': validationErrors[`olevel_${index}`] }" @change="handleOLevelUpload($event, index)"
               :disabled="isUploading" required />
             <small class="text-muted">
-              Upload O'Level result for this sitting (PDF only, Max: 5MB)
+              Upload O'Level result for this sitting (PDF only, Max: 3MB)
             </small>
 
             <div v-if="validationErrors[`olevel_${index}`]" class="invalid-feedback">
@@ -2014,7 +2023,7 @@ export default {
               @change="handleReferenceUpload($event, index)" :disabled="isUploading" required />
             <small class="text-muted mt-2">
               Mandatory: upload referee letter {{ index + 1 }} (PDF only, Max:
-              5MB)
+              3MB)
             </small>
             <div v-if="validationErrors[`reference${index + 1}`]" class="invalid-feedback">
               {{ validationErrors[`reference${index + 1}`] }}

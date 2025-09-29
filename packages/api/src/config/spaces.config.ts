@@ -26,7 +26,11 @@ export const SPACES_CONFIG = {
         PROFILE_PICTURE: ['.jpg', '.jpeg'],
         DOCUMENT: ['.pdf'],
     },
-    MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB in bytes
+    // Specific file size limits for different file types
+    MAX_FILE_SIZE: {
+        PROFILE_PICTURE: 2 * 1024 * 1024, // 2MB for profile pictures
+        DOCUMENT: 3 * 1024 * 1024, // 3MB for PDF documents
+    },
     FILE_PATHS: {
         APPLICATIONS: 'applications',
         TEMP: 'temp',

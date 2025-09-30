@@ -216,6 +216,18 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
+    // Force immediate refresh without debouncing (for manual triggers)
+    async function forceRefreshUserData() {
+        try {
+            logger.info('Force refreshing user data (no debouncing)...');
+            await fetchUserData();
+            return { success: true };
+        } catch (error) {
+            logger.error('Failed to force refresh user data:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
     async function logout() {
         try {
             logger.info('Logging out user...');
@@ -283,6 +295,7 @@ export const useAuthStore = defineStore('auth', () => {
         completeLogout,
         fetchUserData,
         refreshUserData,
+        forceRefreshUserData,
         updateApplication,
         handleAuthError
     };

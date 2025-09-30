@@ -40,9 +40,6 @@ export default {
 
     return {
       authStore,
-      user: authStore.user,
-      application: authStore.application,
-      isAuthenticated: authStore.isAuthenticated,
       logout
     };
   }
@@ -89,14 +86,14 @@ export default {
               data-bs-toggle="dropdown" aria-expanded="false"> -->
           <img
             :src="
-              application.profileImageUrl || 'https://placehold.co/40?text=IMG'
+              authStore.application?.profileImageUrl || 'https://placehold.co/40?text=IMG'
             "
             width="40"
             alt="Profile"
             class="rounded-circle me-2 border border-secondary"
           />
           <span class="fw-bold d-none d-sm-inline">{{
-            user?.firstName || "User"
+            authStore.user?.firstName || "User"
           }}</span>
           <!-- </a>
 

@@ -36,61 +36,26 @@ export default {
       applicationData: this.authStore.application,
     });
 
-    // Always refresh user data when dashboard is mounted to ensure latest state
-    this.refreshUserData();
-
-    // Add window focus listener to refresh data when user returns to tab
-    window.addEventListener('focus', this.onWindowFocus);
+    // Note: General data refresh is now handled by App.vue
+    // Only add email verification specific listener
+    window.addEventListener('focus', this.onEmailVerificationFocus);
   },
   
   beforeUnmount() {
     // Clean up event listener
-    window.removeEventListener('focus', this.onWindowFocus);
+    window.removeEventListener('focus', this.onEmailVerificationFocus);
   },
 
   methods: {
-    async refreshUserData() {
-      // Always refresh user data to get the latest application state
-      if (this.authStore.isAuthenticated) {
-        logger.info('Refreshing user data on dashboard mount...');
-        try {
-          await this.authStore.refreshUserData();
-                    logger.info('User data refreshed successfully', {
-            currentStage: this.authStore.application?.currentStage,
-            applicationNumber: this.authStore.application?.applicationNumber,
-            nationality: this.authStore.application?.nationality,
-            stateOfOrigin: this.authStore.application?.stateOfOrigin,
-            applicationPhone: this.authStore.application?.phone,
-            userPhone: this.authStore.user?.phone,
-            profileImageUrl: this.authStore.application?.profileImageUrl,
-            allApplicationKeys: this.authStore.application ? Object.keys(this.authStore.application) : []
-          });
-        } catch (error) {
-          logger.error('Failed to refresh user data:', error);
-        }
-      }
-    },
-
-    async checkAndRefreshUserData() {
-      // If user is authenticated but we don't have complete user data, refresh it
-      if (this.authStore.isAuthenticated && (!this.user || this.user.isEmailVerified === undefined)) {
-        logger.info('User data seems incomplete, refreshing...');
-        try {
-          await this.authStore.fetchUserData();
-        } catch (error) {
-          logger.error('Failed to refresh user data:', error);
-        }
-      }
-    },
-
-    async onWindowFocus() {
-      // Refresh user data when window regains focus (in case user verified email in another tab)
+    async onEmailVerificationFocus() {
+      // Refresh user data when window regains focus specifically to check email verification status
       if (this.authStore.isAuthenticated && this.user && this.user.isEmailVerified === false) {
         logger.info('Window focused, checking for email verification updates...');
         try {
-          await this.authStore.fetchUserData();
+          await this.authStore.refreshUserData();
+          logger.info('Email verification status refreshed');
         } catch (error) {
-          logger.error('Failed to refresh user data on focus:', error);
+          logger.error('Failed to refresh email verification status on focus:', error);
         }
       }
     }

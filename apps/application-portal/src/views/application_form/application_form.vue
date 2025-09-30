@@ -492,7 +492,7 @@ export default {
         this.firstName = this.user.firstName || "";
         this.lastName = this.user.lastName || "";
         this.email = this.user.email || "";
-        this.phone = this.user.phone || "";
+        // phone is now stored in application collection, not user
 
         logger.info('Prefilled user data:', {
           firstName: this.firstName,
@@ -506,12 +506,15 @@ export default {
           applicationData: this.application,
           hasDob: !!this.application.dob,
           hasGender: !!this.application.gender,
+          hasPhone: !!this.application.phone,
           dobValue: this.application.dob,
-          genderValue: this.application.gender
+          genderValue: this.application.gender,
+          phoneValue: this.application.phone
         });
 
         // Prefill application-specific data if it exists
         this.middleName = this.application.middleName || this.user?.otherName || "";
+        this.phone = this.application.phone || ""; // Phone from application collection
         this.dateOfBirth = this.application.dob ?
           new Date(this.application.dob).toISOString().split('T')[0] : "";
         this.gender = this.application.gender || "";
@@ -521,6 +524,7 @@ export default {
 
         logger.info('After prefilling application data:', {
           middleName: this.middleName,
+          phone: this.phone,
           dateOfBirth: this.dateOfBirth,
           gender: this.gender,
           religion: this.religion,
@@ -1370,8 +1374,8 @@ export default {
                 Phone <span class="text-danger">*</span>
               </label>
               <input type="text" class="form-control" id="phone" v-model="phone"
-                :class="{ 'is-invalid': validationErrors.phone }" :disabled="!!user?.phone" :readonly="!!user?.phone" />
-              <small v-if="user?.phone" class="text-muted">This field is auto-filled from your account</small>
+                :class="{ 'is-invalid': validationErrors.phone }" :disabled="true" readonly />
+              <small class="text-muted">This field is auto-filled from your account</small>
               <div v-if="validationErrors.phone" class="invalid-feedback">
                 {{ validationErrors.phone }}
               </div>

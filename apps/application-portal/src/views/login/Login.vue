@@ -17,7 +17,8 @@ export default {
     return {
       email: '',
       password: '',
-      resetEmail: ''
+      resetEmail: '',
+      showPassword: false
     };
   },
   methods: {
@@ -46,7 +47,7 @@ export default {
 
         // Use Pinia store login
         logger.info('Attempting login with auth store...');
-        
+
         const result = await this.authStore.login({
           email: this.email,
           password: this.password,
@@ -54,7 +55,7 @@ export default {
 
         if (result.success) {
           logger.info('Login successful');
-          
+
           // Success message
           await Swal.fire({
             icon: 'success',
@@ -83,7 +84,7 @@ export default {
           stack: error.stack,
           name: error.name
         });
-        
+
         // Show error message
         await Swal.fire({
           icon: 'error',
@@ -93,6 +94,9 @@ export default {
           confirmButtonColor: '#2d7d7d',
         });
       }
+    },
+    togglePasswordVisibility() {
+      this.showPassword = !this.showPassword;
     },
      async submitForgotPassword() {
       try {
@@ -118,7 +122,7 @@ export default {
 
         // Simulate API call (replace with actual API call)
         await new Promise(resolve => setTimeout(resolve, 1500));
-        
+
         logger.info("Sending reset link to:", this.resetEmail);
 
         // Show success message
@@ -139,7 +143,7 @@ export default {
         this.resetEmail = '';
       } catch (error) {
         logger.error('Password reset error:', error);
-        
+
         await Swal.fire({
           icon: 'error',
           title: 'Oops...',
@@ -154,7 +158,10 @@ export default {
 </script>
 
 <template>
-  <div class="login-page d-flex align-items-center justify-content-center" v-bind="$attrs">
+  <div
+    class="login-page d-flex align-items-center justify-content-center"
+    v-bind="$attrs"
+  >
     <div class="overlay"></div>
     <div
       class="login-card card p-4 shadow-lg text-white bg-dark bg-opacity-25 border border-light border-opacity-25"
@@ -169,9 +176,7 @@ export default {
       <h3 class="mb-4 text-center">Application Login</h3>
       <form @submit.prevent="onSubmit">
         <div class="mb-3">
-          <label for="email" class="form-label text-white"
-            >Email Address</label
-          >
+          <label for="email" class="form-label text-white">Email Address</label>
           <input
             id="email"
             v-model="email"
@@ -185,15 +190,27 @@ export default {
 
         <div class="mb-1">
           <label for="password" class="form-label text-white">Password</label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            class="form-control bg-dark bg-opacity-25 text-white border-light border-opacity-25"
-            placeholder="********"
-            required
-            autocomplete="current-password"
-          />
+          <div class="input-group">
+            <input
+              id="password"
+              v-model="password"
+              :type="showPassword ? 'text' : 'password'"
+              class="form-control bg-dark bg-opacity-25 text-white  border-end-0 border-light border-opacity-25"
+              placeholder="********"
+              required
+              autocomplete="current-password"
+              aria-describedby="password-addon2"
+            />
+            <button
+              class="btn bg-dark bg-opacity-25 border-start-0 border-light border-opacity-25 text-light"
+              type="button"
+              id="password-addon2"
+              @click="togglePasswordVisibility"
+              :title="showPassword ? 'Hide password' : 'Show password'"
+            >
+              <i :class="showPassword ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+            </button>
+          </div>
         </div>
 
         <div class="text-end mb-3">
@@ -243,9 +260,7 @@ export default {
           >
             <div class="card-body">
               <div class="text-center mb-5">
-                <i
-                  class="bi bi-fingerprint h1 acon-bg-primary rounded p-2"
-                ></i>
+                <i class="bi bi-fingerprint h1 acon-bg-primary rounded p-2"></i>
               </div>
               <h4 class="fw-bold text-center mb-3">Forgot password?</h4>
               <p class="text-center small mb-4">

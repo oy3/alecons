@@ -30,6 +30,8 @@ export default {
       programs: [],
       isLoading: false,
       isLoadingData: false,
+      showPassword: false,
+      showConfirmPassword: false,
     };
   },
   async mounted() {
@@ -230,6 +232,14 @@ export default {
 
       return true;
     },
+
+    togglePasswordVisibility() {
+      this.showPassword = !this.showPassword;
+    },
+
+    toggleConfirmPasswordVisibility() {
+      this.showConfirmPassword = !this.showConfirmPassword;
+    },
   },
 };
 </script>
@@ -362,14 +372,46 @@ export default {
 
               <div class="col-sm-6">
                 <label for="password"> Password <span class="text-danger">*</span></label>
-                <input type="password" id="password" v-model="formData.password" placeholder="********"
-                  class="form-control" required />
+                <div class="input-group">
+                  <input
+                    :type="showPassword ? 'text' : 'password'"
+                    id="password"
+                    v-model="formData.password"
+                    placeholder="********"
+                    class="form-control border-end-0"
+                    required
+                  />
+                  <button
+                    class="btn border border-start-0 text-muted"
+                    type="button"
+                    @click="togglePasswordVisibility"
+                    :title="showPassword ? 'Hide password' : 'Show password'"
+                  >
+                    <i :class="showPassword ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                  </button>
+                </div>
               </div>
 
               <div class="col-sm-6">
                 <label for="confirmPassword"> Confirm Password <span class="text-danger">*</span></label>
-                <input type="password" id="confirmPassword" v-model="formData.confirmPassword" placeholder="********"
-                  class="form-control" required />
+                <div class="input-group">
+                  <input
+                    :type="showConfirmPassword ? 'text' : 'password'"
+                    id="confirmPassword"
+                    v-model="formData.confirmPassword"
+                    placeholder="********"
+                    class="form-control  border-end-0"
+                    required
+                  />
+                  <button
+                    class="btn border border-start-0 text-muted"
+                    type="button"
+                    @click="toggleConfirmPasswordVisibility"
+                    :title="showConfirmPassword ? 'Hide password' : 'Show password'"
+                  >
+                    <i :class="showConfirmPassword ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                  </button>
+                </div>
               </div>
 
               <div class="col-12 mt-5">

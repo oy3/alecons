@@ -1674,6 +1674,7 @@ export default {
               </label>
               <input type="date" class="form-control" id="primarySchoolStart" v-model="primarySchoolStart"
                 :class="{ 'is-invalid': validationErrors.primarySchoolStart }" 
+                :min="this.application?.dob ? new Date(this.application.dob).toISOString().split('T')[0] : ''"
                 :max="primarySchoolEnd || new Date().toISOString().split('T')[0]"
                 @change="onPrimaryStartDateChange" 
                 @blur="onPrimaryStartDateChange" 

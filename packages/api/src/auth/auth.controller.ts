@@ -92,4 +92,40 @@ export class AuthController {
     async resendVerification(@Body() body: { email: string }) {
         return this.authService.resendVerificationEmail(body.email);
     }
+
+    // Staff authentication endpoints
+    @Post('staff/login')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Staff login' })
+    @ApiResponse({ status: 200, description: 'Staff successfully logged in' })
+    @ApiResponse({ status: 401, description: 'Invalid staff credentials' })
+    async staffLogin(@Body() loginDto: LoginDto) {
+        return this.authService.staffLogin(loginDto);
+    }
+
+    @Get('staff/profile')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get current staff profile' })
+    @ApiResponse({ status: 200, description: 'Staff profile retrieved' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async getStaffProfile(@Request() req) {
+        this.logger.log('Staff profile controller called - user:', {
+            userId: req.user?._id,
+            email: req.user?.email,
+            role: req.user?.role
+        });
+
+        try {
+            const result = await this.authService.getStaffProfile(req.user._id);
+            this.logger.log('Staff profile service result:', {
+                success: result.success,
+                hasUser: !!result.data?.user
+            });
+            return result;
+        } catch (error) {
+            this.logger.error('Staff profile controller error:', error.message);
+            throw error;
+        }
+    }
 }

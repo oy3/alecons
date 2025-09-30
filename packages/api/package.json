@@ -12,7 +12,8 @@
     "start:dev:verbose": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "test": "echo \"No tests yet\""
+    "test": "echo \"No tests yet\"",
+    "seed:staff": "ts-node -r tsconfig-paths/register src/scripts/seed-staff.ts"
   },
   "keywords": [],
   "author": "",

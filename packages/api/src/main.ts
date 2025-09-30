@@ -9,7 +9,12 @@ async function bootstrap() {
 
     // Enable CORS
     app.enableCors({
-        origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+        origin: [
+            process.env.FRONTEND_URL || 'http://localhost:5173',
+            'http://localhost:3001', // Staff portal
+            'http://localhost:3002', // Student portal (future)
+            'http://localhost:3003', // Website (future)
+        ],
         credentials: true,
     });
 

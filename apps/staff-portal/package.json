@@ -1,0 +1,23 @@
+{
+  "name": "staff-portal",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --mode development",
+    "build": "vite build --mode production",
+    "serve": "vite preview",
+    "build:dev": "vite build --mode development",
+    "build:prod": "vite build --mode production"
+  },
+  "dependencies": {
+    "pinia": "^3.0.3",
+    "sweetalert2": "^11.23.0",
+    "vue": "^3.5.18",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "vite": "^7.1.0"
+  }
+}

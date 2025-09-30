@@ -9,6 +9,8 @@ import { Application, ApplicationDocument } from '../schemas/application.schema'
 import { Program, ProgramDocument } from '../schemas/program.schema';
 import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
+import { Staff, StaffDocument } from '../schemas/staff.schema';
+import { Role, RoleDocument } from '../schemas/role.schema';
 import { EmailService } from '../services/email.service';
 import { ApplicationNumberService } from '../services/application-number.service';
 import { RegisterDto } from './dto/register.dto';
@@ -25,6 +27,8 @@ export class AuthService {
         @InjectModel(Program.name) private programModel: Model<ProgramDocument>,
         @InjectModel(ProgramType.name) private programTypeModel: Model<ProgramTypeDocument>,
         @InjectModel(ProgramMode.name) private programModeModel: Model<ProgramModeDocument>,
+        @InjectModel(Staff.name) private staffModel: Model<StaffDocument>,
+        @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
         private jwtService: JwtService,
         private emailService: EmailService,
         private applicationNumberService: ApplicationNumberService,
@@ -479,6 +483,154 @@ export class AuthService {
                 throw error;
             }
             throw new BadRequestException('Failed to resend verification email');
+        }
+    }
+
+    // Staff authentication methods
+    async staffLogin(loginDto: LoginDto) {
+        const { email, password } = loginDto;
+
+        this.logger.log('Staff login attempt:', { email });
+
+        // Find user with staff or admin role
+        const user = await this.userModel.findOne({
+            email,
+            role: { $in: [UserRole.STAFF, UserRole.ADMIN] }
+        });
+
+        if (!user) {
+            throw new UnauthorizedException('Invalid staff credentials or insufficient permissions');
+        }
+
+        if (!user.isActive) {
+            throw new UnauthorizedException('Your staff account has been deactivated. Please contact administrator');
+        }
+
+        // Check password
+        const isPasswordValid = await user.comparePassword(password);
+        if (!isPasswordValid) {
+            throw new UnauthorizedException('Invalid staff credentials');
+        }
+
+        // Get staff details and role permissions
+        const staff = await this.staffModel
+            .findOne({ userId: user._id })
+            .populate('roleId')
+            .exec();
+
+        if (!staff || !staff.isActive) {
+            throw new UnauthorizedException('Staff record not found or inactive');
+        }
+
+        const role = staff.roleId as any;
+
+        // Generate JWT token with staff information
+        const payload = {
+            email: user.email,
+            sub: user._id,
+            role: user.role,
+            staffId: staff.staffId
+        };
+        const access_token = this.jwtService.sign(payload);
+
+        // Prepare staff user data
+        const staffUserData = {
+            id: user._id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            fullName: user.fullName,
+            role: user.role,
+            isActive: user.isActive,
+            isEmailVerified: user.isEmailVerified,
+            // Staff specific data
+            staffId: staff.staffId,
+            department: staff.department,
+            position: staff.position,
+            // Role and permissions
+            roleId: role._id,
+            roleName: role.name,
+            permissions: this.extractPermissions(role.modules || [])
+        };
+
+        this.logger.log('Staff login successful:', {
+            email,
+            staffId: staff.staffId,
+            role: user.role
+        });
+
+        return {
+            success: true,
+            message: 'Staff login successful',
+            data: {
+                access_token,
+                user: staffUserData
+            }
+        };
+    }
+
+    // Helper method to extract permissions from role modules
+    private extractPermissions(modules: any[]): string[] {
+        const permissions = new Set<string>();
+
+        modules.forEach(module => {
+            if (module.permissions && Array.isArray(module.permissions)) {
+                module.permissions.forEach(permission => {
+                    permissions.add(permission);
+                    // Also add module-specific permissions
+                    permissions.add(`${module.module}:${permission}`);
+                });
+            }
+        });
+
+        return Array.from(permissions);
+    }
+
+    async getStaffProfile(userId: string) {
+        try {
+            const user = await this.userModel.findById(userId);
+            if (!user) {
+                throw new UnauthorizedException('User not found');
+            }
+
+            const staff = await this.staffModel
+                .findOne({ userId: user._id })
+                .populate('roleId')
+                .exec();
+
+            if (!staff) {
+                throw new UnauthorizedException('Staff record not found');
+            }
+
+            const role = staff.roleId as any;
+
+            const staffUserData = {
+                id: user._id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                fullName: user.fullName,
+                role: user.role,
+                isActive: user.isActive,
+                isEmailVerified: user.isEmailVerified,
+                staffId: staff.staffId,
+                department: staff.department,
+                position: staff.position,
+                roleId: role._id,
+                roleName: role.name,
+                permissions: this.extractPermissions(role.modules || [])
+            };
+
+            return {
+                success: true,
+                data: {
+                    user: staffUserData
+                }
+            };
+
+        } catch (error) {
+            this.logger.error('Get staff profile failed:', error);
+            throw error;
         }
     }
 }

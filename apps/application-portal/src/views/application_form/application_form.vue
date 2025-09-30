@@ -1083,6 +1083,17 @@ export default {
     },
 
     async submitApplication() {
+      // Check if declaration is checked before proceeding
+      if (!this.declaration) {
+        await Swal.fire({
+          title: 'Declaration Required',
+          text: 'Please check the declaration box to confirm that all information provided is true and correct.',
+          icon: 'warning',
+          confirmButtonText: 'OK'
+        });
+        return;
+      }
+
       try {
         this.isSubmitting = true;
 
@@ -2297,7 +2308,7 @@ export default {
           <!-- Declaration -->
           <div class="mb-4">
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" v-model="declaration" id="declaration" />
+              <input class="form-check-input" type="checkbox" v-model="declaration" id="declaration" required />
               <label class="form-check-label small" for="declaration">
                 I declare that the information provided above is true and
                 correct to the best of my knowledge.

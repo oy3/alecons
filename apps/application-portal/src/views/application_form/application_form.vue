@@ -233,9 +233,25 @@ export default {
   methods: {
     generateYears() {
       const currentYear = new Date().getFullYear();
-      for (let year = currentYear; year >= 1980; year--) {
+      
+      // Use user's birth year as minimum year if available, otherwise fallback to 1980
+      let minYear = 1980;
+      if (this.application?.dob) {
+        const birthYear = new Date(this.application.dob).getFullYear();
+        minYear = birthYear;
+      }
+      
+      this.years = [];
+      for (let year = currentYear; year >= minYear; year--) {
         this.years.push(year);
       }
+      
+      logger.info('Generated exam years:', {
+        minYear,
+        maxYear: currentYear,
+        totalYears: this.years.length,
+        hasDob: !!this.application?.dob
+      });
     },
 
     loadCountries() {
@@ -531,6 +547,9 @@ export default {
           maritalStatus: this.maritalStatus,
           address: this.address
         });
+
+        // Regenerate years now that we have the application data with birth year
+        this.generateYears();
 
         // Prefill academic background
         if (this.application.academicBackground) {

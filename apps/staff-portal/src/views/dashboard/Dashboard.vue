@@ -47,6 +47,7 @@ export default {
           rejectedApplications: 60,
           totalUsers: 2340,
           activeUsers: 1876,
+          totalRevenue: 12050000,
           systemHealth: 'Excellent'
         }
 
@@ -55,7 +56,7 @@ export default {
             id: '1',
             applicantName: 'John Doe',
             applicationNumber: 'APP-2025-001',
-            program: 'Computer Science',
+            program: 'Nursing',
             status: 'pending',
             submittedAt: '2025-09-30T10:30:00Z'
           },
@@ -63,7 +64,7 @@ export default {
             id: '2',
             applicantName: 'Jane Smith',
             applicationNumber: 'APP-2025-002',
-            program: 'Business Administration',
+            program: 'Nursing',
             status: 'approved',
             submittedAt: '2025-09-29T14:15:00Z'
           },
@@ -71,8 +72,16 @@ export default {
             id: '3',
             applicantName: 'Mike Johnson',
             applicationNumber: 'APP-2025-003',
-            program: 'Engineering',
+            program: 'Nursing',
             status: 'under_review',
+            submittedAt: '2025-09-29T09:45:00Z'
+          },
+          {
+            id: '4',
+            applicantName: 'Jenny Johnson',
+            applicationNumber: 'APP-2025-004',
+            program: 'Nursing',
+            status: 'rejected',
             submittedAt: '2025-09-29T09:45:00Z'
           }
         ]
@@ -99,6 +108,22 @@ export default {
       return new Date(dateString).toLocaleDateString()
     },
 
+    formatRevenue(value) {
+      if (value >= 1_000_000_000) {
+        return (Math.floor(value / 10_000_000) / 100) + 'B'; // 2 decimals truncated
+      }
+      if (value >= 1_000_000) {
+        return (Math.floor(value / 10_000) / 100) + 'M'; // 2 decimals truncated
+      }
+      if (value >= 1_000) {
+        return (Math.floor(value / 10) / 100) + 'K'; // 2 decimals truncated
+      }
+      return value.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    },
+
     navigateToApplications() {
       this.$router.push('/applications')
     },
@@ -111,15 +136,18 @@ export default {
 </script>
 
 <template>
-    <!-- staff-main-content  -->
   <div class="container-fluid p-4">
     <!-- Page Header -->
     <div class="row mb-4">
       <div class="col-12">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <h2 class="fw-bold text-staff-primary mb-1">Dashboard</h2>
-            <p class="text-muted mb-0">Welcome back, {{ authStore.user?.firstName }}!</p>
+            <h2 class="fw-bold text-staff-primary mb-1">
+              Welcome, {{ authStore.user?.firstName }}!
+            </h2>
+            <p class="text-muted mb-0">
+              Here's a summary of the portal's activity.
+            </p>
           </div>
           <div class="d-flex gap-2">
             <button class="btn btn-outline-staff-primary btn-sm">
@@ -146,15 +174,21 @@ export default {
       <!-- Stats Cards Row -->
       <div class="row mb-4">
         <div class="col-lg-3 col-md-6 mb-3">
-          <div class="staff-card h-100">
+          <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center">
-                <div>
-                  <h6 class="card-title text-muted mb-2">Total Applications</h6>
-                  <h3 class="fw-bold text-staff-primary mb-0">{{ stats.totalApplications.toLocaleString() }}</h3>
+              <div class="d-flex align-items-center justify-content-center">
+                <div
+                  class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center"
+                  style="width: 60px; height: 60px">
+                  <i class="bi bi-hourglass-split fs-4"></i>
                 </div>
-                <div class="bg-staff-light rounded-circle p-3">
-                  <i class="bi bi-file-earmark-text fs-4 text-staff-primary"></i>
+                <div class="ms-3">
+                  <h6 class="card-title text-body-secondary">
+                    Pending Applications
+                  </h6>
+                  <h3 class="fw-bold text-dark mb-0">
+                    {{ stats.pendingApplications }}
+                  </h3>
                 </div>
               </div>
             </div>
@@ -162,15 +196,21 @@ export default {
         </div>
 
         <div class="col-lg-3 col-md-6 mb-3">
-          <div class="staff-card h-100">
+          <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center">
-                <div>
-                  <h6 class="card-title text-muted mb-2">Pending Review</h6>
-                  <h3 class="fw-bold text-warning mb-0">{{ stats.pendingApplications }}</h3>
+              <div class="d-flex align-items-center justify-content-center">
+                <div
+                  class="bg-success-subtle text-success rounded-circle d-flex align-items-center justify-content-center"
+                  style="width: 60px; height: 60px">
+                  <i class="bi bi bi-person-check fs-4"></i>
                 </div>
-                <div class="bg-warning bg-opacity-25 rounded-circle p-3">
-                  <i class="bi bi-clock fs-4 text-warning"></i>
+                <div class="ms-3">
+                  <h6 class="card-title text-body-secondary">
+                    Admitted Students
+                  </h6>
+                  <h3 class="fw-bold text-dark mb-0">
+                    {{ stats.approvedApplications.toLocaleString() }}
+                  </h3>
                 </div>
               </div>
             </div>
@@ -178,15 +218,20 @@ export default {
         </div>
 
         <div class="col-lg-3 col-md-6 mb-3">
-          <div class="staff-card h-100">
+          <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center">
-                <div>
-                  <h6 class="card-title text-muted mb-2">Approved</h6>
-                  <h3 class="fw-bold text-success mb-0">{{ stats.approvedApplications.toLocaleString() }}</h3>
+              <div class="d-flex align-items-center justify-content-center">
+                <div
+                  class="bg-warning-subtle text-warning rounded-circle d-flex align-items-center justify-content-center"
+                  style="width: 60px; height: 60px">
+                  <i class="bi bi-cash-stack fs-4"></i>
                 </div>
-                <div class="bg-success bg-opacity-25 rounded-circle p-3">
-                  <i class="bi bi-check-circle fs-4 text-success"></i>
+                <div class="ms-3">
+                  <h6 class="card-title text-body-secondary">Total Revenue</h6>
+                  <h3 class="fw-bold text-dark mb-0">
+                    ₦{{ formatRevenue(stats.totalRevenue) }}
+                  </h3>
+                  <small class="text-body-tertiary">This session</small>
                 </div>
               </div>
             </div>
@@ -194,15 +239,20 @@ export default {
         </div>
 
         <div class="col-lg-3 col-md-6 mb-3">
-          <div class="staff-card h-100">
+          <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center">
-                <div>
-                  <h6 class="card-title text-muted mb-2">Total Users</h6>
-                  <h3 class="fw-bold text-info mb-0">{{ stats.totalUsers.toLocaleString() }}</h3>
+              <div class="d-flex align-items-center justify-content-center">
+                <div
+                  class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center"
+                  style="width: 60px; height: 60px">
+                  <i class="bi bi-people fs-4"></i>
                 </div>
-                <div class="bg-info bg-opacity-25 rounded-circle p-3">
-                  <i class="bi bi-people fs-4 text-info"></i>
+                <div class="ms-3">
+                  <h6 class="card-title text-body-secondary">Total Users</h6>
+                  <h3 class="fw-bold text-dark mb-0">
+                    {{ stats.totalUsers.toLocaleString() }}
+                  </h3>
+                  <small class="text-body-tertiary">Across all roles</small>
                 </div>
               </div>
             </div>
@@ -214,13 +264,10 @@ export default {
       <div class="row">
         <!-- Recent Applications -->
         <div class="col-lg-8 mb-4">
-          <div class="staff-card h-100">
-            <div class="card-header bg-transparent border-bottom">
+          <div class="card border-0 shadow-sm p-0">
+            <div class="card-header bg-transparent border-bottom-0">
               <div class="d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 fw-bold">Recent Applications</h5>
-                <button class="btn btn-outline-staff-primary btn-sm" @click="navigateToApplications">
-                  View All
-                </button>
+                <h5 class="my-3 fw-bold">Recent Applications</h5>
               </div>
             </div>
             <div class="card-body p-0">
@@ -228,118 +275,79 @@ export default {
                 <table class="table table-hover mb-0">
                   <thead class="table-light">
                     <tr>
+                      <th>#</th>
                       <th>Applicant</th>
-                      <th>Application #</th>
                       <th>Program</th>
-                      <th>Status</th>
-                      <th>Date</th>
-                      <th>Actions</th>
+                      <th class="text-center">Date Applied</th>
+                      <th class="text-center">Status</th>
+                      <th class="text-center"></th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr v-for="app in recentApplications" :key="app.id">
                       <td>
+                        <code class="text-staff-primary">{{
+                          app.applicationNumber
+                        }}</code>
+                      </td>
+                      <td>
                         <div class="d-flex align-items-center">
-                          <div class="bg-staff-light rounded-circle p-2 me-2">
-                            <i class="bi bi-person text-staff-primary"></i>
-                          </div>
                           <span class="fw-medium">{{ app.applicantName }}</span>
                         </div>
                       </td>
-                      <td>
-                        <code class="text-staff-primary">{{ app.applicationNumber }}</code>
-                      </td>
                       <td>{{ app.program }}</td>
-                      <td>
+                      <td class="text-center">
+                        {{ formatDate(app.submittedAt) }}
+                      </td>
+                      <td class="text-center">
                         <span class="badge rounded-pill" :class="getStatusBadgeClass(app.status)">
-                          {{ app.status.replace('_', ' ').toUpperCase() }}
+                          {{ app.status.replace("_", " ").toUpperCase() }}
                         </span>
                       </td>
-                      <td>{{ formatDate(app.submittedAt) }}</td>
-                      <td>
-                        <div class="btn-group btn-group-sm">
-                          <button class="btn btn-outline-staff-primary btn-sm">
-                            <i class="bi bi-eye"></i>
-                          </button>
-                          <button class="btn btn-outline-success btn-sm">
-                            <i class="bi bi-check"></i>
-                          </button>
-                        </div>
+                      <td class="text-center">
+                        <button class="btn btn-outline-staff-primary btn-sm">
+                          <i class="bi bi-eye"></i>
+                        </button>
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </div>
+            <div class="card-footer bg-transparent border-top-0 text-end py-3">
+              <button class="btn btn-link text-decoration-none text-staff-primary btn-sm fw-bold"
+                @click="navigateToApplications">
+                View all applications
+                <i class="bi bi-arrow-right"></i>
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Quick Actions & System Status -->
-        <div class="col-lg-4 mb-4">
-          <!-- Quick Actions -->
-          <div class="staff-card mb-4">
-            <div class="card-header bg-transparent border-bottom">
-              <h5 class="mb-0 fw-bold">Quick Actions</h5>
-            </div>
-            <div class="card-body">
-              <div class="d-grid gap-2">
-                <button class="btn btn-staff-primary" @click="navigateToApplications">
-                  <i class="bi bi-plus-circle me-2"></i>Review Applications
-                </button>
-                <button class="btn btn-outline-staff-primary" @click="navigateToUsers">
-                  <i class="bi bi-person-plus me-2"></i>Manage Users
-                </button>
-                <button class="btn btn-outline-staff-primary">
-                  <i class="bi bi-graph-up me-2"></i>Generate Report
-                </button>
-                <button class="btn btn-outline-staff-primary">
-                  <i class="bi bi-gear me-2"></i>System Settings
-                </button>
-              </div>
-            </div>
+        <!-- Quick Actions & -->
+        <div class="col-lg-4">
+          <h5 class="mb-3 fw-bold">Quick Actions</h5>
+
+
+          <div class="d-grid gap-2">
+            <button class="btn btn-staff-primary" @click="navigateToApplications">
+              <i class="bi bi-plus-circle me-2"></i>Review Applications
+            </button>
+            <button class="btn btn-outline-staff-primary" @click="navigateToUsers">
+              <i class="bi bi-person-plus me-2"></i>Manage Users
+            </button>
+            <button class="btn btn-outline-staff-primary">
+              <i class="bi bi-graph-up me-2"></i>Generate Report
+            </button>
+            <button class="btn btn-outline-staff-primary">
+              <i class="bi bi-gear me-2"></i>System Settings
+            </button>
           </div>
 
-          <!-- System Status -->
-          <div class="staff-card">
-            <div class="card-header bg-transparent border-bottom">
-              <h5 class="mb-0 fw-bold">System Status</h5>
-            </div>
-            <div class="card-body">
-              <div class="d-flex align-items-center mb-3">
-                <div class="bg-success bg-opacity-25 rounded-circle p-2 me-3">
-                  <i class="bi bi-server text-success"></i>
-                </div>
-                <div>
-                  <div class="fw-medium">System Health</div>
-                  <span class="badge bg-success">{{ stats.systemHealth }}</span>
-                </div>
-              </div>
-
-              <div class="d-flex align-items-center mb-3">
-                <div class="bg-info bg-opacity-25 rounded-circle p-2 me-3">
-                  <i class="bi bi-people text-info"></i>
-                </div>
-                <div>
-                  <div class="fw-medium">Active Users</div>
-                  <div class="text-muted small">{{ stats.activeUsers }} online</div>
-                </div>
-              </div>
-
-              <div class="d-flex align-items-center">
-                <div class="bg-warning bg-opacity-25 rounded-circle p-2 me-3">
-                  <i class="bi bi-clock text-warning"></i>
-                </div>
-                <div>
-                  <div class="fw-medium">Pending Tasks</div>
-                  <div class="text-muted small">{{ stats.pendingApplications }} items</div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
-  </div>
+    </div>
 </template>
 
 <style scoped>

@@ -8,6 +8,10 @@ import { AuthModule } from './auth/auth.module';
 import { ProgramsModule } from './programs/programs.module';
 import { PaymentsModule } from './payments/payments.module';
 import { UploadModule } from './modules/upload.module';
+import { StaffApplicationsController } from './controllers/staff-applications.controller';
+import { Application, ApplicationSchema } from './schemas/application.schema';
+import { Program, ProgramSchema } from './schemas/program.schema';
+import { User, UserSchema } from './schemas/user.schema';
 
 @Module({
     imports: [
@@ -16,6 +20,11 @@ import { UploadModule } from './modules/upload.module';
             envFilePath: '.env',
         }),
         MongooseModule.forRoot(process.env.DATABASE_URL),
+        MongooseModule.forFeature([
+            { name: Application.name, schema: ApplicationSchema },
+            { name: Program.name, schema: ProgramSchema },
+            { name: User.name, schema: UserSchema }
+        ]),
         ThrottlerModule.forRoot([
             {
                 ttl: 60000,
@@ -27,7 +36,7 @@ import { UploadModule } from './modules/upload.module';
         PaymentsModule,
         UploadModule,
     ],
-    controllers: [AppController],
+    controllers: [AppController, StaffApplicationsController],
     providers: [AppService],
 })
 export class AppModule { }

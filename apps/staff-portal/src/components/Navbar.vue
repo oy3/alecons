@@ -151,11 +151,11 @@ export default {
 </template>
 
 <style scoped>
-.staff-navbar {
+/* .staff-navbar { */
   /* background-color: white !important; */
   /* box-shadow: 0 2px 4px rgba(26, 95, 95, 0.1); */
   /* border-bottom: 1px solid var(--staff-light); */
-}
+/* } */
 
 .form-control:focus {
   border-color: var(--staff-primary);

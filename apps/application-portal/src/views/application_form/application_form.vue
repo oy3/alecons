@@ -31,7 +31,7 @@ export default {
         { examType: "", examYear: "", examNumber: "" }
       ],
       maxSittings: 2,
-      examTypes: ["WAEC/SSCE", "NECO", "NABTEB", "GCE"],
+      examTypes: ["WAEC/SSCE", "NECO", "GCE"],
       years: [],
       subjects: [
         { subject: "English Language", grade: "", sitting: "", locked: true },

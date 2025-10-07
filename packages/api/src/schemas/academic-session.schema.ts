@@ -4,9 +4,10 @@ import { Document } from 'mongoose';
 export type AcademicSessionDocument = AcademicSession & Document;
 
 export enum SessionStatus {
+    DRAFT = 'draft',
     OPEN = 'open',
+    ONGOING = 'ongoing',
     CLOSED = 'closed',
-    UPCOMING = 'upcoming',
 }
 
 @Schema({ timestamps: true })
@@ -20,8 +21,11 @@ export class AcademicSession {
     @Prop({ required: true })
     endDate: Date;
 
-    @Prop({ required: true, enum: SessionStatus, default: SessionStatus.UPCOMING })
+    @Prop({ required: true, enum: SessionStatus, default: SessionStatus.DRAFT })
     status: SessionStatus;
+
+    @Prop({ default: false })
+    applicationsOpen: boolean;
 
     @Prop()
     description?: string;

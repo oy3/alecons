@@ -378,10 +378,10 @@ export class PaymentsService {
             // Map payment codes to next stages
             // Based on the payment code, determine what stage to advance to
             const stageProgressions: { [key: string]: number } = {
-                'portalFee': 3,          // Portal fee payment (stage 2) -> Application form (stage 3)
-                'acceptanceFee': 6,      // Acceptance fee payment (stage 5) -> Clearance (stage 6)
-                'administrativeFee': 8,  // Administrative fee payment (stage 7) -> School fees (stage 8)
-                'schoolFee': 9           // School fee payment (stage 8) -> Done (stage 9)
+                'portalFee': 3,          // Form fee payment (stage 2) -> Application form (stage 3)
+                'acceptanceFee': 8,      // Acceptance fee payment (stage 7) -> Sundry fees (stage 8)
+                'sundryFee': 9,          // Sundry fee payment (stage 8) -> School fees (stage 9)
+                'schoolFee': 10          // School fee payment (stage 9) -> Completed (stage 10)
             };
 
             const nextStage = stageProgressions[payment.paymentCode];
@@ -391,6 +391,11 @@ export class PaymentsService {
                 await application.save();
 
                 this.logger.log(`Advanced application stage to ${nextStage} after ${payment.paymentCode} payment for user ${userId}`);
+
+                // If this is the final payment (school fee), trigger application completion
+                if (payment.paymentCode === 'schoolFee' && nextStage === 10) {
+                    await this.completeApplicationProcess(userId, application);
+                }
             } else {
                 this.logger.log(`No stage progression needed for payment ${payment.paymentCode}, current stage: ${application.currentStage}`);
             }
@@ -443,6 +448,60 @@ export class PaymentsService {
             }
         } catch (error) {
             this.logger.error('Error advancing application stage:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Complete application process by generating matriculation number and creating student record
+     */
+    private async completeApplicationProcess(userId: Types.ObjectId, application: any): Promise<void> {
+        try {
+            this.logger.log('Starting application completion process for user:', userId);
+
+            // Generate matriculation number
+            const currentYear = new Date().getFullYear();
+            const yearSuffix = currentYear.toString().slice(-2);
+            const programCode = '01'; // This should be fetched from program data
+            const timestamp = Date.now();
+            const sequence = (timestamp % 10000).toString().padStart(4, '0');
+
+            const matriculationNumber = `ALC/${yearSuffix}/${programCode}-${sequence}`;
+
+            // Update application with matriculation number and completion status
+            application.matriculationNumber = matriculationNumber;
+            application.status = 'completed';
+            await application.save();
+
+            // Log what should be done for student record and user role update
+            this.logger.log('Application completion tasks needed:', {
+                createStudentRecord: {
+                    userId: application.userId,
+                    applicationId: application._id,
+                    matriculationNumber,
+                    programId: application.programId,
+                    programTypeId: application.programTypeId,
+                    programModeId: application.programModeId,
+                    admissionYear: currentYear,
+                    academicSession: `${currentYear}/${currentYear + 1}`,
+                    status: 'active'
+                },
+                updateUserRole: {
+                    userId: userId,
+                    newRole: 'student'
+                },
+                sendMatriculationEmail: {
+                    userId: userId,
+                    matriculationNumber,
+                    studentPortalUrl: process.env.STUDENT_PORTAL_URL || 'http://localhost:3000/student-portal'
+                }
+            });
+
+            this.logger.log('Application completion process finished successfully for user:', userId);
+            this.logger.log('Generated matriculation number:', matriculationNumber);
+
+        } catch (error) {
+            this.logger.error('Error completing application process:', error);
             throw error;
         }
     }

@@ -12,25 +12,37 @@ export class Student {
     applicationId: Types.ObjectId;
 
     @Prop({ required: true, unique: true })
-    matricNo: string;
+    matriculationNumber: string; // New format: ALC/25/01-0001
 
     @Prop({ type: Types.ObjectId, ref: 'Program', required: true })
-    program: Types.ObjectId;
+    programId: Types.ObjectId;
 
     @Prop({ type: Types.ObjectId, ref: 'ProgramType', required: true })
-    programType: Types.ObjectId;
+    programTypeId: Types.ObjectId;
 
     @Prop({ type: Types.ObjectId, ref: 'ProgramMode', required: true })
-    programMode: Types.ObjectId;
+    programModeId: Types.ObjectId;
 
     @Prop({ required: true })
-    level: string;
+    admissionYear: number;
 
     @Prop({ required: true })
-    semester: number;
+    academicSession: string; // e.g., "2025/2026"
 
-    @Prop({ type: Types.ObjectId, ref: 'AcademicSession', required: true })
-    session: Types.ObjectId;
+    @Prop({ default: 'active' })
+    status: string; // active, suspended, graduated, withdrawn
+
+    @Prop({ default: 1 })
+    currentLevel: number; // 1, 2, 3, etc.
+
+    @Prop({ default: 1 })
+    currentSemester: number; // 1 or 2
+
+    @Prop()
+    graduationDate?: Date;
+
+    @Prop({ default: 0.0 })
+    cumulativeGPA: number;
 
     @Prop({ default: true })
     isActive: boolean;
@@ -38,21 +50,5 @@ export class Student {
 
 export const StudentSchema = SchemaFactory.createForClass(Student);
 
-// Generate matric number before saving
-StudentSchema.pre('save', async function (next) {
-    if (this.isNew && !this.matricNo) {
-        const year = new Date().getFullYear().toString().slice(-2);
-        const StudentModel = this.constructor as any;
-        const count = await StudentModel.countDocuments({
-            createdAt: {
-                $gte: new Date(new Date().getFullYear(), 0, 1),
-                $lt: new Date(new Date().getFullYear() + 1, 0, 1)
-            }
-        });
-
-        // Get program details to build matric number
-        // Format: ALEC/ND/25/001
-        this.matricNo = `ALEC/ND/${year}/${String(count + 1).padStart(3, '0')}`;
-    }
-    next();
-});
+// Note: Matriculation number generation is now handled by MatriculationService
+// to ensure proper format (ALC/YY/program.code-nnnn) and uniqueness

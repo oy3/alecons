@@ -177,10 +177,10 @@ export default {
     isPaymentAvailable(fee) {
       // Map payment codes to their required stages
       const paymentStageMap = {
-        portalFee: 2, // Portal fee (Form fee) available at stage 2
-        acceptanceFee: 5, // Acceptance fee available at stage 5
-        administrativeFee: 7, // Administrative fee available at stage 7
-        schoolFee: 8, // School fee available at stage 8
+        portalFee: 2, // Form fee available at stage 2
+        acceptanceFee: 7, // Acceptance fee available at stage 7
+        sundryFee: 8, // Sundry fee available at stage 8
+        schoolFee: 9, // School fee available at stage 9
       };
 
       const requiredStage = paymentStageMap[fee.paymentCode];
@@ -200,10 +200,10 @@ export default {
 
     getRequiredStage(paymentCode) {
       const paymentStageMap = {
-        portalFee: 2, // Portal fee (Form fee) available at stage 2
-        acceptanceFee: 5, // Acceptance fee available at stage 5
-        administrativeFee: 7, // Administrative fee available at stage 7
-        schoolFee: 8, // School fee available at stage 8
+        portalFee: 2, // Form fee available at stage 2
+        acceptanceFee: 7, // Acceptance fee available at stage 7
+        sundryFee: 8, // Sundry fee available at stage 8
+        schoolFee: 9, // School fee available at stage 9
       };
       return paymentStageMap[paymentCode] || "Unknown";
     },

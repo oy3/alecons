@@ -18,14 +18,15 @@ export default {
     return {
       stages: [
         "Registration",
-        "Portal Fee",
+        "Form Fee",
         "Application Form",
-        "Admission",
+        "Entrance Exam",
+        "Screening",
+        "Admission Decision",
         "Acceptance Fee",
-        "Clearance",
-        "Admin Fee",
+        "Sundry Fee",
         "School Fees",
-        "Done",
+        "Completed",
       ],
     };
   },
@@ -132,43 +133,49 @@ export default {
         {
           stage: 3,
           title: "Complete Application Form",
-          description: "Fill out your application details",
+          description: "Fill out your application details and upload documents",
           paymentStage: false
         },
         {
           stage: 4,
-          title: "Await Admission Decision",
-          description: "Your application is under review",
+          title: "Await Entrance Exam Scheduling",
+          description: "Wait for admin to schedule your online entrance exam",
           paymentStage: false
         },
         {
           stage: 5,
-          title: "Pay Acceptance Fee",
-          description: "Pay acceptance fee to confirm admission",
-          paymentStage: true
+          title: "Await Screening & Interview",
+          description: "Wait for physical screening and interview scheduling",
+          paymentStage: false
         },
         {
           stage: 6,
-          title: "Await Clearance",
-          description: "Document verification in progress",
+          title: "Await Admission Decision",
+          description: "Your application is under review for admission",
           paymentStage: false
         },
         {
           stage: 7,
-          title: "Pay Administrative Fee",
-          description: "Pay administrative processing fee",
+          title: "Pay Acceptance Fee",
+          description: "Pay acceptance fee to confirm your admission",
           paymentStage: true
         },
         {
           stage: 8,
+          title: "Pay Sundry Fees",
+          description: "Pay administrative and sundry charges",
+          paymentStage: true
+        },
+        {
+          stage: 9,
           title: "Pay School Fees",
           description: "Pay tuition and other school fees",
           paymentStage: true
         },
         {
-          stage: 9,
+          stage: 10,
           title: "Application Complete",
-          description: "Welcome! Your application process is complete",
+          description: "Welcome! Get your matriculation number and portal access",
           paymentStage: false
         }
       ];
@@ -186,8 +193,8 @@ export default {
     resumeButtonConfig() {
       const stage = this.currentStage;
 
-      // Payment stages: 2, 5, 7, 8
-      if ([2, 5, 7, 8].includes(stage)) {
+      // Payment stages: 2, 7, 8, 9
+      if ([2, 7, 8, 9].includes(stage)) {
         return {
           text: 'Make Payment',
           route: '/payment',
@@ -206,13 +213,25 @@ export default {
         };
       }
 
-      // Waiting stages: 1, 4, 6, 9
-      if ([1, 4, 6, 9].includes(stage)) {
+      // Stages with exam/screening info available
+      if ([4, 5].includes(stage) && this.hasExamOrScreeningInfo) {
+        return {
+          text: 'View Details',
+          route: null,
+          disabled: false,
+          variant: 'btn-info',
+          showModal: true
+        };
+      }
+
+      // Waiting stages: 1, 4, 5, 6, 10
+      if ([1, 4, 5, 6, 10].includes(stage)) {
         const waitingMessages = {
           1: 'Check Your Email',
-          4: 'Awaiting Admission Decision',
-          6: 'Awaiting Clearance',
-          9: 'Application Complete!'
+          4: 'Awaiting Exam Scheduling',
+          5: 'Awaiting Screening Schedule',
+          6: 'Awaiting Admission Decision',
+          10: 'Application Complete!'
         };
 
         return {
@@ -230,6 +249,73 @@ export default {
         disabled: false,
         variant: 'btn-acon-secondary'
       };
+    },
+
+    hasExamOrScreeningInfo() {
+      return !!(this.application?.entranceExam || this.application?.screening);
+    }
+  },
+  methods: {
+    async onEmailVerificationFocus() {
+      // Refresh user data when window regains focus specifically to check email verification status
+      if (this.authStore.isAuthenticated && this.user && this.user.isEmailVerified === false) {
+        logger.info('Window focused, checking for email verification updates...');
+        try {
+          await this.authStore.refreshUserData();
+          logger.info('Email verification status refreshed');
+        } catch (error) {
+          logger.error('Failed to refresh email verification status on focus:', error);
+        }
+      }
+    },
+
+    showExamScreeningModal() {
+      // Show modal with exam/screening details
+      const application = this.application;
+      let modalContent = '<div class="text-start">';
+      
+      if (application?.entranceExam) {
+        const exam = application.entranceExam;
+        modalContent += `
+          <h6 class="text-primary mb-3"><i class="bi bi-laptop me-2"></i>Entrance Exam Details</h6>
+          <div class="mb-3 p-3 bg-light rounded">
+            <p class="mb-2"><strong>Date:</strong> ${new Date(exam.date).toLocaleDateString('en-US', { 
+              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+            })}</p>
+            <p class="mb-2"><strong>Time:</strong> ${exam.time}</p>
+            ${exam.link ? `<p class="mb-2"><strong>Exam Link:</strong> <a href="${exam.link}" target="_blank" class="text-decoration-none">${exam.link}</a></p>` : ''}
+            ${exam.score !== undefined ? `<p class="mb-0"><strong>Score:</strong> <span class="badge bg-success">${exam.score}%</span></p>` : ''}
+          </div>
+        `;
+      }
+      
+      if (application?.screening) {
+        const screening = application.screening;
+        modalContent += `
+          <h6 class="text-info mb-3"><i class="bi bi-people me-2"></i>Screening & Interview Details</h6>
+          <div class="mb-3 p-3 bg-light rounded">
+            <p class="mb-2"><strong>Date:</strong> ${new Date(screening.date).toLocaleDateString('en-US', { 
+              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+            })}</p>
+            <p class="mb-2"><strong>Time:</strong> ${screening.time}</p>
+            <p class="mb-2"><strong>Venue:</strong> ${screening.venue}</p>
+            <p class="mb-0"><strong>Status:</strong> 
+              <span class="badge ${screening.completed ? 'bg-success' : 'bg-warning'}">${screening.completed ? 'Completed' : 'Scheduled'}</span>
+            </p>
+          </div>
+        `;
+      }
+      
+      modalContent += '</div>';
+      
+      this.$swal.fire({
+        title: 'Exam & Screening Information',
+        html: modalContent,
+        icon: 'info',
+        confirmButtonText: 'Got it!',
+        confirmButtonColor: '#2d7d7d',
+        width: '500px'
+      });
     }
   },
   components: { TodoList, BiodataCard, ProgressCard, EmailVerificationAlert },
@@ -249,6 +335,7 @@ export default {
           :currentStage="application?.currentStage || 0"
           :name="user?.firstName || 'Student'"
           :resumeConfig="resumeButtonConfig"
+          @show-modal="showExamScreeningModal"
         />
 
         <!-- To-do List -->

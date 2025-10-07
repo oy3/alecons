@@ -367,8 +367,36 @@ export class ApplicationUploadController {
                 application.referees = referees;
                 application.examinations = examinations;
 
-                // Documents and profile image
-                application.documents = documents;
+                // Documents using new grouped structure
+                const groupedDocuments: any = {
+                    olevelResults: [],
+                    referenceLetters: []
+                };
+
+                // Group documents by type
+                for (const doc of documents) {
+                    if (doc.type === 'profile_picture') {
+                        groupedDocuments.profilePicture = {
+                            type: doc.type,
+                            url: doc.url,
+                            uploadedAt: doc.uploadedAt
+                        };
+                    } else if (doc.type === 'olevel_result') {
+                        groupedDocuments.olevelResults.push({
+                            type: doc.type,
+                            url: doc.url,
+                            uploadedAt: doc.uploadedAt
+                        });
+                    } else if (doc.type === 'reference_letter') {
+                        groupedDocuments.referenceLetters.push({
+                            type: doc.type,
+                            url: doc.url,
+                            uploadedAt: doc.uploadedAt
+                        });
+                    }
+                }
+
+                application.documents = groupedDocuments;
                 if (profilePicture) {
                     application.profileImageUrl = profilePicture.url;
                 }

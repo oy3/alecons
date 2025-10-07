@@ -6,6 +6,7 @@ export type SessionControlDocument = SessionControl & Document;
 export interface Control {
     name: string;
     active: boolean;
+    description?: string;
 }
 
 export interface PaymentControl {

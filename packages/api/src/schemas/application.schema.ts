@@ -12,6 +12,18 @@ export enum ApplicationStatus {
     REJECTED = 'rejected',
 }
 
+export enum AdmissionDecision {
+    PENDING = 'pending',
+    ADMITTED = 'admitted',
+    REJECTED = 'rejected',
+}
+
+export enum AdmissionDecision {
+    AWAITING_DECISION = 'pending',
+    GRANTED = 'admitted',
+    DENIED = 'rejected',
+}
+
 export interface Guardian {
     name: string;
     phone: string;
@@ -65,6 +77,26 @@ export interface ApplicationDoc {
     uploadedAt?: Date;
 }
 
+export interface EntranceExam {
+    date?: Date;
+    time?: string;
+    link?: string;
+    score?: number;
+}
+
+export interface Screening {
+    date?: Date;
+    time?: string;
+    venue?: string;
+    completed?: boolean;
+}
+
+export interface ApplicationDocuments {
+    profilePicture?: ApplicationDoc;
+    olevelResults: ApplicationDoc[];
+    referenceLetters: ApplicationDoc[];
+}
+
 @Schema({ timestamps: true })
 export class Application {
     @Prop({ type: Types.ObjectId, ref: 'User', required: true })
@@ -82,15 +114,16 @@ export class Application {
     @Prop({ type: Types.ObjectId, ref: 'ProgramMode', required: true })
     programModeId: Types.ObjectId;
 
+    @Prop({ type: Types.ObjectId, ref: 'AcademicSession', required: true })
+    entryAcademicSession: Types.ObjectId;
+
     @Prop({ required: true, enum: ApplicationStatus, default: ApplicationStatus.PENDING })
     status: ApplicationStatus;
 
     @Prop({ default: 1 })
     currentStage: number;
 
-    @Prop()
-    admissionDate?: Date;
-
+    // Personal Information
     @Prop()
     dob?: Date;
 
@@ -121,6 +154,7 @@ export class Application {
     @Prop()
     profileImageUrl?: string;
 
+    // Guardian Information
     @Prop({
         type: {
             name: String,
@@ -132,6 +166,7 @@ export class Application {
     })
     guardian?: Guardian;
 
+    // Next of Kin Information
     @Prop({
         type: {
             name: String,
@@ -143,6 +178,7 @@ export class Application {
     })
     nextOfKin?: NextOfKin;
 
+    // Academic Background
     @Prop({
         type: {
             primary: {
@@ -181,16 +217,76 @@ export class Application {
     })
     examinations: Examination[];
 
+    // Enhanced Document Structure
     @Prop({
-        type: [{
-            type: { type: String, required: true }, // Document type (profile_picture, olevel_result, reference_letter)
-            url: { type: String, required: true },  // File URL
-            uploadedAt: { type: Date, default: Date.now },
-            sittingIndex: { type: Number }, // For olevel results
-            referenceIndex: { type: Number } // For reference letters
-        }]
+        type: {
+            profilePicture: {
+                type: { type: String },
+                url: { type: String },
+                uploadedAt: { type: Date, default: Date.now }
+            },
+            olevelResults: [{
+                type: { type: String, required: true },
+                url: { type: String, required: true },
+                uploadedAt: { type: Date, default: Date.now }
+            }],
+            referenceLetters: [{
+                type: { type: String, required: true },
+                url: { type: String, required: true },
+                uploadedAt: { type: Date, default: Date.now }
+            }]
+        },
+        default: {
+            olevelResults: [],
+            referenceLetters: []
+        }
     })
-    documents: ApplicationDoc[];
+    documents: ApplicationDocuments;
+
+    // Grouped Entrance Exam Fields
+    @Prop({
+        type: {
+            date: Date,
+            time: String,
+            link: String,
+            score: Number
+        }
+    })
+    entranceExam?: EntranceExam;
+
+    // Grouped Screening Fields
+    @Prop({
+        type: {
+            date: Date,
+            time: String,
+            venue: String,
+            completed: { type: Boolean, default: false }
+        }
+    })
+    screening?: Screening;
+
+    // Admission Information
+    @Prop()
+    admissionDate?: Date;
+
+    @Prop({ enum: AdmissionDecision, default: AdmissionDecision.AWAITING_DECISION })
+    admissionDecision: AdmissionDecision;
+
+    @Prop()
+    admissionLetter?: string;
+
+    @Prop()
+    rejectionReason?: string;
+
+    @Prop()
+    matriculationNumber?: string;
+
+    // Audit Trail
+    @Prop({ type: Types.ObjectId, ref: 'User' })
+    lastUpdatedBy?: Types.ObjectId;
+
+    @Prop()
+    lastUpdatedAt?: Date;
 
     @Prop({ default: true })
     isActive: boolean;

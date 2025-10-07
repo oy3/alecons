@@ -22,6 +22,12 @@ export default {
           permissions: ['view', 'applications:view']
         },
         {
+          title: 'Admission',
+          icon: 'bi-clipboard-check',
+          route: '/admission',
+          permissions: ['staff', 'admin', 'applications:manage']
+        },
+        {
           title: 'Users',
           icon: 'bi-people',
           route: '/users',

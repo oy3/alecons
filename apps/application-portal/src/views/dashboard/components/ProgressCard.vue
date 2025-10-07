@@ -22,6 +22,15 @@ export default {
       const completedStages = Math.max(0, this.currentStage - 1);
       return (completedStages / (this.stages.length - 1)) * 100;
     }
+  },
+  methods: {
+    handleResumeClick() {
+      if (this.resumeConfig.showModal) {
+        this.$emit('show-modal');
+      } else if (this.resumeConfig.route) {
+        this.$router.push(this.resumeConfig.route);
+      }
+    }
   }
 };
 </script>
@@ -66,12 +75,11 @@ export default {
       </div>
 
       <button 
-        v-if="resumeConfig.route && !resumeConfig.disabled"
-        @click="$router.push(resumeConfig.route)"
+        v-if="!resumeConfig.disabled"
+        @click="handleResumeClick"
         :class="['btn', 'btn-sm', 'rounded-4', 'px-4', 'mt-3', resumeConfig.variant]"
       >
-        <!-- {{ resumeConfig.text }} -->
-          Resume
+        {{ resumeConfig.text || 'Resume' }}
       </button>
       
       <button 
@@ -79,8 +87,7 @@ export default {
         :disabled="resumeConfig.disabled"
         :class="['btn', 'btn-sm', 'rounded-4', 'px-4', 'mt-3', resumeConfig.variant]"
       >
-        <!-- {{ resumeConfig.text }} -->
-        Resume
+        {{ resumeConfig.text || 'Resume' }}
       </button>
     </div>
   </div>

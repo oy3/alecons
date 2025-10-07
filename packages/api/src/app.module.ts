@@ -12,6 +12,7 @@ import { StaffApplicationsController } from './controllers/staff-applications.co
 import { Application, ApplicationSchema } from './schemas/application.schema';
 import { Program, ProgramSchema } from './schemas/program.schema';
 import { User, UserSchema } from './schemas/user.schema';
+import { EmailService } from './services/email.service';
 
 @Module({
     imports: [
@@ -37,6 +38,6 @@ import { User, UserSchema } from './schemas/user.schema';
         UploadModule,
     ],
     controllers: [AppController, StaffApplicationsController],
-    providers: [AppService],
+    providers: [AppService, EmailService],
 })
 export class AppModule { }

@@ -142,6 +142,47 @@ class StaffApiService {
         })
     }
 
+    // Admission management methods
+    async scheduleExam(id, examData) {
+        return this.makeRequest(`/staff/applications/${id}/schedule-exam`, {
+            method: 'PATCH',
+            body: JSON.stringify(examData),
+        })
+    }
+
+    async updateExamScore(id, scoreData) {
+        return this.makeRequest(`/staff/applications/${id}/exam-score`, {
+            method: 'PATCH',
+            body: JSON.stringify(scoreData),
+        })
+    }
+
+    async scheduleScreening(id, screeningData) {
+        return this.makeRequest(`/staff/applications/${id}/schedule-screening`, {
+            method: 'PATCH',
+            body: JSON.stringify(screeningData),
+        })
+    }
+
+    async completeScreening(id) {
+        return this.makeRequest(`/staff/applications/${id}/complete-screening`, {
+            method: 'PATCH',
+        })
+    }
+
+    async makeAdmissionDecision(id, decisionData) {
+        return this.makeRequest(`/staff/applications/${id}/admission-decision`, {
+            method: 'PATCH',
+            body: JSON.stringify(decisionData),
+        })
+    }
+
+    async generateMatriculationNumber(id) {
+        return this.makeRequest(`/staff/applications/${id}/generate-matric`, {
+            method: 'PATCH',
+        })
+    }
+
     // User management
     async getUsers(filters = {}) {
         const queryParams = new URLSearchParams(filters).toString()

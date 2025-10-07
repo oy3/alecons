@@ -14,9 +14,10 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
+import { Application, ApplicationDocument, ApplicationStatus, AdmissionDecision } from '../schemas/application.schema';
 import { Program, ProgramDocument } from '../schemas/program.schema';
 import { User, UserDocument } from '../schemas/user.schema';
+import { EmailService } from '../services/email.service';
 
 @ApiTags('Staff Applications')
 @Controller('staff/applications')
@@ -29,6 +30,7 @@ export class StaffApplicationsController {
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
         @InjectModel(Program.name) private programModel: Model<ProgramDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
+        private emailService: EmailService,
     ) { }
 
     @Get()
@@ -144,6 +146,11 @@ export class StaffApplicationsController {
                     phone: 1,
                     programName: 1,
                     status: 1,
+                    admissionDecision: 1,
+                    currentStage: 1,
+                    entranceExam: 1,
+                    screening: 1,
+                    entryAcademicSession: 1,
                     profileImageUrl: 1,
                     createdAt: 1,
                     updatedAt: 1
@@ -375,6 +382,413 @@ export class StaffApplicationsController {
                 {
                     success: false,
                     message: 'Failed to retrieve applications statistics',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Patch(':id/schedule-exam')
+    @ApiOperation({ summary: 'Schedule entrance exam for an application' })
+    @ApiResponse({ status: 200, description: 'Exam scheduled successfully' })
+    async scheduleExam(
+        @Param('id') id: string,
+        @Body() examData: {
+            examDate: string;
+            examTime: string;
+            examLink: string;
+        }
+    ) {
+        try {
+            this.logger.log('Scheduling exam for application:', { id, examData });
+
+            const application = await this.applicationModel.findById(id)
+                .populate('userId', 'firstName lastName email')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            // Update application with exam details using grouped structure
+            application.entranceExam = {
+                date: new Date(examData.examDate),
+                time: examData.examTime,
+                link: examData.examLink
+            };
+            application.currentStage = 4; // Move to exam stage
+
+            await application.save();
+
+            // Send exam scheduled email
+            await this.emailService.sendEntranceExamScheduledEmail(
+                (application.userId as any).email,
+                (application.userId as any).firstName,
+                application.entranceExam.date,
+                application.entranceExam.time,
+                application.entranceExam.link
+            );
+
+            this.logger.log('Exam scheduled successfully for application:', id);
+
+            return {
+                success: true,
+                message: 'Entrance exam scheduled successfully',
+                data: { application }
+            };
+
+        } catch (error) {
+            this.logger.error('Error scheduling exam:', error.message);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to schedule exam',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Patch(':id/schedule-screening')
+    @ApiOperation({ summary: 'Schedule screening & interview for an application' })
+    @ApiResponse({ status: 200, description: 'Screening scheduled successfully' })
+    async scheduleScreening(
+        @Param('id') id: string,
+        @Body() screeningData: {
+            screeningDate: string;
+            screeningTime: string;
+            venue: string;
+        }
+    ) {
+        try {
+            this.logger.log('Scheduling screening for application:', { id, screeningData });
+
+            const application = await this.applicationModel.findById(id)
+                .populate('userId', 'firstName lastName email')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            // Update application with screening details using grouped structure
+            application.screening = {
+                date: new Date(screeningData.screeningDate),
+                time: screeningData.screeningTime,
+                venue: screeningData.venue,
+                completed: false
+            };
+            application.currentStage = 5; // Move to screening stage
+
+            await application.save();
+
+            // Send screening scheduled email
+            await this.emailService.sendScreeningScheduledEmail(
+                (application.userId as any).email,
+                (application.userId as any).firstName,
+                application.screening.date,
+                application.screening.time,
+                application.screening.venue
+            );
+
+            this.logger.log('Screening scheduled successfully for application:', id);
+
+            return {
+                success: true,
+                message: 'Screening & interview scheduled successfully',
+                data: { application }
+            };
+
+        } catch (error) {
+            this.logger.error('Error scheduling screening:', error.message);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to schedule screening',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Patch(':id/admission-decision')
+    @ApiOperation({ summary: 'Make admission decision for an application' })
+    @ApiResponse({ status: 200, description: 'Admission decision made successfully' })
+    async makeAdmissionDecision(
+        @Param('id') id: string,
+        @Body() decisionData: {
+            decision: 'admitted' | 'rejected';
+            reason?: string;
+            admissionLetterUrl?: string;
+        }
+    ) {
+        try {
+            this.logger.log('Making admission decision for application:', { id, decisionData });
+
+            const application = await this.applicationModel.findById(id)
+                .populate('userId', 'firstName lastName email')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            // Update application with admission decision using correct enum
+            const decisionMapping = {
+                'admitted': AdmissionDecision.GRANTED,
+                'rejected': AdmissionDecision.DENIED
+            };
+
+            application.admissionDecision = decisionMapping[decisionData.decision];
+            if (decisionData.reason) {
+                application.rejectionReason = decisionData.reason;
+            }
+            if (decisionData.admissionLetterUrl) {
+                application.admissionLetter = decisionData.admissionLetterUrl;
+            }
+
+            if (decisionData.decision === 'admitted') {
+                application.status = ApplicationStatus.ADMITTED;
+                application.currentStage = 7; // Move to acceptance fee stage
+                application.admissionDate = new Date();
+            } else {
+                application.status = ApplicationStatus.REJECTED;
+                application.currentStage = 6; // Stay at admission decision stage but mark as rejected
+            }
+
+            await application.save();
+
+            // Send appropriate email based on decision
+            if (decisionData.decision === 'admitted') {
+                await this.emailService.sendAdmissionLetterEmail(
+                    (application.userId as any).email,
+                    (application.userId as any).firstName,
+                    decisionData.admissionLetterUrl
+                );
+            } else {
+                await this.emailService.sendRejectionEmail(
+                    (application.userId as any).email,
+                    (application.userId as any).firstName,
+                    decisionData.reason
+                );
+            }
+
+            this.logger.log('Admission decision made successfully for application:', id);
+
+            return {
+                success: true,
+                message: `Application ${decisionData.decision} successfully`,
+                data: { application }
+            };
+
+        } catch (error) {
+            this.logger.error('Error making admission decision:', error.message);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to make admission decision',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Patch(':id/exam-score')
+    @ApiOperation({ summary: 'Update entrance exam score' })
+    @ApiResponse({ status: 200, description: 'Exam score updated successfully' })
+    async updateExamScore(
+        @Param('id') id: string,
+        @Body() scoreData: {
+            score: number;
+            passed: boolean;
+        }
+    ) {
+        try {
+            this.logger.log('Updating exam score for application:', { id, scoreData });
+
+            const application = await this.applicationModel.findById(id);
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            // Update exam score using grouped structure
+            if (!application.entranceExam) {
+                throw new HttpException(
+                    { success: false, message: 'Entrance exam not scheduled yet' },
+                    HttpStatus.BAD_REQUEST
+                );
+            }
+
+            application.entranceExam.score = scoreData.score;
+
+            if (scoreData.passed) {
+                application.currentStage = 5; // Move to screening stage if passed
+            } else {
+                application.status = ApplicationStatus.REJECTED;
+                application.admissionDecision = AdmissionDecision.DENIED;
+                application.rejectionReason = 'Failed entrance examination';
+            }
+
+            await application.save();
+
+            this.logger.log('Exam score updated successfully for application:', id);
+
+            return {
+                success: true,
+                message: 'Exam score updated successfully',
+                data: { application }
+            };
+
+        } catch (error) {
+            this.logger.error('Error updating exam score:', error.message);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to update exam score',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Patch(':id/complete-screening')
+    @ApiOperation({ summary: 'Mark screening as completed' })
+    @ApiResponse({ status: 200, description: 'Screening marked as completed' })
+    async completeScreening(@Param('id') id: string) {
+        try {
+            this.logger.log('Marking screening as completed for application:', id);
+
+            const application = await this.applicationModel.findById(id);
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            // Update screening completion status using grouped structure
+            if (!application.screening) {
+                application.screening = { completed: true };
+            } else {
+                application.screening.completed = true;
+            }
+            application.currentStage = 6; // Move to admission decision stage
+            await application.save();
+
+            this.logger.log('Screening marked as completed for application:', id);
+
+            return {
+                success: true,
+                message: 'Screening marked as completed',
+                data: { application }
+            };
+
+        } catch (error) {
+            this.logger.error('Error completing screening:', error.message);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to complete screening',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Patch(':id/generate-matric')
+    @ApiOperation({ summary: 'Generate matriculation number and complete application' })
+    @ApiResponse({ status: 200, description: 'Matriculation number generated successfully' })
+    async generateMatriculationNumber(@Param('id') id: string) {
+        try {
+            this.logger.log('Generating matriculation number for application:', id);
+
+            const application = await this.applicationModel.findById(id)
+                .populate(['userId', 'programId'])
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            // Generate matriculation number (would need MatriculationService and StudentService)
+            const currentYear = new Date().getFullYear();
+            const yearSuffix = currentYear.toString().slice(-2);
+            const programCode = '01'; // This should come from program data
+            const sequence = String(Date.now() % 10000).padStart(4, '0'); // Temporary sequence
+
+            const matriculationNumber = `ALC/${yearSuffix}/${programCode}-${sequence}`;
+
+            // Update application
+            application.matriculationNumber = matriculationNumber;
+            application.status = ApplicationStatus.COMPLETED;
+            application.currentStage = 10; // Final stage
+            await application.save();
+
+            // Create student record (would need Student model injection)
+            // const student = new this.studentModel({
+            //     userId: application.userId,
+            //     applicationId: application._id,
+            //     matriculationNumber,
+            //     programId: application.programId,
+            //     programTypeId: application.programTypeId,
+            //     programModeId: application.programModeId,
+            //     admissionYear: currentYear,
+            //     academicSession: `${currentYear}/${currentYear + 1}`,
+            //     status: 'active'
+            // });
+            // await student.save();
+
+            // Update user role to student
+            // await this.userModel.findByIdAndUpdate(application.userId, { role: 'student' });
+
+            // Send matriculation email
+            // await this.emailService.sendMatriculationEmail(
+            //     application.userId.email,
+            //     application.userId.firstName,
+            //     matriculationNumber,
+            //     process.env.STUDENT_PORTAL_URL
+            // );
+
+            this.logger.log('Matriculation number generated successfully:', matriculationNumber);
+
+            return {
+                success: true,
+                message: 'Matriculation number generated successfully',
+                data: {
+                    application,
+                    matriculationNumber
+                }
+            };
+
+        } catch (error) {
+            this.logger.error('Error generating matriculation number:', error.message);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to generate matriculation number',
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR

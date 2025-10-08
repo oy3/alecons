@@ -28,6 +28,12 @@ export default {
           permissions: ['staff', 'admin', 'applications:manage']
         },
         {
+          title: 'Academics',
+          icon: 'bi-mortarboard',
+          route: '/academics',
+          permissions: ['staff', 'admin', 'academics:manage']
+        },
+        {
           title: 'Users',
           icon: 'bi-people',
           route: '/users',

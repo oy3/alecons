@@ -38,6 +38,12 @@ const routes = [
         meta: { requiresAuth: true, permissions: ['staff', 'admin', 'applications:manage'] }
     },
     {
+        path: '/academics',
+        name: 'Academics',
+        component: () => import('../views/academics/Academics.vue'),
+        meta: { requiresAuth: true, permissions: ['staff', 'admin', 'academics:manage'] }
+    },
+    {
         path: '/users',
         name: 'Users',
         component: () => import('../views/users/Users.vue'),

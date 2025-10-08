@@ -311,6 +311,46 @@ class StaffApiService {
             body: JSON.stringify(controlsData),
         })
     }
+
+    // Department Management
+    async getDepartments(filters = {}) {
+        const queryParams = new URLSearchParams(filters).toString()
+        return this.makeRequest(`/departments${queryParams ? `?${queryParams}` : ''}`)
+    }
+
+    async getDepartment(id) {
+        return this.makeRequest(`/departments/${id}`)
+    }
+
+    async getActiveDepartments() {
+        return this.makeRequest('/departments/active')
+    }
+
+    async createDepartment(departmentData) {
+        return this.makeRequest('/departments', {
+            method: 'POST',
+            body: JSON.stringify(departmentData),
+        })
+    }
+
+    async updateDepartment(id, departmentData) {
+        return this.makeRequest(`/departments/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(departmentData),
+        })
+    }
+
+    async deleteDepartment(id) {
+        return this.makeRequest(`/departments/${id}`, {
+            method: 'DELETE',
+        })
+    }
+
+    async toggleDepartmentStatus(id) {
+        return this.makeRequest(`/departments/${id}/toggle-status`, {
+            method: 'PATCH',
+        })
+    }
 }
 
 export const apiService = new StaffApiService()

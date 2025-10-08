@@ -1,3 +1,358 @@
+
+<script>
+import { apiService } from '../../../services/api.js'
+import { logger } from '@shared/utils/logger'
+
+export default {
+  name: 'Departments',
+  data() {
+    return {
+      departments: [],
+      isLoading: true,
+      searchQuery: '',
+      searchTimeout: null,
+      currentPage: 1,
+      perPage: 10,
+      totalDepartments: 0,
+      apiTotalPages: 0
+    }
+  },
+  computed: {
+    filteredDepartments() {
+      return this.departments
+    },
+
+    paginatedDepartments() {
+      return this.departments
+    },
+
+    totalPages() {
+      const calculated = Math.ceil(this.totalDepartments / this.perPage)
+      return this.apiTotalPages || Math.max(1, calculated)
+    }
+  },
+  watch: {
+    searchQuery() {
+      this.currentPage = 1
+      this.debouncedLoadDepartments()
+    },
+    currentPage() {
+      this.loadDepartments()
+    }
+  },
+  async mounted() {
+    await this.loadDepartments()
+  },
+  methods: {
+    debouncedLoadDepartments() {
+      clearTimeout(this.searchTimeout)
+      this.searchTimeout = setTimeout(() => {
+        this.loadDepartments()
+      }, 500)
+    },
+
+    async loadDepartments() {
+      try {
+        this.isLoading = true
+        logger.info('Loading departments...')
+
+        const params = {
+          page: this.currentPage,
+          limit: this.perPage,
+          sortBy: 'createdAt',
+          sortOrder: 'desc'
+        }
+
+        if (this.searchQuery && this.searchQuery.trim()) {
+          params.search = this.searchQuery.trim()
+        }
+
+        const response = await apiService.getDepartments(params)
+
+        if (response.success) {
+          this.departments = response.data.departments.map(dept => ({
+            id: dept._id,
+            code: dept.code,
+            name: dept.name,
+            description: dept.description || '',
+            isActive: dept.active,
+            programsCount: 0, // TODO: Get actual programs count
+            createdAt: dept.createdAt,
+            updatedAt: dept.updatedAt
+          }))
+
+          this.totalDepartments = response.data.pagination.totalItems
+          this.currentPage = response.data.pagination.currentPage
+          this.apiTotalPages = response.data.pagination.totalPages
+
+          logger.info('Departments loaded successfully', { 
+            count: this.departments.length,
+            total: this.totalDepartments 
+          })
+        } else {
+          throw new Error(response.message || 'Failed to load departments')
+        }
+      } catch (error) {
+        logger.error('Failed to load departments:', error)
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: error.message || 'Failed to load departments',
+          confirmButtonColor: '#1a5f5f'
+        })
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    async showAddDepartmentModal() {
+      const { value: formValues } = await this.$swal.fire({
+        title: 'Add New Department',
+        html: `
+          <div class="row g-3 text-start">
+            <div class="col-12">
+              <label class="form-label">Department Code</label>
+              <input id="departmentCode" class="form-control" placeholder="e.g., NUR" maxlength="3">
+              <small class="text-muted">Maximum 3 characters</small>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Department Name</label>
+              <input id="departmentName" class="form-control" placeholder="e.g., Nursing Sciences">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Description (Optional)</label>
+              <textarea id="description" class="form-control" placeholder="Department description..." rows="3"></textarea>
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="isActive" checked>
+                <label class="form-check-label" for="isActive">Active Department</label>
+              </div>
+            </div>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Add Department',
+        confirmButtonColor: '#1a5f5f',
+        preConfirm: () => {
+          const departmentCode = document.getElementById('departmentCode').value.trim()
+          const departmentName = document.getElementById('departmentName').value.trim()
+          const description = document.getElementById('description').value.trim()
+          const isActive = document.getElementById('isActive').checked
+
+          if (!departmentCode || !departmentName) {
+            this.$swal.showValidationMessage('Please fill in all required fields')
+            return false
+          }
+
+          if (departmentCode.length < 2 || departmentCode.length > 3) {
+            this.$swal.showValidationMessage('Department code must be 2-3 characters')
+            return false
+          }
+
+          // Check if code already exists
+          if (this.departments.some(dept => dept.code.toLowerCase() === departmentCode.toLowerCase())) {
+            this.$swal.showValidationMessage('Department code already exists')
+            return false
+          }
+
+          return {
+            code: departmentCode.toUpperCase(),
+            name: departmentName,
+            description: description || undefined,
+            active: isActive
+          }
+        }
+      })
+
+      if (formValues) {
+        await this.addDepartment(formValues)
+      }
+    },
+
+    async addDepartment(departmentData) {
+      try {
+        logger.info('Adding new department:', departmentData)
+
+        const response = await apiService.createDepartment(departmentData)
+
+        if (response.success) {
+          this.$swal.fire({
+            icon: 'success',
+            title: 'Success',
+            text: 'Department added successfully',
+            timer: 2000,
+            showConfirmButton: false
+          })
+
+          await this.loadDepartments()
+          this.$emit('refresh')
+        } else {
+          throw new Error(response.message)
+        }
+      } catch (error) {
+        logger.error('Failed to add department:', error)
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: error.message || 'Failed to add department',
+          confirmButtonColor: '#1a5f5f'
+        })
+      }
+    },
+
+    async editDepartment(department) {
+      const { value: formValues } = await this.$swal.fire({
+        title: 'Edit Department',
+        html: `
+          <div class="row g-3 text-start">
+            <div class="col-12">
+              <label class="form-label">Department Code</label>
+              <input id="departmentCode" class="form-control" value="${department.code}" maxlength="3">
+              <small class="text-muted">Maximum 3 characters</small>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Department Name</label>
+              <input id="departmentName" class="form-control" value="${department.name}">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Description (Optional)</label>
+              <textarea id="description" class="form-control" rows="3">${department.description || ''}</textarea>
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="isActive" ${department.isActive ? 'checked' : ''}>
+                <label class="form-check-label" for="isActive">Active Department</label>
+              </div>
+            </div>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Update Department',
+        confirmButtonColor: '#1a5f5f',
+        preConfirm: () => {
+          const departmentCode = document.getElementById('departmentCode').value.trim()
+          const departmentName = document.getElementById('departmentName').value.trim()
+          const description = document.getElementById('description').value.trim()
+          const isActive = document.getElementById('isActive').checked
+
+          if (!departmentCode || !departmentName) {
+            this.$swal.showValidationMessage('Please fill in all required fields')
+            return false
+          }
+
+          if (departmentCode.length < 2 || departmentCode.length > 3) {
+            this.$swal.showValidationMessage('Department code must be 2-3 characters')
+            return false
+          }
+
+          // Check if code already exists (excluding current department)
+          if (this.departments.some(dept => dept.id !== department.id && dept.code.toLowerCase() === departmentCode.toLowerCase())) {
+            this.$swal.showValidationMessage('Department code already exists')
+            return false
+          }
+
+          return {
+            code: departmentCode.toUpperCase(),
+            name: departmentName,
+            description: description || undefined,
+            active: isActive
+          }
+        }
+      })
+
+      if (formValues) {
+        await this.updateDepartment(department.id, formValues)
+      }
+    },
+
+    async updateDepartment(departmentId, departmentData) {
+      try {
+        logger.info('Updating department:', { departmentId, departmentData })
+
+        const response = await apiService.updateDepartment(departmentId, departmentData)
+
+        if (response.success) {
+          this.$swal.fire({
+            icon: 'success',
+            title: 'Success',
+            text: 'Department updated successfully',
+            timer: 2000,
+            showConfirmButton: false
+          })
+
+          await this.loadDepartments()
+          this.$emit('refresh')
+        } else {
+          throw new Error(response.message)
+        }
+      } catch (error) {
+        logger.error('Failed to update department:', error)
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: error.message || 'Failed to update department',
+          confirmButtonColor: '#1a5f5f'
+        })
+      }
+    },
+
+    async deleteDepartment(department) {
+      if (department.programsCount > 0) {
+        this.$swal.fire({
+          icon: 'warning',
+          title: 'Cannot Delete',
+          text: `This department has ${department.programsCount} programs. Please remove or reassign programs before deleting.`,
+          confirmButtonColor: '#1a5f5f'
+        })
+        return
+      }
+
+      const result = await this.$swal.fire({
+        title: 'Delete Department',
+        text: `Are you sure you want to delete "${department.name}"? This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Yes, delete it!'
+      })
+
+      if (result.isConfirmed) {
+        try {
+          logger.info('Deleting department:', department.id)
+
+          const response = await apiService.deleteDepartment(department.id)
+
+          if (response.success) {
+            this.$swal.fire({
+              icon: 'success',
+              title: 'Deleted!',
+              text: 'Department has been deleted.',
+              timer: 2000,
+              showConfirmButton: false
+            })
+
+            await this.loadDepartments()
+            this.$emit('refresh')
+          } else {
+            throw new Error(response.message)
+          }
+        } catch (error) {
+          logger.error('Failed to delete department:', error)
+          this.$swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message || 'Failed to delete department',
+            confirmButtonColor: '#1a5f5f'
+          })
+        }
+      }
+    }
+  }
+}
+</script>
+
 <template>
   <div>
     <!-- Search and Add Button -->
@@ -76,7 +431,6 @@
                     </td>
                     <td>
                       <div class="fw-medium">{{ department.name }}</div>
-                      <small class="text-muted">{{ department.shortName }}</small>
                     </td>
                     <td>
                       <span class="text-muted">{{ department.description || 'No description' }}</span>
@@ -143,12 +497,12 @@
                 </li>
                 <li
                   class="page-item"
-                  :class="{ disabled: currentPage === totalPages }"
+                  :class="{ disabled: currentPage >= totalPages || departments.length === 0 }"
                 >
                   <button
                     class="page-link"
                     @click="currentPage = currentPage + 1"
-                    :disabled="currentPage === totalPages"
+                    :disabled="currentPage >= totalPages || departments.length === 0"
                   >
                     Next
                   </button>
@@ -161,368 +515,6 @@
     </div>
   </div>
 </template>
-
-<script>
-import { apiService } from '../../../services/api.js'
-import { logger } from '@shared/utils/logger'
-
-export default {
-  name: 'Departments',
-  data() {
-    return {
-      departments: [],
-      isLoading: true,
-      searchQuery: '',
-      currentPage: 1,
-      perPage: 10
-    }
-  },
-  computed: {
-    filteredDepartments() {
-      if (!this.searchQuery) return this.departments
-
-      return this.departments.filter(department =>
-        department.code.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        department.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        (department.description && department.description.toLowerCase().includes(this.searchQuery.toLowerCase()))
-      )
-    },
-
-    paginatedDepartments() {
-      const start = (this.currentPage - 1) * this.perPage
-      const end = start + this.perPage
-      return this.filteredDepartments.slice(start, end)
-    },
-
-    totalPages() {
-      return Math.ceil(this.filteredDepartments.length / this.perPage)
-    }
-  },
-  watch: {
-    searchQuery() {
-      this.currentPage = 1
-    }
-  },
-  async mounted() {
-    await this.loadDepartments()
-  },
-  methods: {
-    async loadDepartments() {
-      try {
-        this.isLoading = true
-        logger.info('Loading departments...')
-
-        // Mock data for now - replace with actual API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        this.departments = [
-          {
-            id: '1',
-            code: 'NURS',
-            name: 'Nursing Sciences',
-            shortName: 'Nursing',
-            description: 'Department of Nursing Sciences and Clinical Practice',
-            isActive: true,
-            programsCount: 3
-          },
-          {
-            id: '2',
-            code: 'MIDW',
-            name: 'Midwifery',
-            shortName: 'Midwifery',
-            description: 'Department of Midwifery and Maternal Health',
-            isActive: true,
-            programsCount: 2
-          },
-          {
-            id: '3',
-            code: 'PUBH',
-            name: 'Public Health',
-            shortName: 'Public Health',
-            description: 'Department of Community and Public Health',
-            isActive: true,
-            programsCount: 1
-          },
-          {
-            id: '4',
-            code: 'PHTH',
-            name: 'Physiotherapy',
-            shortName: 'Physiotherapy',
-            description: 'Department of Physiotherapy and Rehabilitation',
-            isActive: false,
-            programsCount: 0
-          }
-        ]
-
-        logger.info('Departments loaded successfully', { count: this.departments.length })
-      } catch (error) {
-        logger.error('Failed to load departments:', error)
-        this.$swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to load departments',
-          confirmButtonColor: '#1a5f5f'
-        })
-      } finally {
-        this.isLoading = false
-      }
-    },
-
-    async showAddDepartmentModal() {
-      const { value: formValues } = await this.$swal.fire({
-        title: 'Add New Department',
-        html: `
-          <div class="row g-3">
-            <div class="col-12">
-              <label class="form-label text-start d-block">Department Code</label>
-              <input id="departmentCode" class="swal2-input" placeholder="e.g., NURS" maxlength="10">
-            </div>
-            <div class="col-12">
-              <label class="form-label text-start d-block">Department Name</label>
-              <input id="departmentName" class="swal2-input" placeholder="e.g., Nursing Sciences">
-            </div>
-            <div class="col-12">
-              <label class="form-label text-start d-block">Short Name</label>
-              <input id="shortName" class="swal2-input" placeholder="e.g., Nursing">
-            </div>
-            <div class="col-12">
-              <label class="form-label text-start d-block">Description</label>
-              <textarea id="description" class="swal2-textarea" placeholder="Department description..."></textarea>
-            </div>
-            <div class="col-12">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="isActive" checked>
-                <label class="form-check-label" for="isActive">Active Department</label>
-              </div>
-            </div>
-          </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: 'Add Department',
-        confirmButtonColor: '#1a5f5f',
-        preConfirm: () => {
-          const departmentCode = document.getElementById('departmentCode').value
-          const departmentName = document.getElementById('departmentName').value
-          const shortName = document.getElementById('shortName').value
-          const description = document.getElementById('description').value
-          const isActive = document.getElementById('isActive').checked
-
-          if (!departmentCode || !departmentName) {
-            this.$swal.showValidationMessage('Please fill in all required fields')
-            return false
-          }
-
-          // Check if code already exists
-          if (this.departments.some(dept => dept.code.toLowerCase() === departmentCode.toLowerCase())) {
-            this.$swal.showValidationMessage('Department code already exists')
-            return false
-          }
-
-          return {
-            departmentCode: departmentCode.toUpperCase(),
-            departmentName,
-            shortName,
-            description,
-            isActive
-          }
-        }
-      })
-
-      if (formValues) {
-        await this.addDepartment(formValues)
-      }
-    },
-
-    async addDepartment(departmentData) {
-      try {
-        logger.info('Adding new department:', departmentData)
-
-        // Mock API call - replace with actual implementation
-        const newDepartment = {
-          id: Date.now().toString(),
-          code: departmentData.departmentCode,
-          name: departmentData.departmentName,
-          shortName: departmentData.shortName,
-          description: departmentData.description,
-          isActive: departmentData.isActive,
-          programsCount: 0
-        }
-
-        this.departments.unshift(newDepartment)
-
-        this.$swal.fire({
-          icon: 'success',
-          title: 'Success',
-          text: 'Department added successfully',
-          timer: 2000,
-          showConfirmButton: false
-        })
-
-        this.$emit('refresh')
-      } catch (error) {
-        logger.error('Failed to add department:', error)
-        this.$swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to add department',
-          confirmButtonColor: '#1a5f5f'
-        })
-      }
-    },
-
-    async editDepartment(department) {
-      const { value: formValues } = await this.$swal.fire({
-        title: 'Edit Department',
-        html: `
-          <div class="row g-3">
-            <div class="col-12">
-              <label class="form-label text-start d-block">Department Code</label>
-              <input id="departmentCode" class="swal2-input" value="${department.code}" maxlength="10">
-            </div>
-            <div class="col-12">
-              <label class="form-label text-start d-block">Department Name</label>
-              <input id="departmentName" class="swal2-input" value="${department.name}">
-            </div>
-            <div class="col-12">
-              <label class="form-label text-start d-block">Short Name</label>
-              <input id="shortName" class="swal2-input" value="${department.shortName || ''}">
-            </div>
-            <div class="col-12">
-              <label class="form-label text-start d-block">Description</label>
-              <textarea id="description" class="swal2-textarea">${department.description || ''}</textarea>
-            </div>
-            <div class="col-12">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="isActive" ${department.isActive ? 'checked' : ''}>
-                <label class="form-check-label" for="isActive">Active Department</label>
-              </div>
-            </div>
-          </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: 'Update Department',
-        confirmButtonColor: '#1a5f5f',
-        preConfirm: () => {
-          const departmentCode = document.getElementById('departmentCode').value
-          const departmentName = document.getElementById('departmentName').value
-          const shortName = document.getElementById('shortName').value
-          const description = document.getElementById('description').value
-          const isActive = document.getElementById('isActive').checked
-
-          if (!departmentCode || !departmentName) {
-            this.$swal.showValidationMessage('Please fill in all required fields')
-            return false
-          }
-
-          // Check if code already exists (excluding current department)
-          if (this.departments.some(dept => dept.id !== department.id && dept.code.toLowerCase() === departmentCode.toLowerCase())) {
-            this.$swal.showValidationMessage('Department code already exists')
-            return false
-          }
-
-          return {
-            departmentCode: departmentCode.toUpperCase(),
-            departmentName,
-            shortName,
-            description,
-            isActive
-          }
-        }
-      })
-
-      if (formValues) {
-        await this.updateDepartment(department.id, formValues)
-      }
-    },
-
-    async updateDepartment(departmentId, departmentData) {
-      try {
-        logger.info('Updating department:', { departmentId, departmentData })
-
-        // Mock API call - replace with actual implementation
-        const departmentIndex = this.departments.findIndex(d => d.id === departmentId)
-        if (departmentIndex !== -1) {
-          this.departments[departmentIndex] = {
-            ...this.departments[departmentIndex],
-            code: departmentData.departmentCode,
-            name: departmentData.departmentName,
-            shortName: departmentData.shortName,
-            description: departmentData.description,
-            isActive: departmentData.isActive
-          }
-        }
-
-        this.$swal.fire({
-          icon: 'success',
-          title: 'Success',
-          text: 'Department updated successfully',
-          timer: 2000,
-          showConfirmButton: false
-        })
-
-        this.$emit('refresh')
-      } catch (error) {
-        logger.error('Failed to update department:', error)
-        this.$swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to update department',
-          confirmButtonColor: '#1a5f5f'
-        })
-      }
-    },
-
-    async deleteDepartment(department) {
-      if (department.programsCount > 0) {
-        this.$swal.fire({
-          icon: 'warning',
-          title: 'Cannot Delete',
-          text: `This department has ${department.programsCount} programs. Please remove or reassign programs before deleting.`,
-          confirmButtonColor: '#1a5f5f'
-        })
-        return
-      }
-
-      const result = await this.$swal.fire({
-        title: 'Delete Department',
-        text: `Are you sure you want to delete "${department.name}"? This action cannot be undone.`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Yes, delete it!'
-      })
-
-      if (result.isConfirmed) {
-        try {
-          logger.info('Deleting department:', department.id)
-
-          // Mock API call - replace with actual implementation
-          this.departments = this.departments.filter(d => d.id !== department.id)
-
-          this.$swal.fire({
-            icon: 'success',
-            title: 'Deleted!',
-            text: 'Department has been deleted.',
-            timer: 2000,
-            showConfirmButton: false
-          })
-
-          this.$emit('refresh')
-        } catch (error) {
-          logger.error('Failed to delete department:', error)
-          this.$swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Failed to delete department',
-            confirmButtonColor: '#1a5f5f'
-          })
-        }
-      }
-    }
-  }
-}
-</script>
 
 <style scoped>
 .table th {

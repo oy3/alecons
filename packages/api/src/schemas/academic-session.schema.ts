@@ -24,9 +24,6 @@ export class AcademicSession {
     @Prop({ required: true, enum: SessionStatus, default: SessionStatus.DRAFT })
     status: SessionStatus;
 
-    @Prop({ default: false })
-    applicationsOpen: boolean;
-
     @Prop()
     description?: string;
 

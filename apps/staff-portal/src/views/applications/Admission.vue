@@ -72,7 +72,7 @@ export default {
       examScoreModal: null,
       admissionDecisionModal: null,
       applicationDetailsModal: null,
-      
+
       // Application details
       selectedApplicationDetails: null,
       detailsLoading: false,
@@ -84,12 +84,16 @@ export default {
     },
 
     totalPages() {
-      return (
-        this.apiTotalPages || Math.ceil(this.totalApplications / this.perPage)
-      );
+      const calculated = Math.ceil(this.totalApplications / this.perPage);
+      return this.apiTotalPages || Math.max(1, calculated);
     },
 
     visiblePages() {
+      // Handle edge case where there are no pages or only 1 page
+      if (this.totalPages <= 1) {
+        return [1];
+      }
+
       const delta = 2;
       const range = [];
       const rangeWithDots = [];
@@ -112,7 +116,7 @@ export default {
 
       if (this.currentPage + delta < this.totalPages - 1) {
         rangeWithDots.push("...", this.totalPages);
-      } else {
+      } else if (this.totalPages > 1) {
         rangeWithDots.push(this.totalPages);
       }
 
@@ -177,7 +181,7 @@ export default {
         this.applicationDetailsModal = new Modal(
           document.getElementById("applicationDetailsModal")
         );
-        
+
         // Initialize dropdowns
         this.initializeDropdowns();
       });
@@ -204,7 +208,7 @@ export default {
             // Create new dropdown instance
             new Dropdown(dropdownToggleEl);
           });
-          
+
           logger.info('Dropdowns initialized successfully', { count: dropdownElementList.length });
         } catch (error) {
           logger.error('Failed to initialize dropdowns:', error);
@@ -217,10 +221,10 @@ export default {
       try {
         event.preventDefault();
         event.stopPropagation();
-        
+
         const dropdownToggle = event.currentTarget;
         console.log('Dropdown toggle clicked:', dropdownToggle);
-        
+
         // Try using Bootstrap's Dropdown class
         if (typeof Dropdown !== 'undefined') {
           const dropdown = Dropdown.getOrCreateInstance(dropdownToggle);
@@ -337,7 +341,7 @@ export default {
         this.detailsLoading = true;
         this.selectedApplicationDetails = null;
         this.applicationDetailsModal.show();
-        
+
         const response = await apiService.getApplication(application.id);
 
         if (response.success) {
@@ -594,10 +598,7 @@ export default {
               Review and manage student applications
             </p>
           </div>
-          <button
-            class="btn btn-staff-primary btn-sm"
-            @click="loadApplications"
-          >
+          <button class="btn btn-staff-primary btn-sm" @click="loadApplications">
             <i class="bi bi-arrow-clockwise me-2"></i>Refresh
           </button>
         </div>
@@ -612,34 +613,20 @@ export default {
             <div class="row g-3">
               <div class="col-md-4">
                 <label class="form-label">Program Filter</label>
-                <select
-                  v-model="programFilter"
-                  class="form-select form-select-sm"
-                >
+                <select v-model="programFilter" class="form-select form-select-sm">
                   <option value="all">All Programs</option>
-                  <option
-                    v-for="program in programs"
-                    :key="program"
-                    :value="program"
-                  >
+                  <option v-for="program in programs" :key="program" :value="program">
                     {{ program }}
                   </option>
                 </select>
               </div>
               <div class="col-md-6">
                 <label class="form-label">Search</label>
-                <input
-                  v-model="searchQuery"
-                  type="text"
-                  class="form-control form-control-sm"
-                  placeholder="Search by name, email, or application number..."
-                />
+                <input v-model="searchQuery" type="text" class="form-control form-control-sm"
+                  placeholder="Search by name, email, or application number..." />
               </div>
               <div class="col-md-2 d-flex align-items-end">
-                <button
-                  class="btn btn-outline-staff-primary btn-sm w-100"
-                  @click="searchApplications"
-                >
+                <button class="btn btn-outline-staff-primary btn-sm w-100" @click="searchApplications">
                   <i class="bi bi-search me-1"></i>
                   Search
                 </button>
@@ -672,313 +659,224 @@ export default {
     </div>
 
     <!-- Applications Table -->
-    <div v-else class="table-responsive">
-      <table class="table table-hover mb-0">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Applicant</th>
-            <th>Program</th>
-            <th>Current Stage</th>
-            <th>Status</th>
-            <th>Exam Status</th>
-            <th>Screening Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="application in paginatedApplications"
-            :key="application.id"
-          >
-            <td>
-              <strong>{{ application.applicationNumber }}</strong>
-            </td>
-            <td>
-              <div class="d-flex align-items-center">
-                <img
-                  :src="
-                    application.profileImageUrl || 'https://placehold.co/40'
-                  "
-                  class="rounded-circle me-2"
-                  width="40"
-                  height="40"
-                  alt="Profile"
-                />
-                <div>
-                  <div class="fw-semibold">{{ application.applicantName }}</div>
-                  <small class="text-muted">{{ application.email }}</small>
-                </div>
-              </div>
-            </td>
-            <td>{{ application.programName }}</td>
-            <td>
-              <span class="badge bg-info">
-                {{
-                  application.currentStage
-                    ? `Stage ${application.currentStage} - ${getStageName(
-                        application.currentStage
-                      )}`
-                    : "N/A"
-                }}
-              </span>
-            </td>
-            <td>
-              <span :class="getStatusBadgeClass(application.status)">
-                {{ application.status.toUpperCase() }}
-              </span>
-            </td>
-            <td>
-              <div v-if="application.entranceExam">
-                <small class="text-success">
-                  <i class="bi bi-check-circle me-1"></i>
-                  Scheduled
-                </small>
-                <div
-                  v-if="application.entranceExam.score !== undefined"
-                  class="small"
-                >
-                  Score: {{ application.entranceExam.score }}
-                </div>
-              </div>
-              <small v-else class="text-muted">Not Scheduled</small>
-            </td>
-            <td>
-              <div v-if="application.screening">
-                <small class="text-success">
-                  <i class="bi bi-check-circle me-1"></i>
-                  Scheduled
-                </small>
-                <div
-                  v-if="application.screening.completed"
-                  class="small text-primary"
-                >
-                  Completed
-                </div>
-              </div>
-              <small v-else class="text-muted">Not Scheduled</small>
-            </td>
-            <td>
-              <div class="dropdown">
-                <button
-                  :id="`dropdownMenuButton-${application.id}`"
-                  type="button"
-                  class="btn btn-outline-primary btn-sm dropdown-toggle"
-                  data-bs-toggle="dropdown"
-                  aria-expanded="false"
-                  aria-haspopup="true"
-                  @click="toggleDropdown"
-                >
-                  Actions
-                </button>
-                <ul class="dropdown-menu" :aria-labelledby="`dropdownMenuButton-${application.id}`">
-                  <li>
-                    <a
-                      class="dropdown-item"
-                      href="#"
-                      @click.prevent="viewApplication(application)"
-                    >
-                      <i class="bi bi-eye me-2"></i>View Details
-                    </a>
-                  </li>
-                  <li v-if="!application.entranceExam">
-                    <a
-                      class="dropdown-item"
-                      href="#"
-                      @click.prevent="scheduleExam(application)"
-                    >
-                      <i class="bi bi-calendar-plus me-2"></i>Schedule Exam
-                    </a>
-                  </li>
-                  <li
-                    v-if="
-                      application.entranceExam &&
-                      application.entranceExam.score === undefined
-                    "
-                  >
-                    <a
-                      class="dropdown-item"
-                      href="#"
-                      @click.prevent="inputExamScore(application)"
-                    >
-                      <i class="bi bi-pencil-square me-2"></i>Input Exam Score
-                    </a>
-                  </li>
-                  <li
-                    v-if="
-                      application.entranceExam &&
-                      application.entranceExam.score !== undefined &&
-                      !application.screening
-                    "
-                  >
-                    <a
-                      class="dropdown-item"
-                      href="#"
-                      @click.prevent="scheduleScreening(application)"
-                    >
-                      <i class="bi bi-calendar-check me-2"></i>Schedule
-                      Screening
-                    </a>
-                  </li>
-                  <li
-                    v-if="
-                      application.screening && !application.screening.completed
-                    "
-                  >
-                    <a
-                      class="dropdown-item"
-                      href="#"
-                      @click.prevent="completeScreening(application)"
-                    >
-                      <i class="bi bi-check-circle me-2"></i>Mark Screening
-                      Complete
-                    </a>
-                  </li>
-                  <li
-                    v-if="
-                      application.screening &&
-                      application.screening.completed &&
-                      !application.admissionDecision
-                    "
-                  >
-                    <a
-                      class="dropdown-item"
-                      href="#"
-                      @click.prevent="makeAdmissionDecision(application)"
-                    >
-                      <i class="bi bi-award me-2"></i>Make Admission Decision
-                    </a>
-                  </li>
-                </ul>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-else class="row">
+      <div class="col-12">
+        <div class="card rounded-3 border-0 p-0 shadow-sm">
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Applicant</th>
+                    <th>Program</th>
+                    <th>Current Stage</th>
+                    <th>Status</th>
+                    <th>Exam Status</th>
+                    <th>Screening Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="application in paginatedApplications" :key="application.id">
+                    <td>
+                      <strong>{{ application.applicationNumber }}</strong>
+                    </td>
+                    <td>
+                      <div class="d-flex align-items-center">
+                        <img :src="application.profileImageUrl || 'https://placehold.co/40'
+                          " class="rounded-circle me-2" width="40" height="40" alt="Profile" />
+                        <div>
+                          <div class="fw-semibold">{{ application.applicantName }}</div>
+                          <small class="text-muted">{{ application.email }}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>{{ application.programName }}</td>
+                    <td>
+                      <span class="badge bg-info">
+                        {{
+                          application.currentStage
+                            ? `Stage ${application.currentStage} - ${getStageName(
+                              application.currentStage
+                            )}`
+                            : "N/A"
+                        }}
+                      </span>
+                    </td>
+                    <td>
+                      <span :class="getStatusBadgeClass(application.status)">
+                        {{ application.status.toUpperCase() }}
+                      </span>
+                    </td>
+                    <td>
+                      <div v-if="application.entranceExam">
+                        <small class="text-success">
+                          <i class="bi bi-check-circle me-1"></i>
+                          Scheduled
+                        </small>
+                        <div v-if="application.entranceExam.score !== undefined" class="small">
+                          Score: {{ application.entranceExam.score }}
+                        </div>
+                      </div>
+                      <small v-else class="text-muted">Not Scheduled</small>
+                    </td>
+                    <td>
+                      <div v-if="application.screening">
+                        <small class="text-success">
+                          <i class="bi bi-check-circle me-1"></i>
+                          Scheduled
+                        </small>
+                        <div v-if="application.screening.completed" class="small text-primary">
+                          Completed
+                        </div>
+                      </div>
+                      <small v-else class="text-muted">Not Scheduled</small>
+                    </td>
+                    <td>
+                      <div class="dropdown">
+                        <button :id="`dropdownMenuButton-${application.id}`" type="button"
+                          class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown"
+                          aria-expanded="false" aria-haspopup="true" @click="toggleDropdown">
+                          Actions
+                        </button>
+                        <ul class="dropdown-menu" :aria-labelledby="`dropdownMenuButton-${application.id}`">
+                          <li>
+                            <a class="dropdown-item" href="#" @click.prevent="viewApplication(application)">
+                              <i class="bi bi-eye me-2"></i>View Details
+                            </a>
+                          </li>
+                          <li v-if="!application.entranceExam">
+                            <a class="dropdown-item" href="#" @click.prevent="scheduleExam(application)">
+                              <i class="bi bi-calendar-plus me-2"></i>Schedule Exam
+                            </a>
+                          </li>
+                          <li v-if="
+                            application.entranceExam &&
+                            application.entranceExam.score === undefined
+                          ">
+                            <a class="dropdown-item" href="#" @click.prevent="inputExamScore(application)">
+                              <i class="bi bi-pencil-square me-2"></i>Input Exam Score
+                            </a>
+                          </li>
+                          <li v-if="
+                            application.entranceExam &&
+                            application.entranceExam.score !== undefined &&
+                            !application.screening
+                          ">
+                            <a class="dropdown-item" href="#" @click.prevent="scheduleScreening(application)">
+                              <i class="bi bi-calendar-check me-2"></i>Schedule
+                              Screening
+                            </a>
+                          </li>
+                          <li v-if="
+                            application.screening && !application.screening.completed
+                          ">
+                            <a class="dropdown-item" href="#" @click.prevent="completeScreening(application)">
+                              <i class="bi bi-check-circle me-2"></i>Mark Screening
+                              Complete
+                            </a>
+                          </li>
+                          <li v-if="
+                            application.screening &&
+                            application.screening.completed &&
+                            !application.admissionDecision
+                          ">
+                            <a class="dropdown-item" href="#" @click.prevent="makeAdmissionDecision(application)">
+                              <i class="bi bi-award me-2"></i>Make Admission Decision
+                            </a>
+                          </li>
+                        </ul>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
 
-      <!-- Empty State -->
-      <div v-if="applications.length === 0" class="text-center py-5">
-        <i class="bi bi-inbox display-1 text-muted"></i>
-        <h5 class="mt-3 text-muted">No applications found</h5>
-        <p class="text-muted">Try adjusting your filters or search criteria.</p>
+              <!-- Empty State -->
+              <div v-if="applications.length === 0" class="text-center py-5">
+                <i class="bi bi-inbox display-1 text-muted"></i>
+                <h5 class="mt-3 text-muted">No applications found</h5>
+                <p class="text-muted">Try adjusting your filters or search criteria.</p>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent">
+            <!-- Pagination -->
+            <nav>
+              <ul class="pagination pagination-sm mb-0 justify-content-center">
+                <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                  <a class="page-link" href="#" @click.prevent="currentPage = 1">
+                    <i class="bi bi-chevron-double-left"></i>
+                  </a>
+                </li>
+                <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                  <a class="page-link" href="#" @click.prevent="currentPage--">
+                    <i class="bi bi-chevron-left"></i>
+                  </a>
+                </li>
+                <li v-for="page in visiblePages" :key="page" class="page-item"
+                  :class="{ active: page === currentPage }">
+                  <a class="page-link" href="#" @click.prevent="currentPage = page">
+                    {{ page }}
+                  </a>
+                </li>
+                <li class="page-item" :class="{ disabled: currentPage >= totalPages || applications.length === 0 }">
+                  <a class="page-link" href="#" @click.prevent="currentPage++">
+                    <i class="bi bi-chevron-right"></i>
+                  </a>
+                </li>
+                <li class="page-item" :class="{ disabled: currentPage >= totalPages || applications.length === 0 }">
+                  <a class="page-link" href="#" @click.prevent="currentPage = totalPages">
+                    <i class="bi bi-chevron-double-right"></i>
+                  </a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+
+
+
       </div>
     </div>
 
-    <!-- Pagination -->
-    <nav v-if="totalPages > 0" class="mt-4">
-      <ul class="pagination pagination-sm justify-content-center">
-        <li class="page-item" :class="{ disabled: currentPage === 1 }">
-          <a class="page-link" href="#" @click.prevent="currentPage = 1">
-            <i class="bi bi-chevron-double-left"></i>
-          </a>
-        </li>
-        <li class="page-item" :class="{ disabled: currentPage === 1 }">
-          <a class="page-link" href="#" @click.prevent="currentPage--">
-            <i class="bi bi-chevron-left"></i>
-          </a>
-        </li>
-        <li
-          v-for="page in visiblePages"
-          :key="page"
-          class="page-item"
-          :class="{ active: page === currentPage }"
-        >
-          <a class="page-link" href="#" @click.prevent="currentPage = page">
-            {{ page }}
-          </a>
-        </li>
-        <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-          <a class="page-link" href="#" @click.prevent="currentPage++">
-            <i class="bi bi-chevron-right"></i>
-          </a>
-        </li>
-        <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-          <a
-            class="page-link"
-            href="#"
-            @click.prevent="currentPage = totalPages"
-          >
-            <i class="bi bi-chevron-double-right"></i>
-          </a>
-        </li>
-      </ul>
-    </nav>
   </div>
 
   <!-- Schedule Exam Modal -->
-  <div
-    id="scheduleExamModal"
-    class="modal fade"
-    tabindex="-1"
-    aria-labelledby="scheduleExamModalLabel"
-    aria-hidden="true"
-  >
+  <div id="scheduleExamModal" class="modal fade" tabindex="-1" aria-labelledby="scheduleExamModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 id="scheduleExamModalLabel" class="modal-title">
             Schedule Entrance Exam
           </h5>
-          <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="modal"
-            aria-label="Close"
-          ></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
           <form @submit.prevent="submitExamSchedule">
             <div class="mb-3">
               <label for="examDate" class="form-label">Exam Date</label>
-              <input
-                id="examDate"
-                v-model="examForm.examDate"
-                type="date"
-                class="form-control"
-                required
-              />
+              <input id="examDate" v-model="examForm.examDate" type="date" class="form-control" required />
             </div>
             <div class="mb-3">
               <label for="examTime" class="form-label">Exam Time</label>
-              <input
-                id="examTime"
-                v-model="examForm.examTime"
-                type="time"
-                class="form-control"
-                required
-              />
+              <input id="examTime" v-model="examForm.examTime" type="time" class="form-control" required />
             </div>
             <div class="mb-3">
               <label for="examLink" class="form-label">Exam Link</label>
-              <input
-                id="examLink"
-                v-model="examForm.examLink"
-                type="url"
-                class="form-control"
-                placeholder="https://cbt.platform.com/exam/123"
-                required
-              />
+              <input id="examLink" v-model="examForm.examLink" type="url" class="form-control"
+                placeholder="https://cbt.platform.com/exam/123" required />
             </div>
           </form>
         </div>
         <div class="modal-footer">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            data-bs-dismiss="modal"
-          >
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
             Cancel
           </button>
-          <button
-            type="button"
-            class="btn btn-primary"
-            :disabled="examFormProcessing"
-            @click="submitExamSchedule"
-          >
-            <span
-              v-if="examFormProcessing"
-              class="spinner-border spinner-border-sm me-2"
-            ></span>
+          <button type="button" class="btn btn-primary" :disabled="examFormProcessing" @click="submitExamSchedule">
+            <span v-if="examFormProcessing" class="spinner-border spinner-border-sm me-2"></span>
             Schedule Exam
           </button>
         </div>
@@ -987,83 +885,42 @@ export default {
   </div>
 
   <!-- Schedule Screening Modal -->
-  <div
-    id="scheduleScreeningModal"
-    class="modal fade"
-    tabindex="-1"
-    aria-labelledby="scheduleScreeningModalLabel"
-    aria-hidden="true"
-  >
+  <div id="scheduleScreeningModal" class="modal fade" tabindex="-1" aria-labelledby="scheduleScreeningModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 id="scheduleScreeningModalLabel" class="modal-title">
             Schedule Screening & Interview
           </h5>
-          <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="modal"
-            aria-label="Close"
-          ></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
           <form @submit.prevent="submitScreeningSchedule">
             <div class="mb-3">
-              <label for="screeningDate" class="form-label"
-                >Screening Date</label
-              >
-              <input
-                id="screeningDate"
-                v-model="screeningForm.screeningDate"
-                type="date"
-                class="form-control"
-                required
-              />
+              <label for="screeningDate" class="form-label">Screening Date</label>
+              <input id="screeningDate" v-model="screeningForm.screeningDate" type="date" class="form-control"
+                required />
             </div>
             <div class="mb-3">
-              <label for="screeningTime" class="form-label"
-                >Screening Time</label
-              >
-              <input
-                id="screeningTime"
-                v-model="screeningForm.screeningTime"
-                type="time"
-                class="form-control"
-                required
-              />
+              <label for="screeningTime" class="form-label">Screening Time</label>
+              <input id="screeningTime" v-model="screeningForm.screeningTime" type="time" class="form-control"
+                required />
             </div>
             <div class="mb-3">
               <label for="venue" class="form-label">Venue</label>
-              <textarea
-                id="venue"
-                v-model="screeningForm.venue"
-                class="form-control"
-                rows="3"
-                placeholder="Examination Hall, Alebiosu College of Nursing Services..."
-                required
-              ></textarea>
+              <textarea id="venue" v-model="screeningForm.venue" class="form-control" rows="3"
+                placeholder="Examination Hall, Alebiosu College of Nursing Services..." required></textarea>
             </div>
           </form>
         </div>
         <div class="modal-footer">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            data-bs-dismiss="modal"
-          >
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
             Cancel
           </button>
-          <button
-            type="button"
-            class="btn btn-primary"
-            :disabled="screeningFormProcessing"
-            @click="submitScreeningSchedule"
-          >
-            <span
-              v-if="screeningFormProcessing"
-              class="spinner-border spinner-border-sm me-2"
-            ></span>
+          <button type="button" class="btn btn-primary" :disabled="screeningFormProcessing"
+            @click="submitScreeningSchedule">
+            <span v-if="screeningFormProcessing" class="spinner-border spinner-border-sm me-2"></span>
             Schedule Screening
           </button>
         </div>
@@ -1072,46 +929,23 @@ export default {
   </div>
 
   <!-- Exam Score Modal -->
-  <div
-    id="examScoreModal"
-    class="modal fade"
-    tabindex="-1"
-    aria-labelledby="examScoreModalLabel"
-    aria-hidden="true"
-  >
+  <div id="examScoreModal" class="modal fade" tabindex="-1" aria-labelledby="examScoreModalLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 id="examScoreModalLabel" class="modal-title">Input Exam Score</h5>
-          <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="modal"
-            aria-label="Close"
-          ></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
           <form @submit.prevent="submitExamScore">
             <div class="mb-3">
               <label for="examScore" class="form-label">Exam Score (%)</label>
-              <input
-                id="examScore"
-                v-model="scoreForm.score"
-                type="number"
-                class="form-control"
-                min="0"
-                max="100"
-                required
-              />
+              <input id="examScore" v-model="scoreForm.score" type="number" class="form-control" min="0" max="100"
+                required />
             </div>
             <div class="mb-3">
               <div class="form-check">
-                <input
-                  id="examPassed"
-                  v-model="scoreForm.passed"
-                  class="form-check-input"
-                  type="checkbox"
-                />
+                <input id="examPassed" v-model="scoreForm.passed" class="form-check-input" type="checkbox" />
                 <label class="form-check-label" for="examPassed">
                   Student passed the exam
                 </label>
@@ -1120,23 +954,11 @@ export default {
           </form>
         </div>
         <div class="modal-footer">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            data-bs-dismiss="modal"
-          >
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
             Cancel
           </button>
-          <button
-            type="button"
-            class="btn btn-primary"
-            :disabled="scoreFormProcessing"
-            @click="submitExamScore"
-          >
-            <span
-              v-if="scoreFormProcessing"
-              class="spinner-border spinner-border-sm me-2"
-            ></span>
+          <button type="button" class="btn btn-primary" :disabled="scoreFormProcessing" @click="submitExamScore">
+            <span v-if="scoreFormProcessing" class="spinner-border spinner-border-sm me-2"></span>
             Save Score
           </button>
         </div>
@@ -1145,103 +967,56 @@ export default {
   </div>
 
   <!-- Admission Decision Modal -->
-  <div
-    id="admissionDecisionModal"
-    class="modal fade"
-    tabindex="-1"
-    aria-labelledby="admissionDecisionModalLabel"
-    aria-hidden="true"
-  >
+  <div id="admissionDecisionModal" class="modal fade" tabindex="-1" aria-labelledby="admissionDecisionModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 id="admissionDecisionModalLabel" class="modal-title">
             Make Admission Decision
           </h5>
-          <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="modal"
-            aria-label="Close"
-          ></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
           <form @submit.prevent="submitAdmissionDecision">
             <div class="mb-3">
               <label class="form-label">Decision</label>
               <div class="form-check">
-                <input
-                  id="admitStudent"
-                  v-model="decisionForm.decision"
-                  class="form-check-input"
-                  type="radio"
-                  value="admitted"
-                />
+                <input id="admitStudent" v-model="decisionForm.decision" class="form-check-input" type="radio"
+                  value="admitted" />
                 <label class="form-check-label" for="admitStudent">
                   <span class="text-success fw-semibold">Admit Student</span>
                 </label>
               </div>
               <div class="form-check">
-                <input
-                  id="rejectStudent"
-                  v-model="decisionForm.decision"
-                  class="form-check-input"
-                  type="radio"
-                  value="rejected"
-                />
+                <input id="rejectStudent" v-model="decisionForm.decision" class="form-check-input" type="radio"
+                  value="rejected" />
                 <label class="form-check-label" for="rejectStudent">
                   <span class="text-danger fw-semibold">Reject Student</span>
                 </label>
               </div>
             </div>
             <div v-if="decisionForm.decision === 'admitted'" class="mb-3">
-              <label for="admissionLetterUrl" class="form-label"
-                >Admission Letter URL</label
-              >
-              <input
-                id="admissionLetterUrl"
-                v-model="decisionForm.admissionLetterUrl"
-                type="url"
-                class="form-control"
-                placeholder="https://portal.acon.edu.ng/admission-letters/..."
-              />
+              <label for="admissionLetterUrl" class="form-label">Admission Letter URL</label>
+              <input id="admissionLetterUrl" v-model="decisionForm.admissionLetterUrl" type="url" class="form-control"
+                placeholder="https://portal.acon.edu.ng/admission-letters/..." />
             </div>
             <div v-if="decisionForm.decision === 'rejected'" class="mb-3">
-              <label for="rejectionReason" class="form-label"
-                >Rejection Reason</label
-              >
-              <textarea
-                id="rejectionReason"
-                v-model="decisionForm.reason"
-                class="form-control"
-                rows="3"
-                placeholder="Explain the reason for rejection..."
-              ></textarea>
+              <label for="rejectionReason" class="form-label">Rejection Reason</label>
+              <textarea id="rejectionReason" v-model="decisionForm.reason" class="form-control" rows="3"
+                placeholder="Explain the reason for rejection..."></textarea>
             </div>
           </form>
         </div>
         <div class="modal-footer">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            data-bs-dismiss="modal"
-          >
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
             Cancel
           </button>
-          <button
-            type="button"
-            :class="
-              decisionForm.decision === 'admitted'
-                ? 'btn btn-success'
-                : 'btn btn-danger'
-            "
-            :disabled="decisionFormProcessing"
-            @click="submitAdmissionDecision"
-          >
-            <span
-              v-if="decisionFormProcessing"
-              class="spinner-border spinner-border-sm me-2"
-            ></span>
+          <button type="button" :class="decisionForm.decision === 'admitted'
+            ? 'btn btn-success'
+            : 'btn btn-danger'
+            " :disabled="decisionFormProcessing" @click="submitAdmissionDecision">
+            <span v-if="decisionFormProcessing" class="spinner-border spinner-border-sm me-2"></span>
             {{
               decisionForm.decision === "admitted"
                 ? "Admit Student"
@@ -1254,13 +1029,8 @@ export default {
   </div>
 
   <!-- Application Details Modal -->
-  <div
-    id="applicationDetailsModal"
-    class="modal fade"
-    tabindex="-1"
-    aria-labelledby="applicationDetailsModalLabel"
-    aria-hidden="true"
-  >
+  <div id="applicationDetailsModal" class="modal fade" tabindex="-1" aria-labelledby="applicationDetailsModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog modal-xl">
       <div class="modal-content">
         <div class="modal-header">
@@ -1271,14 +1041,9 @@ export default {
               {{ selectedApplicationDetails.applicationNumber }}
             </span>
           </h5>
-          <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="modal"
-            aria-label="Close"
-          ></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        
+
         <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
           <!-- Loading State -->
           <div v-if="detailsLoading" class="text-center py-5">
@@ -1301,17 +1066,13 @@ export default {
                 <div class="card-body">
                   <div class="row g-3">
                     <div class="col-12 text-center">
-                      <img
-                        :src="selectedApplicationDetails.profileImageUrl || 'https://placehold.co/120x120'"
-                        class="rounded-circle mb-3"
-                        width="120"
-                        height="120"
-                        alt="Profile Photo"
-                      >
+                      <img :src="selectedApplicationDetails.profileImageUrl || 'https://placehold.co/120x120'"
+                        class="rounded-circle mb-3" width="120" height="120" alt="Profile Photo">
                     </div>
                     <div class="col-12">
                       <label class="form-label fw-semibold">Full Name</label>
-                      <p class="form-control-plaintext">{{ selectedApplicationDetails.userId?.firstName + ' ' + selectedApplicationDetails.userId?.lastName || 'N/A' }}</p>
+                      <p class="form-control-plaintext">{{ selectedApplicationDetails.userId?.firstName + ' ' +
+                        selectedApplicationDetails.userId?.lastName || 'N/A' }}</p>
                     </div>
                     <div class="col-12">
                       <label class="form-label fw-semibold">Email</label>
@@ -1324,7 +1085,8 @@ export default {
                     <div class="col-12">
                       <label class="form-label fw-semibold">Date of Birth</label>
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.dob ? new Date(selectedApplicationDetails.dob).toLocaleDateString() : 'N/A' }}
+                        {{ selectedApplicationDetails.dob ? new
+                          Date(selectedApplicationDetails.dob).toLocaleDateString() : 'N/A' }}
                       </p>
                     </div>
                     <div class="col-6">
@@ -1358,8 +1120,9 @@ export default {
                       <label class="form-label fw-semibold">Current Stage</label>
                       <p class="form-control-plaintext">
                         <span class="badge bg-info">
-                          {{ selectedApplicationDetails.currentStage 
-                            ? `Stage ${selectedApplicationDetails.currentStage} - ${getStageName(selectedApplicationDetails.currentStage)}` 
+                          {{ selectedApplicationDetails.currentStage
+                            ? `Stage ${selectedApplicationDetails.currentStage} -
+                          ${getStageName(selectedApplicationDetails.currentStage)}`
                             : 'N/A' }}
                         </span>
                       </p>
@@ -1374,18 +1137,21 @@ export default {
                     </div>
                     <div class="col-12">
                       <label class="form-label fw-semibold">Academic Session</label>
-                      <p class="form-control-plaintext">{{ selectedApplicationDetails.entryAcademicSession || 'N/A' }}</p>
+                      <p class="form-control-plaintext">{{ selectedApplicationDetails.entryAcademicSession || 'N/A' }}
+                      </p>
                     </div>
                     <div class="col-6">
                       <label class="form-label fw-semibold">Submitted Date</label>
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.createdAt ? new Date(selectedApplicationDetails.createdAt).toLocaleString() : 'N/A' }}
+                        {{ selectedApplicationDetails.createdAt ? new
+                          Date(selectedApplicationDetails.createdAt).toLocaleString() : 'N/A' }}
                       </p>
                     </div>
                     <div class="col-6">
                       <label class="form-label fw-semibold">Last Updated</label>
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.updatedAt ? new Date(selectedApplicationDetails.updatedAt).toLocaleString() : 'N/A' }}
+                        {{ selectedApplicationDetails.updatedAt ? new
+                          Date(selectedApplicationDetails.updatedAt).toLocaleString() : 'N/A' }}
                       </p>
                     </div>
                   </div>
@@ -1425,7 +1191,8 @@ export default {
                     </div>
                     <div class="col-12">
                       <label class="form-label fw-semibold">Emergency Contact Relationship</label>
-                      <p class="form-control-plaintext">{{ selectedApplicationDetails.nextOfKin.relationship || 'N/A' }}</p>
+                      <p class="form-control-plaintext">{{ selectedApplicationDetails.nextOfKin.relationship || 'N/A' }}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1448,7 +1215,8 @@ export default {
                       <div class="row g-2">
                         <div class="col-6">
                           <small class="text-muted">Date:</small>
-                          <p class="mb-1">{{ selectedApplicationDetails.entranceExam.date ? new Date(selectedApplicationDetails.entranceExam.date).toLocaleDateString() : 'N/A' }}</p>
+                          <p class="mb-1">{{ selectedApplicationDetails.entranceExam.date ? new
+                            Date(selectedApplicationDetails.entranceExam.date).toLocaleDateString() : 'N/A' }}</p>
                         </div>
                         <div class="col-6">
                           <small class="text-muted">Time:</small>
@@ -1457,10 +1225,9 @@ export default {
                         <div class="col-12">
                           <small class="text-muted">Exam Link:</small>
                           <p class="mb-1">
-                            <a v-if="selectedApplicationDetails.entranceExam.link" 
-                               :href="selectedApplicationDetails.entranceExam.link" 
-                               target="_blank" 
-                               class="text-decoration-none">
+                            <a v-if="selectedApplicationDetails.entranceExam.link"
+                              :href="selectedApplicationDetails.entranceExam.link" target="_blank"
+                              class="text-decoration-none">
                               {{ selectedApplicationDetails.entranceExam.link }}
                               <i class="bi bi-box-arrow-up-right ms-1"></i>
                             </a>
@@ -1470,8 +1237,8 @@ export default {
                         <div class="col-12">
                           <small class="text-muted">Score:</small>
                           <p class="mb-1">
-                            <span v-if="selectedApplicationDetails.entranceExam.score !== undefined" 
-                                  :class="selectedApplicationDetails.entranceExam.score >= 50 ? 'text-success fw-bold' : 'text-danger fw-bold'">
+                            <span v-if="selectedApplicationDetails.entranceExam.score !== undefined"
+                              :class="selectedApplicationDetails.entranceExam.score >= 50 ? 'text-success fw-bold' : 'text-danger fw-bold'">
                               {{ selectedApplicationDetails.entranceExam.score }}%
                             </span>
                             <span v-else class="text-muted">Not Available</span>
@@ -1489,7 +1256,8 @@ export default {
                       <div class="row g-2">
                         <div class="col-6">
                           <small class="text-muted">Date:</small>
-                          <p class="mb-1">{{ selectedApplicationDetails.screening.date ? new Date(selectedApplicationDetails.screening.date).toLocaleDateString() : 'N/A' }}</p>
+                          <p class="mb-1">{{ selectedApplicationDetails.screening.date ? new
+                            Date(selectedApplicationDetails.screening.date).toLocaleDateString() : 'N/A' }}</p>
                         </div>
                         <div class="col-6">
                           <small class="text-muted">Time:</small>
@@ -1502,7 +1270,8 @@ export default {
                         <div class="col-12">
                           <small class="text-muted">Status:</small>
                           <p class="mb-1">
-                            <span :class="selectedApplicationDetails.screening.completed ? 'badge bg-success' : 'badge bg-warning'">
+                            <span
+                              :class="selectedApplicationDetails.screening.completed ? 'badge bg-success' : 'badge bg-warning'">
                               {{ selectedApplicationDetails.screening.completed ? 'Completed' : 'Pending' }}
                             </span>
                           </p>
@@ -1529,9 +1298,8 @@ export default {
                     <div class="col-md-6">
                       <h6 class="fw-semibold text-primary">O'Level Results</h6>
                       <div v-if="selectedApplicationDetails.documents?.olevelResults?.length">
-                        <div v-for="(result, index) in selectedApplicationDetails.documents.olevelResults" 
-                             :key="index" 
-                             class="border rounded p-2 mb-2">
+                        <div v-for="(result, index) in selectedApplicationDetails.documents.olevelResults" :key="index"
+                          class="border rounded p-2 mb-2">
                           <small class="text-muted">Result {{ index + 1 }}:</small>
                           <p class="mb-1">
                             <a :href="result" target="_blank" class="text-decoration-none">
@@ -1547,9 +1315,8 @@ export default {
                     <div class="col-md-6">
                       <h6 class="fw-semibold text-primary">Reference Letters</h6>
                       <div v-if="selectedApplicationDetails.documents?.referenceLetters?.length">
-                        <div v-for="(letter, index) in selectedApplicationDetails.documents.referenceLetters" 
-                             :key="index" 
-                             class="border rounded p-2 mb-2">
+                        <div v-for="(letter, index) in selectedApplicationDetails.documents.referenceLetters"
+                          :key="index" class="border rounded p-2 mb-2">
                           <small class="text-muted">Letter {{ index + 1 }}:</small>
                           <p class="mb-1">
                             <a :href="letter" target="_blank" class="text-decoration-none">
@@ -1578,7 +1345,8 @@ export default {
                     <div class="col-md-4">
                       <label class="form-label fw-semibold">Decision</label>
                       <p class="form-control-plaintext">
-                        <span :class="selectedApplicationDetails.admissionDecision === 'admitted' ? 'badge bg-success' : 'badge bg-danger'">
+                        <span
+                          :class="selectedApplicationDetails.admissionDecision === 'admitted' ? 'badge bg-success' : 'badge bg-danger'">
                           {{ selectedApplicationDetails.admissionDecision?.toUpperCase() || 'N/A' }}
                         </span>
                       </p>
@@ -1586,17 +1354,16 @@ export default {
                     <div class="col-md-4">
                       <label class="form-label fw-semibold">Decision Date</label>
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.admissionDecisionDate 
-                           ? new Date(selectedApplicationDetails.admissionDecisionDate).toLocaleDateString() 
-                           : 'N/A' }}
+                        {{ selectedApplicationDetails.admissionDecisionDate
+                          ? new Date(selectedApplicationDetails.admissionDecisionDate).toLocaleDateString()
+                          : 'N/A' }}
                       </p>
                     </div>
                     <div v-if="selectedApplicationDetails.admissionLetterUrl" class="col-md-4">
                       <label class="form-label fw-semibold">Admission Letter</label>
                       <p class="form-control-plaintext">
-                        <a :href="selectedApplicationDetails.admissionLetterUrl" 
-                           target="_blank" 
-                           class="text-decoration-none">
+                        <a :href="selectedApplicationDetails.admissionLetterUrl" target="_blank"
+                          class="text-decoration-none">
                           View Letter <i class="bi bi-box-arrow-up-right ms-1"></i>
                         </a>
                       </p>
@@ -1618,17 +1385,12 @@ export default {
             <p class="text-muted">Unable to load application details.</p>
           </div>
         </div>
-        
+
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
             Close
           </button>
-          <button 
-            v-if="selectedApplicationDetails" 
-            type="button" 
-            class="btn btn-primary"
-            @click="window.print()"
-          >
+          <button v-if="selectedApplicationDetails" type="button" class="btn btn-primary" @click="window.print()">
             <i class="bi bi-printer me-2"></i>Print Details
           </button>
         </div>
@@ -1638,20 +1400,25 @@ export default {
 </template>
 
 <style scoped>
-.table-responsive {
-  border-radius: 0.5rem;
-  overflow: hidden;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
-}
-
 .table thead th {
-  background-color: #f8f9fa;
   font-weight: 600;
-  color: #495057;
+  color: var(--staff-primary);
+  border-bottom: 2px solid var(--staff-light);
 }
 
 .table tbody tr:hover {
   background-color: #f8f9fa;
+}
+
+.pagination .page-link {
+  color: var(--staff-primary);
+  border-color: var(--staff-light);
+}
+
+.pagination .page-item.active .page-link {
+  background-color: var(--staff-primary);
+  border-color: var(--staff-primary);
+  color: white;
 }
 
 .modal-content {

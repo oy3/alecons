@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { ProgramsModule } from './programs/programs.module';
 import { PaymentsModule } from './payments/payments.module';
 import { UploadModule } from './modules/upload.module';
+import { AcademicSessionsModule } from './modules/academic-sessions.module';
 import { StaffApplicationsController } from './controllers/staff-applications.controller';
 import { Application, ApplicationSchema } from './schemas/application.schema';
 import { Program, ProgramSchema } from './schemas/program.schema';
@@ -36,6 +37,7 @@ import { EmailService } from './services/email.service';
         ProgramsModule,
         PaymentsModule,
         UploadModule,
+        AcademicSessionsModule,
     ],
     controllers: [AppController, StaffApplicationsController],
     providers: [AppService, EmailService],

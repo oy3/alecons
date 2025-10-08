@@ -91,7 +91,8 @@ export default {
 
     totalPages() {
       // Use totalPages from API response if available, otherwise calculate
-      return this.apiTotalPages || Math.ceil(this.filteredApplications.length / this.perPage)
+      const calculated = Math.ceil(this.filteredApplications.length / this.perPage)
+      return this.apiTotalPages || Math.max(1, calculated)
     }
   },
   watch: {
@@ -615,7 +616,7 @@ export default {
           <div class="card-body p-0">
             <div class="table-responsive">
               <table class="table table-hover mb-0">
-                <thead class="table-light">
+                <thead class="">
                   <tr>
                     <th>#</th>
                     <th>Applicant</th>
@@ -820,12 +821,12 @@ export default {
                 </li>
                 <li
                   class="page-item"
-                  :class="{ disabled: currentPage === totalPages }"
+                  :class="{ disabled: currentPage >= totalPages || filteredApplications.length === 0 }"
                 >
                   <button
                     class="page-link"
                     @click="currentPage = currentPage + 1"
-                    :disabled="currentPage === totalPages"
+                    :disabled="currentPage >= totalPages || filteredApplications.length === 0"
                   >
                     Next
                   </button>
@@ -860,14 +861,12 @@ export default {
 .pagination .page-link {
   color: var(--staff-primary);
   border-color: var(--staff-light);
-  /* border-radius: 0px; */
 }
 
 .pagination .page-item.active .page-link {
   background-color: var(--staff-primary);
   border-color: var(--staff-primary);
   color: white;
-  /* border-radius: 0px; */
 }
 
 .dropdown-menu {

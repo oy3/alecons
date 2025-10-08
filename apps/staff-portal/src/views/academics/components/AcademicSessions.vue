@@ -9,74 +9,101 @@ export default {
       sessions: [],
       isLoading: true,
       searchQuery: '',
+      searchTimeout: null,
       currentPage: 1,
-      perPage: 10
+      perPage: 10,
+      totalSessions: 0,
+      apiTotalPages: 0,
+      
+      // Status options
+      statusOptions: [
+        { value: 'draft', label: 'Draft', class: 'bg-secondary' },
+        { value: 'open', label: 'Open', class: 'bg-success' },
+        { value: 'ongoing', label: 'Ongoing', class: 'bg-primary' },
+        { value: 'closed', label: 'Closed', class: 'bg-danger' }
+      ],
+
+      // Session controls data
+      selectedSession: null,
+      sessionControls: null,
+      controlsLoading: false,
+      availablePayments: []
     }
   },
   computed: {
     filteredSessions() {
-      if (!this.searchQuery) return this.sessions
-
-      return this.sessions.filter(session =>
-        session.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        session.academicYear.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        (session.description && session.description.toLowerCase().includes(this.searchQuery.toLowerCase()))
-      )
+      return this.sessions
     },
 
     paginatedSessions() {
-      const start = (this.currentPage - 1) * this.perPage
-      const end = start + this.perPage
-      return this.filteredSessions.slice(start, end)
+      return this.sessions
     },
 
     totalPages() {
-      return Math.ceil(this.filteredSessions.length / this.perPage)
+      const calculated = Math.ceil(this.totalSessions / this.perPage)
+      return this.apiTotalPages || Math.max(1, calculated)
     }
   },
   watch: {
     searchQuery() {
       this.currentPage = 1
+      this.debouncedLoadSessions()
+    },
+    currentPage() {
+      this.loadSessions()
     }
   },
   async mounted() {
     await this.loadSessions()
   },
   methods: {
+    debouncedLoadSessions() {
+      clearTimeout(this.searchTimeout)
+      this.searchTimeout = setTimeout(() => {
+        this.loadSessions()
+      }, 500)
+    },
+
     async loadSessions() {
       try {
         this.isLoading = true
         logger.info('Loading academic sessions...')
 
-        // Mock data for now - replace with actual API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        this.sessions = [
-          {
-            id: '1',
-            name: '2024/2025 Academic Session',
-            academicYear: '2024/2025',
-            description: 'Main academic session for 2024-2025',
-            startDate: '2024-09-01',
-            endDate: '2025-08-31',
-            isActive: true,
-            applicationsOpen: true,
-            controlsCount: 5
-          },
-          {
-            id: '2',
-            name: '2023/2024 Academic Session',
-            academicYear: '2023/2024',
-            description: 'Previous academic session',
-            startDate: '2023-09-01',
-            endDate: '2024-08-31',
-            isActive: false,
-            applicationsOpen: false,
-            controlsCount: 3
-          }
-        ]
+        const params = {
+          page: this.currentPage,
+          limit: this.perPage,
+          sortBy: 'createdAt',
+          sortOrder: 'desc'
+        }
 
-        logger.info('Academic sessions loaded successfully', { count: this.sessions.length })
+        if (this.searchQuery && this.searchQuery.trim()) {
+          params.search = this.searchQuery.trim()
+        }
+
+        const response = await apiService.getAcademicSessions(params)
+
+        if (response.success) {
+          this.sessions = response.data.sessions.map(session => ({
+            id: session._id,
+            sessionYear: session.sessionYear,
+            description: session.description || '',
+            startDate: session.startDate,
+            endDate: session.endDate,
+            status: session.status,
+            active: session.active,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt
+          }))
+
+          this.totalSessions = response.data.pagination.totalItems
+          this.currentPage = response.data.pagination.currentPage
+          this.apiTotalPages = response.data.pagination.totalPages
+
+          logger.info('Academic sessions loaded successfully', { 
+            count: this.sessions.length,
+            total: this.totalSessions 
+          })
+        }
       } catch (error) {
         logger.error('Failed to load academic sessions:', error)
         this.$swal.fire({
@@ -90,9 +117,20 @@ export default {
       }
     },
 
+    generateSessionYear(startDate, endDate) {
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      return `${start.getFullYear()}/${end.getFullYear()}`
+    },
+
     formatDate(dateString) {
       if (!dateString) return 'N/A'
       return new Date(dateString).toLocaleDateString()
+    },
+
+    getStatusBadgeClass(status) {
+      const statusOption = this.statusOptions.find(s => s.value === status)
+      return statusOption ? statusOption.class : 'bg-secondary'
     },
 
     async showAddSessionModal() {
@@ -102,64 +140,80 @@ export default {
           <div class="row text-start">
             <div class="col-12 mb-3">
               <label class="form-label">Academic Session Year</label>
-              <input id="academicYear" class="form-control" placeholder="e.g., 2024/2025" readonly>
+              <input id="sessionYear" class="form-control" placeholder="Auto-generated from dates" readonly>
             </div>
-                        <div class="col-6 mb-3">
+            <div class="col-6 mb-3">
               <label class="form-label">Start Date</label>
-              <input id="startDate" type="date" class="form-control">
+              <input id="startDate" type="date" class="form-control" required>
             </div>
             <div class="col-6 mb-3">
               <label class="form-label">End Date</label>
-              <input id="endDate" type="date" class="form-control">
+              <input id="endDate" type="date" class="form-control" required>
             </div>
             <div class="col-12 mb-3">
               <label class="form-label">Description</label>
-              <textarea id="description" class="form-control" placeholder="Session description..."></textarea>
+              <textarea id="description" class="form-control" placeholder="Session description..." rows="3"></textarea>
             </div>
-
-            <div class="col-12 mb-3">
-                <label class="form-label" for="status">Status</label>
-                <select class="form-select" aria-label="Default select example">
-  <option disabled>--Select status--</option>
-  <option value="1" selected>Open</option>
-  <option value="2">Ongoing</option>
-  <option value="3">Closed</option>
-</select>
-                </div>
-            <div class="col-6">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="isActive" checked>
-                <label class="form-check-label" for="isActive">Active Session</label>
+            <div class="col-6 mb-3">
+              <label class="form-label">Status</label>
+              <select id="status" class="form-select" required>
+                <option value="">--Select status--</option>
+                <option value="draft">Draft</option>
+                <option value="open" selected>Open</option>
+                <option value="ongoing">Ongoing</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+            <div class="col-6 mb-3">
+              <div class="form-check mt-4">
+                <input class="form-check-input" type="checkbox" id="active" checked>
+                <label class="form-check-label" for="active">Active Session</label>
               </div>
             </div>
-
           </div>
         `,
         showCancelButton: true,
         confirmButtonText: 'Add Session',
         confirmButtonColor: '#1a5f5f',
+        didOpen: () => {
+          // Auto-generate session year when dates change
+          const startDateInput = document.getElementById('startDate')
+          const endDateInput = document.getElementById('endDate')
+          const sessionYearInput = document.getElementById('sessionYear')
+
+          const updateSessionYear = () => {
+            if (startDateInput.value && endDateInput.value) {
+              const sessionYear = this.generateSessionYear(startDateInput.value, endDateInput.value)
+              sessionYearInput.value = sessionYear
+            }
+          }
+
+          startDateInput.addEventListener('change', updateSessionYear)
+          endDateInput.addEventListener('change', updateSessionYear)
+        },
         preConfirm: () => {
-          const sessionName = document.getElementById('sessionName').value
-          const academicYear = document.getElementById('academicYear').value
-          const description = document.getElementById('description').value
           const startDate = document.getElementById('startDate').value
           const endDate = document.getElementById('endDate').value
-          const isActive = document.getElementById('isActive').checked
+          const description = document.getElementById('description').value
           const status = document.getElementById('status').value
+          const active = document.getElementById('active').checked
 
-          if (!sessionName || !academicYear || !startDate || !endDate) {
+          if (!startDate || !endDate || !status) {
             this.$swal.showValidationMessage('Please fill in all required fields')
             return false
           }
 
+          if (new Date(endDate) <= new Date(startDate)) {
+            this.$swal.showValidationMessage('End date must be after start date')
+            return false
+          }
+
           return {
-            sessionName,
-            academicYear,
-            description,
             startDate,
             endDate,
-            isActive,
-            status
+            description: description || undefined,
+            status,
+            active
           }
         }
       })
@@ -173,36 +227,28 @@ export default {
       try {
         logger.info('Adding new academic session:', sessionData)
 
-        // Mock API call - replace with actual implementation
-        const newSession = {
-          id: Date.now().toString(),
-          name: sessionData.sessionName,
-          academicYear: sessionData.academicYear,
-          description: sessionData.description,
-          startDate: sessionData.startDate,
-          endDate: sessionData.endDate,
-          isActive: sessionData.isActive,
-          applicationsOpen: sessionData.applicationsOpen,
-          controlsCount: 0
+        const response = await apiService.createAcademicSession(sessionData)
+
+        if (response.success) {
+          this.$swal.fire({
+            icon: 'success',
+            title: 'Success',
+            text: 'Academic session added successfully',
+            timer: 2000,
+            showConfirmButton: false
+          })
+
+          await this.loadSessions()
+          this.$emit('refresh')
+        } else {
+          throw new Error(response.message)
         }
-
-        this.sessions.unshift(newSession)
-
-        this.$swal.fire({
-          icon: 'success',
-          title: 'Success',
-          text: 'Academic session added successfully',
-          timer: 2000,
-          showConfirmButton: false
-        })
-
-        this.$emit('refresh')
       } catch (error) {
         logger.error('Failed to add academic session:', error)
         this.$swal.fire({
           icon: 'error',
           title: 'Error',
-          text: 'Failed to add academic session',
+          text: error.message || 'Failed to add academic session',
           confirmButtonColor: '#1a5f5f'
         })
       }
@@ -213,36 +259,36 @@ export default {
         title: 'Edit Academic Session',
         html: `
           <div class="row g-3 text-start">
-            <div class="col-12">
-              <label class="form-label">Academic Year</label>
-              <input id="academicYear" class="form-control" value="${session.academicYear}" readonly>
+            <div class="col-12 mb-3">
+              <label class="form-label">Academic Session Year</label>
+              <input id="sessionYear" class="form-control" value="${session.sessionYear}" readonly>
             </div>
-            <div class="col-12">
-              <label class="form-label">Description</label>
-              <textarea id="description" class="form-control">${session.description || ''}</textarea>
-            </div>
-            <div class="col-6">
+            <div class="col-6 mb-3">
               <label class="form-label">Start Date</label>
-              <input id="startDate" type="date" class="form-control" value="${session.startDate}">
+              <input id="startDate" type="date" class="form-control" value="${session.startDate?.split('T')[0]}" required>
             </div>
-            <div class="col-6">
+            <div class="col-6 mb-3">
               <label class="form-label">End Date</label>  
-              <input id="endDate" type="date" class="form-control" value="${session.endDate}">
+              <input id="endDate" type="date" class="form-control" value="${session.endDate?.split('T')[0]}" required>
             </div>
-
-            <div class="col-12">
-                <label class="form-label" for="status">Status</label>
-                <select class="form-select" aria-label="Default select example">
-  <option disabled>--Select status--</option>
-  <option value="1" selected>Open</option>
-  <option value="2">Ongoing</option>
-  <option value="3">Closed</option>
-</select>
-                </div>
-            <div class="col-12">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="isActive" ${session.isActive ? 'checked' : ''}>
-                <label class="form-check-label" for="isActive">Active Session</label>
+            <div class="col-12 mb-3">
+              <label class="form-label">Description</label>
+              <textarea id="description" class="form-control" rows="3">${session.description || ''}</textarea>
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label">Status</label>
+              <select id="status" class="form-select" required>
+                <option value="">--Select status--</option>
+                <option value="draft" ${session.status === 'draft' ? 'selected' : ''}>Draft</option>
+                <option value="open" ${session.status === 'open' ? 'selected' : ''}>Open</option>
+                <option value="ongoing" ${session.status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+                <option value="closed" ${session.status === 'closed' ? 'selected' : ''}>Closed</option>
+              </select>
+            </div>
+            <div class="col-6 mb-3">
+              <div class="form-check mt-4">
+                <input class="form-check-input" type="checkbox" id="active" ${session.active ? 'checked' : ''}>
+                <label class="form-check-label" for="active">Active Session</label>
               </div>
             </div>
           </div>
@@ -250,28 +296,45 @@ export default {
         showCancelButton: true,
         confirmButtonText: 'Update Session',
         confirmButtonColor: '#1a5f5f',
+        didOpen: () => {
+          // Auto-generate session year when dates change
+          const startDateInput = document.getElementById('startDate')
+          const endDateInput = document.getElementById('endDate')
+          const sessionYearInput = document.getElementById('sessionYear')
+
+          const updateSessionYear = () => {
+            if (startDateInput.value && endDateInput.value) {
+              const sessionYear = this.generateSessionYear(startDateInput.value, endDateInput.value)
+              sessionYearInput.value = sessionYear
+            }
+          }
+
+          startDateInput.addEventListener('change', updateSessionYear)
+          endDateInput.addEventListener('change', updateSessionYear)
+        },
         preConfirm: () => {
-          const sessionName = document.getElementById('sessionName').value
-          const academicYear = document.getElementById('academicYear').value
-          const description = document.getElementById('description').value
           const startDate = document.getElementById('startDate').value
           const endDate = document.getElementById('endDate').value
-          const isActive = document.getElementById('isActive').checked
-          const applicationsOpen = document.getElementById('applicationsOpen').checked
+          const description = document.getElementById('description').value
+          const status = document.getElementById('status').value
+          const active = document.getElementById('active').checked
 
-          if (!sessionName || !academicYear || !startDate || !endDate) {
+          if (!startDate || !endDate || !status) {
             this.$swal.showValidationMessage('Please fill in all required fields')
             return false
           }
 
+          if (new Date(endDate) <= new Date(startDate)) {
+            this.$swal.showValidationMessage('End date must be after start date')
+            return false
+          }
+
           return {
-            sessionName,
-            academicYear,
-            description,
             startDate,
             endDate,
-            isActive,
-            applicationsOpen
+            description: description || undefined,
+            status,
+            active
           }
         }
       })
@@ -285,36 +348,28 @@ export default {
       try {
         logger.info('Updating academic session:', { sessionId, sessionData })
 
-        // Mock API call - replace with actual implementation
-        const sessionIndex = this.sessions.findIndex(s => s.id === sessionId)
-        if (sessionIndex !== -1) {
-          this.sessions[sessionIndex] = {
-            ...this.sessions[sessionIndex],
-            name: sessionData.sessionName,
-            academicYear: sessionData.academicYear,
-            description: sessionData.description,
-            startDate: sessionData.startDate,
-            endDate: sessionData.endDate,
-            isActive: sessionData.isActive,
-            applicationsOpen: sessionData.applicationsOpen
-          }
+        const response = await apiService.updateAcademicSession(sessionId, sessionData)
+
+        if (response.success) {
+          this.$swal.fire({
+            icon: 'success',
+            title: 'Success',
+            text: 'Academic session updated successfully',
+            timer: 2000,
+            showConfirmButton: false
+          })
+
+          await this.loadSessions()
+          this.$emit('refresh')
+        } else {
+          throw new Error(response.message)
         }
-
-        this.$swal.fire({
-          icon: 'success',
-          title: 'Success',
-          text: 'Academic session updated successfully',
-          timer: 2000,
-          showConfirmButton: false
-        })
-
-        this.$emit('refresh')
       } catch (error) {
         logger.error('Failed to update academic session:', error)
         this.$swal.fire({
           icon: 'error',
           title: 'Error',
-          text: 'Failed to update academic session',
+          text: error.message || 'Failed to update academic session',
           confirmButtonColor: '#1a5f5f'
         })
       }
@@ -323,7 +378,7 @@ export default {
     async deleteSession(session) {
       const result = await this.$swal.fire({
         title: 'Delete Academic Session',
-        text: `Are you sure you want to delete "${session.name}"? This action cannot be undone.`,
+        text: `Are you sure you want to delete "${session.sessionYear}"? This action cannot be undone and will also delete all associated session controls.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#dc3545',
@@ -335,24 +390,28 @@ export default {
         try {
           logger.info('Deleting academic session:', session.id)
 
-          // Mock API call - replace with actual implementation
-          this.sessions = this.sessions.filter(s => s.id !== session.id)
+          const response = await apiService.deleteAcademicSession(session.id)
 
-          this.$swal.fire({
-            icon: 'success',
-            title: 'Deleted!',
-            text: 'Academic session has been deleted.',
-            timer: 2000,
-            showConfirmButton: false
-          })
+          if (response.success) {
+            this.$swal.fire({
+              icon: 'success',
+              title: 'Deleted!',
+              text: 'Academic session has been deleted.',
+              timer: 2000,
+              showConfirmButton: false
+            })
 
-          this.$emit('refresh')
+            await this.loadSessions()
+            this.$emit('refresh')
+          } else {
+            throw new Error(response.message)
+          }
         } catch (error) {
           logger.error('Failed to delete academic session:', error)
           this.$swal.fire({
             icon: 'error',
             title: 'Error',
-            text: 'Failed to delete academic session',
+            text: error.message || 'Failed to delete academic session',
             confirmButtonColor: '#1a5f5f'
           })
         }
@@ -360,76 +419,256 @@ export default {
     },
 
     async viewControls(session) {
-      // This will show a modal with controls management
       await this.showControlsModal(session)
     },
 
     async showControlsModal(session) {
-      const { value: action } = await this.$swal.fire({
-        title: `Session Controls - ${session.name}`,
-        html: `
-          <div class="text-start">
-            <div class="mb-3">
-              <input type="text" id="controlSearch" class="form-control" placeholder="Search controls...">
+      try {
+        this.selectedSession = session
+        this.controlsLoading = true
+
+        logger.info('Loading session controls for session:', session.id)
+
+        // Load session controls
+        const response = await apiService.getSessionControls(session.id)
+        logger.info('Session controls response:', response)
+        
+        if (response.success) {
+          this.sessionControls = response.data.controls
+          logger.info('Loaded session controls:', this.sessionControls)
+        } else {
+          logger.error('Failed to load session controls:', response)
+          throw new Error(response.message || 'Failed to load session controls')
+        }
+
+        // Load available payments for dropdown
+        const paymentsResponse = await apiService.getPayments({ limit: 100 })
+        logger.info('Payments response:', paymentsResponse)
+        
+        if (paymentsResponse.success) {
+          this.availablePayments = paymentsResponse.data.payments
+          logger.info('Loaded payments:', this.availablePayments)
+        } else {
+          logger.warn('Failed to load payments:', paymentsResponse)
+          this.availablePayments = []
+        }
+
+        this.controlsLoading = false
+
+        const { value: action } = await this.$swal.fire({
+          title: `Session Controls - ${session.sessionYear}`,
+          html: this.getControlsModalHTML(),
+          showCloseButton: true,
+          showConfirmButton: false,
+          width: '900px',
+          customClass: {
+            htmlContainer: 'p-0'
+          },
+          didOpen: () => {
+            this.initializeControlsModal()
+          }
+        })
+      } catch (error) {
+        this.controlsLoading = false
+        logger.error('Failed to load session controls:', error)
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: error.message || 'Failed to load session controls',
+          confirmButtonColor: '#1a5f5f'
+        })
+      }
+    },
+
+    getControlsModalHTML() {
+      if (this.controlsLoading) {
+        return `
+          <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
             </div>
-            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-              <table class="table table-sm table-hover">
-                <thead class="table-light sticky-top">
-                  <tr>
-                    <th>Control Name</th>
-                    <th>Type</th>
-                    <th>Value</th>
-                    <th class="text-center">Active</th>
-                  </tr>
-                </thead>
-                <tbody id="controlsTableBody">
-                  <tr>
-                    <td>Application Fee</td>
-                    <td>Amount</td>
-                    <td>₦5,000</td>
-                    <td class="text-center">
-                      <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" checked>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Max Applications</td>
-                    <td>Number</td>
-                    <td>1000</td>
-                    <td class="text-center">
-                      <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" checked>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Application Deadline</td>
-                    <td>Date</td>
-                    <td>2024-12-31</td>
-                    <td class="text-center">
-                      <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox">
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <p class="mt-3 text-muted">Loading session controls...</p>
+          </div>
+        `
+      }
+
+      const controls = this.sessionControls?.controls || []
+      const payments = this.sessionControls?.payments || []
+
+      // Debug logging
+      logger.info('Rendering controls modal with:', {
+        sessionControls: this.sessionControls,
+        controls: controls,
+        payments: payments,
+        controlsLength: controls.length,
+        paymentsLength: payments.length
+      })
+
+      // If no session controls data, show message
+      if (!this.sessionControls) {
+        return `
+          <div class="p-4">
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              No session controls found for this academic session. Please try refreshing or contact support.
             </div>
           </div>
-        `,
-        showCloseButton: true,
-        showConfirmButton: false,
-        width: '800px',
-        didOpen: () => {
-          // Add search functionality for controls
-          const searchInput = document.getElementById('controlSearch')
-          searchInput.addEventListener('input', (e) => {
-            // Implement search functionality here
-            console.log('Searching controls:', e.target.value)
-          })
-        }
+        `
+      }
+
+      return `
+        <div class="p-4">
+          <div class="row">
+            <!-- Session Controls -->
+            <div class="col-md-6">
+              <h6 class="fw-bold mb-3">
+                <i class="bi bi-toggles me-2"></i>Session Controls
+              </h6>
+              <div class="controls-container">
+                ${controls.length > 0 ? controls.map(control => `
+                  <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                    <div>
+                      <strong>${this.formatControlName(control.name)}</strong>
+                    </div>
+                    <div class="form-check form-switch">
+                      <input 
+                        class="form-check-input control-switch" 
+                        type="checkbox" 
+                        data-control="${control.name}"
+                        ${control.active ? 'checked' : ''}
+                      >
+                    </div>
+                  </div>
+                `).join('') : '<p class="text-muted">No session controls available</p>'}
+              </div>
+            </div>
+
+            <!-- Payment Controls -->
+            <div class="col-md-6">
+              <h6 class="fw-bold mb-3">
+                <i class="bi bi-credit-card me-2"></i>Payment Controls
+              </h6>
+              <div class="payments-container">
+                ${payments.length > 0 ? payments.map(payment => `
+                  <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                    <div>
+                      <strong>${payment.paymentId?.name || 'Unknown Payment'}</strong>
+                    </div>
+                    <div class="form-check form-switch">
+                      <input 
+                        class="form-check-input payment-switch" 
+                        type="checkbox" 
+                        data-payment="${payment.paymentId?._id}"
+                        ${payment.active ? 'checked' : ''}
+                      >
+                    </div>
+                  </div>
+                `).join('') : '<p class="text-muted">No payment controls available</p>'}
+              </div>
+            </div>
+          </div>
+
+          <div class="row mt-4">
+            <div class="col-12">
+              <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" id="closeControlsBtn">Close</button>
+                <button type="button" class="btn btn-primary" id="saveControlsBtn">
+                  <i class="bi bi-check me-2"></i>Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `
+    },
+
+    formatControlName(controlName) {
+      const names = {
+        application: 'Application',
+        admissionProcessing: 'Admission Processing',
+        courseRegistration: 'Course Registration',
+        resultUpload: 'Result Upload',
+        resultRelease: 'Result Release'
+      }
+      return names[controlName] || controlName
+    },
+
+    initializeControlsModal() {
+      // Add event listeners for control switches
+      document.querySelectorAll('.control-switch').forEach(switchEl => {
+        switchEl.addEventListener('change', (e) => {
+          this.updateControlSwitch(e.target.dataset.control, e.target.checked)
+        })
       })
+
+      // Add event listeners for payment switches
+      document.querySelectorAll('.payment-switch').forEach(switchEl => {
+        switchEl.addEventListener('change', (e) => {
+          this.updatePaymentSwitch(e.target.dataset.payment, e.target.checked)
+        })
+      })
+
+      // Add close button listener
+      document.getElementById('closeControlsBtn')?.addEventListener('click', () => {
+        this.$swal.close()
+      })
+
+      // Add save button listener
+      document.getElementById('saveControlsBtn')?.addEventListener('click', () => {
+        this.saveSessionControls()
+      })
+    },
+
+    updateControlSwitch(controlName, active) {
+      if (this.sessionControls && this.sessionControls.controls) {
+        const control = this.sessionControls.controls.find(c => c.name === controlName)
+        if (control) {
+          control.active = active
+        }
+      }
+    },
+
+    updatePaymentSwitch(paymentId, active) {
+      if (this.sessionControls && this.sessionControls.payments) {
+        const payment = this.sessionControls.payments.find(p => p.paymentId._id === paymentId)
+        if (payment) {
+          payment.active = active
+        }
+      }
+    },
+
+    async saveSessionControls() {
+      try {
+        const controlsData = {
+          controls: this.sessionControls.controls,
+          payments: this.sessionControls.payments.map(p => ({
+            paymentId: p.paymentId._id,
+            active: p.active
+          }))
+        }
+
+        const response = await apiService.updateSessionControls(this.selectedSession.id, controlsData)
+
+        if (response.success) {
+          this.$swal.fire({
+            icon: 'success',
+            title: 'Success',
+            text: 'Session controls updated successfully',
+            timer: 2000,
+            showConfirmButton: false
+          })
+        } else {
+          throw new Error(response.message)
+        }
+      } catch (error) {
+        logger.error('Failed to save session controls:', error)
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: error.message || 'Failed to save session controls',
+          confirmButtonColor: '#1a5f5f'
+        })
+      }
     }
   }
 }
@@ -483,19 +722,18 @@ export default {
               <table class="table table-hover mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th>Session Name</th>
-                    <th>Academic Year</th>
+                    <th>Session Year</th>
                     <th>Start Date</th>
                     <th>End Date</th>
                     <th class="text-center">Status</th>
-                    <th class="text-center">Applications Open</th>
+                    <th class="text-center">Active</th>
                     <th class="text-center">Controls</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-if="paginatedSessions.length === 0">
-                    <td colspan="8" class="text-center py-5">
+                    <td colspan="7" class="text-center py-5">
                       <div class="text-muted">
                         <i class="bi bi-calendar-x fs-1 mb-3 d-block"></i>
                         <h5 class="mb-2">No Academic Sessions Found</h5>
@@ -511,36 +749,35 @@ export default {
 
                   <tr v-for="session in paginatedSessions" :key="session.id">
                     <td>
-                      <div class="fw-medium">{{ session.name }}</div>
+                      <div class="fw-medium">{{ session.sessionYear }}</div>
                       <small class="text-muted">{{ session.description }}</small>
                     </td>
-                    <td>{{ session.academicYear }}</td>
                     <td>{{ formatDate(session.startDate) }}</td>
                     <td>{{ formatDate(session.endDate) }}</td>
                     <td class="text-center">
                       <span
                         class="badge rounded-pill"
-                        :class="session.isActive ? 'bg-success' : 'bg-secondary'"
+                        :class="getStatusBadgeClass(session.status)"
                       >
-                        {{ session.isActive ? 'Active' : 'Inactive' }}
+                        {{ session.status?.toUpperCase() }}
                       </span>
                     </td>
                     <td class="text-center">
                       <span
                         class="badge rounded-pill"
-                        :class="session.applicationsOpen ? 'bg-info' : 'bg-warning'"
+                        :class="session.active ? 'bg-success' : 'bg-secondary'"
                       >
-                        {{ session.applicationsOpen ? 'Open' : 'Closed' }}
+                        {{ session.active ? 'Active' : 'Inactive' }}
                       </span>
                     </td>
                     <td class="text-center">
                       <button
                         class="btn btn-outline-primary btn-sm"
                         @click="viewControls(session)"
-                        title="View Controls"
+                        title="Manage Controls"
                       >
                         <i class="bi bi-sliders"></i>
-                        <span class="badge bg-primary ms-1">{{ session.controlsCount || 0 }}</span>
+                        Controls
                       </button>
                     </td>
                     <td>
@@ -592,12 +829,12 @@ export default {
                 </li>
                 <li
                   class="page-item"
-                  :class="{ disabled: currentPage === totalPages }"
+                  :class="{ disabled: currentPage >= totalPages || sessions.length === 0 }"
                 >
                   <button
                     class="page-link"
                     @click="currentPage = currentPage + 1"
-                    :disabled="currentPage === totalPages"
+                    :disabled="currentPage >= totalPages || sessions.length === 0"
                   >
                     Next
                   </button>

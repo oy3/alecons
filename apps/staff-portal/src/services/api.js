@@ -269,6 +269,48 @@ class StaffApiService {
             method: 'DELETE',
         })
     }
+
+    // Academic Sessions Management
+    async getAcademicSessions(params = {}) {
+        const queryParams = new URLSearchParams(params).toString()
+        const endpoint = queryParams ? `/academic-sessions?${queryParams}` : '/academic-sessions'
+        return this.makeRequest(endpoint)
+    }
+
+    async getAcademicSession(id) {
+        return this.makeRequest(`/academic-sessions/${id}`)
+    }
+
+    async createAcademicSession(sessionData) {
+        return this.makeRequest('/academic-sessions', {
+            method: 'POST',
+            body: JSON.stringify(sessionData),
+        })
+    }
+
+    async updateAcademicSession(id, sessionData) {
+        return this.makeRequest(`/academic-sessions/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(sessionData),
+        })
+    }
+
+    async deleteAcademicSession(id) {
+        return this.makeRequest(`/academic-sessions/${id}`, {
+            method: 'DELETE',
+        })
+    }
+
+    async getSessionControls(sessionId) {
+        return this.makeRequest(`/academic-sessions/${sessionId}/controls`)
+    }
+
+    async updateSessionControls(sessionId, controlsData) {
+        return this.makeRequest(`/academic-sessions/${sessionId}/controls`, {
+            method: 'PUT',
+            body: JSON.stringify(controlsData),
+        })
+    }
 }
 
 export const apiService = new StaffApiService()

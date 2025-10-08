@@ -27,7 +27,6 @@ export class SessionControl {
         default: [
             { name: 'application', active: false },
             { name: 'admissionProcessing', active: false },
-            { name: 'clearance', active: false },
             { name: 'courseRegistration', active: false },
             { name: 'resultUpload', active: false },
             { name: 'resultRelease', active: false }

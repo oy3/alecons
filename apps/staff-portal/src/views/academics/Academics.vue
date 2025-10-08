@@ -1,3 +1,63 @@
+<script>
+import { useAuthStore } from '../../stores/auth.js'
+import { logger } from '@shared/utils/logger'
+import AcademicSessions from './components/AcademicSessions.vue'
+import Departments from './components/Departments.vue'
+import Programs from './components/Programs.vue'
+import Payments from './components/Payments.vue'
+import Roles from './components/Roles.vue'
+
+export default {
+  name: 'AcademicsManagement',
+  components: {
+    AcademicSessions,
+    Departments,
+    Programs,
+    Payments,
+    Roles
+  },
+  setup() {
+    const authStore = useAuthStore()
+    return {
+      authStore
+    }
+  },
+  data() {
+    return {
+      activeTab: 'sessions'
+    }
+  },
+  async mounted() {
+    await this.authStore.initialize()
+
+    // Check permissions
+    if (!this.authStore.hasAnyPermission(['academics:manage', 'admin', 'staff'])) {
+      this.$swal.fire({
+        icon: 'error',
+        title: 'Access Denied',
+        text: 'You do not have permission to manage academics',
+        confirmButtonColor: '#1a5f5f'
+      })
+      this.$router.push('/dashboard')
+      return
+    }
+
+    logger.info('Academics management page loaded')
+  },
+  methods: {
+    setActiveTab(tab) {
+      this.activeTab = tab
+      logger.info('Switched to tab:', tab)
+    },
+
+    refreshCurrentTab() {
+      this.$emit('refresh')
+      logger.info('Refreshing current tab:', this.activeTab)
+    }
+  }
+}
+</script>
+
 <template>
   <div class="container-fluid p-4">
     <!-- Page Header -->
@@ -138,66 +198,6 @@
     </div>
   </div>
 </template>
-
-<script>
-import { useAuthStore } from '../../stores/auth.js'
-import { logger } from '@shared/utils/logger'
-import AcademicSessions from './components/AcademicSessions.vue'
-import Departments from './components/Departments.vue'
-import Programs from './components/Programs.vue'
-import Payments from './components/Payments.vue'
-import Roles from './components/Roles.vue'
-
-export default {
-  name: 'AcademicsManagement',
-  components: {
-    AcademicSessions,
-    Departments,
-    Programs,
-    Payments,
-    Roles
-  },
-  setup() {
-    const authStore = useAuthStore()
-    return {
-      authStore
-    }
-  },
-  data() {
-    return {
-      activeTab: 'sessions'
-    }
-  },
-  async mounted() {
-    await this.authStore.initialize()
-
-    // Check permissions
-    if (!this.authStore.hasAnyPermission(['academics:manage', 'admin', 'staff'])) {
-      this.$swal.fire({
-        icon: 'error',
-        title: 'Access Denied',
-        text: 'You do not have permission to manage academics',
-        confirmButtonColor: '#1a5f5f'
-      })
-      this.$router.push('/dashboard')
-      return
-    }
-
-    logger.info('Academics management page loaded')
-  },
-  methods: {
-    setActiveTab(tab) {
-      this.activeTab = tab
-      logger.info('Switched to tab:', tab)
-    },
-
-    refreshCurrentTab() {
-      this.$emit('refresh')
-      logger.info('Refreshing current tab:', this.activeTab)
-    }
-  }
-}
-</script>
 
 <style scoped>
 .nav-tabs {

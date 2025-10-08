@@ -233,6 +233,42 @@ class StaffApiService {
     async healthCheck() {
         return this.makeRequest('/health')
     }
+
+    // Payment Management
+    async getPayments(filters = {}) {
+        const queryParams = new URLSearchParams(filters).toString()
+        return this.makeRequest(`/staff/payments${queryParams ? `?${queryParams}` : ''}`)
+    }
+
+    async getPayment(id) {
+        return this.makeRequest(`/staff/payments/${id}`)
+    }
+
+    async createPayment(paymentData) {
+        return this.makeRequest('/staff/payments', {
+            method: 'POST',
+            body: JSON.stringify(paymentData),
+        })
+    }
+
+    async updatePayment(id, paymentData) {
+        return this.makeRequest(`/staff/payments/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(paymentData),
+        })
+    }
+
+    async togglePaymentStatus(id) {
+        return this.makeRequest(`/staff/payments/${id}/toggle-status`, {
+            method: 'PATCH',
+        })
+    }
+
+    async deletePayment(id) {
+        return this.makeRequest(`/staff/payments/${id}`, {
+            method: 'DELETE',
+        })
+    }
 }
 
 export const apiService = new StaffApiService()

@@ -505,4 +505,262 @@ export class PaymentsService {
             throw error;
         }
     }
+
+    // Payment Management Methods for Staff Portal
+
+    async getPaymentsForManagement(filters: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        active?: boolean;
+        sortBy?: string;
+        sortOrder?: string;
+    }) {
+        const {
+            page = 1,
+            limit = 10,
+            search,
+            active,
+            sortBy = 'createdAt',
+            sortOrder = 'desc'
+        } = filters;
+
+        // Build query
+        const query: any = {};
+
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } },
+                { paymentCode: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        if (active !== undefined) {
+            query.active = active;
+        }
+
+        // Build sort object
+        const sort: any = {};
+        sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+        // Calculate pagination
+        const skip = (page - 1) * limit;
+
+        // Execute queries
+        const [payments, totalCount] = await Promise.all([
+            this.paymentModel
+                .find(query)
+                .sort(sort)
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            this.paymentModel.countDocuments(query)
+        ]);
+
+        // Transform payments for frontend
+        const transformedPayments = payments.map(payment => ({
+            id: payment._id.toString(),
+            name: payment.name,
+            description: payment.description,
+            amount: payment.amount,
+            category: payment.category,
+            isActive: payment.active,
+            paymentCode: payment.paymentCode,
+            createdAt: (payment as any).createdAt,
+            updatedAt: (payment as any).updatedAt
+        }));
+
+        return {
+            payments: transformedPayments,
+            pagination: {
+                page,
+                limit,
+                totalCount,
+                totalPages: Math.ceil(totalCount / limit),
+                hasNextPage: page < Math.ceil(totalCount / limit),
+                hasPrevPage: page > 1
+            }
+        };
+    }
+
+    async getPaymentById(id: string) {
+        try {
+            const payment = await this.paymentModel.findById(id).lean();
+
+            if (!payment) {
+                return null;
+            }
+
+            return {
+                id: payment._id.toString(),
+                name: payment.name,
+                description: payment.description,
+                amount: payment.amount,
+                category: payment.category,
+                isActive: payment.active,
+                paymentCode: payment.paymentCode,
+                createdAt: (payment as any).createdAt,
+                updatedAt: (payment as any).updatedAt
+            };
+        } catch (error) {
+            this.logger.error('Error getting payment by ID:', error);
+            throw error;
+        }
+    }
+
+    async createPayment(createPaymentDto: {
+        name: string;
+        description?: string;
+        amount: number;
+        category?: string;
+        isActive?: boolean;
+        paymentCode?: string;
+    }) {
+        try {
+            const paymentData = {
+                name: createPaymentDto.name,
+                description: createPaymentDto.description,
+                amount: createPaymentDto.amount,
+                category: createPaymentDto.category,
+                active: createPaymentDto.isActive !== undefined ? createPaymentDto.isActive : true,
+                paymentCode: createPaymentDto.paymentCode
+            };
+
+            const payment = new this.paymentModel(paymentData);
+            const savedPayment = await payment.save();
+
+            this.logger.log('Payment created successfully:', savedPayment._id);
+
+            return {
+                id: savedPayment._id.toString(),
+                name: savedPayment.name,
+                description: savedPayment.description,
+                amount: savedPayment.amount,
+                category: savedPayment.category,
+                isActive: savedPayment.active,
+                paymentCode: savedPayment.paymentCode,
+                createdAt: (savedPayment as any).createdAt,
+                updatedAt: (savedPayment as any).updatedAt
+            };
+        } catch (error) {
+            this.logger.error('Error creating payment:', error);
+            throw error;
+        }
+    }
+
+    async updatePayment(id: string, updatePaymentDto: {
+        name?: string;
+        description?: string;
+        amount?: number;
+        category?: string;
+        isActive?: boolean;
+        paymentCode?: string;
+    }) {
+        try {
+            const updateData: any = {};
+
+            if (updatePaymentDto.name !== undefined) {
+                updateData.name = updatePaymentDto.name;
+            }
+            if (updatePaymentDto.paymentCode !== undefined) {
+                updateData.paymentCode = updatePaymentDto.paymentCode;
+            }
+            if (updatePaymentDto.description !== undefined) {
+                updateData.description = updatePaymentDto.description;
+            }
+            if (updatePaymentDto.amount !== undefined) {
+                updateData.amount = updatePaymentDto.amount;
+            }
+            if (updatePaymentDto.category !== undefined) {
+                updateData.category = updatePaymentDto.category;
+            }
+            if (updatePaymentDto.isActive !== undefined) {
+                updateData.active = updatePaymentDto.isActive;
+            }
+
+            const payment = await this.paymentModel
+                .findByIdAndUpdate(id, updateData, { new: true })
+                .lean();
+
+            if (!payment) {
+                return null;
+            }
+
+            this.logger.log('Payment updated successfully:', payment._id);
+
+            return {
+                id: payment._id.toString(),
+                name: payment.name,
+                description: payment.description,
+                amount: payment.amount,
+                category: payment.category,
+                isActive: payment.active,
+                paymentCode: payment.paymentCode,
+                createdAt: (payment as any).createdAt,
+                updatedAt: (payment as any).updatedAt
+            };
+        } catch (error) {
+            this.logger.error('Error updating payment:', error);
+            throw error;
+        }
+    }
+
+    async togglePaymentStatus(id: string) {
+        try {
+            const payment = await this.paymentModel.findById(id);
+
+            if (!payment) {
+                return null;
+            }
+
+            payment.active = !payment.active;
+            const updatedPayment = await payment.save();
+
+            this.logger.log('Payment status toggled successfully:', {
+                id: updatedPayment._id,
+                active: updatedPayment.active
+            });
+
+            return {
+                id: updatedPayment._id.toString(),
+                name: updatedPayment.name,
+                description: updatedPayment.description,
+                amount: updatedPayment.amount,
+                category: updatedPayment.category,
+                isActive: updatedPayment.active,
+                paymentCode: updatedPayment.paymentCode,
+                createdAt: (updatedPayment as any).createdAt,
+                updatedAt: (updatedPayment as any).updatedAt
+            };
+        } catch (error) {
+            this.logger.error('Error toggling payment status:', error);
+            throw error;
+        }
+    }
+
+    async deletePayment(id: string) {
+        try {
+            // Check if payment is being used by any student payments
+            const studentPaymentCount = await this.studentPaymentModel.countDocuments({
+                paymentId: id
+            });
+
+            if (studentPaymentCount > 0) {
+                throw new Error('Cannot delete payment that has been used by students');
+            }
+
+            const result = await this.paymentModel.findByIdAndDelete(id);
+
+            if (!result) {
+                return null;
+            }
+
+            this.logger.log('Payment deleted successfully:', id);
+            return true;
+        } catch (error) {
+            this.logger.error('Error deleting payment:', error);
+            throw error;
+        }
+    }
 }

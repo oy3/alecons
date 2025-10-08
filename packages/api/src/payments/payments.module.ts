@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { PaymentsController } from './payments.controller';
+import { PaymentsController, StaffPaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { Payment, PaymentSchema } from '../schemas/payment.schema';
 import { StudentPayment, StudentPaymentSchema } from '../schemas/student-payment.schema';
@@ -14,8 +14,8 @@ import { Application, ApplicationSchema } from '../schemas/application.schema';
             { name: Application.name, schema: ApplicationSchema },
         ]),
     ],
-    controllers: [PaymentsController],
+    controllers: [PaymentsController, StaffPaymentsController],
     providers: [PaymentsService],
     exports: [PaymentsService],
 })
-export class PaymentsModule {}
+export class PaymentsModule { }

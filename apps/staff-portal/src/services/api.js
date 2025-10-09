@@ -351,6 +351,104 @@ class StaffApiService {
             method: 'PATCH',
         })
     }
+
+    // Program API methods
+    async getPrograms(params = {}) {
+        const queryString = new URLSearchParams(params).toString()
+        return this.makeRequest(`/programs${queryString ? `?${queryString}` : ''}`)
+    }
+
+    async getProgram(id) {
+        return this.makeRequest(`/programs/${id}`)
+    }
+
+    async createProgram(programData) {
+        return this.makeRequest('/programs', {
+            method: 'POST',
+            body: JSON.stringify(programData),
+        })
+    }
+
+    async updateProgram(id, programData) {
+        return this.makeRequest(`/programs/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(programData),
+        })
+    }
+
+    async deleteProgram(id) {
+        return this.makeRequest(`/programs/${id}`, {
+            method: 'DELETE',
+        })
+    }
+
+    async toggleProgramStatus(id) {
+        return this.makeRequest(`/programs/${id}/toggle-status`, {
+            method: 'PUT',
+        })
+    }
+
+    // Program Type API methods
+    async getProgramTypes() {
+        return this.makeRequest('/programs/types')
+    }
+
+    async createProgramType(typeData) {
+        return this.makeRequest('/programs/types', {
+            method: 'POST',
+            body: JSON.stringify(typeData),
+        })
+    }
+
+    async updateProgramType(id, typeData) {
+        return this.makeRequest(`/programs/types/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(typeData),
+        })
+    }
+
+    async deleteProgramType(id) {
+        return this.makeRequest(`/programs/types/${id}`, {
+            method: 'DELETE',
+        })
+    }
+
+    async toggleProgramTypeStatus(id) {
+        return this.makeRequest(`/programs/types/${id}/toggle-status`, {
+            method: 'PUT',
+        })
+    }
+
+    // Program Mode API methods
+    async getProgramModes() {
+        return this.makeRequest('/programs/modes')
+    }
+
+    async createProgramMode(modeData) {
+        return this.makeRequest('/programs/modes', {
+            method: 'POST',
+            body: JSON.stringify(modeData),
+        })
+    }
+
+    async updateProgramMode(id, modeData) {
+        return this.makeRequest(`/programs/modes/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(modeData),
+        })
+    }
+
+    async deleteProgramMode(id) {
+        return this.makeRequest(`/programs/modes/${id}`, {
+            method: 'DELETE',
+        })
+    }
+
+    async toggleProgramModeStatus(id) {
+        return this.makeRequest(`/programs/modes/${id}/toggle-status`, {
+            method: 'PUT',
+        })
+    }
 }
 
 export const apiService = new StaffApiService()

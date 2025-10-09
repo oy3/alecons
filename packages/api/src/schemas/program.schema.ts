@@ -17,6 +17,15 @@ export class Program {
     @Prop()
     description?: string;
 
+    @Prop({ type: Types.ObjectId, ref: 'ProgramType', required: true })
+    programTypeId: Types.ObjectId;
+
+    @Prop({ type: Types.ObjectId, ref: 'ProgramMode', required: true })
+    programModeId: Types.ObjectId;
+
+    @Prop({ required: true })
+    durationSemesters: number;
+
     @Prop({ default: true })
     active: boolean;
 }

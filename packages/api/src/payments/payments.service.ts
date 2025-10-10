@@ -378,7 +378,7 @@ export class PaymentsService {
 
         return {
             status: transaction.status,
-            reference: transaction.reference,
+            reference: ransaction.reference,
             amount: transaction.amount,
             channel: transaction.channel,
             paid_at: transaction.paid_at,

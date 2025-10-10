@@ -89,7 +89,7 @@ export class EmailService {
                         
                         <h2>Hello ${firstName},</h2>
                         
-                        <p>Thank you for creating your account with Alebiosu College of Nursing Services (ACON)!</p>
+                        <p>Thank you for creating your account with Alebiosu College of Nursing Services (ALECONS)!</p>
                         
                         <p>To complete your registration and proceed with your application, please verify your email address by clicking the button below:</p>
                         
@@ -116,7 +116,7 @@ export class EmailService {
                         <div class="footer">
                             <p><strong>Alebiosu College of Nursing Services</strong><br>
                             Omuo Oke, Ekiti State, Nigeria<br>
-                            Email: admissions@acon.edu.ng<br>
+                            Email: admissions@alecons.edu.ng<br>
                             Phone: +234 708 460 1610</p>
                         </div>
                     </div>
@@ -183,7 +183,7 @@ export class EmailService {
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
                             <p><strong>Alebiosu College of Nursing Services</strong><br>
                             Omuo Oke, Ekiti State, Nigeria<br>
-                            Email: admissions@acon.edu.ng<br>
+                            Email: admissions@alecons.edu.ng<br>
                             Phone: +234 708 460 1610</p>
                         </div>
                     </div>
@@ -273,7 +273,7 @@ export class EmailService {
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
                             <p><strong>Alebiosu College of Nursing Services</strong><br>
                             Omuo Oke, Ekiti State, Nigeria<br>
-                            Email: admissions@acon.edu.ng<br>
+                            Email: admissions@alecons.edu.ng<br>
                             Phone: +234 708 460 1610</p>
                         </div>
                     </div>
@@ -368,7 +368,7 @@ export class EmailService {
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
                             <p><strong>Alebiosu College of Nursing Services</strong><br>
                             Omuo Oke, Ekiti State, Nigeria<br>
-                            Email: admissions@acon.edu.ng<br>
+                            Email: admissions@alecons.edu.ng<br>
                             Phone: +234 708 460 1610</p>
                         </div>
                     </div>
@@ -438,12 +438,12 @@ export class EmailService {
                         
                         <p><strong>Important:</strong> You have 14 days to accept this offer by paying the acceptance fee. Failure to do so may result in the offer being withdrawn.</p>
                         
-                        <p>Welcome to the ACON family! We look forward to supporting you on your journey to becoming a professional nurse.</p>
+                        <p>Welcome to the ALECONS family! We look forward to supporting you on your journey to becoming a professional nurse.</p>
                         
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
                             <p><strong>Alebiosu College of Nursing Services</strong><br>
                             Omuo Oke, Ekiti State, Nigeria<br>
-                            Email: admissions@acon.edu.ng<br>
+                            Email: admissions@alecons.edu.ng<br>
                             Phone: +234 708 460 1610</p>
                         </div>
                     </div>
@@ -511,7 +511,7 @@ export class EmailService {
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
                             <p><strong>Alebiosu College of Nursing Services</strong><br>
                             Omuo Oke, Ekiti State, Nigeria<br>
-                            Email: admissions@acon.edu.ng<br>
+                            Email: admissions@alecons.edu.ng<br>
                             Phone: +234 708 460 1610</p>
                         </div>
                     </div>
@@ -538,7 +538,7 @@ export class EmailService {
         const mailOptions = {
             from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
             to: email,
-            subject: '🎓 Welcome to ACON - Your Matriculation Details',
+            subject: '🎓 Welcome to ALECONS - Your Matriculation Details',
             html: `
                 <!DOCTYPE html>
                 <html>
@@ -558,7 +558,7 @@ export class EmailService {
                 <body>
                     <div class="container">
                         <div class="header">
-                            <h1>🎓 Welcome to ACON!</h1>
+                            <h1>🎓 Welcome to ALECONS!</h1>
                             <h2>Application Process Complete</h2>
                         </div>
                         
@@ -600,7 +600,7 @@ export class EmailService {
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
                             <p><strong>Alebiosu College of Nursing Services</strong><br>
                             Omuo Oke, Ekiti State, Nigeria<br>
-                            Email: admissions@acon.edu.ng<br>
+                            Email: admissions@alecons.edu.ng<br>
                             Phone: +234 708 460 1610</p>
                         </div>
                     </div>

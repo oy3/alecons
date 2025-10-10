@@ -494,6 +494,67 @@ export default {
       this.loadApplications()
 
       logger.info('Filters reset successfully')
+    },
+
+    async sendMatriculationEmail(application) {
+      try {
+        // Show confirmation dialog
+        const result = await this.$swal.fire({
+          icon: 'question',
+          title: 'Send Matriculation Email',
+          text: `Send matriculation email to ${application.applicantName}?`,
+          showCancelButton: true,
+          confirmButtonText: 'Send Email',
+          cancelButtonText: 'Cancel',
+          confirmButtonColor: '#1a5f5f',
+          cancelButtonColor: '#6c757d'
+        })
+
+        if (!result.isConfirmed) {
+          return
+        }
+
+        // Show loading
+        this.$swal.fire({
+          title: 'Sending Email...',
+          text: 'Please wait while we send the matriculation email.',
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          willOpen: () => {
+            this.$swal.showLoading()
+          }
+        })
+
+        // Make API call
+        const response = await apiService.sendMatriculationEmail(application.id)
+
+        if (response.success) {
+          this.$swal.fire({
+            icon: 'success',
+            title: 'Email Sent Successfully!',
+            text: `Matriculation email sent to ${application.email}`,
+            confirmButtonColor: '#1a5f5f'
+          })
+
+          logger.info('Matriculation email sent successfully:', {
+            applicationId: application.id,
+            email: application.email,
+            matricNumber: response.data?.matriculationNumber
+          })
+        } else {
+          throw new Error(response.message || 'Failed to send email')
+        }
+
+      } catch (error) {
+        logger.error('Error sending matriculation email:', error)
+        
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Failed to Send Email',
+          text: error.message || 'An error occurred while sending the matriculation email',
+          confirmButtonColor: '#dc3545'
+        })
+      }
     }
   }
 }
@@ -614,7 +675,6 @@ export default {
             </div>
           </div> -->
           <div class="card-body p-0">
-            <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead class="">
                   <tr>
@@ -721,9 +781,20 @@ export default {
                             data-bs-toggle="dropdown"
                             title="Update Status"
                           >
-                            <i class="bi bi-check-circle"></i>
+                            <i class="bi bi-three-dots-vertical"></i>
                           </button>
                           <ul class="dropdown-menu">
+                            <li v-if="app.status === 'completed'" class="">
+                                <a
+                                class="dropdown-item"
+                                href="#"
+                                @click.prevent="sendMatriculationEmail(app)"
+                              >
+                              <i class="bi bi-envelope text-success me-2"></i>
+                               Send matric no.
+                            </a>                      
+                            </li>
+<!-- 
                             <li>
                               <a
                                 class="dropdown-item"
@@ -785,7 +856,9 @@ export default {
                                 <i class="bi bi-x-circle text-danger me-2"></i
                                 >Rejected
                               </a>
-                            </li>
+                            </li> -->
+
+
                           </ul>
                         </div>
                       </div>
@@ -793,7 +866,6 @@ export default {
                   </tr>
                 </tbody>
               </table>
-            </div>
           </div>
 
           <!-- Pagination -->

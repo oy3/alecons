@@ -183,6 +183,12 @@ class StaffApiService {
         })
     }
 
+    async sendMatriculationEmail(id) {
+        return this.makeRequest(`/staff/applications/${id}/send-matric-email`, {
+            method: 'PATCH',
+        })
+    }
+
     // User management
     async getUsers(filters = {}) {
         const queryParams = new URLSearchParams(filters).toString()

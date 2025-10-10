@@ -18,6 +18,7 @@ import { Application, ApplicationDocument, ApplicationStatus, AdmissionDecision 
 import { Program, ProgramDocument } from '../schemas/program.schema';
 import { User, UserDocument } from '../schemas/user.schema';
 import { EmailService } from '../services/email.service';
+import { MatriculationService } from '../services/matriculation.service';
 
 @ApiTags('Staff Applications')
 @Controller('staff/applications')
@@ -31,6 +32,7 @@ export class StaffApplicationsController {
         @InjectModel(Program.name) private programModel: Model<ProgramDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
         private emailService: EmailService,
+        private matriculationService: MatriculationService,
     ) { }
 
     @Get()
@@ -733,13 +735,10 @@ export class StaffApplicationsController {
                 );
             }
 
-            // Generate matriculation number (would need MatriculationService and StudentService)
-            const currentYear = new Date().getFullYear();
-            const yearSuffix = currentYear.toString().slice(-2);
-            const programCode = '01'; // This should come from program data
-            const sequence = String(Date.now() % 10000).padStart(4, '0'); // Temporary sequence
+            const user = application.userId as any;
 
-            const matriculationNumber = `ALC/${yearSuffix}/${programCode}-${sequence}`;
+            // Generate matriculation number using the proper service
+            const matriculationNumber = await this.matriculationService.generateMatriculationNumber(application.programId.toString());
 
             // Update application
             application.matriculationNumber = matriculationNumber;
@@ -747,36 +746,20 @@ export class StaffApplicationsController {
             application.currentStage = 10; // Final stage
             await application.save();
 
-            // Create student record (would need Student model injection)
-            // const student = new this.studentModel({
-            //     userId: application.userId,
-            //     applicationId: application._id,
-            //     matriculationNumber,
-            //     programId: application.programId,
-            //     programTypeId: application.programTypeId,
-            //     programModeId: application.programModeId,
-            //     admissionYear: currentYear,
-            //     academicSession: `${currentYear}/${currentYear + 1}`,
-            //     status: 'active'
-            // });
-            // await student.save();
-
-            // Update user role to student
-            // await this.userModel.findByIdAndUpdate(application.userId, { role: 'student' });
-
             // Send matriculation email
-            // await this.emailService.sendMatriculationEmail(
-            //     application.userId.email,
-            //     application.userId.firstName,
-            //     matriculationNumber,
-            //     process.env.STUDENT_PORTAL_URL
-            // );
+            const studentPortalUrl = process.env.STUDENT_PORTAL_URL || 'http://localhost:3000/student-portal';
+            await this.emailService.sendMatriculationEmail(
+                user.email,
+                user.firstName,
+                matriculationNumber,
+                studentPortalUrl
+            );
 
             this.logger.log('Matriculation number generated successfully:', matriculationNumber);
 
             return {
                 success: true,
-                message: 'Matriculation number generated successfully',
+                message: 'Matriculation number generated and email sent successfully',
                 data: {
                     application,
                     matriculationNumber
@@ -789,6 +772,65 @@ export class StaffApplicationsController {
                 {
                     success: false,
                     message: 'Failed to generate matriculation number',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Patch(':id/send-matric-email')
+    @ApiOperation({ summary: 'Send matriculation email to student' })
+    @ApiResponse({ status: 200, description: 'Matriculation email sent successfully' })
+    async sendMatriculationEmail(@Param('id') id: string) {
+        try {
+            this.logger.log('Sending matriculation email for application:', id);
+
+            const application = await this.applicationModel.findById(id)
+                .populate('userId')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            if (!application.matriculationNumber) {
+                throw new HttpException(
+                    { success: false, message: 'Matriculation number not generated yet' },
+                    HttpStatus.BAD_REQUEST
+                );
+            }
+
+            const user = application.userId as any;
+            const studentPortalUrl = process.env.STUDENT_PORTAL_URL || 'http://localhost:3000/student-portal';
+
+            await this.emailService.sendMatriculationEmail(
+                user.email,
+                user.firstName,
+                application.matriculationNumber,
+                studentPortalUrl
+            );
+
+            this.logger.log('Matriculation email sent successfully to:', user.email);
+
+            return {
+                success: true,
+                message: 'Matriculation email sent successfully',
+                data: {
+                    email: user.email,
+                    matriculationNumber: application.matriculationNumber
+                }
+            };
+
+        } catch (error) {
+            this.logger.error('Error sending matriculation email:', error.message);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to send matriculation email',
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR

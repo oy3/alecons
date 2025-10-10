@@ -5,6 +5,8 @@ import { Payment, PaymentDocument, PaymentAudience } from '../schemas/payment.sc
 import { StudentPayment, StudentPaymentDocument, PaymentStatus } from '../schemas/student-payment.schema';
 import { Application, ApplicationDocument } from '../schemas/application.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
+import { MatriculationService } from '../services/matriculation.service';
+import { EmailService } from '../services/email.service';
 
 export interface PaymentSummary {
     id: string;
@@ -44,6 +46,8 @@ export class PaymentsService {
         @InjectModel(StudentPayment.name) private studentPaymentModel: Model<StudentPaymentDocument>,
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
+        private matriculationService: MatriculationService,
+        private emailService: EmailService,
     ) { }
 
     async getStudentPaymentsSummary(userId: string): Promise<StudentPaymentsSummary> {
@@ -378,7 +382,7 @@ export class PaymentsService {
 
         return {
             status: transaction.status,
-            reference: ransaction.reference,
+            reference: transaction.reference,
             amount: transaction.amount,
             channel: transaction.channel,
             paid_at: transaction.paid_at,
@@ -489,46 +493,33 @@ export class PaymentsService {
         try {
             this.logger.log('Starting application completion process for user:', userId);
 
-            // Generate matriculation number
-            const currentYear = new Date().getFullYear();
-            const yearSuffix = currentYear.toString().slice(-2);
-            const programCode = '01'; // This should be fetched from program data
-            const timestamp = Date.now();
-            const sequence = (timestamp % 10000).toString().padStart(4, '0');
+            // Get user details for email
+            const user = await this.userModel.findById(userId);
+            if (!user) {
+                throw new Error('User not found for application completion');
+            }
 
-            const matriculationNumber = `ALC/${yearSuffix}/${programCode}-${sequence}`;
+            // Generate proper matriculation number using the matriculation service
+            const matriculationNumber = await this.matriculationService.generateMatriculationNumber(application.programId);
 
             // Update application with matriculation number and completion status
             application.matriculationNumber = matriculationNumber;
             application.status = 'completed';
+            application.currentStage = 10; // Set to final stage
             await application.save();
 
-            // Log what should be done for student record and user role update
-            this.logger.log('Application completion tasks needed:', {
-                createStudentRecord: {
-                    userId: application.userId,
-                    applicationId: application._id,
-                    matriculationNumber,
-                    programId: application.programId,
-                    programTypeId: application.programTypeId,
-                    programModeId: application.programModeId,
-                    admissionYear: currentYear,
-                    academicSession: `${currentYear}/${currentYear + 1}`,
-                    status: 'active'
-                },
-                updateUserRole: {
-                    userId: userId,
-                    newRole: 'student'
-                },
-                sendMatriculationEmail: {
-                    userId: userId,
-                    matriculationNumber,
-                    studentPortalUrl: process.env.STUDENT_PORTAL_URL || 'http://localhost:3000/student-portal'
-                }
-            });
+            // Send matriculation email
+            const studentPortalUrl = process.env.STUDENT_PORTAL_URL || 'http://localhost:3000/student-portal';
+            await this.emailService.sendMatriculationEmail(
+                user.email,
+                user.firstName,
+                matriculationNumber,
+                studentPortalUrl
+            );
 
             this.logger.log('Application completion process finished successfully for user:', userId);
             this.logger.log('Generated matriculation number:', matriculationNumber);
+            this.logger.log('Matriculation email sent to:', user.email);
 
         } catch (error) {
             this.logger.error('Error completing application process:', error);

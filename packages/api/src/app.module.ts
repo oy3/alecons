@@ -14,7 +14,9 @@ import { StaffApplicationsController } from './controllers/staff-applications.co
 import { Application, ApplicationSchema } from './schemas/application.schema';
 import { Program, ProgramSchema } from './schemas/program.schema';
 import { User, UserSchema } from './schemas/user.schema';
+import { Student, StudentSchema } from './schemas/student.schema';
 import { EmailService } from './services/email.service';
+import { MatriculationService } from './services/matriculation.service';
 
 @Module({
     imports: [
@@ -26,7 +28,8 @@ import { EmailService } from './services/email.service';
         MongooseModule.forFeature([
             { name: Application.name, schema: ApplicationSchema },
             { name: Program.name, schema: ProgramSchema },
-            { name: User.name, schema: UserSchema }
+            { name: User.name, schema: UserSchema },
+            { name: Student.name, schema: StudentSchema }
         ]),
         ThrottlerModule.forRoot([
             {
@@ -42,6 +45,6 @@ import { EmailService } from './services/email.service';
         DepartmentsModule,
     ],
     controllers: [AppController, StaffApplicationsController],
-    providers: [AppService, EmailService],
+    providers: [AppService, EmailService, MatriculationService],
 })
 export class AppModule { }

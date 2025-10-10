@@ -98,8 +98,7 @@ export class ProgramsService {
     async findAllPrograms(queryDto: QueryProgramsDto) {
         try {
             const { search, departmentId, programTypeId, programModeId, active, page = 1, limit = 10 } = queryDto;
-            const skip = (page - 1) * limit;
-
+            
             // Build filter object
             const filter: any = {};
 
@@ -123,8 +122,37 @@ export class ProgramsService {
 
             if (active !== undefined) {
                 filter.active = active;
+            } else {
+                // For public access (registration), only show active programs by default
+                filter.active = true;
             }
 
+            // If no query parameters are provided (registration use case), return all active programs without pagination
+            const isPublicAccess = !search && !departmentId && !programTypeId && !programModeId && active === undefined && page === 1 && limit === 10;
+            
+            if (isPublicAccess) {
+                const programs = await this.programModel
+                    .find(filter)
+                    .sort({ createdAt: -1 })
+                    .exec();
+
+                return {
+                    success: true,
+                    data: programs.map(program => ({
+                        id: program._id.toString(),
+                        name: program.name,
+                        code: program.code,
+                        description: program.description,
+                        departmentId: program.departmentId.toString(),
+                        programTypeId: program.programTypeId.toString(),
+                        programModeId: program.programModeId.toString(),
+                        active: program.active
+                    }))
+                };
+            }
+
+            // For admin/staff access with pagination
+            const skip = (page - 1) * limit;
             const programs = await this.programModel
                 .find(filter)
                 .populate('departmentId', 'name code')
@@ -636,45 +664,6 @@ export class ProgramsService {
             active: programMode.active,
             createdAt: programMode.createdAt,
             updatedAt: programMode.updatedAt
-        };
-    }
-
-    // Legacy methods (keep for backward compatibility)
-    async getProgramTypes() {
-        const result = await this.findAllProgramTypes();
-        return {
-            success: result.success,
-            data: result.data.map(type => ({
-                id: type.id,
-                name: type.type,
-                description: type.description,
-            })),
-        };
-    }
-
-    async getProgramModes() {
-        const result = await this.findAllProgramModes();
-        return {
-            success: result.success,
-            data: result.data.map(mode => ({
-                id: mode.id,
-                name: mode.mode,
-                description: mode.description,
-            })),
-        };
-    }
-
-    async getPrograms() {
-        const result = await this.findAllPrograms({});
-        return {
-            success: result.success,
-            data: result.data.map(program => ({
-                id: program.id,
-                name: program.name,
-                code: program.code,
-                description: program.description,
-                departmentId: program.departmentId,
-            })),
         };
     }
 }

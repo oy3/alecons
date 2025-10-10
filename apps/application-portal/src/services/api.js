@@ -191,6 +191,10 @@ class ApiService {
     }
 
     // Authentication methods
+    async checkRegistrationEligibility() {
+        return this.makeRequest('/auth/check-eligibility');
+    }
+
     async register(userData) {
         return this.makeRequest('/auth/register', {
             method: 'POST',

@@ -177,10 +177,11 @@ export default {
     isPaymentAvailable(fee) {
       // Map payment codes to their required stages
       const paymentStageMap = {
-        portalFee: 2, // Form fee available at stage 2
+        formFee: 2, // Form fee available at stage 2 (after email verification)
         acceptanceFee: 7, // Acceptance fee available at stage 7
         sundryFee: 8, // Sundry fee available at stage 8
         schoolFee: 9, // School fee available at stage 9
+        accommodationFee: 10, // Accommodation fee available at stage 10
       };
 
       const requiredStage = paymentStageMap[fee.paymentCode];
@@ -200,10 +201,11 @@ export default {
 
     getRequiredStage(paymentCode) {
       const paymentStageMap = {
-        portalFee: 2, // Form fee available at stage 2
+        formFee: 2, // Form fee available at stage 2 (after email verification)
         acceptanceFee: 7, // Acceptance fee available at stage 7
         sundryFee: 8, // Sundry fee available at stage 8
         schoolFee: 9, // School fee available at stage 9
+        accommodationFee: 10, // Accommodation fee available at stage 10
       };
       return paymentStageMap[paymentCode] || "Unknown";
     },
@@ -264,7 +266,16 @@ export default {
           </h6>
 
           <div
-            v-if="unpaidFees.length === 0"
+            v-if="unpaidFees.length === 0 && paidFees.length === 0"
+            class="alert alert-info"
+            role="alert"
+          >
+            <i class="bi bi-info-circle"></i>
+            No fees available for your account at this time.
+          </div>
+
+          <div
+            v-else-if="unpaidFees.length === 0 && paidFees.length > 0"
             class="alert alert-success"
             role="alert"
           >
@@ -323,7 +334,16 @@ export default {
           </h6>
 
           <div
-            v-if="paidFees.length === 0"
+            v-if="paidFees.length === 0 && unpaidFees.length === 0"
+            class="alert alert-info"
+            role="alert"
+          >
+            <i class="bi bi-info-circle"></i>
+            No payment history available.
+          </div>
+
+          <div
+            v-else-if="paidFees.length === 0"
             class="alert alert-info"
             role="alert"
           >

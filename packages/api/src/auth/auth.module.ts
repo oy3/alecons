@@ -9,6 +9,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EmailService } from '../services/email.service';
 import { ApplicationNumberService } from '../services/application-number.service';
+import { ApplicationEligibilityService } from '../services/application-eligibility.service';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { Program, ProgramSchema } from '../schemas/program.schema';
@@ -16,6 +17,8 @@ import { ProgramType, ProgramTypeSchema } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeSchema } from '../schemas/program-mode.schema';
 import { Staff, StaffSchema } from '../schemas/staff.schema';
 import { Role, RoleSchema } from '../schemas/role.schema';
+import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
+import { SessionControl, SessionControlSchema } from '../schemas/session-control.schema';
 
 @Module({
     imports: [
@@ -27,6 +30,8 @@ import { Role, RoleSchema } from '../schemas/role.schema';
             { name: ProgramMode.name, schema: ProgramModeSchema },
             { name: Staff.name, schema: StaffSchema },
             { name: Role.name, schema: RoleSchema },
+            { name: AcademicSession.name, schema: AcademicSessionSchema },
+            { name: SessionControl.name, schema: SessionControlSchema },
         ]),
         PassportModule,
         JwtModule.registerAsync({
@@ -41,7 +46,7 @@ import { Role, RoleSchema } from '../schemas/role.schema';
         }),
     ],
     controllers: [AuthController, ApplicationNumberController],
-    providers: [AuthService, JwtStrategy, EmailService, ApplicationNumberService],
+    providers: [AuthService, JwtStrategy, EmailService, ApplicationNumberService, ApplicationEligibilityService],
     exports: [AuthService, JwtStrategy],
 })
 export class AuthModule { }

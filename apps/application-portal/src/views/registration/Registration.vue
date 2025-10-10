@@ -28,16 +28,85 @@ export default {
       programTypes: [],
       programModes: [],
       programs: [],
+      filteredPrograms: [],
       isLoading: false,
       isLoadingData: false,
       showPassword: false,
       showConfirmPassword: false,
+      registrationAllowed: false,
+      eligibilityMessage: '',
+      currentAcademicSession: null,
     };
   },
+  computed: {
+    // Filter programs based on selected type and mode
+    availablePrograms() {
+      if (!this.formData.programTypeId || !this.formData.programModeId) {
+        return [];
+      }
+      
+      return this.programs.filter(program => 
+        program.programTypeId === this.formData.programTypeId && 
+        program.programModeId === this.formData.programModeId &&
+        program.active
+      );
+    }
+  },
+  watch: {
+    // Reset program selection when type or mode changes
+    'formData.programTypeId'() {
+      this.formData.programId = '';
+    },
+    'formData.programModeId'() {
+      this.formData.programId = '';
+    }
+  },
   async mounted() {
+    await this.checkRegistrationEligibility();
     await this.loadInitialData();
   },
   methods: {
+    async checkRegistrationEligibility() {
+      try {
+        logger.info('Checking registration eligibility...');
+        const response = await apiService.checkRegistrationEligibility();
+        
+        if (response.success) {
+          this.registrationAllowed = response.data.eligible;
+          this.eligibilityMessage = response.data.reason || '';
+          this.currentAcademicSession = response.data.academicSession;
+          
+          logger.info('Registration eligibility check result:', {
+            eligible: this.registrationAllowed,
+            reason: this.eligibilityMessage,
+            academicSession: this.currentAcademicSession
+          });
+
+          if (!this.registrationAllowed) {
+            await Swal.fire({
+              icon: 'warning',
+              title: 'Registration Not Available',
+              text: this.eligibilityMessage,
+              confirmButtonColor: '#2d7d7d',
+            });
+          }
+        } else {
+          throw new Error(response.message || 'Failed to check registration eligibility');
+        }
+      } catch (error) {
+        logger.error('Error checking registration eligibility:', error);
+        this.registrationAllowed = false;
+        this.eligibilityMessage = 'Unable to verify registration availability. Please try again later.';
+        
+        await Swal.fire({
+          icon: 'error',
+          title: 'System Error',
+          text: this.eligibilityMessage,
+          confirmButtonColor: '#2d7d7d',
+        });
+      }
+    },
+
     async loadInitialData() {
       try {
         this.isLoadingData = true;
@@ -50,19 +119,25 @@ export default {
         ]);
 
         if (programTypesResult.success) {
-          this.programTypes = programTypesResult.data;
+          // Handle both nested and direct data structure
+          this.programTypes = programTypesResult.data?.data || programTypesResult.data || [];
+          logger.info("Program types loaded:", this.programTypes);
         } else {
           logger.error("Failed to load program types:", programTypesResult);
         }
 
         if (programModesResult.success) {
-          this.programModes = programModesResult.data;
+          // Handle both nested and direct data structure
+          this.programModes = programModesResult.data?.data || programModesResult.data || [];
+          logger.info("Program modes loaded:", this.programModes);
         } else {
           logger.error("Failed to load program modes:", programModesResult);
         }
 
         if (programsResult.success) {
-          this.programs = programsResult.data;
+          // Handle both nested and direct data structure
+          this.programs = programsResult.data?.data || programsResult.data || [];
+          logger.info("Programs loaded:", this.programs);
         } else {
           logger.error("Failed to load programs:", programsResult);
         }
@@ -87,6 +162,17 @@ export default {
 
     async onSubmit() {
       try {
+        // Check if registration is allowed
+        if (!this.registrationAllowed) {
+          await Swal.fire({
+            icon: 'warning',
+            title: 'Registration Not Available',
+            text: this.eligibilityMessage,
+            confirmButtonColor: '#2d7d7d',
+          });
+          return;
+        }
+
         // Validate form
         if (!this.validateForm()) {
           return;
@@ -198,12 +284,36 @@ export default {
         return false;
       }
 
-      // Email validation
+      // Email format validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Email',
+          text: 'Please enter a valid email address',
+          confirmButtonColor: '#2d7d7d',
+        });
+        return false;
+      }
+
+      // Email confirmation validation
       if (email !== confirmEmail) {
         Swal.fire({
           icon: 'warning',
           title: 'Email Mismatch',
           text: 'Email addresses do not match',
+          confirmButtonColor: '#2d7d7d',
+        });
+        return false;
+      }
+
+      // Phone number validation (Nigerian format: starts with 0 or +234, 11 digits total)
+      const phoneRegex = /^(\+234|0)[789][01]\d{8}$/;
+      if (!phoneRegex.test(phone.replace(/\s/g, ''))) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Phone Number',
+          text: 'Please enter a valid Nigerian phone number (e.g., 08012345678 or +2348012345678)',
           confirmButtonColor: '#2d7d7d',
         });
         return false;
@@ -259,34 +369,59 @@ export default {
       <div class="col-md-7 p-5 d-flex align-items-center justify-content-center form-container text-white text-md-dark">
         <div class="mt-md-0 mt-5 pt-5 pt-md-0">
           <h2 class="mb-4">Registration</h2>
-          <form @submit.prevent="onSubmit" class="mb-5">
+          
+          <!-- Academic Session Info -->
+          <div v-if="currentAcademicSession" class="alert alert-info mb-4">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-calendar-event me-2"></i>
+              <small>
+                <strong>Current Academic Session:</strong> {{ currentAcademicSession.sessionYear }}
+                <span class="badge bg-primary ms-2">{{ currentAcademicSession.status?.toUpperCase() }}</span>
+              </small>
+            </div>
+          </div>
+
+          <!-- Registration Status Alert -->
+          <div v-if="!registrationAllowed" class="alert alert-warning mb-4">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              <small>{{ eligibilityMessage }}</small>
+            </div>
+          </div>
+
+          <form @submit.prevent="onSubmit" class="mb-5" :class="{ 'opacity-50': !registrationAllowed }">
             <div class="row g-3">
 
               <div class="col-sm-4">
                 <label for="programType">Program Type <span class="text-danger">*</span></label>
-                <select id="programType" v-model="formData.programTypeId" class="form-select" required :disabled="isLoadingData">
-                  <option value="" disabled>{{ isLoadingData ? 'Loading...' : '-- Select --' }}</option>
+                <select id="programType" v-model="formData.programTypeId" class="form-select" required :disabled="isLoadingData || !registrationAllowed">
+                  <option value="" disabled>{{ isLoadingData ? 'Loading...' : '-- Select Program Type --' }}</option>
                   <option v-for="programType in programTypes" :key="programType.id" :value="programType.id">
-                    {{ programType.name }}
+                    {{ programType.description || programType.type }}
                   </option>
                 </select>
               </div>
 
               <div class="col-sm-4">
                 <label for="programMode">Program Mode<span class="text-danger">*</span></label>
-                <select id="programMode" v-model="formData.programModeId" class="form-select" required :disabled="isLoadingData">
-                  <option value="" disabled>{{ isLoadingData ? 'Loading...' : '-- Select --' }}</option>
+                <select id="programMode" v-model="formData.programModeId" class="form-select" required :disabled="isLoadingData || !registrationAllowed">
+                  <option value="" disabled>{{ isLoadingData ? 'Loading...' : '-- Select Program Mode --' }}</option>
                   <option v-for="programMode in programModes" :key="programMode.id" :value="programMode.id">
-                    {{ programMode.name }}
+                    {{ programMode.description || programMode.mode }}
                   </option>
                 </select>
               </div>
 
               <div class="col-sm-4">
                 <label for="program">Program <span class="text-danger">*</span></label>
-                <select id="program" v-model="formData.programId" class="form-select" required :disabled="isLoadingData">
-                  <option value="" disabled>{{ isLoadingData ? 'Loading...' : '-- Select --' }}</option>
-                  <option v-for="program in programs" :key="program.id" :value="program.id">
+                <select id="program" v-model="formData.programId" class="form-select" required :disabled="isLoadingData || !registrationAllowed || availablePrograms.length === 0">
+                  <option value="" disabled>
+                    {{ isLoadingData ? 'Loading...' : 
+                       (!formData.programTypeId || !formData.programModeId) ? '-- Select Type & Mode First --' :
+                       availablePrograms.length === 0 ? '-- No Programs Available --' :
+                       '-- Select Program --' }}
+                  </option>
+                  <option v-for="program in availablePrograms" :key="program.id" :value="program.id">
                     {{ program.name }}
                   </option>
                 </select>
@@ -336,26 +471,6 @@ export default {
                   Date of Birth <span class="text-danger">*</span></label>
                 <input type="date" id="dateOfBirth" v-model="formData.dateOfBirth" class="form-control" required />
               </div>
-
-              <!-- <div class="col-sm-4">
-                <label for="nationality">
-                  Nationality <span class="text-danger">*</span></label>
-                <input type="text" id="nationality" v-model="formData.nationality" class="form-control"
-                  placeholder="Nigeria" required />
-              </div>
-
-              <div class="col-sm-4">
-                <label for="stateOfOrigin">
-                  State of Origin <span class="text-danger">*</span></label>
-                <input type="text" id="stateOfOrigin" v-model="formData.stateOfOrigin" class="form-control"
-                  placeholder="Ekiti" required />
-              </div>
-
-              <div class="col-sm-4">
-                <label for="lga"> LGA <span class="text-danger">*</span></label>
-                <input type="text" id="lga" v-model="formData.lga" class="form-control" placeholder="Ado-Ekiti"
-                  required />
-              </div> -->
 
               <div class="col-sm-3">
                 <label for="gender">
@@ -415,8 +530,9 @@ export default {
               </div>
 
               <div class="col-12 mt-5">
-                <button type="submit" class="btn btn-primary w-100" :disabled="isLoading">
-                  {{ isLoading ? "Creating Account..." : "Create Account" }}
+                <button type="submit" class="btn btn-primary w-100" :disabled="isLoading || !registrationAllowed">
+                  <span v-if="!registrationAllowed">Registration Not Available</span>
+                  <span v-else>{{ isLoading ? "Creating Account..." : "Create Account" }}</span>
                 </button>
               </div>
             </div>

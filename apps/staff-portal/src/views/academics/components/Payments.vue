@@ -78,7 +78,9 @@ export default {
             amount: payment.amount,
             isActive: payment.isActive,
             paymentCode: payment.paymentCode,
-            createdAt: new Date(payment.createdAt)
+            targetAudience: payment.targetAudience,
+            createdAt: new Date(payment.createdAt),
+            updatedAt: new Date(payment.updatedAt)
           }))
 
           logger.info(`Loaded ${this.allPayments.length} payments`)
@@ -165,6 +167,16 @@ export default {
               <input id="swal-payment-amount" class="form-control" type="number" placeholder="0.00" min="0" step="0.01" required>
             </div>
             <div class="col-12">
+              <label for="swal-target-audience" class="form-label">Target Audience</label>
+              <select id="swal-target-audience" class="form-select" multiple required>
+                <option value="applicant">Applicant</option>
+                <option value="student">Student</option>
+                <option value="academic_staff">Academic Staff</option>
+                <option value="admin_staff">Admin Staff</option>
+              </select>
+              <div class="form-text">Hold Ctrl/Cmd to select multiple audiences</div>
+            </div>
+            <div class="col-12">
               <div class="form-check text-start">
                 <input id="swal-payment-active" class="form-check-input" type="checkbox" checked>
                 <label for="swal-payment-active" class="form-check-label">
@@ -185,9 +197,16 @@ export default {
           const description = document.getElementById('swal-payment-description').value
           const amount = document.getElementById('swal-payment-amount').value
           const isActive = document.getElementById('swal-payment-active').checked
+          const audienceSelect = document.getElementById('swal-target-audience')
+          const targetAudience = Array.from(audienceSelect.selectedOptions).map(option => option.value)
 
           if (!name || !paymentCode || !amount) {
             Swal.showValidationMessage('Please fill in all required fields')
+            return false
+          }
+
+          if (targetAudience.length === 0) {
+            Swal.showValidationMessage('Please select at least one target audience')
             return false
           }
 
@@ -203,7 +222,7 @@ export default {
             return false
           }
 
-          return { name, paymentCode, description, amount: parseFloat(amount), isActive }
+          return { name, paymentCode, description, amount: parseFloat(amount), isActive, targetAudience }
         }
       })
 
@@ -275,6 +294,16 @@ export default {
               <input id="swal-edit-amount" class="form-control" type="number" value="${payment.amount}" min="0" step="0.01" required>
             </div>
             <div class="col-12">
+              <label for="swal-edit-target-audience" class="form-label">Target Audience</label>
+              <select id="swal-edit-target-audience" class="form-select" multiple required>
+                <option value="applicant" ${payment.targetAudience?.includes('applicant') ? 'selected' : ''}>Applicant</option>
+                <option value="student" ${payment.targetAudience?.includes('student') ? 'selected' : ''}>Student</option>
+                <option value="academic_staff" ${payment.targetAudience?.includes('academic_staff') ? 'selected' : ''}>Academic Staff</option>
+                <option value="admin_staff" ${payment.targetAudience?.includes('admin_staff') ? 'selected' : ''}>Admin Staff</option>
+              </select>
+              <div class="form-text">Hold Ctrl/Cmd to select multiple audiences</div>
+            </div>
+            <div class="col-12">
               <div class="form-check text-start">
                 <input id="swal-edit-active" class="form-check-input" type="checkbox" ${payment.isActive ? 'checked' : ''}>
                 <label for="swal-edit-active" class="form-check-label">
@@ -289,15 +318,31 @@ export default {
         cancelButtonText: 'Cancel',
         confirmButtonColor: '#198754',
         cancelButtonColor: '#6c757d',
+        didOpen: () => {
+          // Manually set the selected options after the modal opens
+          const targetAudienceSelect = document.getElementById('swal-edit-target-audience');
+          if (targetAudienceSelect && payment.targetAudience) {
+            Array.from(targetAudienceSelect.options).forEach(option => {
+              option.selected = payment.targetAudience.includes(option.value);
+            });
+          }
+        },
         preConfirm: () => {
           const name = document.getElementById('swal-edit-name').value
           const paymentCode = document.getElementById('swal-edit-code').value
           const description = document.getElementById('swal-edit-description').value
           const amount = document.getElementById('swal-edit-amount').value
           const isActive = document.getElementById('swal-edit-active').checked
+          const audienceSelect = document.getElementById('swal-edit-target-audience')
+          const targetAudience = Array.from(audienceSelect.selectedOptions).map(option => option.value)
 
           if (!name || !paymentCode || !amount) {
             Swal.showValidationMessage('Please fill in all required fields')
+            return false
+          }
+
+          if (targetAudience.length === 0) {
+            Swal.showValidationMessage('Please select at least one target audience')
             return false
           }
 
@@ -313,7 +358,7 @@ export default {
             return false
           }
 
-          return { name, paymentCode, description, amount: parseFloat(amount), isActive }
+          return { name, paymentCode, description, amount: parseFloat(amount), isActive, targetAudience }
         }
       })
 
@@ -469,6 +514,26 @@ export default {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
       }).format(amount)
+    },
+
+    formatAudienceLabel(audience) {
+      const labels = {
+        'applicant': 'Applicant',
+        'student': 'Student',
+        'academic_staff': 'Academic Staff',
+        'admin_staff': 'Admin Staff'
+      }
+      return labels[audience] || audience
+    },
+
+    getAudienceBadgeClass(audience) {
+      const classes = {
+        'applicant': 'bg-primary',
+        'student': 'bg-success',
+        'academic_staff': 'bg-info',
+        'admin_staff': 'bg-warning text-dark'
+      }
+      return classes[audience] || 'bg-secondary'
     }
   }
 }
@@ -526,6 +591,7 @@ export default {
                     <th>Payment Code</th>
                     <th>Description</th>
                     <th>Amount</th>
+                    <th>Target Audience</th>
                     <th>Status</th>
                     <th width="150">Actions</th>
                   </tr>
@@ -544,6 +610,18 @@ export default {
                     <td>
                       <div class="fw-semibold text-success">
                         ₦{{ formatAmount(payment.amount) }}
+                      </div>
+                    </td>
+                    <td>
+                      <div class="d-flex flex-wrap gap-1">
+                        <span 
+                          v-for="audience in (payment.targetAudience || ['applicant'])" 
+                          :key="audience"
+                          class="badge"
+                          :class="getAudienceBadgeClass(audience)"
+                        >
+                          {{ formatAudienceLabel(audience) }}
+                        </span>
                       </div>
                     </td>
                     <td>
@@ -581,7 +659,7 @@ export default {
                     </td>
                   </tr>
                   <tr v-if="paginatedPayments.length === 0">
-                    <td colspan="6" class="text-center py-4 text-muted">
+                    <td colspan="7" class="text-center py-4 text-muted">
                       <i class="bi bi-credit-card display-6 d-block mb-2"></i>
                       {{ searchQuery ? 'No payments found matching your search.' : 'No payments available. Create one to get started.' }}
                     </td>

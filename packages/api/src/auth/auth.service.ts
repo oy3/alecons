@@ -13,6 +13,7 @@ import { Staff, StaffDocument } from '../schemas/staff.schema';
 import { Role, RoleDocument } from '../schemas/role.schema';
 import { EmailService } from '../services/email.service';
 import { ApplicationNumberService } from '../services/application-number.service';
+import { ApplicationEligibilityService } from '../services/application-eligibility.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -32,6 +33,7 @@ export class AuthService {
         private jwtService: JwtService,
         private emailService: EmailService,
         private applicationNumberService: ApplicationNumberService,
+        private applicationEligibilityService: ApplicationEligibilityService,
     ) { }
 
     async register(registerDto: RegisterDto) {
@@ -48,6 +50,18 @@ export class AuthService {
             programModeId,
             programId
         } = registerDto;
+
+        // First, check if registration is currently allowed
+        const eligibility = await this.applicationEligibilityService.checkRegistrationEligibility();
+        if (!eligibility.eligible) {
+            throw new BadRequestException(eligibility.reason);
+        }
+
+        const activeSession = eligibility.activeSession as any; // Cast to any to access _id
+        this.logger.log('Registration eligibility check passed', {
+            activeSessionId: activeSession._id,
+            sessionYear: activeSession.sessionYear
+        });
 
         // Check if user already exists
         const existingUser = await this.userModel.findOne({ email });
@@ -105,11 +119,15 @@ export class AuthService {
             programId: programObjectId,
             programTypeId: programTypeObjectId,
             programModeId: programModeObjectId,
+            entryAcademicSession: activeSession._id, // Link to current academic session
             status: 'pending',
             currentStage: 1,
             referees: [],
             examinations: [],
-            documents: [],
+            documents: {
+                olevelResults: [],
+                referenceLetters: []
+            },
         };
 
         // Add optional fields if provided
@@ -119,6 +137,13 @@ export class AuthService {
 
         const application = new this.applicationModel(applicationData);
         await application.save();
+
+        this.logger.log('Application created successfully', {
+            applicationId: application._id,
+            applicationNumber: application.applicationNumber,
+            entryAcademicSession: activeSession._id,
+            sessionYear: activeSession.sessionYear
+        });
 
         // Generate JWT token
         const payload = { email: user.email, sub: user._id, role: user.role };
@@ -146,8 +171,42 @@ export class AuthService {
             },
             applicationId: application._id,
             applicationNumber: application.applicationNumber,
+            academicSession: {
+                id: activeSession._id,
+                sessionYear: activeSession.sessionYear
+            }
         };
-    } async login(loginDto: LoginDto) {
+    }
+
+    async checkRegistrationEligibility() {
+        try {
+            const eligibility = await this.applicationEligibilityService.checkRegistrationEligibility();
+            return {
+                success: true,
+                data: {
+                    eligible: eligibility.eligible,
+                    reason: eligibility.reason,
+                    academicSession: eligibility.activeSession ? {
+                        id: (eligibility.activeSession as any)._id,
+                        sessionYear: eligibility.activeSession.sessionYear,
+                        status: eligibility.activeSession.status
+                    } : null
+                }
+            };
+        } catch (error) {
+            this.logger.error('Error checking registration eligibility:', error);
+            return {
+                success: false,
+                message: 'Failed to check registration eligibility',
+                data: {
+                    eligible: false,
+                    reason: 'System error occurred. Please try again later.'
+                }
+            };
+        }
+    }
+
+    async login(loginDto: LoginDto) {
         const { email, password } = loginDto;
 
         // Find user by email

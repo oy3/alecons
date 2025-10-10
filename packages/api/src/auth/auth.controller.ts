@@ -20,6 +20,13 @@ export class AuthController {
         return this.authService.register(registerDto);
     }
 
+    @Get('check-eligibility')
+    @ApiOperation({ summary: 'Check if registration is currently allowed' })
+    @ApiResponse({ status: 200, description: 'Registration eligibility status' })
+    async checkRegistrationEligibility() {
+        return this.authService.checkRegistrationEligibility();
+    }
+
     @Post('login')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Login user' })

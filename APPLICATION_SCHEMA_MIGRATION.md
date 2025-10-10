@@ -125,9 +125,6 @@ export class AcademicSession {
     @Prop({ required: true, unique: true })
     sessionYear: string;
 
-    @Prop({ default: false })
-    applicationsOpen: boolean;
-
     @Prop({ required: true, enum: SessionStatus, default: SessionStatus.DRAFT })
     status: SessionStatus;
 

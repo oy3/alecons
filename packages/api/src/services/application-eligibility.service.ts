@@ -24,25 +24,29 @@ export class ApplicationEligibilityService {
      */
     async checkRegistrationEligibility(): Promise<EligibilityResult> {
         try {
-            // Find the active session with applications open
+            // Find the active session (applications controlled via session controls)
             const activeSession = await this.sessionModel.findOne({
                 active: true,
-                applicationsOpen: true,
                 status: { $in: [SessionStatus.OPEN, SessionStatus.ONGOING] }
             });
 
             if (!activeSession) {
-                this.logger.log('No active session with applications open found');
+                this.logger.log('No active session found');
                 return {
                     eligible: false,
-                    reason: 'No active application session available. Applications are currently closed.'
+                    reason: 'No active academic session available. Please contact administration.'
                 };
             }
 
-            // Check session controls
+            this.logger.log('Found active session:', {
+                sessionId: activeSession._id,
+                sessionYear: activeSession.sessionYear,
+                status: activeSession.status
+            });
+
+            // Check session controls (this is the primary check for applications)
             const sessionControls = await this.sessionControlModel.findOne({
-                academicSessionId: activeSession._id,
-                isActive: true
+                academicSessionId: activeSession._id
             });
 
             if (!sessionControls) {
@@ -90,73 +94,33 @@ export class ApplicationEligibilityService {
      */
     async getActiveApplicationSession(): Promise<AcademicSession | null> {
         try {
-            return await this.sessionModel.findOne({
+            // Find active session and check if applications are enabled via controls
+            const activeSession = await this.sessionModel.findOne({
                 active: true,
-                applicationsOpen: true,
                 status: { $in: [SessionStatus.OPEN, SessionStatus.ONGOING] }
             });
+
+            if (!activeSession) {
+                return null;
+            }
+
+            // Check if application control is active
+            const sessionControls = await this.sessionControlModel.findOne({
+                academicSessionId: activeSession._id
+            });
+
+            if (!sessionControls) {
+                return null;
+            }
+
+            const applicationControl = sessionControls.controls.find(
+                control => control.name === 'application' && control.active === true
+            );
+
+            return applicationControl ? activeSession : null;
         } catch (error) {
             this.logger.error('Error getting active application session:', error);
             return null;
-        }
-    }
-
-    /**
-     * Validate that only one session can have applicationsOpen = true
-     */
-    async validateSingleOpenSession(sessionId: string): Promise<boolean> {
-        try {
-            const openSessions = await this.sessionModel.find({
-                applicationsOpen: true,
-                _id: { $ne: sessionId }
-            });
-
-            return openSessions.length === 0;
-        } catch (error) {
-            this.logger.error('Error validating single open session:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Close applications for a session and update status
-     */
-    async closeApplicationsForSession(sessionId: string): Promise<void> {
-        try {
-            await this.sessionModel.findByIdAndUpdate(sessionId, {
-                applicationsOpen: false,
-                status: SessionStatus.ONGOING
-            });
-
-            this.logger.log('Applications closed for session:', sessionId);
-        } catch (error) {
-            this.logger.error('Error closing applications for session:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Open applications for a session (ensuring only one is open at a time)
-     */
-    async openApplicationsForSession(sessionId: string): Promise<void> {
-        try {
-            // First close applications for all other sessions
-            await this.sessionModel.updateMany(
-                { _id: { $ne: sessionId } },
-                { applicationsOpen: false }
-            );
-
-            // Then open applications for the specified session
-            await this.sessionModel.findByIdAndUpdate(sessionId, {
-                applicationsOpen: true,
-                active: true,
-                status: SessionStatus.OPEN
-            });
-
-            this.logger.log('Applications opened for session:', sessionId);
-        } catch (error) {
-            this.logger.error('Error opening applications for session:', error);
-            throw error;
         }
     }
 }

@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Payment, PaymentDocument } from '../schemas/payment.schema';
+import { Payment, PaymentDocument, PaymentAudience } from '../schemas/payment.schema';
 import { StudentPayment, StudentPaymentDocument, PaymentStatus } from '../schemas/student-payment.schema';
 import { Application, ApplicationDocument } from '../schemas/application.schema';
+import { User, UserDocument, UserRole } from '../schemas/user.schema';
 
 export interface PaymentSummary {
     id: string;
@@ -42,13 +43,42 @@ export class PaymentsService {
         @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
         @InjectModel(StudentPayment.name) private studentPaymentModel: Model<StudentPaymentDocument>,
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
+        @InjectModel(User.name) private userModel: Model<UserDocument>,
     ) { }
 
     async getStudentPaymentsSummary(userId: string): Promise<StudentPaymentsSummary> {
         const userObjectId = new Types.ObjectId(userId);
 
-        // Get all active payments
-        const allPayments = await this.paymentModel.find({ active: true }).lean();
+        // Get user to determine their role
+        const user = await this.userModel.findById(userObjectId).lean();
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        // Map UserRole to PaymentAudience
+        let userAudience: PaymentAudience;
+        switch (user.role) {
+            case UserRole.APPLICANT:
+                userAudience = PaymentAudience.APPLICANT;
+                break;
+            case UserRole.STUDENT:
+                userAudience = PaymentAudience.STUDENT;
+                break;
+            case UserRole.STAFF:
+                userAudience = PaymentAudience.ACADEMIC_STAFF; // You can adjust this logic
+                break;
+            case UserRole.ADMIN:
+                userAudience = PaymentAudience.ADMIN_STAFF;
+                break;
+            default:
+                userAudience = PaymentAudience.APPLICANT;
+        }
+
+        // Get all active payments that target this user's audience
+        const allPayments = await this.paymentModel.find({
+            active: true,
+            targetAudience: { $in: [userAudience] }
+        }).lean();
 
         // Get student's successful payments
         const studentPayments = await this.studentPaymentModel
@@ -378,7 +408,7 @@ export class PaymentsService {
             // Map payment codes to next stages
             // Based on the payment code, determine what stage to advance to
             const stageProgressions: { [key: string]: number } = {
-                'portalFee': 3,          // Form fee payment (stage 2) -> Application form (stage 3)
+                'formFee': 3,          // Form fee payment (stage 2) -> Application form (stage 3)
                 'acceptanceFee': 8,      // Acceptance fee payment (stage 7) -> Sundry fees (stage 8)
                 'sundryFee': 9,          // Sundry fee payment (stage 8) -> School fees (stage 9)
                 'schoolFee': 10          // School fee payment (stage 9) -> Completed (stage 10)
@@ -551,6 +581,7 @@ export class PaymentsService {
         const [payments, totalCount] = await Promise.all([
             this.paymentModel
                 .find(query)
+                .select('_id name description amount category active paymentCode targetAudience createdAt updatedAt')
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
@@ -567,6 +598,7 @@ export class PaymentsService {
             category: payment.category,
             isActive: payment.active,
             paymentCode: payment.paymentCode,
+            targetAudience: payment.targetAudience,
             createdAt: (payment as any).createdAt,
             updatedAt: (payment as any).updatedAt
         }));
@@ -600,6 +632,7 @@ export class PaymentsService {
                 category: payment.category,
                 isActive: payment.active,
                 paymentCode: payment.paymentCode,
+                targetAudience: payment.targetAudience,
                 createdAt: (payment as any).createdAt,
                 updatedAt: (payment as any).updatedAt
             };
@@ -616,6 +649,7 @@ export class PaymentsService {
         category?: string;
         isActive?: boolean;
         paymentCode?: string;
+        targetAudience?: PaymentAudience[];
     }) {
         try {
             const paymentData = {
@@ -624,7 +658,8 @@ export class PaymentsService {
                 amount: createPaymentDto.amount,
                 category: createPaymentDto.category,
                 active: createPaymentDto.isActive !== undefined ? createPaymentDto.isActive : true,
-                paymentCode: createPaymentDto.paymentCode
+                paymentCode: createPaymentDto.paymentCode,
+                targetAudience: createPaymentDto.targetAudience || [PaymentAudience.APPLICANT]
             };
 
             const payment = new this.paymentModel(paymentData);
@@ -640,6 +675,7 @@ export class PaymentsService {
                 category: savedPayment.category,
                 isActive: savedPayment.active,
                 paymentCode: savedPayment.paymentCode,
+                targetAudience: savedPayment.targetAudience,
                 createdAt: (savedPayment as any).createdAt,
                 updatedAt: (savedPayment as any).updatedAt
             };
@@ -656,6 +692,7 @@ export class PaymentsService {
         category?: string;
         isActive?: boolean;
         paymentCode?: string;
+        targetAudience?: PaymentAudience[];
     }) {
         try {
             const updateData: any = {};
@@ -678,6 +715,9 @@ export class PaymentsService {
             if (updatePaymentDto.isActive !== undefined) {
                 updateData.active = updatePaymentDto.isActive;
             }
+            if (updatePaymentDto.targetAudience !== undefined) {
+                updateData.targetAudience = updatePaymentDto.targetAudience;
+            }
 
             const payment = await this.paymentModel
                 .findByIdAndUpdate(id, updateData, { new: true })
@@ -697,6 +737,7 @@ export class PaymentsService {
                 category: payment.category,
                 isActive: payment.active,
                 paymentCode: payment.paymentCode,
+                targetAudience: payment.targetAudience,
                 createdAt: (payment as any).createdAt,
                 updatedAt: (payment as any).updatedAt
             };

@@ -5,6 +5,7 @@ import { PaymentsService } from './payments.service';
 import { Payment, PaymentSchema } from '../schemas/payment.schema';
 import { StudentPayment, StudentPaymentSchema } from '../schemas/student-payment.schema';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
+import { User, UserSchema } from '../schemas/user.schema';
 
 @Module({
     imports: [
@@ -12,6 +13,7 @@ import { Application, ApplicationSchema } from '../schemas/application.schema';
             { name: Payment.name, schema: PaymentSchema },
             { name: StudentPayment.name, schema: StudentPaymentSchema },
             { name: Application.name, schema: ApplicationSchema },
+            { name: User.name, schema: UserSchema },
         ]),
     ],
     controllers: [PaymentsController, StaffPaymentsController],

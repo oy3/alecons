@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 import { ProgramsService } from './programs.service';
 import {
     CreateProgramDto,
@@ -28,8 +29,9 @@ export class ProgramsController {
         return this.programsService.createProgram(createProgramDto);
     }
 
-    @Get()
-    @ApiOperation({ summary: 'Get all programs with optional filtering and pagination' })
+        @Get()
+    @Public()  // Make this public for registration access
+    @ApiOperation({ summary: 'Get all programs' })
     @ApiResponse({ status: 200, description: 'Programs retrieved successfully' })
     async findAllPrograms(@Query() queryDto: QueryProgramsDto) {
         return this.programsService.findAllPrograms(queryDto);
@@ -45,6 +47,7 @@ export class ProgramsController {
     }
 
     @Get('types')
+    @Public()  // Make this public for registration access
     @ApiOperation({ summary: 'Get all program types' })
     @ApiResponse({ status: 200, description: 'Program types retrieved successfully' })
     async findAllProgramTypes() {
@@ -85,6 +88,7 @@ export class ProgramsController {
     }
 
     @Get('modes')
+    @Public()  // Make this public for registration access
     @ApiOperation({ summary: 'Get all program modes' })
     @ApiResponse({ status: 200, description: 'Program modes retrieved successfully' })
     async findAllProgramModes() {
@@ -146,27 +150,5 @@ export class ProgramsController {
     @ApiResponse({ status: 404, description: 'Program not found' })
     async toggleProgramStatus(@Param('id') id: string) {
         return this.programsService.toggleProgramStatus(id);
-    }
-
-    // Legacy endpoints (keep for backward compatibility)
-    @Get('legacy/types')
-    @ApiOperation({ summary: 'Get all active program types (legacy)' })
-    @ApiResponse({ status: 200, description: 'List of program types retrieved successfully' })
-    async getProgramTypes() {
-        return this.programsService.getProgramTypes();
-    }
-
-    @Get('legacy/modes')
-    @ApiOperation({ summary: 'Get all active program modes (legacy)' })
-    @ApiResponse({ status: 200, description: 'List of program modes retrieved successfully' })
-    async getProgramModes() {
-        return this.programsService.getProgramModes();
-    }
-
-    @Get('legacy/programs')
-    @ApiOperation({ summary: 'Get all active programs (legacy)' })
-    @ApiResponse({ status: 200, description: 'List of programs retrieved successfully' })
-    async getPrograms() {
-        return this.programsService.getPrograms();
     }
 }

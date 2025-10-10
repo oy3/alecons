@@ -223,17 +223,17 @@ export class Application {
             profilePicture: {
                 type: { type: String },
                 url: { type: String },
-                uploadedAt: { type: Date, default: Date.now }
+                uploadedAt: { type: Date }
             },
             olevelResults: [{
                 type: { type: String, required: true },
                 url: { type: String, required: true },
-                uploadedAt: { type: Date, default: Date.now }
+                uploadedAt: { type: Date }
             }],
             referenceLetters: [{
                 type: { type: String, required: true },
                 url: { type: String, required: true },
-                uploadedAt: { type: Date, default: Date.now }
+                uploadedAt: { type: Date }
             }]
         },
         default: {

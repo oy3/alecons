@@ -14,7 +14,7 @@ This document outlines the implementation of the updated 10-stage application pr
 ### 2. Form Fee Payment (Stage 2)
 - **Student Action**: Pay application form fee via Paystack
 - **System Action**: Process payment and advance stage
-- **Payment Code**: `portalFee`
+- **Payment Code**: `formFee`
 - **Next Stage**: Application Form (Stage 3)
 
 ### 3. Application Form (Stage 3)
@@ -127,7 +127,7 @@ PATCH /staff/applications/:id/generate-matric
 #### Updated Payment Stages (`payments.service.ts`)
 ```typescript
 const stageProgressions = {
-    'portalFee': 3,      // Form fee -> Application form
+    'formFee': 3,      // Form fee -> Application form
     'acceptanceFee': 8,  // Acceptance fee -> Sundry fees
     'sundryFee': 9,      // Sundry fee -> School fees
     'schoolFee': 10      // School fee -> Completed

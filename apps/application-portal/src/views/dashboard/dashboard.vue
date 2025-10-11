@@ -248,7 +248,7 @@ export default {
           text: 'Access Student Portal',
           route: null,
           disabled: false,
-          variant: 'btn-success',
+          variant: 'btn-acon-primary',
           action: 'redirectToStudentPortal'
         };
       }

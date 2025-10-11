@@ -174,7 +174,8 @@ export default {
             status: app.status,
             profileImageUrl: app.profileImageUrl,
             submittedAt: app.createdAt,
-            lastUpdated: app.updatedAt
+            lastUpdated: app.updatedAt,
+            matriculationNumber: app.matriculationNumber
           }))
 
           this.totalApplications = response.data.pagination.totalItems
@@ -555,6 +556,80 @@ export default {
           confirmButtonColor: '#dc3545'
         })
       }
+    },
+
+    async handleMatriculationAction(application) {
+      if (application.matriculationNumber) {
+        // If matriculation number exists, send email
+        await this.sendMatriculationEmail(application)
+      } else {
+        // If matriculation number doesn't exist, generate it first
+        await this.generateMatriculationNumber(application)
+      }
+    },
+
+    async generateMatriculationNumber(application) {
+      try {
+        // Show confirmation dialog
+        const result = await this.$swal.fire({
+          icon: 'question',
+          title: 'Generate Matriculation Number',
+          text: `Generate matriculation number for ${application.applicantName}? This will also send the email automatically.`,
+          showCancelButton: true,
+          confirmButtonText: 'Generate',
+          cancelButtonText: 'Cancel',
+          confirmButtonColor: '#1a5f5f',
+          cancelButtonColor: '#6c757d'
+        })
+
+        if (!result.isConfirmed) {
+          return
+        }
+
+        // Show loading
+        this.$swal.fire({
+          title: 'Generating Matriculation Number...',
+          text: 'Please wait while we generate the matriculation number and send the email.',
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          willOpen: () => {
+            this.$swal.showLoading()
+          }
+        })
+
+        // Make API call
+        const response = await apiService.generateMatriculationNumber(application.id)
+
+        if (response.success) {
+          this.$swal.fire({
+            icon: 'success',
+            title: 'Matriculation Number Generated!',
+            text: `Matriculation number generated and email sent to ${application.email}`,
+            confirmButtonColor: '#1a5f5f'
+          })
+
+          logger.info('Matriculation number generated successfully:', {
+            applicationId: application.id,
+            email: application.email,
+            matricNumber: response.data?.matriculationNumber
+          })
+
+          // Refresh the applications list to show updated data
+          await this.loadApplications()
+        } else {
+          throw new Error(response.message || 'Failed to generate matriculation number')
+        }
+
+      } catch (error) {
+        logger.error('Error generating matriculation number:', error)
+        
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Failed to Generate Matriculation Number',
+          text: error.message || 'An error occurred while generating the matriculation number',
+          confirmButtonColor: '#dc3545'
+        })
+      }
     }
   }
 }
@@ -788,10 +863,11 @@ export default {
                                 <a
                                 class="dropdown-item"
                                 href="#"
-                                @click.prevent="sendMatriculationEmail(app)"
+                                @click.prevent="handleMatriculationAction(app)"
                               >
-                              <i class="bi bi-envelope text-success me-2"></i>
-                               Send matric no.
+                              <i class="bi bi-envelope text-success me-2" v-if="app.matriculationNumber"></i>
+                              <i class="bi bi-plus-circle text-primary me-2" v-else></i>
+                               {{ app.matriculationNumber ? 'Send matric no.' : 'Generate matric no.' }}
                             </a>                      
                             </li>
 <!-- 

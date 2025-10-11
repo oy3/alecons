@@ -5,6 +5,7 @@ import TodoList from "./components/TodoList.vue";
 import BiodataCard from "./components/BiodataCard.vue";
 import ProgressCard from "./components/ProgressCard.vue";
 import EmailVerificationAlert from "./components/EmailVerificationAlert.vue";
+import Swal from 'sweetalert2';
 
 export default {
   name: "Dashboard",
@@ -175,9 +176,9 @@ export default {
         {
           stage: 10,
           title: "Application Complete",
-          description: "Welcome! Get your matriculation number and portal access",
+          description: "Welcome! Check your email for matriculation number and portal access details",
           paymentStage: false
-        }
+        },
       ];
 
       return stageDefinitions.map(def => ({
@@ -224,14 +225,13 @@ export default {
         };
       }
 
-      // Waiting stages: 1, 4, 5, 6, 10
-      if ([1, 4, 5, 6, 10].includes(stage)) {
+      // Waiting stages: 1, 4, 5, 6
+      if ([1, 4, 5, 6].includes(stage)) {
         const waitingMessages = {
           1: 'Check Your Email',
           4: 'Awaiting Exam Scheduling',
           5: 'Awaiting Screening Schedule',
-          6: 'Awaiting Admission Decision',
-          10: 'Application Complete!'
+          6: 'Awaiting Admission Decision'
         };
 
         return {
@@ -239,6 +239,17 @@ export default {
           route: null,
           disabled: true,
           variant: 'btn-secondary'
+        };
+      }
+
+      // Stage 10: Application Complete - Redirect to Student Portal
+      if (stage === 10) {
+        return {
+          text: 'Access Student Portal',
+          route: null,
+          disabled: false,
+          variant: 'btn-success',
+          action: 'redirectToStudentPortal'
         };
       }
 
@@ -308,13 +319,32 @@ export default {
       
       modalContent += '</div>';
       
-      this.$swal.fire({
+      Swal.fire({
         title: 'Exam & Screening Information',
         html: modalContent,
+        confirmButtonText: 'Close',
+        confirmButtonColor: '#1a5f5f',
+        width: '600px'
+      });
+    },
+
+    redirectToStudentPortal() {
+      // Show confirmation before redirecting
+      Swal.fire({
         icon: 'info',
-        confirmButtonText: 'Got it!',
-        confirmButtonColor: '#2d7d7d',
-        width: '500px'
+        title: 'Access Student Portal',
+        text: 'You will be redirected to the student portal. Make sure you have received your matriculation number via email.',
+        showCancelButton: true,
+        confirmButtonText: 'Continue to Student Portal',
+        cancelButtonText: 'Stay Here',
+        confirmButtonColor: '#1a5f5f',
+        cancelButtonColor: '#6c757d'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Get student portal URL from environment or use default
+          const studentPortalUrl = import.meta.env.VITE_APP_STUDENT_PORTAL_URL || 'http://localhost:3000/student-portal';
+          window.open(studentPortalUrl, '_blank');
+        }
       });
     }
   },
@@ -336,6 +366,7 @@ export default {
           :name="user?.firstName || 'Student'"
           :resumeConfig="resumeButtonConfig"
           @show-modal="showExamScreeningModal"
+          @redirectToStudentPortal="redirectToStudentPortal"
         />
 
         <!-- To-do List -->

@@ -27,6 +27,9 @@ export default {
     handleResumeClick() {
       if (this.resumeConfig.showModal) {
         this.$emit('show-modal');
+      } else if (this.resumeConfig.action) {
+        // Handle custom actions
+        this.$emit(this.resumeConfig.action);
       } else if (this.resumeConfig.route) {
         this.$router.push(this.resumeConfig.route);
       }

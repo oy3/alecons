@@ -153,6 +153,7 @@ export class StaffApplicationsController {
                     entranceExam: 1,
                     screening: 1,
                     entryAcademicSession: 1,
+                    matriculationNumber: 1,
                     profileImageUrl: 1,
                     createdAt: 1,
                     updatedAt: 1
@@ -738,7 +739,9 @@ export class StaffApplicationsController {
             const user = application.userId as any;
 
             // Generate matriculation number using the proper service
-            const matriculationNumber = await this.matriculationService.generateMatriculationNumber(application.programId.toString());
+            // Extract the actual ObjectId from the populated program
+            const programId = application.programId._id || application.programId;
+            const matriculationNumber = await this.matriculationService.generateMatriculationNumber(programId.toString());
 
             // Update application
             application.matriculationNumber = matriculationNumber;

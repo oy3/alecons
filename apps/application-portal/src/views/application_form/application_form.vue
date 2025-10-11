@@ -537,9 +537,17 @@ export default {
         this.dateOfBirth = this.application.dob ?
           new Date(this.application.dob).toISOString().split('T')[0] : "";
         this.gender = this.application.gender || "";
-        this.religion = this.application.religion || "";
-        this.maritalStatus = this.application.maritalStatus || "";
-        this.address = this.application.address || "";
+        
+        // Only prefill if current form field is empty (don't overwrite user input)
+        if (!this.religion) {
+          this.religion = this.application.religion || "";
+        }
+        if (!this.maritalStatus) {
+          this.maritalStatus = this.application.maritalStatus || "";
+        }
+        if (!this.address) {
+          this.address = this.application.address || "";
+        }
 
         logger.info('After prefilling application data:', {
           middleName: this.middleName,

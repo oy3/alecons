@@ -320,6 +320,15 @@ export class ApplicationUploadController {
                 }));
 
             try {
+                // Debug: Log the personal info data being received
+                this.logger.log('Personal info data received:', {
+                    religion: applicationData.personalInfo.religion,
+                    maritalStatus: applicationData.personalInfo.maritalStatus,
+                    address: applicationData.personalInfo.address,
+                    phone: applicationData.personalInfo.phone,
+                    gender: applicationData.personalInfo.gender
+                });
+
                 // Update all application fields with form data
                 application.programId = new Types.ObjectId(applicationData.programId);
                 application.programTypeId = new Types.ObjectId(applicationData.programTypeId);
@@ -335,6 +344,15 @@ export class ApplicationUploadController {
                 application.stateOfOrigin = applicationData.personalInfo.stateOfOrigin;
                 application.lga = applicationData.personalInfo.lga;
                 application.nationality = applicationData.personalInfo.nationality;
+
+                // Debug: Log the application object after assignment
+                this.logger.log('Application object after assignment:', {
+                    religion: application.religion,
+                    maritalStatus: application.maritalStatus,
+                    address: application.address,
+                    phone: application.phone,
+                    gender: application.gender
+                });
 
                 // Academic background
                 if (applicationData.academicInfo.primarySchool && applicationData.academicInfo.secondarySchool) {
@@ -405,7 +423,34 @@ export class ApplicationUploadController {
                 application.status = ApplicationStatus.PENDING;
                 application.currentStage = 4;
 
+                // Debug: Log the application object just before saving
+                this.logger.log('Application object just before save:', {
+                    id: application._id,
+                    religion: application.religion,
+                    maritalStatus: application.maritalStatus,
+                    address: application.address,
+                    phone: application.phone,
+                    gender: application.gender,
+                    stateOfOrigin: application.stateOfOrigin,
+                    lga: application.lga,
+                    nationality: application.nationality
+                });
+
                 await application.save();
+
+                // Debug: Log what was actually saved
+                const savedApplication = await this.applicationModel.findById(application._id).lean();
+                this.logger.log('Application object after save:', {
+                    id: savedApplication._id,
+                    religion: savedApplication.religion,
+                    maritalStatus: savedApplication.maritalStatus,
+                    address: savedApplication.address,
+                    phone: savedApplication.phone,
+                    gender: savedApplication.gender,
+                    stateOfOrigin: savedApplication.stateOfOrigin,
+                    lga: savedApplication.lga,
+                    nationality: savedApplication.nationality
+                });
 
                 this.logger.log('Application saved successfully:', {
                     applicationId: application._id.toString(),

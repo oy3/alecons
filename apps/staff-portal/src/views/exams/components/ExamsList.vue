@@ -414,7 +414,7 @@ export default {
     },
 
     async gradeExam(exam) {
-      const result = await this.$swal.fire({
+      const result = await Swal.fire({
         title: 'Grade All Attempts',
         text: `This will grade all attempts for "${exam.title}". Continue?`,
         icon: 'question',
@@ -428,7 +428,7 @@ export default {
         try {
           const response = await apiService.gradeExam(exam._id)
           if (response.success) {
-            this.$swal.fire({
+            Swal.fire({
               icon: 'success',
               title: 'Grading Started',
               text: 'Grading job has been queued. Results will be available shortly.',
@@ -437,7 +437,7 @@ export default {
             this.loadExams()
           }
         } catch (error) {
-          this.$swal.fire({
+          Swal.fire({
             icon: 'error',
             title: 'Grading Failed',
             text: 'Failed to start grading process.',
@@ -448,7 +448,7 @@ export default {
     },
 
     async releaseResults(exam) {
-      const result = await this.$swal.fire({
+      const result = await Swal.fire({
         title: 'Release Results',
         text: `Release results for "${exam.title}" to students?`,
         icon: 'question',
@@ -462,7 +462,7 @@ export default {
         try {
           const response = await apiService.releaseExamResults(exam._id)
           if (response.success) {
-            this.$swal.fire({
+            Swal.fire({
               icon: 'success',
               title: 'Results Released',
               text: 'Results have been released to students.',
@@ -471,7 +471,7 @@ export default {
             this.loadExams()
           }
         } catch (error) {
-          this.$swal.fire({
+          Swal.fire({
             icon: 'error',
             title: 'Release Failed',
             text: 'Failed to release results.',
@@ -482,7 +482,7 @@ export default {
     },
 
     async deleteExam(exam) {
-      const result = await this.$swal.fire({
+      const result = await Swal.fire({
         title: 'Delete Exam',
         text: `Are you sure you want to delete "${exam.title}"? This action cannot be undone.`,
         icon: 'warning',
@@ -496,7 +496,7 @@ export default {
         try {
           const response = await apiService.deleteExam(exam._id)
           if (response.success) {
-            this.$swal.fire({
+            Swal.fire({
               icon: 'success',
               title: 'Exam Deleted',
               text: 'Exam has been deleted successfully.',
@@ -505,7 +505,7 @@ export default {
             this.loadExams()
           }
         } catch (error) {
-          this.$swal.fire({
+          Swal.fire({
             icon: 'error',
             title: 'Delete Failed',
             text: 'Failed to delete exam.',

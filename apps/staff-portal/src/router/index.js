@@ -44,6 +44,12 @@ const routes = [
         meta: { requiresAuth: true, permissions: ['staff', 'admin', 'academics:manage'] }
     },
     {
+        path: '/exams',
+        name: 'ExamManagement',
+        component: () => import('../views/exams/ExamManagement.vue'),
+        meta: { requiresAuth: true, permissions: ['staff', 'admin', 'exams:manage'] }
+    },
+    {
         path: '/users',
         name: 'Users',
         component: () => import('../views/users/Users.vue'),

@@ -34,6 +34,45 @@ export class ExamController {
         private queueService: QueueService,
     ) { }
 
+    @Get()
+    @Roles('staff', 'admin')
+    @ApiOperation({ summary: 'Get all exams with pagination (Staff only)' })
+    @ApiResponse({ status: 200, description: 'Exams retrieved successfully' })
+    async getAllExams(@Request() req, @Query() query): Promise<any> {
+        try {
+            const { 
+                page = 1, 
+                limit = 10, 
+                search = '', 
+                status = '', 
+                type = '',
+                sortBy = 'createdAt',
+                sortOrder = 'desc'
+            } = query;
+
+            const exams = await this.examService.getAllExams({
+                page: parseInt(page),
+                limit: parseInt(limit),
+                search,
+                status,
+                type,
+                sortBy,
+                sortOrder
+            });
+
+            return {
+                success: true,
+                ...exams
+            };
+        } catch (error) {
+            this.logger.error('Error getting all exams:', error.message);
+            throw new HttpException(
+                error.message || 'Failed to get exams',
+                error.status || HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
     @Get('available')
     @Roles('student', 'applicant', 'staff')
     @ApiOperation({ summary: 'Get available exams for current user' })

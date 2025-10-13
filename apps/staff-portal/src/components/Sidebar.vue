@@ -34,6 +34,12 @@ export default {
           permissions: ['staff', 'admin', 'academics:manage']
         },
         {
+          title: 'Exams',
+          icon: 'bi-file-text',
+          route: '/exams',
+          permissions: ['staff', 'admin', 'exams:manage']
+        },
+        {
           title: 'Users',
           icon: 'bi-people',
           route: '/users',

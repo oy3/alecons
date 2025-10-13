@@ -455,6 +455,106 @@ class StaffApiService {
             method: 'PUT',
         })
     }
+
+    // Exam API methods
+    async getExams(params = {}) {
+        const queryString = new URLSearchParams(params).toString()
+        const endpoint = queryString ? `/exams?${queryString}` : '/exams'
+        return this.makeRequest(endpoint)
+    }
+
+    async getExam(examId) {
+        return this.makeRequest(`/exams/${examId}`)
+    }
+
+    async createExam(examData) {
+        return this.makeRequest('/exams', {
+            method: 'POST',
+            body: JSON.stringify(examData),
+        })
+    }
+
+    async updateExam(examId, examData) {
+        return this.makeRequest(`/exams/${examId}`, {
+            method: 'PUT',
+            body: JSON.stringify(examData),
+        })
+    }
+
+    async deleteExam(examId) {
+        return this.makeRequest(`/exams/${examId}`, {
+            method: 'DELETE',
+        })
+    }
+
+    async gradeExam(examId) {
+        return this.makeRequest(`/exams/${examId}/grade-all`, {
+            method: 'POST',
+        })
+    }
+
+    async releaseExamResults(examId, releaseAll = true) {
+        return this.makeRequest(`/exams/${examId}/release-results`, {
+            method: 'POST',
+            body: JSON.stringify({ releaseAll }),
+        })
+    }
+
+    async retractExamResults(examId) {
+        return this.makeRequest(`/exams/${examId}/retract-results`, {
+            method: 'POST',
+        })
+    }
+
+    async getExamStatistics(examId) {
+        return this.makeRequest(`/exams/${examId}/statistics`)
+    }
+
+    async getJobStatus(queueName, jobId) {
+        return this.makeRequest(`/exams/jobs/${queueName}/${jobId}`)
+    }
+
+    // Question Bank API methods
+    async getQuestions(examId, params = {}) {
+        const queryString = new URLSearchParams(params).toString()
+        const endpoint = queryString ? `/questions/${examId}?${queryString}` : `/questions/${examId}`
+        return this.makeRequest(endpoint)
+    }
+
+    async createQuestion(questionData) {
+        return this.makeRequest('/questions', {
+            method: 'POST',
+            body: JSON.stringify(questionData),
+        })
+    }
+
+    async updateQuestion(questionId, questionData) {
+        return this.makeRequest(`/questions/${questionId}`, {
+            method: 'PUT',
+            body: JSON.stringify(questionData),
+        })
+    }
+
+    async deleteQuestion(questionId) {
+        return this.makeRequest(`/questions/${questionId}`, {
+            method: 'DELETE',
+        })
+    }
+
+    async bulkImportQuestions(examId, file, format) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('examId', examId)
+        formData.append('format', format)
+
+        return this.makeRequest('/questions/bulk-import', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                // Remove Content-Type to let browser set it with boundary for FormData
+            }
+        })
+    }
 }
 
 export const apiService = new StaffApiService()

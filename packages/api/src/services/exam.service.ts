@@ -431,6 +431,77 @@ export class ExamService {
     }
 
     // Admin methods (TODO: Add proper implementation)
+    async getAllExams(options: {
+        page: number;
+        limit: number;
+        search?: string;
+        status?: string;
+        type?: string;
+        sortBy?: string;
+        sortOrder?: string;
+    }): Promise<{
+        exams: ExamDocument[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    }> {
+        try {
+            const { page, limit, search, status, type, sortBy = 'createdAt', sortOrder = 'desc' } = options;
+
+            // Build filter query
+            const filter: any = { isActive: true };
+
+            if (search) {
+                filter.$or = [
+                    { title: { $regex: search, $options: 'i' } },
+                    { description: { $regex: search, $options: 'i' } }
+                ];
+            }
+
+            if (status) {
+                filter.status = status;
+            }
+
+            if (type) {
+                filter.type = type;
+            }
+
+            // Calculate pagination
+            const skip = (page - 1) * limit;
+
+            // Build sort object
+            const sort: any = {};
+            sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+            // Execute query
+            const [exams, total] = await Promise.all([
+                this.examModel
+                    .find(filter)
+                    .populate('academicSession', 'title year')
+                    .populate('createdBy', 'firstName lastName email')
+                    .sort(sort)
+                    .skip(skip)
+                    .limit(limit)
+                    .lean(),
+                this.examModel.countDocuments(filter)
+            ]);
+
+            const totalPages = Math.ceil(total / limit);
+
+            return {
+                exams,
+                total,
+                page,
+                limit,
+                totalPages
+            };
+        } catch (error) {
+            this.logger.error('Error getting all exams:', error.message);
+            throw error;
+        }
+    }
+
     async createExam(createExamDto: any, createdBy: string): Promise<ExamDocument> {
         try {
             const exam = new this.examModel({

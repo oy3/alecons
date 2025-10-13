@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { BullModule } from '@nestjs/bull';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -10,6 +11,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { UploadModule } from './modules/upload.module';
 import { AcademicSessionsModule } from './modules/academic-sessions.module';
 import { DepartmentsModule } from './modules/departments.module';
+import { ExamModule } from './modules/exam.module';
 import { StaffApplicationsController } from './controllers/staff-applications.controller';
 import { Application, ApplicationSchema } from './schemas/application.schema';
 import { Program, ProgramSchema } from './schemas/program.schema';
@@ -37,12 +39,20 @@ import { MatriculationService } from './services/matriculation.service';
                 limit: 100,
             },
         ]),
+        BullModule.forRoot({
+            redis: {
+                host: process.env.REDIS_HOST || 'localhost',
+                port: parseInt(process.env.REDIS_PORT) || 6379,
+                password: process.env.REDIS_PASSWORD,
+            },
+        }),
         AuthModule,
         ProgramsModule,
         PaymentsModule,
         UploadModule,
         AcademicSessionsModule,
         DepartmentsModule,
+        ExamModule,
     ],
     controllers: [AppController, StaffApplicationsController],
     providers: [AppService, EmailService, MatriculationService],

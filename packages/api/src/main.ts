@@ -7,10 +7,12 @@ async function bootstrap() {
     const logger = new Logger('Bootstrap');
     const app = await NestFactory.create(AppModule);
 
-    // Enable CORS
+        // Enable CORS
     app.enableCors({
         origin: [
             process.env.FRONTEND_URL || 'http://localhost:5173',
+            'http://localhost:5174', // CBT Portal (original)
+            'http://localhost:3004', // CBT Portal (current)
             'http://localhost:3001', // Staff portal
             'http://localhost:3002', // Student portal (future)
             'http://localhost:3003', // Website (future)

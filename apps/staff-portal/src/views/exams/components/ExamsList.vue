@@ -51,7 +51,7 @@
     </div>
 
     <!-- Exams Table -->
-    <div v-else-if="exams.length > 0" class="card">
+    <div v-else-if="exams && exams.length > 0" class="card">
       <div class="card-body p-0">
         <div class="table-responsive">
           <table class="table table-hover mb-0">
@@ -228,6 +228,7 @@
 import { useAuthStore } from '../../../stores/auth.js'
 import { apiService } from '../../../services/api.js'
 import { logger } from '@shared/utils/logger'
+import Swal from 'sweetalert2'
 
 export default {
   name: 'ExamsList',
@@ -252,7 +253,7 @@ export default {
   },
   computed: {
     filteredExams() {
-      let filtered = this.exams
+      let filtered = this.exams || []
 
       if (this.searchQuery) {
         const query = this.searchQuery.toLowerCase()
@@ -337,6 +338,7 @@ export default {
 
     async loadExams() {
       try {
+        logger.info('Loading exams with auth token:', !!this.authStore.token)
         this.isLoading = true
         const params = {
           page: this.currentPage,
@@ -351,16 +353,28 @@ export default {
         }
 
         const response = await apiService.getExams(params)
+        logger.info('Exams API response:', response)
+        
         if (response.success) {
-          this.exams = response.data
-          this.totalExams = response.total || response.data.length
+          this.exams = response.exams || []
+          this.totalExams = response.total || response.exams?.length || 0
+          logger.info('Exams loaded successfully:', this.exams.length, 'exams')
+        } else {
+          logger.error('API returned unsuccessful response:', response)
         }
       } catch (error) {
         logger.error('Error loading exams:', error)
-        this.$swal.fire({
+        
+        // Handle authentication errors
+        if (error.message.includes('Unauthorized') || error.message.includes('401')) {
+          this.authStore.handleAuthError()
+          return
+        }
+        
+        Swal.fire({
           icon: 'error',
-          title: 'Loading Failed',
-          text: 'Failed to load exams. Please try again.',
+          title: 'Loading Failed', 
+          text: error.message || 'Failed to load exams. Please try again.',
           confirmButtonColor: '#1a5f5f'
         })
       } finally {

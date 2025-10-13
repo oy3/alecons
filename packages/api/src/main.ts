@@ -7,7 +7,7 @@ async function bootstrap() {
     const logger = new Logger('Bootstrap');
     const app = await NestFactory.create(AppModule);
 
-        // Enable CORS
+    // Enable CORS
     app.enableCors({
         origin: [
             process.env.FRONTEND_URL || 'http://localhost:5173',

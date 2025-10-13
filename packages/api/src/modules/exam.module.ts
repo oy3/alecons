@@ -12,22 +12,22 @@ import { ExamAttempt, ExamAttemptSchema } from '../schemas/exam-attempt.schema';
 import { ExamResult, ExamResultSchema } from '../schemas/exam-result.schema';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([
-      { name: Exam.name, schema: ExamSchema },
-      { name: Question.name, schema: QuestionSchema },
-      { name: ExamPassword.name, schema: ExamPasswordSchema },
-      { name: ExamAttempt.name, schema: ExamAttemptSchema },
-      { name: ExamResult.name, schema: ExamResultSchema },
-    ]),
-    BullModule.registerQueue(
-      { name: 'exam-grading' },
-      { name: 'bulk-import' },
-      { name: 'result-processing' }
-    ),
-  ],
-  controllers: [ExamController],
-  providers: [ExamService, GradingService, QueueService],
-  exports: [ExamService, GradingService, QueueService],
+    imports: [
+        MongooseModule.forFeature([
+            { name: Exam.name, schema: ExamSchema },
+            { name: Question.name, schema: QuestionSchema },
+            { name: ExamPassword.name, schema: ExamPasswordSchema },
+            { name: ExamAttempt.name, schema: ExamAttemptSchema },
+            { name: ExamResult.name, schema: ExamResultSchema },
+        ]),
+        BullModule.registerQueue(
+            { name: 'exam-grading' },
+            { name: 'bulk-import' },
+            { name: 'result-processing' }
+        ),
+    ],
+    controllers: [ExamController],
+    providers: [ExamService, GradingService, QueueService],
+    exports: [ExamService, GradingService, QueueService],
 })
-export class ExamModule {}
+export class ExamModule { }

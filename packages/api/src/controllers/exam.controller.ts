@@ -40,11 +40,11 @@ export class ExamController {
     @ApiResponse({ status: 200, description: 'Exams retrieved successfully' })
     async getAllExams(@Request() req, @Query() query): Promise<any> {
         try {
-            const { 
-                page = 1, 
-                limit = 10, 
-                search = '', 
-                status = '', 
+            const {
+                page = 1,
+                limit = 10,
+                search = '',
+                status = '',
                 type = '',
                 sortBy = 'createdAt',
                 sortOrder = 'desc'
@@ -59,6 +59,8 @@ export class ExamController {
                 sortBy,
                 sortOrder
             });
+
+
 
             return {
                 success: true,

@@ -478,7 +478,7 @@ export class ExamService {
             const [exams, total] = await Promise.all([
                 this.examModel
                     .find(filter)
-                    .populate('academicSession', 'title year')
+                    .populate('academicSession', 'sessionYear startDate endDate status')
                     .populate('createdBy', 'firstName lastName email')
                     .sort(sort)
                     .skip(skip)
@@ -504,11 +504,75 @@ export class ExamService {
 
     async createExam(createExamDto: any, createdBy: string): Promise<ExamDocument> {
         try {
-            const exam = new this.examModel({
-                ...createExamDto,
-                createdBy: new Types.ObjectId(createdBy)
+            this.logger.log('Received exam data:', JSON.stringify(createExamDto, null, 2));
+
+            // Debug specific number fields
+            this.logger.log('Raw number values:', {
+                totalQuestions: { value: createExamDto.totalQuestions, type: typeof createExamDto.totalQuestions },
+                totalMark: { value: createExamDto.totalMark, type: typeof createExamDto.totalMark },
+                cutOffMark: { value: createExamDto.cutOffMark, type: typeof createExamDto.cutOffMark },
+                duration: { value: createExamDto.duration, type: typeof createExamDto.duration },
+                attemptLimit: { value: createExamDto.attemptLimit, type: typeof createExamDto.attemptLimit }
             });
 
+            // Process and validate the data
+            const processedData = {
+                ...createExamDto,
+                // Ensure academicSession is ObjectId
+                academicSession: new Types.ObjectId(createExamDto.academicSession),
+                // Ensure examTimestamp is Date
+                examTimestamp: new Date(createExamDto.examTimestamp),
+                // Ensure numbers are properly converted
+                duration: Number(createExamDto.duration),
+                totalQuestions: Number(createExamDto.totalQuestions),
+                attemptLimit: Number(createExamDto.attemptLimit),
+                totalMark: Number(createExamDto.totalMark),
+                cutOffMark: Number(createExamDto.cutOffMark),
+                // Handle target filter - convert programs array to ObjectIds
+                target: {
+                    ...createExamDto.target,
+                    filter: {
+                        ...createExamDto.target?.filter,
+                        // Convert programs array to ObjectIds if provided
+                        ...(createExamDto.target?.filter?.programs && {
+                            programs: createExamDto.target.filter.programs.map(id => new Types.ObjectId(id))
+                        }),
+                        // Convert departments array to ObjectIds if provided
+                        ...(createExamDto.target?.filter?.departments && {
+                            departments: createExamDto.target.filter.departments.map(id => new Types.ObjectId(id))
+                        }),
+                        // Convert courses array to ObjectIds if provided
+                        ...(createExamDto.target?.filter?.courses && {
+                            courses: createExamDto.target.filter.courses.map(id => new Types.ObjectId(id))
+                        })
+                    }
+                },
+                createdBy: new Types.ObjectId(createdBy)
+            };
+
+            this.logger.log('Processed exam data:', JSON.stringify(processedData, null, 2));
+
+            // Debug converted number values
+            this.logger.log('Converted number values:', {
+                totalQuestions: processedData.totalQuestions,
+                totalMark: processedData.totalMark,
+                cutOffMark: processedData.cutOffMark,
+                duration: processedData.duration,
+                attemptLimit: processedData.attemptLimit
+            });
+
+            const exam = new this.examModel(processedData);
+            const savedExam = await exam.save();
+
+            this.logger.log('Saved exam number values:', {
+                totalQuestions: savedExam.totalQuestions,
+                totalMark: savedExam.totalMark,
+                cutOffMark: savedExam.cutOffMark,
+                duration: savedExam.duration,
+                attemptLimit: savedExam.attemptLimit
+            });
+
+            return savedExam;
             return await exam.save();
         } catch (error) {
             this.logger.error('Error creating exam:', error.message);
@@ -518,9 +582,60 @@ export class ExamService {
 
     async updateExam(examId: string, updateExamDto: any, updatedBy: string): Promise<ExamDocument> {
         try {
+            // Process and validate the data similar to create
+            const processedData = {
+                ...updateExamDto,
+                // Ensure academicSession is ObjectId if provided
+                ...(updateExamDto.academicSession && {
+                    academicSession: new Types.ObjectId(updateExamDto.academicSession)
+                }),
+                // Ensure examTimestamp is Date if provided
+                ...(updateExamDto.examTimestamp && {
+                    examTimestamp: new Date(updateExamDto.examTimestamp)
+                }),
+                // Ensure numbers are properly converted if provided
+                ...(updateExamDto.duration !== undefined && {
+                    duration: Number(updateExamDto.duration)
+                }),
+                ...(updateExamDto.totalQuestions !== undefined && {
+                    totalQuestions: Number(updateExamDto.totalQuestions)
+                }),
+                ...(updateExamDto.attemptLimit !== undefined && {
+                    attemptLimit: Number(updateExamDto.attemptLimit)
+                }),
+                ...(updateExamDto.totalMark !== undefined && {
+                    totalMark: Number(updateExamDto.totalMark)
+                }),
+                ...(updateExamDto.cutOffMark !== undefined && {
+                    cutOffMark: Number(updateExamDto.cutOffMark)
+                }),
+                // Handle target filter if provided
+                ...(updateExamDto.target && {
+                    target: {
+                        ...updateExamDto.target,
+                        filter: {
+                            ...updateExamDto.target?.filter,
+                            // Convert programs array to ObjectIds if provided
+                            ...(updateExamDto.target?.filter?.programs && {
+                                programs: updateExamDto.target.filter.programs.map(id => new Types.ObjectId(id))
+                            }),
+                            // Convert departments array to ObjectIds if provided
+                            ...(updateExamDto.target?.filter?.departments && {
+                                departments: updateExamDto.target.filter.departments.map(id => new Types.ObjectId(id))
+                            }),
+                            // Convert courses array to ObjectIds if provided
+                            ...(updateExamDto.target?.filter?.courses && {
+                                courses: updateExamDto.target.filter.courses.map(id => new Types.ObjectId(id))
+                            })
+                        }
+                    }
+                }),
+                updatedBy: new Types.ObjectId(updatedBy)
+            };
+
             const exam = await this.examModel.findByIdAndUpdate(
                 examId,
-                { ...updateExamDto, updatedBy: new Types.ObjectId(updatedBy) },
+                processedData,
                 { new: true }
             );
 

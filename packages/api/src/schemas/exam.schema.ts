@@ -24,7 +24,10 @@ export class Exam {
     target: {
         type: 'applicants' | 'students' | 'staff' | 'custom';
         filter: {
-            programId?: Types.ObjectId;
+            programs?: Types.ObjectId[];
+            departments?: Types.ObjectId[];
+            courses?: Types.ObjectId[];
+            programId?: Types.ObjectId; // Keep for backward compatibility
             year?: number;
             semester?: string;
             departmentId?: Types.ObjectId;

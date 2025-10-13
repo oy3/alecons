@@ -1,3 +1,111 @@
+<script>
+import { useAuthStore } from '../../stores/auth.js'
+import { logger } from '@shared/utils/logger'
+import { apiService } from '../../services/api.js'
+import Swal from 'sweetalert2'
+import ExamsList from './components/ExamsList.vue'
+import QuestionBank from './components/QuestionBank.vue'
+import ExamResults from './components/ExamResults.vue'
+import ExamAnalytics from './components/ExamAnalytics.vue'
+import ExamFormModal from './components/ExamFormModal.vue'
+import ExamStatisticsModal from './components/ExamStatisticsModal.vue'
+
+export default {
+  name: 'ExamManagement',
+  components: {
+    ExamsList,
+    QuestionBank,
+    ExamResults,
+    ExamAnalytics,
+    ExamFormModal,
+    ExamStatisticsModal
+  },
+  setup() {
+    const authStore = useAuthStore()
+    return {
+      authStore
+    }
+  },
+  data() {
+    return {
+      activeTab: 'exams',
+      showCreateExamModal: false,
+      showEditExamModal: false,
+      showStatisticsModal: false,
+      selectedExam: null
+    }
+  },
+  async mounted() {
+    await this.authStore.initialize()
+
+    // Check permissions
+    if (!this.authStore.hasAnyPermission(['exams:manage', 'staff', 'admin'])) {
+      this.$swal.fire({
+        icon: 'error',
+        title: 'Access Denied',
+        text: 'You do not have permission to manage exams',
+        confirmButtonColor: '#1a5f5f'
+      })
+      this.$router.push('/dashboard')
+      return
+    }
+
+    logger.info('Exam management page loaded')
+  },
+  methods: {
+    setActiveTab(tab) {
+      this.activeTab = tab
+      logger.info('Switched to exam tab:', tab)
+    },
+    
+    handleEditExam(exam) {
+      this.selectedExam = exam
+      this.showEditExamModal = true
+    },
+    
+    handleViewStatistics(exam) {
+      this.selectedExam = exam
+      this.showStatisticsModal = true
+    },
+    
+    closeExamModal() {
+      this.showCreateExamModal = false
+      this.showEditExamModal = false
+      this.selectedExam = null
+    },
+    
+    async handleExamSave(examData) {
+      try {
+        let result
+        if (this.selectedExam) {
+          // Update existing exam - remove id from data object since it goes in the URL
+          const updateData = { ...examData }
+          delete updateData.id
+          result = await apiService.updateExam(examData.id, updateData)
+        } else {
+          // Create new exam
+          result = await apiService.createExam(examData)
+        }
+
+        if (result.success) {
+          Swal.fire('Success', 
+            this.selectedExam ? 'Exam updated successfully' : 'Exam created successfully', 
+            'success')
+          this.closeExamModal()
+          // Refresh exams list
+          this.$refs.examsList?.loadExams()
+        } else {
+          Swal.fire('Error', result.message || 'Failed to save exam', 'error')
+        }
+      } catch (error) {
+        console.error('Error saving exam:', error)
+        Swal.fire('Error', 'Failed to save exam', 'error')
+      }
+    }
+  }
+}
+</script>
+
 <template>
   <div class="exam-management">
     <!-- Header Section -->
@@ -104,7 +212,7 @@
       :show="showCreateExamModal || showEditExamModal"
       :exam="selectedExam"
       @close="closeExamModal"
-      @saved="handleExamSaved"
+      @save="handleExamSave"
     />
 
     <!-- Statistics Modal -->
@@ -115,89 +223,6 @@
     />
   </div>
 </template>
-
-<script>
-import { useAuthStore } from '../../stores/auth.js'
-import { logger } from '@shared/utils/logger'
-import ExamsList from './components/ExamsList.vue'
-import QuestionBank from './components/QuestionBank.vue'
-import ExamResults from './components/ExamResults.vue'
-import ExamAnalytics from './components/ExamAnalytics.vue'
-import ExamFormModal from './components/ExamFormModal.vue'
-import ExamStatisticsModal from './components/ExamStatisticsModal.vue'
-
-export default {
-  name: 'ExamManagement',
-  components: {
-    ExamsList,
-    QuestionBank,
-    ExamResults,
-    ExamAnalytics,
-    ExamFormModal,
-    ExamStatisticsModal
-  },
-  setup() {
-    const authStore = useAuthStore()
-    return {
-      authStore
-    }
-  },
-  data() {
-    return {
-      activeTab: 'exams',
-      showCreateExamModal: false,
-      showEditExamModal: false,
-      showStatisticsModal: false,
-      selectedExam: null
-    }
-  },
-  async mounted() {
-    await this.authStore.initialize()
-
-    // Check permissions
-    if (!this.authStore.hasAnyPermission(['exams:manage', 'staff', 'admin'])) {
-      this.$swal.fire({
-        icon: 'error',
-        title: 'Access Denied',
-        text: 'You do not have permission to manage exams',
-        confirmButtonColor: '#1a5f5f'
-      })
-      this.$router.push('/dashboard')
-      return
-    }
-
-    logger.info('Exam management page loaded')
-  },
-  methods: {
-    setActiveTab(tab) {
-      this.activeTab = tab
-      logger.info('Switched to exam tab:', tab)
-    },
-    
-    handleEditExam(exam) {
-      this.selectedExam = exam
-      this.showEditExamModal = true
-    },
-    
-    handleViewStatistics(exam) {
-      this.selectedExam = exam
-      this.showStatisticsModal = true
-    },
-    
-    closeExamModal() {
-      this.showCreateExamModal = false
-      this.showEditExamModal = false
-      this.selectedExam = null
-    },
-    
-    handleExamSaved() {
-      this.closeExamModal()
-      // Refresh exams list
-      this.$refs.examsList?.loadExams()
-    }
-  }
-}
-</script>
 
 <style scoped>
 .exam-management {

@@ -1,229 +1,3 @@
-<template>
-  <div class="exams-list">
-    <!-- Filters and Search -->
-    <div class="row mb-4">
-      <div class="col-md-4">
-        <div class="input-group">
-          <span class="input-group-text">
-            <i class="bi bi-search"></i>
-          </span>
-          <input
-            type="text"
-            class="form-control"
-            placeholder="Search exams..."
-            v-model="searchQuery"
-            @input="handleSearch"
-          >
-        </div>
-      </div>
-      <div class="col-md-3">
-        <select class="form-select" v-model="statusFilter" @change="loadExams">
-          <option value="all">All Statuses</option>
-          <option value="draft">Draft</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="in-progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="graded">Graded</option>
-        </select>
-      </div>
-      <div class="col-md-3">
-        <select class="form-select" v-model="sessionFilter" @change="loadExams">
-          <option value="all">All Sessions</option>
-          <option v-for="session in academicSessions" :key="session._id" :value="session._id">
-            {{ session.sessionYear }}
-          </option>
-        </select>
-      </div>
-      <div class="col-md-2">
-        <button class="btn btn-outline-secondary w-100" @click="refreshExams">
-          <i class="bi bi-arrow-clockwise me-1"></i>
-          Refresh
-        </button>
-      </div>
-    </div>
-
-    <!-- Loading State -->
-    <div v-if="isLoading" class="text-center py-5">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <p class="mt-3">Loading exams...</p>
-    </div>
-
-    <!-- Exams Table -->
-    <div v-else-if="exams && exams.length > 0" class="card">
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Title</th>
-                <th>Session</th>
-                <th>Target</th>
-                <th>Schedule</th>
-                <th>Duration</th>
-                <th>Questions</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="exam in paginatedExams" :key="exam._id">
-                <td>
-                  <div>
-                    <strong>{{ exam.title }}</strong>
-                    <br>
-                    <small class="text-muted">{{ exam.description.substring(0, 60) }}{{ exam.description.length > 60 ? '...' : '' }}</small>
-                  </div>
-                </td>
-                <td>
-                  <span class="badge bg-light text-dark">
-                    {{ exam.academicSession?.sessionYear || 'N/A' }}
-                  </span>
-                </td>
-                <td>
-                  <div>
-                    <small class="text-muted d-block">{{ formatTargetType(exam.target.type) }}</small>
-                    <span v-if="exam.target.filter.programId" class="badge bg-info">
-                      {{ exam.programName || 'Program' }}
-                    </span>
-                  </div>
-                </td>
-                <td>
-                  <div>
-                    <strong>{{ formatDateTime(exam.examTimestamp) }}</strong>
-                    <br>
-                    <small class="text-muted">{{ formatDate(exam.examTimestamp) }}</small>
-                  </div>
-                </td>
-                <td>
-                  <span class="badge bg-secondary">{{ exam.duration }}min</span>
-                </td>
-                <td>
-                  <div class="text-center">
-                    <strong>{{ exam.totalQuestions }}</strong>
-                    <br>
-                    <small class="text-muted">{{ exam.totalMark }} marks</small>
-                  </div>
-                </td>
-                <td>
-                  <span 
-                    class="badge"
-                    :class="getStatusBadgeClass(exam.status)"
-                  >
-                    {{ exam.status.charAt(0).toUpperCase() + exam.status.slice(1) }}
-                  </span>
-                </td>
-                <td>
-                  <div class="btn-group">
-                    <button 
-                      class="btn btn-sm btn-outline-primary"
-                      @click="viewExam(exam)"
-                      title="View Details"
-                    >
-                      <i class="bi bi-eye"></i>
-                    </button>
-                    <button 
-                      class="btn btn-sm btn-outline-success"
-                      @click="editExam(exam)"
-                      title="Edit Exam"
-                      v-if="canEditExam(exam)"
-                    >
-                      <i class="bi bi-pencil"></i>
-                    </button>
-                    <div class="btn-group dropstart">
-                      <button 
-                        class="btn btn-sm btn-outline-secondary dropdown-toggle"
-                        data-bs-toggle="dropdown"
-                      >
-                        <i class="bi bi-three-dots"></i>
-                      </button>
-                      <ul class="dropdown-menu">
-                        <li>
-                          <button 
-                            class="dropdown-item"
-                            @click="viewStatistics(exam)"
-                          >
-                            <i class="bi bi-graph-up me-2"></i>
-                            Statistics
-                          </button>
-                        </li>
-                        <li v-if="exam.status === 'completed'">
-                          <button 
-                            class="dropdown-item"
-                            @click="gradeExam(exam)"
-                          >
-                            <i class="bi bi-check-circle me-2"></i>
-                            Grade All
-                          </button>
-                        </li>
-                        <li v-if="exam.status === 'graded'">
-                          <button 
-                            class="dropdown-item"
-                            @click="releaseResults(exam)"
-                          >
-                            <i class="bi bi-send me-2"></i>
-                            Release Results
-                          </button>
-                        </li>
-                        <li v-if="canDeleteExam(exam)">
-                          <hr class="dropdown-divider">
-                          <button 
-                            class="dropdown-item text-danger"
-                            @click="deleteExam(exam)"
-                          >
-                            <i class="bi bi-trash me-2"></i>
-                            Delete
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Empty State -->
-    <div v-else class="text-center py-5">
-      <i class="bi bi-file-text text-muted" style="font-size: 4rem;"></i>
-      <h4 class="text-muted mt-3">No Exams Found</h4>
-      <p class="text-muted">Create your first exam to get started.</p>
-      <button class="btn btn-primary" @click="$emit('create-exam')">
-        <i class="bi bi-plus-circle me-1"></i>
-        Create Exam
-      </button>
-    </div>
-
-    <!-- Pagination -->
-    <nav v-if="totalPages > 1" class="mt-4" aria-label="Exams pagination">
-      <ul class="pagination justify-content-center">
-        <li class="page-item" :class="{ disabled: currentPage === 1 }">
-          <button class="page-link" @click="changePage(currentPage - 1)" :disabled="currentPage === 1">
-            <i class="bi bi-chevron-left"></i>
-          </button>
-        </li>
-        <li 
-          v-for="page in visiblePages" 
-          :key="page" 
-          class="page-item" 
-          :class="{ active: page === currentPage }"
-        >
-          <button class="page-link" @click="changePage(page)">{{ page }}</button>
-        </li>
-        <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-          <button class="page-link" @click="changePage(currentPage + 1)" :disabled="currentPage === totalPages">
-            <i class="bi bi-chevron-right"></i>
-          </button>
-        </li>
-      </ul>
-    </nav>
-  </div>
-</template>
-
 <script>
 import { useAuthStore } from '../../../stores/auth.js'
 import { apiService } from '../../../services/api.js'
@@ -277,7 +51,9 @@ export default {
     paginatedExams() {
       const start = (this.currentPage - 1) * this.perPage
       const end = start + this.perPage
-      return this.filteredExams.slice(start, end)
+      const paginated = this.filteredExams.slice(start, end)
+
+      return paginated
     },
 
     totalPages() {
@@ -329,7 +105,7 @@ export default {
       try {
         const response = await apiService.getAcademicSessions()
         if (response.success) {
-          this.academicSessions = response.data
+          this.academicSessions = response.data.sessions || []
         }
       } catch (error) {
         logger.error('Error loading academic sessions:', error)
@@ -353,7 +129,6 @@ export default {
         }
 
         const response = await apiService.getExams(params)
-        logger.info('Exams API response:', response)
         
         if (response.success) {
           this.exams = response.exams || []
@@ -565,6 +340,230 @@ export default {
   }
 }
 </script>
+
+<template>
+  <div class="exams-list">
+    <!-- Filters and Search -->
+    <div class="row mb-4">
+      <div class="col-md-4">
+        <div class="input-group">
+          <span class="input-group-text">
+            <i class="bi bi-search"></i>
+          </span>
+          <input
+            type="text"
+            class="form-control"
+            placeholder="Search exams..."
+            v-model="searchQuery"
+            @input="handleSearch"
+          >
+        </div>
+      </div>
+      <div class="col-md-3">
+        <select class="form-select" v-model="statusFilter" @change="loadExams">
+          <option value="all">All Statuses</option>
+          <option value="draft">Draft</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="in-progress">In Progress</option>
+          <option value="completed">Completed</option>
+          <option value="graded">Graded</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select class="form-select" v-model="sessionFilter" @change="loadExams">
+          <option value="all">All Sessions</option>
+          <option v-for="session in academicSessions" :key="session._id" :value="session._id">
+            {{ session.sessionYear }}
+          </option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-outline-secondary w-100" @click="refreshExams">
+          <i class="bi bi-arrow-clockwise me-1"></i>
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="isLoading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-3">Loading exams...</p>
+    </div>
+
+    <!-- Exams Table -->
+    <div v-else-if="exams && exams.length > 0" class="card p-0">
+      <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Title</th>
+                <th>Session</th>
+                <th>Target</th>
+                <th>Schedule</th>
+                <th>Duration</th>
+                <th>Questions</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="exam in paginatedExams" :key="exam._id">
+                <td>
+                  <div>
+                    <strong>{{ exam.title }}</strong>
+                    <br>
+                    <small class="text-muted">{{ exam.description.substring(0, 60) }}{{ exam.description.length > 60 ? '...' : '' }}</small>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge bg-light text-dark">
+                    {{ exam.academicSession?.sessionYear || 'N/A' }}
+                  </span>
+                </td>
+                <td>
+                  <div>
+                    <small class="text-muted d-block">{{ formatTargetType(exam.target.type) }}</small>
+                    <span v-if="exam.target?.filter?.programs?.length > 0" class="badge bg-info">
+                      {{ exam.target.filter.programs.length }} Program(s)
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <div>
+                    <strong>{{ formatDateTime(exam.examTimestamp) }}</strong>
+                    <br>
+                    <small class="text-muted">{{ formatDate(exam.examTimestamp) }}</small>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge bg-secondary">{{ exam.duration }}min</span>
+                </td>
+                <td>
+                  <div class="text-center">
+                    <strong>{{ exam.totalQuestions }}</strong>
+                    <br>
+                    <small class="text-muted">{{ exam.totalMark }} marks</small>
+                  </div>
+                </td>
+                <td>
+                  <span 
+                    class="badge"
+                    :class="getStatusBadgeClass(exam.status)"
+                  >
+                    {{ exam.status.charAt(0).toUpperCase() + exam.status.slice(1) }}
+                  </span>
+                </td>
+                <td>
+                  <div class="btn-group">
+                    <button 
+                      class="btn btn-sm btn-outline-primary"
+                      @click="viewExam(exam)"
+                      title="View Details"
+                    >
+                      <i class="bi bi-eye"></i>
+                    </button>
+                    <button 
+                      class="btn btn-sm btn-outline-success"
+                      @click="editExam(exam)"
+                      title="Edit Exam"
+                      v-if="canEditExam(exam)"
+                    >
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <div class="btn-group dropdown">
+                      <button 
+                        class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                        data-bs-toggle="dropdown"
+                      >
+                        <!-- <i class="bi bi-three-dots"></i> -->
+                      </button>
+                      <ul class="dropdown-menu">
+                        <li>
+                          <button 
+                            class="dropdown-item"
+                            @click="viewStatistics(exam)"
+                          >
+                            <i class="bi bi-graph-up me-2"></i>
+                            Statistics
+                          </button>
+                        </li>
+                        <li v-if="exam.status === 'completed'">
+                          <button 
+                            class="dropdown-item"
+                            @click="gradeExam(exam)"
+                          >
+                            <i class="bi bi-check-circle me-2"></i>
+                            Grade All
+                          </button>
+                        </li>
+                        <li v-if="exam.status === 'graded'">
+                          <button 
+                            class="dropdown-item"
+                            @click="releaseResults(exam)"
+                          >
+                            <i class="bi bi-send me-2"></i>
+                            Release Results
+                          </button>
+                        </li>
+                        <li v-if="canDeleteExam(exam)">
+                          <hr class="dropdown-divider">
+                          <button 
+                            class="dropdown-item text-danger"
+                            @click="deleteExam(exam)"
+                          >
+                            <i class="bi bi-trash me-2"></i>
+                            Delete
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-else class="text-center py-5">
+      <i class="bi bi-file-text text-muted" style="font-size: 4rem;"></i>
+      <h4 class="text-muted mt-3">No Exams Found</h4>
+      <p class="text-muted">Create your first exam to get started.</p>
+      <button class="btn btn-primary" @click="$emit('create-exam')">
+        <i class="bi bi-plus-circle me-1"></i>
+        Create Exam
+      </button>
+    </div>
+
+    <!-- Pagination -->
+    <nav v-if="totalPages > 1" class="mt-4" aria-label="Exams pagination">
+      <ul class="pagination justify-content-center">
+        <li class="page-item" :class="{ disabled: currentPage === 1 }">
+          <button class="page-link" @click="changePage(currentPage - 1)" :disabled="currentPage === 1">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+        </li>
+        <li 
+          v-for="page in visiblePages" 
+          :key="page" 
+          class="page-item" 
+          :class="{ active: page === currentPage }"
+        >
+          <button class="page-link" @click="changePage(page)">{{ page }}</button>
+        </li>
+        <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+          <button class="page-link" @click="changePage(currentPage + 1)" :disabled="currentPage === totalPages">
+            <i class="bi bi-chevron-right"></i>
+          </button>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</template>
 
 <style scoped>
 .exams-list {

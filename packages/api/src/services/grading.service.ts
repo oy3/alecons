@@ -5,6 +5,7 @@ import { Question, QuestionDocument } from '../schemas/question.schema';
 import { ExamResult, ExamResultDocument } from '../schemas/exam-result.schema';
 import { ExamAttempt, ExamAttemptDocument } from '../schemas/exam-attempt.schema';
 import { Exam, ExamDocument } from '../schemas/exam.schema';
+import { EmailService } from './email.service';
 
 export interface GradingOptions {
     negativeMarking?: boolean;
@@ -31,30 +32,35 @@ export class GradingService {
         @InjectModel(ExamResult.name) private resultModel: Model<ExamResultDocument>,
         @InjectModel(ExamAttempt.name) private attemptModel: Model<ExamAttemptDocument>,
         @InjectModel(Exam.name) private examModel: Model<ExamDocument>,
+        private emailService: EmailService,
     ) { }
 
-    async gradeExam(attemptId: string): Promise<ExamResultDocument> {
+    async gradeExam(attemptId: string, gradedBy?: string): Promise<ExamResultDocument> {
         try {
             this.logger.log(`Starting grading for attempt: ${attemptId}`);
 
             // Get attempt with exam details
             const attempt = await this.attemptModel
                 .findById(attemptId)
-                .populate('examId')
                 .lean();
 
             if (!attempt) {
                 throw new Error('Attempt not found');
             }
 
-            // Get all questions for the exam
+            this.logger.debug(`Found attempt for user ${attempt.userId}, exam ${attempt.examId}`);
+
+            // Get all questions for the exam - examId in attempt is already an ObjectId
             const questions = await this.questionModel
                 .find({ examId: attempt.examId })
                 .lean();
 
             if (!questions.length) {
-                throw new Error('No questions found for exam');
+                this.logger.error(`No questions found for exam ${attempt.examId}`);
+                throw new Error(`No questions found for exam ${attempt.examId}`);
             }
+
+            this.logger.log(`Found ${questions.length} questions for exam ${attempt.examId}`);
 
             // Process each question and calculate scores
             const questionResults: QuestionResult[] = [];
@@ -66,7 +72,8 @@ export class GradingService {
                 const userAnswer = attempt.answers.find(a =>
                     a.questionId.toString() === question._id.toString()
                 );
-                const result = this.gradeQuestion(question, userAnswer);
+
+                const result = this.gradeQuestion(question as unknown as QuestionDocument, userAnswer);
 
                 questionResults.push(result);
 
@@ -78,18 +85,35 @@ export class GradingService {
                 maxScore += result.maxMarks;
             }
 
+            // Update the total questions count to match what was actually processed
+            const totalQuestions = questions.length;
+
             // Calculate percentage and determine pass/fail
             const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
             const exam = attempt.examId as any;
-            const passingPercentage = exam.passingPercentage || 50;
-            const status = percentage >= passingPercentage ? 'pass' : 'fail';
+
+            // Use the exam's cutOffMark to determine pass/fail
+            // cutOffMark is absolute score, passingPercentage might be percentage
+            let passingThreshold = 50; // Default fallback
+
+            if (exam.cutOffMark && exam.totalMark) {
+                // If cutOffMark is set, calculate percentage from it
+                passingThreshold = (exam.cutOffMark / exam.totalMark) * 100;
+            } else if (exam.passingPercentage) {
+                // Use passingPercentage if available
+                passingThreshold = exam.passingPercentage;
+            }
+
+            const status = percentage >= passingThreshold ? 'pass' : 'fail';
+
+            this.logger.debug(`Score calculation: ${totalScore}/${maxScore} = ${percentage}%. Passing threshold: ${passingThreshold}%. Status: ${status}`);
 
             // Update or create result document
             const resultData = {
                 examId: attempt.examId,
                 userId: attempt.userId,
                 attemptId: attempt._id,
-                totalQuestions: questions.length,
+                totalQuestions,
                 questionsAttempted: attempt.answers.filter(a => a.selected).length,
                 correctAnswers,
                 totalScore,
@@ -107,19 +131,44 @@ export class GradingService {
             });
 
             let result: ExamResultDocument;
+            const gradingHistoryEntry = {
+                action: existingResult ? 'regraded' : 'graded',
+                performedBy: gradedBy ? new Types.ObjectId(gradedBy) : null,
+                performedAt: new Date(),
+                method: 'auto',
+                previousStatus: existingResult?.status,
+                newStatus: status,
+                previousScore: existingResult?.totalScore,
+                newScore: totalScore,
+                notes: existingResult ? 'Automatic regrading via regrade-all action' : 'Initial automatic grading'
+            };
 
             if (existingResult) {
+                // Update existing result and add to history
+                const updateData = {
+                    ...resultData,
+                    $push: { gradingHistory: gradingHistoryEntry }
+                };
+
                 result = await this.resultModel.findByIdAndUpdate(
                     existingResult._id,
-                    resultData,
+                    updateData,
                     { new: true }
                 );
-            } else {
-                result = new this.resultModel(resultData);
-                await result.save();
-            }
 
-            this.logger.log(`Grading completed for attempt ${attemptId}. Score: ${totalScore}/${maxScore} (${percentage}%)`);
+                this.logger.log(`Regraded existing result for attempt ${attemptId}. Previous: ${existingResult.totalScore}/${existingResult.maxScore} (${existingResult.percentage}%) -> New: ${totalScore}/${maxScore} (${percentage}%)`);
+            } else {
+                // Create new result with initial history entry
+                const newResultData = {
+                    ...resultData,
+                    gradingHistory: [gradingHistoryEntry]
+                };
+
+                result = new this.resultModel(newResultData);
+                await result.save();
+
+                this.logger.log(`Created new result for attempt ${attemptId}. Score: ${totalScore}/${maxScore} (${percentage}%)`);
+            }
 
             return result;
 
@@ -190,7 +239,6 @@ export class GradingService {
     private gradeMCQ(question: QuestionDocument, userAnswer: any): boolean {
         const correctOption = question.answer;
         const userSelection = userAnswer.selected;
-
         return correctOption === userSelection;
     }
 
@@ -307,9 +355,56 @@ export class GradingService {
                 filter.gradingType = 'auto'; // Only release auto-graded results
             }
 
+            // Get all results that will be released with user and exam details
+            const results = await this.resultModel
+                .find(filter)
+                .populate('userId', 'firstName lastName email')
+                .populate('examId', 'title')
+                .lean();
+
+            if (results.length === 0) {
+                this.logger.log(`No results found to release for exam ${examId}`);
+                return;
+            }
+
+            // Update the released status
             await this.resultModel.updateMany(filter, { released: true });
 
-            this.logger.log(`Results released for exam ${examId}`);
+            this.logger.log(`Results released for exam ${examId}. Sending emails to ${results.length} students.`);
+
+            // Send notification emails to students
+            const emailPromises = results.map(async (result) => {
+                try {
+                    const user = result.userId as any;
+                    const exam = result.examId as any;
+
+                    if (!user || !user.email) {
+                        this.logger.warn(`No email found for user in result ${result._id}`);
+                        return;
+                    }
+
+                    await this.emailService.sendExamResultEmail(
+                        user.email,
+                        user.firstName || 'Student',
+                        exam?.title || 'Unknown Exam',
+                        result.correctAnswers || 0,
+                        result.totalQuestions || 0,
+                        result.percentage || 0,
+                        result.status || 'unknown',
+                        result.gradedAt || new Date()
+                    );
+
+                    this.logger.log(`Exam result email sent to ${user.email} for exam: ${exam?.title}`);
+                } catch (emailError) {
+                    this.logger.error(`Failed to send exam result email for result ${result._id}:`, emailError.message);
+                    // Don't throw here - we want to continue sending other emails
+                }
+            });
+
+            // Execute all email sends
+            await Promise.allSettled(emailPromises);
+
+            this.logger.log(`Email notifications completed for exam ${examId}`);
 
         } catch (error) {
             this.logger.error(`Error releasing results for exam ${examId}:`, error.message);

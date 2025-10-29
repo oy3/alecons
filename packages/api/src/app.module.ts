@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bull';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -13,6 +14,7 @@ import { AcademicSessionsModule } from './modules/academic-sessions.module';
 import { DepartmentsModule } from './modules/departments.module';
 import { ExamModule } from './modules/exam.module';
 import { StaffApplicationsController } from './controllers/staff-applications.controller';
+import { ExamResultsController } from './controllers/exam-results.controller';
 import { Application, ApplicationSchema } from './schemas/application.schema';
 import { Program, ProgramSchema } from './schemas/program.schema';
 import { User, UserSchema } from './schemas/user.schema';
@@ -46,6 +48,7 @@ import { MatriculationService } from './services/matriculation.service';
                 password: process.env.REDIS_PASSWORD,
             },
         }),
+        ScheduleModule.forRoot(),
         AuthModule,
         ProgramsModule,
         PaymentsModule,
@@ -54,7 +57,7 @@ import { MatriculationService } from './services/matriculation.service';
         DepartmentsModule,
         ExamModule,
     ],
-    controllers: [AppController, StaffApplicationsController],
+    controllers: [AppController, StaffApplicationsController, ExamResultsController],
     providers: [AppService, EmailService, MatriculationService],
 })
 export class AppModule { }

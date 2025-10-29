@@ -61,7 +61,7 @@ export default {
 
                 <div class="ms-3">
                   <h5 class="card-title acon-text-primary fw-bold mb-0">
-                    About ACONS
+                    About ALECONS
                   </h5>
                   <p class="card-text text-secondary mb-0">
                     Learn about our history, mission, and commitment to
@@ -203,7 +203,7 @@ export default {
     </div>
 
     <div class="text-center py-5 acon-bg-light">
-      <h2 class="fw-bold acon-text-primary mt-5">Why Choose ACONS?</h2>
+      <h2 class="fw-bold acon-text-primary mt-5">Why Choose ALECONS?</h2>
       <p class="lead mb-5 text-secondary">
         Join a community of excellence where your nursing career begins with the
         best foundation

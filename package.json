@@ -11,14 +11,57 @@
     "dev": "vite",
     "build": "vite build && node generate-sitemap.js",
     "preview": "vite preview",
-    "clean": "rm -rf node_modules yarn.lock package-lock.json"
+    "clean": "rm -rf node_modules yarn.lock package-lock.json",
+    
+    "install:all": "npm install && npm run install:workspaces",
+    "install:workspaces": "npm install --workspaces",
+    
+    "dev:all": "concurrently --names=\"API,CBT,APP,STAFF,STUDENT\" --prefix-colors=\"blue,green,yellow,magenta,cyan\" \"npm run dev:api\" \"npm run dev:cbt\" \"npm run dev:application\" \"npm run dev:staff\" \"npm run dev:student\"",
+    "dev:frontend": "concurrently --names=\"CBT,APP,STAFF,STUDENT\" --prefix-colors=\"green,yellow,magenta,cyan\" \"npm run dev:cbt\" \"npm run dev:application\" \"npm run dev:staff\" \"npm run dev:student\"",
+    "dev:api": "npm run start:dev --workspace=packages/api",
+    "dev:cbt": "npm run dev --workspace=apps/cbt",
+    "dev:application": "npm run dev --workspace=apps/application-portal", 
+    "dev:staff": "npm run dev --workspace=apps/staff-portal",
+    "dev:student": "npm run dev --workspace=apps/student-portal",
+    
+    "build:all": "npm-run-all build:api build:frontend",
+    "build:api": "npm run build --workspace=packages/api",
+    "build:frontend": "npm-run-all build:cbt build:application build:staff build:student",
+    "build:cbt": "npm run build --workspace=apps/cbt",
+    "build:application": "npm run build --workspace=apps/application-portal",
+    "build:staff": "npm run build --workspace=apps/staff-portal", 
+    "build:student": "npm run build --workspace=apps/student-portal",
+    
+    "start:all": "concurrently --names=\"API,CBT,APP,STAFF,STUDENT\" --prefix-colors=\"blue,green,yellow,magenta,cyan\" \"npm run start:api\" \"npm run start:cbt\" \"npm run start:application\" \"npm run start:staff\" \"npm run start:student\"",
+    "start:api": "npm run start:prod --workspace=packages/api",
+    "start:cbt": "npm run preview --workspace=apps/cbt",
+    "start:application": "npm run preview --workspace=apps/application-portal",
+    "start:staff": "npm run preview --workspace=apps/staff-portal",
+    "start:student": "npm run preview --workspace=apps/student-portal",
+    
+    "test:all": "npm-run-all test:api test:frontend",
+    "test:api": "npm run test --workspace=packages/api",
+    "test:frontend": "npm-run-all test:cbt test:application test:staff test:student",
+    "test:cbt": "npm run test --workspace=apps/cbt",
+    "test:application": "npm run test --workspace=apps/application-portal",
+    "test:staff": "npm run test --workspace=apps/staff-portal",
+    "test:student": "npm run test --workspace=apps/student-portal",
+    
+    "lint:all": "npm-run-all lint:api lint:frontend",
+    "lint:api": "npm run format --workspace=packages/api",
+    "lint:frontend": "echo \"Frontend linting setup needed\"",
+    
+    "clean:all": "npm-run-all clean:workspaces clean:root",
+    "clean:workspaces": "npm run clean --workspace=packages/api && npm run clean --workspace=apps/cbt && npm run clean --workspace=apps/application-portal && npm run clean --workspace=apps/staff-portal && npm run clean --workspace=apps/student-portal",
+    "clean:root": "rm -rf node_modules yarn.lock package-lock.json"
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",
+    "bcrypt": "^6.0.0",
     "bootstrap": "^5.3.7",
     "bootstrap-icons": "^1.13.1",
     "nodemailer": "^7.0.6",
-    "sweetalert2": "^11.23.0",
+    "sweetalert2": "^11.26.3",
     "vue": "^3.5.17",
     "vue-meta": "^3.0.0-alpha.2",
     "vue-router": "^4.5.1"
@@ -26,6 +69,9 @@
   "devDependencies": {
     "@types/nodemailer": "^7.0.1",
     "@vitejs/plugin-vue": "^6.0.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "npm-run-all": "^4.1.5",
     "sitemap": "^8.0.0",
     "vite": "^7.0.4"
   }

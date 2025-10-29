@@ -48,9 +48,10 @@
 
       <!-- Time remaining for upcoming exams -->
       <div v-if="type === 'upcoming'" class="mb-3">
-        <div class="alert alert-info small py-2 mb-0">
-          <i class="bi bi-info-circle me-1"></i>
-          Starts {{ timeUntilExam }}
+        <div class="alert small py-2 mb-0" :class="timeUntilExam === 'now' ? 'alert-success' : 'alert-info'">
+          <i class="bi me-1" :class="timeUntilExam === 'now' ? 'bi-check-circle' : 'bi-info-circle'"></i>
+          <span v-if="timeUntilExam === 'now'">Available now!</span>
+          <span v-else>Starts {{ timeUntilExam }}</span>
         </div>
       </div>
 
@@ -110,12 +111,22 @@
         <i class="bi bi-clock me-1"></i>
         Not Yet Available
       </button>
+
+      <button 
+        v-if="type === 'missed'" 
+        class="btn btn-outline-danger w-100"
+        disabled
+      >
+        <i class="bi bi-x-circle me-1"></i>
+        Exam Missed
+      </button>
     </div>
   </div>
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { logger } from '@shared/utils/logger'
 
 export default {
   name: 'ExamCard',
@@ -127,17 +138,54 @@ export default {
     type: {
       type: String,
       required: true,
-      validator: value => ['available', 'continue', 'upcoming', 'completed'].includes(value)
+      validator: value => ['available', 'continue', 'upcoming', 'completed', 'missed'].includes(value)
     }
   },
-  emits: ['start', 'continue', 'viewResults'],
-  setup(props) {
+  emits: ['start', 'continue', 'viewResults', 'examBecameAvailable'],
+  setup(props, { emit }) {
+    // Reactive current time for real-time countdown
+    const currentTime = ref(new Date())
+    let countdownTimer = null
+
+    // Update current time every 30 seconds for upcoming exams
+    const startCountdownTimer = () => {
+      if (props.type === 'upcoming' && props.exam.examTimestamp) {
+        // Check how close the exam is
+        const timeUntilExam = new Date(props.exam.examTimestamp) - new Date()
+        
+        // If exam is very close (within 5 minutes), update every 10 seconds for accuracy
+        // Otherwise, update every 30 seconds
+        const updateInterval = timeUntilExam <= 5 * 60 * 1000 ? 10000 : 30000
+        
+        countdownTimer = setInterval(() => {
+          currentTime.value = new Date()
+          
+          // If exam time has passed, emit event to parent to refresh data
+          const newTimeUntil = new Date(props.exam.examTimestamp) - new Date()
+          if (newTimeUntil <= 0) {
+            // Exam should now be available - notify parent to refresh
+            logger.info(`ExamCard: Exam ${props.exam.id} (${props.exam.title}) became available - emitting event to parent`)
+            emit('examBecameAvailable', props.exam.id)
+            stopCountdownTimer()
+          }
+        }, updateInterval)
+      }
+    }
+
+    // Cleanup timer
+    const stopCountdownTimer = () => {
+      if (countdownTimer) {
+        clearInterval(countdownTimer)
+        countdownTimer = null
+      }
+    }
     const cardClass = computed(() => {
       switch (props.type) {
         case 'available': return 'border-primary'
         case 'continue': return 'border-warning'
         case 'upcoming': return 'border-info'
         case 'completed': return 'border-success'
+        case 'missed': return 'border-danger'
         default: return ''
       }
     })
@@ -148,6 +196,7 @@ export default {
         case 'continue': return 'badge bg-warning'
         case 'upcoming': return 'badge bg-info'
         case 'completed': return 'badge bg-success'
+        case 'missed': return 'badge bg-danger'
         default: return 'badge bg-secondary'
       }
     })
@@ -158,6 +207,7 @@ export default {
         case 'continue': return 'In Progress'
         case 'upcoming': return 'Upcoming'
         case 'completed': return 'Completed'
+        case 'missed': return 'Missed'
         default: return 'Unknown'
       }
     })
@@ -180,9 +230,8 @@ export default {
     })
 
     const timeUntilExam = computed(() => {
-      const now = new Date()
       const examTime = new Date(props.exam.examTimestamp)
-      const diff = examTime - now
+      const diff = examTime - currentTime.value // Use reactive currentTime
       
       if (diff <= 0) return 'now'
       
@@ -195,7 +244,7 @@ export default {
       } else if (hours > 0) {
         return `in ${hours}h ${minutes}m`
       } else {
-        return `in ${minutes} minutes`
+        return `in ${minutes} minute${minutes !== 1 ? 's' : ''}`
       }
     })
 
@@ -210,6 +259,15 @@ export default {
         minute: '2-digit'
       })
     }
+
+    // Lifecycle hooks
+    onMounted(() => {
+      startCountdownTimer()
+    })
+
+    onUnmounted(() => {
+      stopCountdownTimer()
+    })
 
     return {
       cardClass,

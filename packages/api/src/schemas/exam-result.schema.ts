@@ -92,6 +92,32 @@ export class ExamResult {
 
     @Prop({ default: true })
     isValid: boolean;
+
+    @Prop({
+        type: [{
+            action: { type: String, enum: ['graded', 'regraded', 'released', 'retracted'], required: true },
+            performedBy: { type: Types.ObjectId, ref: 'User', required: true },
+            performedAt: { type: Date, default: Date.now },
+            method: { type: String, enum: ['auto', 'manual'], required: true },
+            previousStatus: { type: String, enum: ['pass', 'fail'] },
+            newStatus: { type: String, enum: ['pass', 'fail'] },
+            previousScore: Number,
+            newScore: Number,
+            notes: { type: String, maxlength: 500 }
+        }],
+        default: []
+    })
+    gradingHistory: Array<{
+        action: 'graded' | 'regraded' | 'released' | 'retracted';
+        performedBy: Types.ObjectId;
+        performedAt: Date;
+        method: 'auto' | 'manual';
+        previousStatus?: 'pass' | 'fail';
+        newStatus?: 'pass' | 'fail';
+        previousScore?: number;
+        newScore?: number;
+        notes?: string;
+    }>;
 }
 
 export const ExamResultSchema = SchemaFactory.createForClass(ExamResult);
@@ -101,6 +127,7 @@ ExamResultSchema.index({ examId: 1, userId: 1 }, { unique: true });
 ExamResultSchema.index({ userId: 1, gradedAt: -1 });
 ExamResultSchema.index({ examId: 1, status: 1 });
 ExamResultSchema.index({ examId: 1, totalScore: -1 }); // For ranking
+ExamResultSchema.index({ attemptId: 1 }); // For finding results by attempt
 
 // Pre-save middleware to calculate percentage and status
 ExamResultSchema.pre('save', function (next) {

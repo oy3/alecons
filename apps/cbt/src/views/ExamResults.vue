@@ -1,3 +1,147 @@
+<script>
+import { ref, computed, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { apiService } from "../services/api.js";
+import Swal from "sweetalert2";
+
+export default {
+  name: "ExamResults",
+  setup() {
+    const route = useRoute();
+    const router = useRouter();
+
+    const isLoading = ref(true);
+    const exam = ref(null);
+    const result = ref(null);
+
+    const scoreClass = computed(() => {
+      if (!result.value) return "";
+      return result.value.percentage >= 70
+        ? "text-success"
+        : result.value.percentage >= 50
+        ? "text-warning"
+        : "text-danger";
+    });
+
+    const correctPercentage = computed(() => {
+      if (!result.value) return 0;
+      return (result.value.correctAnswers / result.value.totalQuestions) * 100;
+    });
+
+    const partialPercentage = computed(() => {
+      if (!result.value) return 0;
+      return (
+        ((result.value.partialCorrectAnswers || 0) /
+          result.value.totalQuestions) *
+        100
+      );
+    });
+
+    const loadResults = async () => {
+      try {
+        isLoading.value = true;
+
+        const response = await apiService.getExamResults(route.params.examId);
+        console.log("ExamResults - API response:", response);
+
+        if (response.success && response.data) {
+          const {
+            exam: examData,
+            result: resultData,
+            attempt,
+            hasResult,
+            released,
+          } = response.data;
+
+          exam.value = examData;
+
+          // Check if results are released and available
+          if (hasResult && released && resultData) {
+            result.value = resultData;
+            console.log("ExamResults - Results are released:", {
+              hasResult,
+              released,
+              status: resultData.status,
+              percentage: resultData.percentage,
+            });
+          } else if (attempt) {
+            // Handle case where exam was submitted but results not yet released
+            result.value = {
+              status: "pending",
+              submittedAt: attempt.submittedAt,
+              startedAt: attempt.startedAt,
+              totalQuestions: attempt.totalQuestions || 0,
+              questionsAttempted: attempt.questionsAttempted || 0,
+              message:
+                attempt.status === "auto-submitted"
+                  ? "Your exam was automatically submitted when time expired. Results are being processed."
+                  : "Your exam has been submitted and is being graded.",
+              isPending: true,
+              released: false,
+            };
+            console.log(
+              "ExamResults - Showing pending status for unreleased results"
+            );
+          } else {
+            // No result or attempt found
+            console.log("ExamResults - No results or attempts found");
+            throw new Error("No exam results found");
+          }
+
+          if (!exam.value) {
+            throw new Error("Exam data not found");
+          }
+        } else {
+          throw new Error(response.message || "Failed to load results");
+        }
+      } catch (error) {
+        console.error("Error loading results:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Loading Failed",
+          text: error.message || "Failed to load exam results.",
+          confirmButtonColor: "#1a5f5f",
+        });
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
+    const formatDateTime = (dateStr) => {
+      if (!dateStr) return "N/A";
+      const date = new Date(dateStr);
+      return date.toLocaleString("en-US", {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    };
+
+    const goToDashboard = () => {
+      router.push("/dashboard");
+    };
+
+    onMounted(() => {
+      loadResults();
+    });
+
+    return {
+      isLoading,
+      exam,
+      result,
+      scoreClass,
+      correctPercentage,
+      partialPercentage,
+      formatDateTime,
+      goToDashboard,
+    };
+  },
+};
+</script>
+
 <template>
   <div class="container py-5">
     <div class="row justify-content-center">
@@ -26,28 +170,67 @@
         </div>
 
         <!-- Results Content -->
-        <div v-else-if="result" class="row">
+        <div v-else-if="result && result.released" class="row">
           <!-- Score Summary -->
           <div class="col-md-4 mb-4">
             <div class="card h-100 border-0 shadow-sm">
-              <div class="card-header text-center" :class="result.status === 'pass' ? 'bg-success text-white' : 'bg-danger text-white'">
+              <!-- Pending State -->
+              <div
+                v-if="result.isPending"
+                class="card-header text-center bg-warning text-dark"
+              >
                 <h5 class="mb-0">
-                  <i :class="result.status === 'pass' ? 'bi-check-circle' : 'bi-x-circle'" class="bi me-2"></i>
-                  {{ result.status === 'pass' ? 'PASSED' : 'FAILED' }}
+                  <i class="bi bi-clock me-2"></i>
+                  PENDING
+                </h5>
+              </div>
+              <!-- Graded Results -->
+              <div
+                v-else
+                class="card-header text-center"
+                :class="
+                  result.status === 'pass'
+                    ? 'bg-success text-white'
+                    : 'bg-danger text-white'
+                "
+              >
+                <h5 class="mb-0">
+                  <i
+                    :class="
+                      result.status === 'pass'
+                        ? 'bi-check-circle'
+                        : 'bi-x-circle'
+                    "
+                    class="bi me-2"
+                  ></i>
+                  {{ result.status === "pass" ? "PASSED" : "FAILED" }}
                 </h5>
               </div>
               <div class="card-body text-center">
-                <div class="display-4 fw-bold mb-3" :class="scoreClass">
-                  {{ result.percentage }}%
-                </div>
-                <div class="row text-center">
-                  <div class="col-6">
-                    <div class="h5 text-primary">{{ result.totalScore }}</div>
-                    <small class="text-muted">Your Score</small>
+                <!-- Pending Message -->
+                <div v-if="result.isPending" class="py-4">
+                  <div class="spinner-border text-warning mb-3" role="status">
+                    <span class="visually-hidden">Processing...</span>
                   </div>
-                  <div class="col-6">
-                    <div class="h5 text-secondary">{{ result.maxScore }}</div>
-                    <small class="text-muted">Max Score</small>
+                  <p class="mb-0">{{ result.message }}</p>
+                  <small class="text-muted">
+                    Submitted: {{ formatDateTime(result.submittedAt) }}
+                  </small>
+                </div>
+                <!-- Graded Results -->
+                <div v-else>
+                  <div class="display-4 fw-bold mb-3" :class="scoreClass">
+                    {{ result.percentage }}%
+                  </div>
+                  <div class="row text-center">
+                    <div class="col-6">
+                      <div class="h5 text-primary">{{ result.totalScore }}</div>
+                      <small class="text-muted">Your Score</small>
+                    </div>
+                    <div class="col-6">
+                      <div class="h5 text-secondary">{{ result.maxScore }}</div>
+                      <small class="text-muted">Max Score</small>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -75,13 +258,17 @@
                     <div class="stat-item mb-3">
                       <div class="d-flex justify-content-between">
                         <span>Questions Attempted:</span>
-                        <span class="fw-bold">{{ result.questionsAttempted }}</span>
+                        <span class="fw-bold">{{
+                          result.questionsAttempted
+                        }}</span>
                       </div>
                     </div>
                     <div class="stat-item mb-3">
                       <div class="d-flex justify-content-between">
                         <span>Correct Answers:</span>
-                        <span class="fw-bold text-success">{{ result.correctAnswers }}</span>
+                        <span class="fw-bold text-success">{{
+                          result.correctAnswers
+                        }}</span>
                       </div>
                     </div>
                   </div>
@@ -95,13 +282,18 @@
                     <div class="stat-item mb-3">
                       <div class="d-flex justify-content-between">
                         <span>Submission Time:</span>
-                        <span class="fw-bold">{{ formatDateTime(result.gradedAt) }}</span>
+                        <span class="fw-bold">{{
+                          formatDateTime(result.gradedAt)
+                        }}</span>
                       </div>
                     </div>
                     <div class="stat-item mb-3" v-if="result.statistics">
                       <div class="d-flex justify-content-between">
                         <span>Rank:</span>
-                        <span class="fw-bold">{{ result.statistics.rank }} / {{ result.statistics.totalParticipants }}</span>
+                        <span class="fw-bold"
+                          >{{ result.statistics.rank }} /
+                          {{ result.statistics.totalParticipants }}</span
+                        >
                       </div>
                     </div>
                   </div>
@@ -109,16 +301,18 @@
 
                 <!-- Progress Bar -->
                 <div class="mt-4">
-                  <label class="form-label small text-muted">Score Breakdown</label>
-                  <div class="progress" style="height: 25px;">
-                    <div 
-                      class="progress-bar bg-success" 
+                  <label class="form-label small text-muted"
+                    >Score Breakdown</label
+                  >
+                  <div class="progress" style="height: 25px">
+                    <div
+                      class="progress-bar bg-success"
                       :style="{ width: correctPercentage + '%' }"
                     >
                       {{ result.correctAnswers }} Correct
                     </div>
-                    <div 
-                      class="progress-bar bg-warning" 
+                    <div
+                      class="progress-bar bg-warning"
                       :style="{ width: partialPercentage + '%' }"
                     >
                       {{ result.partialCorrectAnswers || 0 }} Partial
@@ -130,7 +324,10 @@
           </div>
 
           <!-- Detailed Results -->
-          <div class="col-12" v-if="result.questionResults && result.questionResults.length > 0">
+          <div
+            class="col-12"
+            v-if="result.questionResults && result.questionResults.length > 0"
+          >
             <div class="card border-0 shadow-sm">
               <div class="card-header">
                 <h6 class="mb-0">
@@ -151,10 +348,15 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="(qResult, index) in result.questionResults" :key="qResult.questionId">
+                      <tr
+                        v-for="(qResult, index) in result.questionResults"
+                        :key="qResult.questionId"
+                      >
                         <td>{{ index + 1 }}</td>
                         <td>
-                          <span v-if="qResult.userAnswer">{{ qResult.userAnswer }}</span>
+                          <span v-if="qResult.userAnswer">{{
+                            qResult.userAnswer
+                          }}</span>
                           <span v-else class="text-muted">Not answered</span>
                         </td>
                         <td>
@@ -167,15 +369,21 @@
                           {{ qResult.pointsAwarded }} / {{ qResult.maxPoints }}
                         </td>
                         <td>
-                          <span 
+                          <span
                             class="badge"
                             :class="{
                               'bg-success': qResult.isCorrect,
                               'bg-danger': qResult.isCorrect === false,
-                              'bg-secondary': qResult.isCorrect === null
+                              'bg-secondary': qResult.isCorrect === null,
                             }"
                           >
-                            {{ qResult.isCorrect ? 'Correct' : qResult.isCorrect === false ? 'Incorrect' : 'Pending' }}
+                            {{
+                              qResult.isCorrect
+                                ? "Correct"
+                                : qResult.isCorrect === false
+                                ? "Incorrect"
+                                : "Pending"
+                            }}
                           </span>
                         </td>
                       </tr>
@@ -202,12 +410,36 @@
           </div>
         </div>
 
-        <!-- Error State -->
-        <div v-else class="text-center py-5">
-          <i class="bi bi-exclamation-circle text-warning" style="font-size: 4rem;"></i>
+        <!-- Results Not Released -->
+        <div v-else-if="result && !result.released" class="text-center py-5">
+          <i class="bi bi-lock text-primary" style="font-size: 4rem"></i>
           <h4 class="mt-3">Results Not Available</h4>
           <p class="text-muted">
-            Your exam results are not yet available. Please check back later or contact your instructor.
+            Your exam has been graded but results are not yet released.<br />
+            Please check back later or contact your instructor.
+          </p>
+          <div v-if="result.gradedAt" class="mt-3">
+            <small class="text-muted">
+              <i class="bi bi-calendar me-1"></i>
+              Graded on: {{ formatDateTime(result.gradedAt) }}
+            </small>
+          </div>
+          <button class="btn btn-primary mt-3" @click="goToDashboard">
+            <i class="bi bi-arrow-left me-1"></i>
+            Back to Dashboard
+          </button>
+        </div>
+
+        <!-- Error State -->
+        <div v-else class="text-center py-5">
+          <i
+            class="bi bi-exclamation-circle text-warning"
+            style="font-size: 4rem"
+          ></i>
+          <h4 class="mt-3">Results Not Available</h4>
+          <p class="text-muted">
+            Your exam results are not yet available. Please check back later or
+            contact your instructor.
           </p>
           <button class="btn btn-primary" @click="goToDashboard">
             <i class="bi bi-arrow-left me-1"></i>
@@ -218,98 +450,6 @@
     </div>
   </div>
 </template>
-
-<script>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { apiService } from '../services/api.js'
-import Swal from 'sweetalert2'
-
-export default {
-  name: 'ExamResults',
-  setup() {
-    const route = useRoute()
-    const router = useRouter()
-    
-    const isLoading = ref(true)
-    const exam = ref(null)
-    const result = ref(null)
-
-    const scoreClass = computed(() => {
-      if (!result.value) return ''
-      return result.value.percentage >= 70 ? 'text-success' : 
-             result.value.percentage >= 50 ? 'text-warning' : 'text-danger'
-    })
-
-    const correctPercentage = computed(() => {
-      if (!result.value) return 0
-      return (result.value.correctAnswers / result.value.totalQuestions) * 100
-    })
-
-    const partialPercentage = computed(() => {
-      if (!result.value) return 0
-      return ((result.value.partialCorrectAnswers || 0) / result.value.totalQuestions) * 100
-    })
-
-    const loadResults = async () => {
-      try {
-        isLoading.value = true
-        
-        const response = await apiService.getExamResults(route.params.examId)
-        
-        if (response.success) {
-          exam.value = response.data.exam
-          result.value = response.data.result
-        } else {
-          throw new Error(response.message)
-        }
-      } catch (error) {
-        console.error('Error loading results:', error)
-        Swal.fire({
-          icon: 'error',
-          title: 'Loading Failed',
-          text: error.message || 'Failed to load exam results.',
-          confirmButtonColor: '#1a5f5f'
-        })
-      } finally {
-        isLoading.value = false
-      }
-    }
-
-    const formatDateTime = (dateStr) => {
-      if (!dateStr) return 'N/A'
-      const date = new Date(dateStr)
-      return date.toLocaleString('en-US', {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    }
-
-    const goToDashboard = () => {
-      router.push('/dashboard')
-    }
-
-    onMounted(() => {
-      loadResults()
-    })
-
-    return {
-      isLoading,
-      exam,
-      result,
-      scoreClass,
-      correctPercentage,
-      partialPercentage,
-      formatDateTime,
-      goToDashboard
-    }
-  }
-}
-</script>
 
 <style scoped>
 .display-4 {

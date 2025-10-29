@@ -31,10 +31,10 @@ export default {
         },
         examTimestamp: '',
         duration: 60,
-        totalQuestions: 10,
+        totalQuestions: 100,
         attemptLimit: 1,
         totalMark: 100,
-        cutOffMark: 40,
+        cutOffMark: 50,
         randomizeQuestions: false,
         randomizeOptions: false,
         security: {
@@ -88,11 +88,39 @@ export default {
 
     formattedExamDate() {
       if (!this.form.examTimestamp) return ''
-      return new Date(this.form.examTimestamp).toISOString().slice(0, 16)
+      
+      // Handle both ISO string and Date object inputs
+      const date = typeof this.form.examTimestamp === 'string' 
+        ? new Date(this.form.examTimestamp) 
+        : this.form.examTimestamp
+        
+      // Check if date is valid
+      if (isNaN(date.getTime())) return ''
+      
+      // Format for datetime-local input (YYYY-MM-DDTHH:mm)
+      // Use local timezone to avoid offset issues
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      
+      return `${year}-${month}-${day}T${hours}:${minutes}`
     },
 
     minExamDate() {
-      return new Date().toISOString().slice(0, 16)
+      // Set minimum to 5 minutes from now to give reasonable buffer
+      const minDate = new Date()
+      minDate.setMinutes(minDate.getMinutes() + 5)
+      
+      // Format for datetime-local input using local timezone
+      const year = minDate.getFullYear()
+      const month = String(minDate.getMonth() + 1).padStart(2, '0')
+      const day = String(minDate.getDate()).padStart(2, '0')
+      const hours = String(minDate.getHours()).padStart(2, '0')
+      const minutes = String(minDate.getMinutes()).padStart(2, '0')
+      
+      return `${year}-${month}-${day}T${hours}:${minutes}`
     }
   },
   watch: {
@@ -167,10 +195,10 @@ export default {
           },
           examTimestamp: this.exam.examTimestamp ? new Date(this.exam.examTimestamp).toISOString() : '',
           duration: this.exam.duration || 60,
-          totalQuestions: this.exam.totalQuestions || 10,
+          totalQuestions: this.exam.totalQuestions || 100,
           attemptLimit: this.exam.attemptLimit || 1,
           totalMark: this.exam.totalMark || 100,
-          cutOffMark: this.exam.cutOffMark || 40,
+          cutOffMark: this.exam.cutOffMark || 50,
           randomizeQuestions: this.exam.randomizeQuestions || false,
           randomizeOptions: this.exam.randomizeOptions || false,
           security: {
@@ -199,10 +227,10 @@ export default {
         },
         examTimestamp: '',
         duration: 60,
-        totalQuestions: 10,
+        totalQuestions: 100,
         attemptLimit: 1,
         totalMark: 100,
-        cutOffMark: 40,
+        cutOffMark: 50,
         randomizeQuestions: false,
         randomizeOptions: false,
         security: {
@@ -237,8 +265,13 @@ export default {
         this.errors.examTimestamp = 'Exam date and time is required'
       } else {
         const examDate = new Date(this.form.examTimestamp)
-        if (examDate <= new Date()) {
-          this.errors.examTimestamp = 'Exam date must be in the future'
+        const now = new Date()
+        
+        // Give a 1 minute buffer to account for processing time
+        const minimumTime = new Date(now.getTime() + (1 * 60 * 1000))
+        
+        if (examDate <= minimumTime) {
+          this.errors.examTimestamp = 'Exam date must be at least 1 minute in the future'
         }
       }
 
@@ -340,7 +373,44 @@ export default {
     },
 
     onExamDateChange(event) {
-      this.form.examTimestamp = event.target.value
+      const inputValue = event.target.value
+      
+      if (!inputValue) {
+        this.form.examTimestamp = ''
+        this.clearFieldError('examTimestamp')
+        return
+      }
+      
+      // Create date from datetime-local input (already in local timezone)
+      const selectedDate = new Date(inputValue)
+      
+      // Validate the date is valid
+      if (isNaN(selectedDate.getTime())) {
+        this.errors.examTimestamp = 'Please enter a valid date and time'
+        return
+      }
+      
+      // Store as ISO string for consistency with backend
+      this.form.examTimestamp = selectedDate.toISOString()
+      
+      // Clear previous error when user selects a valid date
+      this.clearFieldError('examTimestamp')
+      
+      // Real-time validation feedback
+      const now = new Date()
+      // Add 1 minute buffer for current time comparison
+      if (selectedDate <= new Date(now.getTime() + 60000)) {
+        this.errors.examTimestamp = 'Exam date must be at least 1 minute in the future'
+      }
+    },
+
+    // Utility method to clear field errors
+    clearFieldError(fieldName) {
+      console.log('Clearing error for field:', fieldName, 'Current errors:', this.errors)
+      if (this.errors[fieldName]) {
+        delete this.errors[fieldName]
+        console.log('Error cleared. Remaining errors:', this.errors)
+      }
     }
   }
 }
@@ -374,7 +444,8 @@ export default {
                 <div class="mb-3">
                   <label for="title" class="form-label">Exam Title <span class="text-danger">*</span></label>
                   <input v-model="form.title" type="text" id="title" class="form-control"
-                    :class="{ 'is-invalid': errors.title }" placeholder="Enter exam title" required />
+                    :class="{ 'is-invalid': errors.title }" placeholder="Enter exam title" 
+                    @input="clearFieldError('title')" required />
                   <div v-if="errors.title" class="invalid-feedback">{{ errors.title }}</div>
                 </div>
 
@@ -389,7 +460,8 @@ export default {
                     <label for="academicSession" class="form-label">Academic Session <span
                         class="text-danger">*</span></label>
                     <select v-model="form.academicSession" id="academicSession" class="form-select"
-                      :class="{ 'is-invalid': errors.academicSession }" required>
+                      :class="{ 'is-invalid': errors.academicSession }" 
+                      @change="clearFieldError('academicSession')" required>
                       <option value="">Select Academic Session</option>
                       <option v-for="session in academicSessions" :key="session._id" :value="session._id">
                       {{ session.sessionYear }}
@@ -404,7 +476,14 @@ export default {
                     <input :value="formattedExamDate" @input="onExamDateChange" type="datetime-local" id="examTimestamp"
                       class="form-control" :class="{ 'is-invalid': errors.examTimestamp }" :min="minExamDate"
                       required />
-                    <div v-if="errors.examTimestamp" class="invalid-feedback">{{ errors.examTimestamp }}</div>
+                    <div class="form-text text-muted">
+                      <i class="bi bi-info-circle me-1"></i>
+                      Select a future date and time for the exam
+                    </div>
+                    <div v-if="errors.examTimestamp" class="invalid-feedback">
+                      <i class="bi bi-exclamation-triangle me-1"></i>
+                      {{ errors.examTimestamp }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -475,7 +554,8 @@ export default {
                     <label for="duration" class="form-label">Duration (minutes) <span
                         class="text-danger">*</span></label>
                     <input v-model.number="form.duration" type="number" id="duration" class="form-control"
-                      :class="{ 'is-invalid': errors.duration }" min="5" max="480" required />
+                      :class="{ 'is-invalid': errors.duration }" min="5" max="480" 
+                      @input="clearFieldError('duration')" required />
                     <div v-if="errors.duration" class="invalid-feedback">{{ errors.duration }}</div>
                     <div class="form-text">Between 5 and 480 minutes</div>
                   </div>
@@ -484,7 +564,8 @@ export default {
                     <label for="totalQuestions" class="form-label">Total Questions <span
                         class="text-danger">*</span></label>
                     <input v-model.number="form.totalQuestions" type="number" id="totalQuestions" class="form-control"
-                      :class="{ 'is-invalid': errors.totalQuestions }" min="1" max="500" step="1" required />
+                      :class="{ 'is-invalid': errors.totalQuestions }" min="1" max="500" step="1" 
+                      @input="clearFieldError('totalQuestions')" required />
                     <div v-if="errors.totalQuestions" class="invalid-feedback">{{ errors.totalQuestions }}</div>
                     <div class="form-text">Between 1 and 500 questions</div>
                   </div>
@@ -494,14 +575,16 @@ export default {
                   <div class="col-md-4 mb-3">
                     <label for="totalMark" class="form-label">Total Mark <span class="text-danger">*</span></label>
                     <input v-model.number="form.totalMark" type="number" id="totalMark" class="form-control"
-                      :class="{ 'is-invalid': errors.totalMark }" min="1" step="1" required />
+                      :class="{ 'is-invalid': errors.totalMark }" min="1" step="1" 
+                      @input="clearFieldError('totalMark')" required />
                     <div v-if="errors.totalMark" class="invalid-feedback">{{ errors.totalMark }}</div>
                   </div>
 
                   <div class="col-md-4 mb-3">
                     <label for="cutOffMark" class="form-label">Cut Off Mark <span class="text-danger">*</span></label>
                     <input v-model.number="form.cutOffMark" type="number" id="cutOffMark" class="form-control"
-                      :class="{ 'is-invalid': errors.cutOffMark }" min="0" :max="form.totalMark" step="1" required />
+                      :class="{ 'is-invalid': errors.cutOffMark }" min="0" :max="form.totalMark" step="1" 
+                      @input="clearFieldError('cutOffMark')" required />
                     <div v-if="errors.cutOffMark" class="invalid-feedback">{{ errors.cutOffMark }}</div>
                     <div class="form-text">Minimum score to pass</div>
                   </div>

@@ -90,3 +90,7 @@ QuestionSchema.methods.toClientJSON = function () {
     delete obj.answer; // Remove answer for security
     return obj;
 };
+
+// Add database indexes for performance
+QuestionSchema.index({ examId: 1 }); // Index for finding questions by exam
+QuestionSchema.index({ examId: 1, createdAt: 1 }); // Compound index for sorting

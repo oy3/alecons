@@ -8,7 +8,8 @@
     "build": "vite build --mode production",
     "serve": "vite preview",
     "build:dev": "vite build --mode development",
-    "build:prod": "vite build --mode production"
+    "build:prod": "vite build --mode production",
+        "clean": "rm -rf node_modules yarn.lock package-lock.json dist*"
   },
   "dependencies": {
     "@paystack/inline-js": "^2.22.7",

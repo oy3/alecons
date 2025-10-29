@@ -41,6 +41,23 @@ body {
   right: 0;
   z-index: 10000;
   animation: pulse 1s infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.security-warning .btn {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 0.85rem;
+}
+
+.security-warning .btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.7);
+  color: white;
 }
 
 @keyframes pulse {
@@ -74,7 +91,7 @@ body {
 
 /* Question navigation */
 .question-nav {
-  max-height: 400px;
+  max-height: 250px;
   overflow-y: auto;
 }
 
@@ -96,7 +113,7 @@ body {
 }
 
 .question-nav-item.current {
-  background: #007bff;
+  background: #007bff !important;
   color: white;
   transform: scale(1.1);
 }

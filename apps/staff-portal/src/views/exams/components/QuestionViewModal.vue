@@ -19,42 +19,42 @@
           <div v-if="question">
             <div class="mb-4">
               <h6>Question Text</h6>
-              <p class="border p-3 rounded bg-light">{{ question.text }}</p>
+              <p class="border p-3 rounded bg-light">{{ question.questionText }}</p>
             </div>
             
             <div class="row mb-3">
-              <div class="col-md-4">
+              <div class="col-md-5">
                 <strong>Type:</strong> 
                 <span class="badge bg-primary ms-1">{{ formatType(question.type) }}</span>
               </div>
-              <div class="col-md-4">
-                <strong>Points:</strong> {{ question.points }}
+              <div class="col-md-3">
+                <strong>Mark:</strong> {{ question.mark }}
               </div>
               <div class="col-md-4">
                 <strong>Difficulty:</strong> 
-                <span class="badge" :class="getDifficultyClass(question.difficulty)">
-                  {{ question.difficulty }}
+                <span class="badge" :class="getDifficultyClass(question.metadata?.difficulty)">
+                  {{ question.metadata?.difficulty || 'N/A' }}
                 </span>
               </div>
             </div>
             
-            <div v-if="question.type === 'multiple-choice'" class="mb-3">
+            <div v-if="['mcq', 'multi'].includes(question.type)" class="mb-3">
               <h6>Options</h6>
-              <div v-for="(option, index) in question.options" :key="index" class="mb-2">
+              <div 
+                v-for="(optionText, key) in question.options" 
+                :key="key" 
+                class="mb-2"
+              >
                 <div class="d-flex align-items-center">
-                  <span class="badge bg-secondary me-2">{{ String.fromCharCode(65 + index) }}</span>
-                  <span>{{ option.text }}</span>
+                  <span class="badge bg-secondary me-2">{{ key.toUpperCase() }}</span>
+                  <span>{{ optionText }}</span>
                   <i 
-                    v-if="question.correctAnswer === index" 
+                    v-if="isCorrectAnswer(key)"
                     class="bi bi-check-circle-fill text-success ms-2"
+                    :title="'Correct Answer'"
                   ></i>
                 </div>
               </div>
-            </div>
-            
-            <div v-if="question.type === 'true-false'" class="mb-3">
-              <h6>Correct Answer</h6>
-              <span class="badge bg-success">{{ question.correctAnswer }}</span>
             </div>
             
             <div v-if="question.createdAt" class="text-muted small">
@@ -68,7 +68,7 @@
           </div>
         </div>
         
-        <div class="modal-footer">
+        <!-- <div class="modal-footer">
           <button type="button" class="btn btn-secondary" @click="close">
             Close
           </button>
@@ -81,7 +81,7 @@
             <i class="bi bi-pencil me-1"></i>
             Edit Question
           </button>
-        </div>
+        </div> -->
       </div>
     </div>
   </div>
@@ -104,9 +104,8 @@ export default {
   methods: {
     formatType(type) {
       const types = {
-        'multiple-choice': 'Multiple Choice',
-        'true-false': 'True/False',
-        'short-answer': 'Short Answer',
+        'mcq': 'Multiple Choice',
+        'multi': 'Multi-Select',
         'essay': 'Essay'
       }
       return types[type] || type
@@ -114,10 +113,21 @@ export default {
     getDifficultyClass(difficulty) {
       const classes = {
         'easy': 'bg-success',
-        'medium': 'bg-warning',
+        'medium': 'bg-warning text-dark',
         'hard': 'bg-danger'
       }
-      return classes[difficulty] || 'bg-secondary'
+      return classes[difficulty?.toLowerCase()] || 'bg-secondary'
+    },
+    isCorrectAnswer(optionKey) {
+      if (!this.question?.answer) return false;
+      
+      if (this.question.type === 'mcq') {
+        return this.question.answer === optionKey;
+      } else if (this.question.type === 'multi') {
+        return Array.isArray(this.question.answer) && 
+               this.question.answer.includes(optionKey);
+      }
+      return false;
     },
     formatDate(date) {
       return new Date(date).toLocaleDateString()

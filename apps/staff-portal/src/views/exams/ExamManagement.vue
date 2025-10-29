@@ -116,7 +116,7 @@ export default {
       </div>
       <div class="d-flex gap-2">
         <button 
-          class="btn btn-outline-primary"
+          class="btn btn-outline-acon-primary"
           @click="activeTab = 'questionBank'"
           :class="{ active: activeTab === 'questionBank' }"
         >
@@ -124,7 +124,7 @@ export default {
           Question Bank
         </button>
         <button 
-          class="btn btn-primary"
+          class="btn btn-acon-primary"
           @click="showCreateExamModal = true"
           v-if="authStore.hasAnyPermission(['staff', 'admin', 'exams:create'])"
         >
@@ -242,6 +242,7 @@ export default {
 .nav-tabs .nav-link:hover {
   background-color: #f8f9fa;
   color: #1a5f5f;
+  border-bottom: 1px solid #1a5f5f;
 }
 
 .nav-tabs .nav-link.active {
@@ -258,7 +259,7 @@ export default {
 
 .tab-content {
   background: white;
-  border-radius: 0 0.375rem 0.375rem 0.375rem;
+  border-radius: 0.375rem 0.375rem 0.375rem 0.375rem;
   padding: 1.5rem;
   box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
 }

@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import * as jwt from 'jsonwebtoken';
 import { AuthController } from './auth.controller';
 import { ApplicationNumberController } from '../controllers/application-number.controller';
 import { AuthService } from './auth.service';
@@ -36,11 +37,11 @@ import { SessionControl, SessionControlSchema } from '../schemas/session-control
         PassportModule,
         JwtModule.registerAsync({
             imports: [ConfigModule],
-            useFactory: async (configService: ConfigService) => ({
+            useFactory: async (configService: ConfigService): Promise<JwtModuleOptions> => ({
                 secret: configService.get<string>('JWT_SECRET'),
                 signOptions: {
                     expiresIn: configService.get<string>('JWT_EXPIRATION') || '7d'
-                },
+                } as jwt.SignOptions,
             }),
             inject: [ConfigService],
         }),

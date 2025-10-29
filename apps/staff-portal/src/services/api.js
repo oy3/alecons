@@ -487,9 +487,33 @@ class StaffApiService {
         })
     }
 
+    async regenerateExamPassword(examId) {
+        return this.makeRequest(`/exams/${examId}/regenerate-password`, {
+            method: 'POST',
+        })
+    }
+
+    async sendScheduledExamEmail(examId) {
+        return this.makeRequest(`/exams/${examId}/send-scheduled-email`, {
+            method: 'POST',
+        })
+    }
+
     async gradeExam(examId) {
         return this.makeRequest(`/exams/${examId}/grade-all`, {
             method: 'POST',
+        })
+    }
+
+    async regradeExam(examId) {
+        return this.makeRequest(`/exams/${examId}/regrade-all`, {
+            method: 'POST',
+        })
+    }
+
+    async getExamGradingStatus(examId) {
+        return this.makeRequest(`/exams/${examId}/grading-status`, {
+            method: 'GET',
         })
     }
 
@@ -510,6 +534,170 @@ class StaffApiService {
         return this.makeRequest(`/exams/${examId}/statistics`)
     }
 
+    async getExamResults(examId, params = {}) {
+        const queryString = new URLSearchParams(params).toString()
+        const endpoint = queryString ? `/exams/${examId}/results?${queryString}` : `/exams/${examId}/results`
+        return this.makeRequest(endpoint)
+    }
+
+    async getExamResultDetails(resultId) {
+        return this.makeRequest(`/exam-results/${resultId}`)
+    }
+
+    async regradeUserExam(examId, userId) {
+        return this.makeRequest(`/exams/${examId}/regrade-user`, {
+            method: 'POST',
+            body: JSON.stringify({ userId })
+        })
+    }
+
+    async downloadExamResultPDF(resultId) {
+        const url = `${this.baseURL}/exam-results/${resultId}/download-pdf`
+
+        const config = {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        }
+
+        if (this.token) {
+            config.headers.Authorization = `Bearer ${this.token}`
+        }
+
+        try {
+            logger.info('Staff API request (PDF download):', {
+                method: config.method,
+                url,
+                hasAuth: !!this.token,
+            })
+
+            const response = await fetch(url, config)
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    this.handleTokenExpiration()
+                    throw new Error('Unauthorized access')
+                }
+
+                const errorData = await response.json().catch(() => ({}))
+                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
+            }
+
+            // Get the blob data
+            const blob = await response.blob()
+
+            // Validate blob size
+            if (blob.size === 0) {
+                throw new Error('PDF file is empty')
+            }
+
+            // Validate blob type
+            if (!blob.type.includes('pdf')) {
+                logger.warn('Unexpected blob type:', blob.type)
+            }
+
+            // Create a download link
+            const downloadUrl = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = downloadUrl
+            link.download = `exam-result-${resultId}.pdf`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            window.URL.revokeObjectURL(downloadUrl)
+
+            logger.info('PDF download successful:', {
+                resultId,
+                fileSize: blob.size,
+                blobType: blob.type
+            })
+
+            return { success: true, message: 'PDF downloaded successfully' }
+        } catch (error) {
+            logger.error('PDF download failed:', {
+                resultId,
+                error: error.message
+            })
+            throw error
+        }
+    }
+
+    async exportExamResultsPDF(examId, params = {}) {
+        const queryString = new URLSearchParams(params).toString()
+        const url = queryString ?
+            `${this.baseURL}/exams/${examId}/export-results-pdf?${queryString}` :
+            `${this.baseURL}/exams/${examId}/export-results-pdf`
+
+        const config = {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        }
+
+        if (this.token) {
+            config.headers.Authorization = `Bearer ${this.token}`
+        }
+
+        try {
+            logger.info('Staff API request (Export Results PDF):', {
+                method: config.method,
+                url,
+                hasAuth: !!this.token,
+            })
+
+            const response = await fetch(url, config)
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    this.handleTokenExpiration()
+                    throw new Error('Unauthorized access')
+                }
+
+                const errorData = await response.json().catch(() => ({}))
+                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
+            }
+
+            // Get the blob data
+            const blob = await response.blob()
+
+            // Validate blob size
+            if (blob.size === 0) {
+                throw new Error('Export file is empty')
+            }
+
+            // Validate blob type
+            if (!blob.type.includes('pdf')) {
+                logger.warn('Unexpected blob type:', blob.type)
+            }
+
+            // Create a download link
+            const downloadUrl = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = downloadUrl
+            link.download = `exam-results-${examId}.pdf`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            window.URL.revokeObjectURL(downloadUrl)
+
+            logger.info('Export PDF download successful:', {
+                examId,
+                fileSize: blob.size,
+                blobType: blob.type
+            })
+
+            return { success: true, message: 'Export PDF downloaded successfully' }
+        } catch (error) {
+            logger.error('Export PDF download failed:', {
+                examId,
+                error: error.message
+            })
+            throw error
+        }
+    }
+
     async getJobStatus(queueName, jobId) {
         return this.makeRequest(`/exams/jobs/${queueName}/${jobId}`)
     }
@@ -517,12 +705,12 @@ class StaffApiService {
     // Question Bank API methods
     async getQuestions(examId, params = {}) {
         const queryString = new URLSearchParams(params).toString()
-        const endpoint = queryString ? `/questions/${examId}?${queryString}` : `/questions/${examId}`
+        const endpoint = queryString ? `/exams/${examId}/questions/manage?${queryString}` : `/exams/${examId}/questions/manage`
         return this.makeRequest(endpoint)
     }
 
-    async createQuestion(questionData) {
-        return this.makeRequest('/questions', {
+    async createQuestion(examId, questionData) {
+        return this.makeRequest(`/exams/${examId}/questions`, {
             method: 'POST',
             body: JSON.stringify(questionData),
         })
@@ -552,6 +740,33 @@ class StaffApiService {
             body: formData,
             headers: {
                 // Remove Content-Type to let browser set it with boundary for FormData
+            }
+        })
+    }
+
+    async bulkImportPreview(file, format) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('format', format)
+
+        return this.makeRequest('/questions/bulk-import-preview', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                // Remove Content-Type to let browser set it with boundary for FormData
+            }
+        })
+    }
+
+    async saveBulkImportQuestions(examId, questions) {
+        return this.makeRequest('/questions/bulk-import-save', {
+            method: 'POST',
+            body: JSON.stringify({
+                examId,
+                questions
+            }),
+            headers: {
+                'Content-Type': 'application/json'
             }
         })
     }

@@ -37,7 +37,7 @@
           <div class="alert alert-warning">
             <h6><i class="bi bi-exclamation-triangle me-2"></i>Security Notice</h6>
             <ul class="mb-0">
-              <li>This exam requires <strong>full-screen mode</strong></li>
+              <li>You will be required to enter <strong>fullscreen mode</strong></li>
               <li>Tab switching and window minimizing are <strong>monitored</strong></li>
               <li>Right-click and copy/paste are <strong>disabled</strong></li>
               <li>Excessive violations may result in <strong>exam termination</strong></li>
@@ -109,7 +109,7 @@
               <li>Close all unnecessary applications and browser tabs</li>
               <li>Find a quiet, well-lit environment</li>
               <li>Have your materials ready (if allowed)</li>
-              <li>Click "Start Exam" to begin in full-screen mode</li>
+              <li>You will be prompted to enter fullscreen mode for exam security</li>
             </ol>
           </div>
         </div>
@@ -151,6 +151,7 @@
 
 <script>
 import { ref, computed, watch } from 'vue'
+import { logger } from "@shared/utils/logger";
 
 export default {
   name: 'StartExamModal',
@@ -213,7 +214,8 @@ export default {
           return
         }
 
-        // Emit start event with exam ID and password
+        // Start the exam - fullscreen will be handled by the exam interface overlay
+        logger.info('Starting exam - fullscreen will be required on exam interface')
         emit('start', props.exam.id, password.value)
       } catch (error) {
         passwordError.value = 'An error occurred. Please try again.'

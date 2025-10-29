@@ -120,15 +120,49 @@ export const apiService = {
     async getAvailableExams() {
         try {
             const response = await apiClient.get('/exams/available')
-            // Backend returns direct array, wrap it for frontend consistency
+            logger.debug('Available exams API response:', response.data)
+
+            if (response.data?.success && response.data?.data) {
+                return {
+                    success: true,
+                    data: response.data.data
+                }
+            }
+
             return {
-                success: true,
-                data: response.data
+                success: false,
+                message: response.data?.message || 'Failed to fetch available exams'
             }
         } catch (error) {
+            logger.error('Error fetching available exams:', error)
             return {
                 success: false,
                 message: error.response?.data?.message || 'Failed to fetch available exams'
+            }
+        }
+    },
+
+    async getExamHistory() {
+        try {
+            const response = await apiClient.get('/exams/history')
+            logger.debug('Exam history API response:', response.data)
+
+            if (response.data.success) {
+                return {
+                    success: true,
+                    data: response.data.data || []
+                }
+            }
+
+            return {
+                success: false,
+                message: response.data?.message || 'Failed to fetch exam history'
+            }
+        } catch (error) {
+            logger.error('Error fetching exam history:', error)
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Failed to fetch exam history'
             }
         }
     },
@@ -172,7 +206,8 @@ export const apiService = {
     // Exam attempts
     async saveAnswers(examId, attemptId, answers) {
         try {
-            const response = await apiClient.post(`/exams/${examId}/attempts/${attemptId}/save`, {
+            const response = await apiClient.post(`/exams/${examId}/save-answers`, {
+                attemptId,
                 answers,
                 timestamp: new Date()
             })
@@ -185,19 +220,29 @@ export const apiService = {
         }
     },
 
-    async submitExam(examId, attemptId, finalAnswers, securityViolations = []) {
+    async submitExam(examId, attemptId, finalAnswers, securityViolations = [], isAutoSubmit = false) {
         try {
-            const response = await apiClient.post(`/exams/${examId}/attempts/${attemptId}/submit`, {
+            logger.info('Submitting exam:', { examId, attemptId, answersCount: finalAnswers.length, isAutoSubmit });
+
+            const response = await apiClient.post(`/exams/${examId}/submit`, {
+                attemptId,
                 answers: finalAnswers,
                 securityViolations,
-                submittedAt: new Date()
-            })
-            return response.data
+                submittedAt: new Date(),
+                isAutoSubmit
+            });
+
+            logger.info('Submit exam API response:', response.data);
+            return response.data;
         } catch (error) {
+            logger.error('Submit exam API error:', error);
+
+            // Return a more detailed error response
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to submit exam'
-            }
+                message: error.response?.data?.message || error.message || 'Failed to submit exam',
+                error: error.response?.data || error
+            };
         }
     },
 
@@ -241,10 +286,10 @@ export const apiService = {
     // Security monitoring
     async reportSecurityViolation(examId, attemptId, violation) {
         try {
-            const response = await apiClient.post(`/exams/${examId}/attempts/${attemptId}/security-violation`, violation)
+            const response = await apiClient.post(`/exams/${examId}/security-violation`, violation)
             return response.data
         } catch (error) {
-            console.error('Failed to report security violation:', error)
+            logger.error('Failed to report security violation:', error)
             return { success: false }
         }
     },
@@ -252,14 +297,14 @@ export const apiService = {
     // Heartbeat for exam monitoring
     async sendHeartbeat(examId, attemptId) {
         try {
-            const response = await apiClient.post(`/exams/${examId}/attempts/${attemptId}/heartbeat`, {
+            const response = await apiClient.post(`/exams/${examId}/heartbeat`, {
                 timestamp: new Date(),
                 userAgent: navigator.userAgent,
                 screenResolution: `${screen.width}x${screen.height}`
             })
             return response.data
         } catch (error) {
-            console.error('Heartbeat failed:', error)
+            logger.error('Heartbeat failed:', error)
             return { success: false }
         }
     }

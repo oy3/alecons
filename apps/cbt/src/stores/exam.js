@@ -1,6 +1,11 @@
 import { reactive } from 'vue'
 
 export const examStore = reactive({
+    // Session identifiers for secure access
+    currentExamId: null,
+    currentAttemptId: null,
+
+    // Exam data
     currentExam: null,
     currentAttempt: null,
     questions: [],
@@ -12,18 +17,41 @@ export const examStore = reactive({
     autoSaveStatus: 'saved', // 'saving', 'saved', 'error'
     tabSwitchCount: 0,
     blurCount: 0,
+    timeUpTriggered: null, // Timestamp for reactivity triggering
 
     // Security tracking
     securityViolations: [],
 
     setExam(exam) {
         this.currentExam = exam
-        this.timeRemaining = exam.duration * 60 // Convert minutes to seconds
+        // Only set default time if not already set by attempt
+        if (this.timeRemaining === 0) {
+            this.timeRemaining = exam.duration * 60 // Convert minutes to seconds
+        }
     },
 
     setAttempt(attempt) {
         this.currentAttempt = attempt
-        this.answers = attempt.answers || {}
+
+        // Convert answers array to object format if needed
+        if (attempt.answers && Array.isArray(attempt.answers)) {
+            const answersObj = {}
+            attempt.answers.forEach(answer => {
+                answersObj[answer.questionId] = {
+                    questionId: answer.questionId,
+                    selected: answer.selected,
+                    answeredAt: answer.answeredAt
+                }
+            })
+            this.answers = answersObj
+        } else {
+            this.answers = attempt.answers || {}
+        }
+
+        // Set time remaining from attempt timing if available
+        if (attempt.timing) {
+            this.timeRemaining = attempt.timing.timeRemaining
+        }
     },
 
     setQuestions(questions) {
@@ -97,8 +125,13 @@ export const examStore = reactive({
 
     timeUp() {
         this.stopTimer()
+        this.timeRemaining = 0
         // Auto-submit exam when time is up
-        this.submitExam()
+        this.isSubmitted = true
+        // Force reactivity trigger by updating a timestamp
+        this.timeUpTriggered = Date.now()
+        // Note: The actual submission should be handled by the component
+        // This just marks the state as time up
     },
 
     formatTime(seconds) {
@@ -150,6 +183,11 @@ export const examStore = reactive({
     },
 
     reset() {
+        // Clear session identifiers
+        this.currentExamId = null
+        this.currentAttemptId = null
+
+        // Clear exam data
         this.currentExam = null
         this.currentAttempt = null
         this.questions = []
@@ -163,5 +201,24 @@ export const examStore = reactive({
         this.blurCount = 0
         this.securityViolations = []
         this.stopTimer()
+    },
+
+    // Clear session data for security when exam is completed or user leaves
+    clearSession() {
+        this.currentExamId = null
+        this.currentAttemptId = null
+        this.currentExam = null
+        this.currentAttempt = null
+        this.questions = []
+        this.answers = {}
+        this.currentQuestionIndex = 0
+        this.timeRemaining = 0
+        this.isSubmitted = true
+        this.isFullscreen = false
+        this.autoSaveStatus = 'saved'
+        this.tabSwitchCount = 0
+        this.blurCount = 0
+        this.timeUpTriggered = null
+        this.securityViolations = []
     }
 })

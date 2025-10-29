@@ -28,7 +28,7 @@ export default [
         }
     },
     {
-        path: '/exam/:examId/interface',
+        path: '/exam/take',
         name: 'ExamInterface',
         component: ExamInterface,
         meta: {

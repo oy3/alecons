@@ -61,6 +61,7 @@ npm run dev:cbt          # CBT Portal (port 3004)
 npm run dev:application  # Application Portal (port 3000)
 npm run dev:staff        # Staff Portal (port 3001)
 npm run dev:student      # Student Portal (port 3002)
+npm run dev:website      # Website (port 3003)
 
 # If API building is giving issues
 rm -rf dist tsconfig.build.tsbuildinfo && npm run build
@@ -91,6 +92,7 @@ npm run build:cbt
 npm run build:application
 npm run build:staff
 npm run build:student
+npm run build:website
 ```
 
 ### Production

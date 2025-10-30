@@ -273,12 +273,60 @@ fi
 # Build the application
 npm run build
 
-# Start with PM2
-pm2 start dist/main.js --name "alecons-api" --env production
+# Create a startup script that loads environment variables correctly
+cat > start.js << 'EOF'
+// Load environment variables first
+require('dotenv').config({ path: '.env.production' });
+
+// Log environment variables to verify they're loaded
+console.log('=== Environment Variables Loaded ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Loaded successfully' : 'NOT LOADED');
+console.log('PORT:', process.env.PORT);
+console.log('===================================');
+
+// Start the main application
+require('./dist/main.js');
+EOF
+
+# Create ecosystem configuration for PM2
+cat > ecosystem.config.js << 'EOF'
+module.exports = {
+  apps: [{
+    name: 'alecons-api',
+    script: './start.js',
+    cwd: '/home/api',
+    env: {
+      NODE_ENV: 'production'
+    },
+    instances: 1,
+    exec_mode: 'fork',
+    watch: false,
+    max_memory_restart: '1G',
+    error_file: '/var/log/pm2/alecons-api-error.log',
+    out_file: '/var/log/pm2/alecons-api-out.log',
+    time: true
+  }]
+};
+EOF
+
+# Stop PM2
+pm2 stop alecons-api
+pm2 delete alecons-api
+
+# Start with PM2 using ecosystem configuration
+pm2 start ecosystem.config.js
 
 # Save PM2 configuration
 pm2 save
 pm2 startup
+
+# Verify API is running and environment variables are loaded
+pm2 logs alecons-api --lines 20
+
+# Test API health endpoint
+curl http://localhost:8000/api/v1/health
+curl https://api.alecons.com.ng/api/v1/health
 ```
 
 ---
@@ -330,69 +378,179 @@ sudo nano /etc/nginx/sites-available/alecons
 Create `/etc/nginx/sites-available/alecons`:
 
 ```nginx
-# Main Website (alecons.com.ng)
+# Main website - alecons.com.ng
 server {
-    listen 80;
-    server_name alecons.com.ng www.alecons.com.ng;
-    root /home/alecons/alecons/apps/website/dist;
+    server_name alecons.com.ng;
+    root /home/apps/website;
     index index.html;
-
+    
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri/ @fallback;
     }
 
-    location /api {
-        return 301 https://api.alecons.com.ng$request_uri;
+    location @fallback {
+        rewrite ^.*$ /index.html last;
     }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/alecons.com.ng/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 
-# Student Portal (portal.alecons.com.ng)
+# WWW redirect for main website (using same SSL cert)
 server {
-    listen 80;
+    listen 443 ssl;
+    server_name www.alecons.com.ng;
+    ssl_certificate /etc/letsencrypt/live/alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/alecons.com.ng/privkey.pem; # managed by Certbot
+    return 301 https://alecons.com.ng$request_uri;
+}
+
+# Student Portal - portal.alecons.com.ng
+server {
     server_name portal.alecons.com.ng;
-    root /home/alecons/alecons/apps/student-portal/dist;
+    root /home/apps/student-portal;
     index index.html;
-
-    # CBT Portal route
-    location /cbt {
-        alias /home/alecons/alecons/apps/cbt/dist;
-        try_files $uri $uri/ /cbt/index.html;
+    
+    # CBT portal at /cbt (keep this for backward compatibility)
+    location /cbt/ {
+        alias /home/apps/cbt/;
+        index index.html;
+        try_files $uri $uri/ @cbt_fallback;
     }
 
+    location @cbt_fallback {
+        rewrite ^/cbt/(.*)$ /cbt/index.html last;
+    }
+    
+    # Student portal root
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri/ @student_fallback;
     }
+
+    location @student_fallback {
+        rewrite ^.*$ /index.html last;
+    }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/alecons.com.ng/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 
-# Application Portal (apply.alecons.com.ng)
+# WWW redirect for portal (using main SSL cert)
 server {
-    listen 80;
+    listen 443 ssl;
+    server_name www.portal.alecons.com.ng;
+    ssl_certificate /etc/letsencrypt/live/alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/alecons.com.ng/privkey.pem; # managed by Certbot
+    return 301 https://portal.alecons.com.ng$request_uri;
+}
+
+# CBT Portal - cbt.alecons.com.ng
+server {
+    server_name cbt.alecons.com.ng;
+    root /home/apps/cbt;
+    index index.html;
+    
+    location / {
+        try_files $uri $uri/ @cbt_main_fallback;
+    }
+
+    location @cbt_main_fallback {
+        rewrite ^.*$ /index.html last;
+    }
+
+    # Static file caching
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/cbt.alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/cbt.alecons.com.ng/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}
+
+# WWW redirect for CBT (using CBT SSL cert)
+server {
+    listen 443 ssl;
+    server_name www.cbt.alecons.com.ng;
+    ssl_certificate /etc/letsencrypt/live/cbt.alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/cbt.alecons.com.ng/privkey.pem; # managed by Certbot
+    return 301 https://cbt.alecons.com.ng$request_uri;
+}
+
+# Application Portal - apply.alecons.com.ng
+server {
     server_name apply.alecons.com.ng;
-    root /home/alecons/alecons/apps/application-portal/dist;
+    root /home/apps/application-portal;
     index index.html;
-
+    
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri/ @app_fallback;
     }
+
+    location @app_fallback {
+        rewrite ^.*$ /index.html last;
+    }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/alecons.com.ng/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 
-# Staff Portal (staff.alecons.com.ng)
+# WWW redirect for apply (using main SSL cert)
 server {
-    listen 80;
+    listen 443 ssl;
+    server_name www.apply.alecons.com.ng;
+    ssl_certificate /etc/letsencrypt/live/alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/alecons.com.ng/privkey.pem; # managed by Certbot
+    return 301 https://apply.alecons.com.ng$request_uri;
+}
+
+# Staff Portal - staff.alecons.com.ng  
+server {
     server_name staff.alecons.com.ng;
-    root /home/alecons/alecons/apps/staff-portal/dist;
+    root /home/apps/staff-portal;
     index index.html;
-
+    
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri/ @staff_fallback;
     }
+
+    location @staff_fallback {
+        rewrite ^.*$ /index.html last;
+    }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/alecons.com.ng/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 
-# API Backend (api.alecons.com.ng)
+# WWW redirect for staff (using main SSL cert)
 server {
-    listen 80;
-    server_name api.alecons.com.ng;
+    listen 443 ssl;
+    server_name www.staff.alecons.com.ng;
+    ssl_certificate /etc/letsencrypt/live/alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/alecons.com.ng/privkey.pem; # managed by Certbot
+    return 301 https://staff.alecons.com.ng$request_uri;
+}
 
+# API - api.alecons.com.ng
+server {
+    server_name api.alecons.com.ng;
+    
     location / {
         proxy_pass http://localhost:8000;
         proxy_http_version 1.1;
@@ -403,8 +561,108 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
+        client_max_body_size 50M;
     }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/alecons.com.ng/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
+
+# WWW redirect for API (using main SSL cert)
+server {
+    listen 443 ssl;
+    server_name www.api.alecons.com.ng;
+    ssl_certificate /etc/letsencrypt/live/alecons.com.ng/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/alecons.com.ng/privkey.pem; # managed by Certbot
+    return 301 https://api.alecons.com.ng$request_uri;
+}
+
+# HTTP to HTTPS redirects (managed by Certbot)
+server {
+    if ($host = www.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    if ($host = alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80;
+    server_name alecons.com.ng www.alecons.com.ng;
+    return 404; # managed by Certbot
+}
+
+server {
+    if ($host = www.portal.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    if ($host = portal.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80;
+    server_name portal.alecons.com.ng www.portal.alecons.com.ng;
+    return 404; # managed by Certbot
+}
+
+server {
+    if ($host = www.cbt.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    if ($host = cbt.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80;
+    server_name cbt.alecons.com.ng www.cbt.alecons.com.ng;
+    return 404; # managed by Certbot
+}
+
+server {
+    if ($host = www.apply.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    if ($host = apply.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80;
+    server_name apply.alecons.com.ng www.apply.alecons.com.ng;
+    return 404; # managed by Certbot
+}
+
+server {
+    if ($host = www.staff.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    if ($host = staff.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80;
+    server_name staff.alecons.com.ng www.staff.alecons.com.ng;
+    return 404; # managed by Certbot
+}
+
+server {
+    if ($host = www.api.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    if ($host = api.alecons.com.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80;
+    server_name api.alecons.com.ng www.api.alecons.com.ng;
+    return 40
 ```
 
 ### Enable Nginx Configuration

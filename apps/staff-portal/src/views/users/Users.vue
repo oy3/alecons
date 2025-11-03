@@ -2,6 +2,7 @@
 import { useAuthStore } from '../../stores/auth.js'
 import { apiService } from '../../services/api.js'
 import { logger } from '@shared/utils/logger'
+import Swal from 'sweetalert2'
 
 export default {
   name: 'UsersManagement',
@@ -14,97 +15,116 @@ export default {
   data() {
     return {
       users: [],
+      roles: [],
       isLoading: true,
+      isSavingUser: false, // Loading state for user creation/update
       searchQuery: '',
       roleFilter: 'all',
       statusFilter: 'all',
       currentPage: 1,
       perPage: 10,
       totalUsers: 0,
+      totalPages: 0,
       showUserModal: false,
       selectedUser: null,
+      isEditMode: false,
       
       userForm: {
         firstName: '',
         lastName: '',
+        otherName: '',
         email: '',
-        phone: '',
-        role: 'staff',
-        department: '',
+        type: 'admin', // admin, staff, student, applicant
+        department: '', // only for admin/staff
         position: '',
-        status: 'active'
+        roleId: '',
+        isActive: true
       },
 
-      roleOptions: [
-        { value: 'all', label: 'All Roles' },
-        { value: 'admin', label: 'Administrator' },
-        { value: 'manager', label: 'Manager' },
-        { value: 'staff', label: 'Staff' },
-        { value: 'student', label: 'Student' }
-      ],
-
-      statusOptions: [
-        { value: 'all', label: 'All Statuses' },
-        { value: 'active', label: 'Active' },
-        { value: 'inactive', label: 'Inactive' },
-        { value: 'suspended', label: 'Suspended' }
+      userTypes: [
+        { value: 'admin', label: 'Administrator', enabled: true },
+        { value: 'staff', label: 'Staff Member', enabled: true },
+        { value: 'student', label: 'Student', enabled: false },
+        { value: 'applicant', label: 'Applicant', enabled: false }
       ],
 
       departments: [
-        'Admissions',
-        'Academic Affairs',
-        'Student Services',
-        'Finance',
-        'IT Support',
-        'Administration'
+        { value: 'Academics', label: 'Academics' },
+        { value: 'Administration', label: 'Administration' }
       ],
 
       positions: [
-        'Administrator',
+        'Super  Administrator',
         'Manager',
+        'Senior Staff',
         'Staff',
         'Supervisor',
-        'Assistant'
+        'Assistant',
+        'Coordinator',
+        'Officer',
+        'Lecturer',
+        'Professor'
+      ],
+
+      // Role Management Configuration
+      availableModules: [
+        { value: 'dashboard', label: 'Dashboard' },
+        { value: 'applications', label: 'Applications' },
+        { value: 'admissions', label: 'Admissions' },
+        { value: 'academics', label: 'Academics' },
+        { value: 'exams', label: 'Academics' },
+        { value: 'users', label: 'Users' },
+        { value: 'reports', label: 'Reports' },
+        { value: 'settings', label: 'Settings' },
+      ],
+      availablePermissions: [
+        { value: 'create', label: 'Create' },
+        { value: 'read', label: 'Read/View' },
+        { value: 'update', label: 'Update/Edit' },
+        { value: 'delete', label: 'Delete' },
+        { value: 'manage', label: 'Manage All' },
+        { value: 'approve', label: 'Approve' },
+        { value: 'review', label: 'Review' },
+        { value: 'export', label: 'Export' }
       ]
     }
   },
   async mounted() {
     await this.loadUsers()
+    await this.loadRoles()
   },
   computed: {
-    filteredUsers() {
-      let filtered = this.users
-
-      // Search filter
-      if (this.searchQuery) {
-        filtered = filtered.filter(user => 
-          user.firstName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          user.lastName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          user.email.toLowerCase().includes(this.searchQuery.toLowerCase())
-        )
-      }
-
-      // Role filter
-      if (this.roleFilter !== 'all') {
-        filtered = filtered.filter(user => user.role === this.roleFilter)
-      }
-
-      // Status filter
-      if (this.statusFilter !== 'all') {
-        filtered = filtered.filter(user => user.status === this.statusFilter)
-      }
-
-      return filtered
+    roleOptions() {
+      return [
+        { value: 'all', label: 'All Roles' },
+        { value: 'admin', label: 'Administrator' },
+        { value: 'staff', label: 'Staff' },
+        { value: 'student', label: 'Student' },
+        { value: 'applicant', label: 'Applicant' }
+      ]
     },
 
-    paginatedUsers() {
-      const start = (this.currentPage - 1) * this.perPage
-      const end = start + this.perPage
-      return this.filteredUsers.slice(start, end)
+    statusOptions() {
+      return [
+        { value: 'all', label: 'All Statuses' },
+        { value: 'active', label: 'Active' },
+        { value: 'inactive', label: 'Inactive' }
+      ]
     },
 
-    totalPages() {
-      return Math.ceil(this.filteredUsers.length / this.perPage)
+    // Show department and role fields for admin/staff (both are staff members)
+    showStaffFields() {
+      return ['admin', 'staff'].includes(this.userForm.type)
+    },
+
+    // Generate staff ID based on department
+    staffIdPrefix() {
+      if (this.userForm.department === 'Academics') {
+        return 'ALCN/ACD/'
+      } else if (this.userForm.department === 'Administration') {
+        return 'ALCN/ADM/'
+      }
+      return 'ALCN/XXX/'
     }
   },
   methods: {
@@ -113,80 +133,22 @@ export default {
         this.isLoading = true
         logger.info('Loading users...')
 
-        // Mock data - replace with actual API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        const params = {
+          page: this.currentPage,
+          limit: this.perPage,
+          role: this.roleFilter !== 'all' ? this.roleFilter : undefined,
+          status: this.statusFilter !== 'all' ? this.statusFilter : undefined,
+          search: this.searchQuery || undefined
+        }
 
-        this.users = [
-          {
-            id: '1',
-            firstName: 'John',
-            lastName: 'Admin',
-            email: 'john.admin@acons.edu',
-            phone: '+1-555-0100',
-            role: 'admin',
-            department: 'Administration',
-            position: 'Administrator',
-            status: 'active',
-            lastLogin: '2025-01-16T09:30:00Z',
-            createdAt: '2024-08-01T10:00:00Z'
-          },
-          {
-            id: '2',
-            firstName: 'Sarah',
-            lastName: 'Manager',
-            email: 'sarah.manager@acons.edu',
-            phone: '+1-555-0101',
-            role: 'manager',
-            department: 'Admissions',
-            position: 'Manager',
-            status: 'active',
-            lastLogin: '2025-01-16T08:15:00Z',
-            createdAt: '2024-09-15T14:30:00Z'
-          },
-          {
-            id: '3',
-            firstName: 'Mike',
-            lastName: 'Staff',
-            email: 'mike.staff@acons.edu',
-            phone: '+1-555-0102',
-            role: 'staff',
-            department: 'Academic Affairs',
-            position: 'Staff',
-            status: 'active',
-            lastLogin: '2025-01-15T16:45:00Z',
-            createdAt: '2024-10-01T09:00:00Z'
-          },
-          {
-            id: '4',
-            firstName: 'Jane',
-            lastName: 'Student',
-            email: 'jane.student@email.com',
-            phone: '+1-555-0103',
-            role: 'student',
-            department: null,
-            position: null,
-            status: 'active',
-            lastLogin: '2025-01-16T07:20:00Z',
-            createdAt: '2024-11-01T12:00:00Z'
-          },
-          {
-            id: '5',
-            firstName: 'Bob',
-            lastName: 'Inactive',
-            email: 'bob.inactive@acons.edu',
-            phone: '+1-555-0104',
-            role: 'staff',
-            department: 'IT Support',
-            position: 'Staff',
-            status: 'inactive',
-            lastLogin: '2024-12-01T10:30:00Z',
-            createdAt: '2024-07-01T08:00:00Z'
-          }
-        ]
-
-        this.totalUsers = this.users.length
-
-        logger.info('Users loaded successfully')
+        const response = await apiService.getUsers(params)
+        
+        if (response.success) {
+          this.users = response.data.users
+          this.totalUsers = response.data.pagination.total
+          this.totalPages = response.data.pagination.pages
+          logger.info('Users loaded successfully')
+        }
       } catch (error) {
         logger.error('Failed to load users:', error)
         this.$swal.fire({
@@ -199,23 +161,44 @@ export default {
       }
     },
 
+    async loadRoles() {
+      try {
+        const response = await apiService.getRoles()
+        if (response.success) {
+          this.roles = response.data
+        }
+      } catch (error) {
+        logger.error('Failed to load roles:', error)
+      }
+    },
+
+    async onSearch() {
+      this.currentPage = 1
+      await this.loadUsers()
+    },
+
+    async onFilterChange() {
+      this.currentPage = 1
+      await this.loadUsers()
+    },
+
+    async onPageChange(page) {
+      this.currentPage = page
+      await this.loadUsers()
+    },
+
     getRoleBadgeClass(role) {
       const roleClasses = {
         admin: 'bg-danger text-white',
-        manager: 'bg-primary text-white',
         staff: 'bg-info text-white',
-        student: 'bg-secondary text-white'
+        student: 'bg-secondary text-white',
+        applicant: 'bg-warning text-dark'
       }
       return roleClasses[role] || 'bg-secondary text-white'
     },
 
-    getStatusBadgeClass(status) {
-      const statusClasses = {
-        active: 'bg-success text-white',
-        inactive: 'bg-warning text-dark',
-        suspended: 'bg-danger text-white'
-      }
-      return statusClasses[status] || 'bg-secondary text-white'
+    getStatusBadgeClass(isActive) {
+      return isActive ? 'bg-success text-white' : 'bg-warning text-dark'
     },
 
     formatDate(dateString) {
@@ -233,25 +216,30 @@ export default {
 
     editUser(user) {
       this.selectedUser = { ...user }
+      this.isEditMode = true
+      
       this.userForm = {
         firstName: user.firstName,
         lastName: user.lastName,
+        otherName: user.otherName || '',
         email: user.email,
-        phone: user.phone,
-        role: user.role,
+        type: user.role,
         department: user.department || '',
         position: user.position || '',
-        status: user.status
+        roleId: user.roleId || '',
+        isActive: user.isActive
       }
       this.showUserModal = true
     },
 
     async saveUser() {
       try {
+        this.isSavingUser = true // Start loading
         logger.info('Saving user...')
 
         // Validate form
         if (!this.userForm.firstName || !this.userForm.lastName || !this.userForm.email) {
+          this.isSavingUser = false // Stop loading on validation error
           this.$swal.fire({
             icon: 'warning',
             title: 'Validation Error',
@@ -260,107 +248,294 @@ export default {
           return
         }
 
-        // Mock API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
-
-        if (this.selectedUser.id) {
-          // Update existing user
-          const index = this.users.findIndex(u => u.id === this.selectedUser.id)
-          if (index !== -1) {
-            this.users[index] = {
-              ...this.users[index],
-              ...this.userForm
-            }
-          }
-        } else {
-          // Add new user
-          const newUser = {
-            id: Date.now().toString(),
-            ...this.userForm,
-            lastLogin: null,
-            createdAt: new Date().toISOString()
-          }
-          this.users.push(newUser)
+        // Validate staff-specific fields if creating staff or admin (both need these fields)
+        if ((this.userForm.type === 'staff' || this.userForm.type === 'admin') && 
+            (!this.userForm.department || !this.userForm.position || !this.userForm.roleId)) {
+          this.isSavingUser = false // Stop loading on validation error
+          this.$swal.fire({
+            icon: 'warning',
+            title: 'Validation Error',
+            text: 'Please fill in department, position, and role - these are required for all staff members'
+          })
+          return
         }
 
-        this.showUserModal = false
-        this.selectedUser = null
-        this.resetForm()
+        let response
+        if (this.isEditMode && this.selectedUser) {
+          response = await apiService.updateUser(this.selectedUser._id, this.userForm)
+        } else {
+          // Use unified creation method for both admin and staff
+          response = await apiService.createStaffUser(this.userForm)
+        }
 
-        this.$swal.fire({
-          icon: 'success',
-          title: 'User Saved',
-          text: 'User has been saved successfully',
-          timer: 2000,
-          showConfirmButton: false
-        })
+        if (response.success) {
+          this.showUserModal = false
+          this.selectedUser = null
+          this.isEditMode = false
+          this.resetUserForm()
+          await this.loadUsers()
 
-        logger.info('User saved successfully')
+          this.$swal.fire({
+            icon: 'success',
+            title: this.isEditMode ? 'User Updated' : 'User Created',
+            text: response.message,
+            timer: 2000,
+            showConfirmButton: false
+          })
+
+          logger.info('User saved successfully')
+        }
       } catch (error) {
         logger.error('Failed to save user:', error)
+        let errorMessage = 'Failed to save user'
+        
+        if (error.message.includes('Email already exists')) {
+          errorMessage = 'Email address is already in use'
+        }
+
         this.$swal.fire({
           icon: 'error',
           title: 'Save Failed',
-          text: 'Failed to save user'
+          text: errorMessage
+        })
+      } finally {
+        this.isSavingUser = false // Stop loading in all cases
+      }
+    },
+
+    async saveStaff() {
+      try {
+        logger.info('Saving staff...')
+
+        // Validate form
+        if (!this.staffForm.firstName || !this.staffForm.lastName || !this.staffForm.email ||
+            !this.staffForm.department || !this.staffForm.position || !this.staffForm.roleId) {
+          this.$swal.fire({
+            icon: 'warning',
+            title: 'Validation Error',
+            text: 'Please fill in all required fields'
+          })
+          return
+        }
+
+        let response
+        if (this.isEditMode && this.selectedUser) {
+          response = await apiService.updateStaff(this.selectedUser._id, this.staffForm)
+        } else {
+          response = await apiService.createStaffUser(this.staffForm)
+        }
+
+        if (response.success) {
+          this.showStaffModal = false
+          this.selectedUser = null
+          this.isEditMode = false
+          this.resetStaffForm()
+          await this.loadUsers()
+
+          this.$swal.fire({
+            icon: 'success',
+            title: this.isEditMode ? 'Staff Updated' : 'Staff Created',
+            text: response.message,
+            timer: 2000,
+            showConfirmButton: false
+          })
+
+          logger.info('Staff saved successfully')
+        }
+      } catch (error) {
+        logger.error('Failed to save staff:', error)
+        let errorMessage = 'Failed to save staff'
+        
+        if (error.message.includes('Email already exists')) {
+          errorMessage = 'Email address is already in use'
+        }
+
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Save Failed',
+          text: errorMessage
         })
       }
     },
 
-    async updateUserStatus(user, newStatus) {
+    async updateUserStatus(user) {
       try {
-        logger.info(`Updating user ${user.id} status to ${newStatus}`)
-
-        // Mock API call
-        await new Promise(resolve => setTimeout(resolve, 500))
-
-        // Update local data
-        const index = this.users.findIndex(u => u.id === user.id)
-        if (index !== -1) {
-          this.users[index].status = newStatus
+        if (!user) {
+          await this.$swal.fire({
+            title: 'Error!',
+            text: 'No user selected',
+            icon: 'error',
+            confirmButtonColor: '#dc3545'
+          })
+          return
         }
 
-        this.$swal.fire({
-          icon: 'success',
-          title: 'Status Updated',
-          text: `User status updated to ${newStatus.toUpperCase()}`,
-          timer: 2000,
-          showConfirmButton: false
+        const action = user.isActive ? 'deactivate' : 'activate'
+        const newStatus = !user.isActive
+
+        // Show confirmation modal
+        const result = await this.$swal.fire({
+          title: `${action.charAt(0).toUpperCase() + action.slice(1)} User?`,
+          text: `Are you sure you want to ${action} ${user.firstName} ${user.lastName}? ${
+            user.isActive 
+              ? 'They will no longer be able to access the system.' 
+              : 'They will regain access to the system.'
+          }`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: `Yes, ${action.charAt(0).toUpperCase() + action.slice(1)}`,
+          cancelButtonText: 'Cancel',
+          confirmButtonColor: user.isActive ? '#dc3545' : '#198754',
+          cancelButtonColor: '#6c757d'
         })
 
-        logger.info('User status updated successfully')
+        if (!result.isConfirmed) {
+          return
+        }
+
+        logger.info(`Updating user ${user._id} status to ${newStatus}`)
+
+        const response = await apiService.updateUserStatus(user._id, newStatus)
+
+        if (response.success) {
+          await this.loadUsers()
+          
+          // Show success modal
+          await this.$swal.fire({
+            title: 'Success!',
+            text: `User ${action}d successfully`,
+            icon: 'success',
+            confirmButtonColor: '#198754',
+            timer: 3000,
+            timerProgressBar: true,
+            showConfirmButton: true,
+            allowOutsideClick: false
+          })
+          
+          logger.info('User status updated successfully')
+        }
       } catch (error) {
         logger.error('Failed to update user status:', error)
+        
+        // Show error modal
+        await this.$swal.fire({
+          title: 'Error!',
+          text: error.response?.data?.message || 'Failed to update user status',
+          icon: 'error',
+          confirmButtonColor: '#dc3545'
+        })
+      }
+    },
+
+    async resetPassword(user) {
+      try {
+        const result = await this.$swal.fire({
+          title: 'Reset Password',
+          text: `Reset password for ${user.firstName} ${user.lastName}? A new password will be sent to their email.`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#dc3545',
+          cancelButtonColor: '#6c757d',
+          confirmButtonText: 'Yes, reset password',
+          cancelButtonText: 'Cancel'
+        })
+
+        if (result.isConfirmed) {
+          logger.info(`Resetting password for user ${user._id}`)
+
+          const response = await apiService.resetUserPassword(user._id)
+
+          if (response.success) {
+            this.$swal.fire({
+              icon: 'success',
+              title: 'Password Reset',
+              text: 'New password has been sent to the user\'s email',
+              timer: 3000,
+              showConfirmButton: false
+            })
+
+            logger.info('Password reset successfully')
+          }
+        }
+      } catch (error) {
+        logger.error('Failed to reset password:', error)
         this.$swal.fire({
           icon: 'error',
-          title: 'Update Failed',
-          text: 'Failed to update user status'
+          title: 'Reset Failed',
+          text: 'Failed to reset password'
+        })
+      }
+    },
+
+    async deleteUser(user) {
+      try {
+        const result = await this.$swal.fire({
+          title: 'Delete User',
+          text: `Are you sure you want to delete ${user.firstName} ${user.lastName}? This action cannot be undone.`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#dc3545',
+          cancelButtonColor: '#6c757d',
+          confirmButtonText: 'Yes, delete',
+          cancelButtonText: 'Cancel'
+        })
+
+        if (result.isConfirmed) {
+          logger.info(`Deleting user ${user._id}`)
+
+          const response = await apiService.deleteUser(user._id)
+
+          if (response.success) {
+            await this.loadUsers()
+
+            this.$swal.fire({
+              icon: 'success',
+              title: 'User Deleted',
+              text: 'User has been deleted successfully',
+              timer: 2000,
+              showConfirmButton: false
+            })
+
+            logger.info('User deleted successfully')
+          }
+        }
+      } catch (error) {
+        logger.error('Failed to delete user:', error)
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Delete Failed',
+          text: 'Failed to delete user'
         })
       }
     },
 
     addNewUser() {
       this.selectedUser = null
-      this.resetForm()
+      this.isEditMode = false
+      this.resetUserForm()
       this.showUserModal = true
     },
 
-    resetForm() {
+    resetUserForm() {
       this.userForm = {
         firstName: '',
         lastName: '',
+        otherName: '',
         email: '',
-        phone: '',
-        role: 'staff',
+        type: 'admin',
         department: '',
         position: '',
-        status: 'active'
+        roleId: '',
+        isActive: true
       }
     },
 
-    closeModal() {
+    closeUserModal() {
       this.showUserModal = false
       this.selectedUser = null
-      this.resetForm()
+      this.isEditMode = false
+      this.isSavingUser = false // Reset loading state
+      this.resetUserForm()
     },
 
     exportUsers() {
@@ -370,6 +545,450 @@ export default {
         icon: 'info',
         confirmButtonColor: '#1a5f5f'
       })
+    },
+
+    getRoleName(roleId) {
+      const role = this.roles.find(r => r._id === roleId)
+      return role ? role.name : 'Unknown Role'
+    },
+
+    // Role Management Methods
+    async showRolesManagement() {
+      try {
+        // Refresh roles data
+        await this.loadRoles()
+        
+        const rolesTableRows = this.roles.map(role => {
+          // Convert module permissions back to frontend format for display
+          const moduleNames = role.modules?.map(m => m.module) || []
+          const totalModules = moduleNames.length
+          
+          return `
+            <tr>
+              <td class="text-start">${role.name}</td>
+              <td class="text-start">${role.description || 'No description'}</td>
+              <td class="text-start">${totalModules} modules</td>
+              <td class="text-center">
+                <button class="btn btn-sm btn-outline-primary me-2" onclick="window.editRole('${role._id}')">
+                  <i class="bi bi-pencil"></i> Edit
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="window.deleteRole('${role._id}')">
+                  <i class="bi bi-trash"></i> Delete
+                </button>
+              </td>
+            </tr>
+          `
+        }).join('')
+
+        // Store reference to this component for global access
+        window.editRole = (roleId) => this.editRole(roleId)
+        window.deleteRole = (roleId) => this.deleteRole(roleId)
+        window.addNewRole = () => this.showRoleModal()
+
+        const result = await Swal.fire({
+          title: 'Roles Management',
+          html: `
+            <div class="text-start">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">System Roles</h5>
+                <button class="btn btn-primary btn-sm" onclick="window.addNewRole()">
+                  <i class="bi bi-plus"></i> Add New Role
+                </button>
+              </div>
+              
+              <div class="table-responsive">
+                <table class="table table-hover">
+                  <thead class="">
+                    <tr>
+                      <th class="text-start">Role Name</th>
+                      <th class="text-start">Description</th>
+                      <th class="text-start">Modules</th>
+                      <th class="text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rolesTableRows || '<tr><td colspan="4" class="text-center text-muted">No roles found</td></tr>'}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `,
+          width: '800px',
+          showConfirmButton: false,
+          showCloseButton: true,
+          customClass: {
+            container: 'roles-management-modal'
+          }
+        })
+
+        // Clean up global references
+        delete window.editRole
+        delete window.deleteRole
+        delete window.addNewRole
+
+      } catch (error) {
+        logger.error('Error showing roles management:', error)
+        Swal.fire({
+          title: 'Error!',
+          text: 'Failed to load roles management. Please try again.',
+          icon: 'error',
+          confirmButtonColor: '#dc3545'
+        })
+      }
+    },
+
+    async showRoleModal(existingRole = null) {
+      const isEdit = !!existingRole
+      
+      // Convert backend format to frontend format
+      let selectedModules = []
+      let rolePermissions = {}
+      
+      if (existingRole && existingRole.modules) {
+        selectedModules = existingRole.modules.map(m => m.module)
+        rolePermissions = {}
+        existingRole.modules.forEach(m => {
+          rolePermissions[m.module] = m.permissions || []
+        })
+      }
+
+      const moduleCheckboxes = this.availableModules.map(module => `
+        <div class="col-6 col-md-4 mb-2">
+          <div class="form-check">
+            <input 
+              class="form-check-input module-checkbox" 
+              type="checkbox" 
+              value="${module.value}" 
+              id="module-${module.value}"
+              ${selectedModules.includes(module.value) ? 'checked' : ''}
+            >
+            <label class="form-check-label" for="module-${module.value}">
+              ${module.label}
+            </label>
+          </div>
+        </div>
+      `).join('')
+
+      const result = await Swal.fire({
+        title: isEdit ? 'Edit Role' : 'Add New Role',
+        html: `
+          <div class="row g-3">
+            <div class="col-md-12">
+              <label for="swal-role-name" class="form-label text-start w-100">Role Name</label>
+              <input 
+                id="swal-role-name" 
+                class="form-control" 
+                placeholder="e.g., Academic Coordinator" 
+                value="${existingRole ? existingRole.name : ''}"
+                required
+              >
+            </div>
+            <div class="col-md-12">
+              <label for="swal-role-description" class="form-label text-start w-100">Description</label>
+              <textarea 
+                id="swal-role-description" 
+                class="form-control" 
+                placeholder="Brief description of the role" 
+                rows="3"
+              >${existingRole ? existingRole.description || '' : ''}</textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Select Modules</label>
+              <div class="row">
+                ${moduleCheckboxes}
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Permissions for Selected Modules</label>
+              <div id="permissions-container" class="border rounded p-3">
+                <small class="text-muted">Select modules above to configure permissions</small>
+              </div>
+            </div>
+          </div>
+        `,
+        width: '700px',
+        showCancelButton: true,
+        confirmButtonText: isEdit ? 'Update Role' : 'Create Role',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d',
+        didOpen: () => {
+          this.setupRoleModalInteractions(selectedModules, rolePermissions)
+        },
+        preConfirm: () => {
+          return this.validateAndGetRoleData()
+        }
+      })
+
+      if (result.isConfirmed && result.value) {
+        let operationSuccess = false
+        if (isEdit) {
+          operationSuccess = await this.updateRole(existingRole._id, result.value)
+        } else {
+          operationSuccess = await this.createRole(result.value)
+        }
+        
+        // Only return to roles management if operation was successful
+        if (operationSuccess) {
+          // Small delay to ensure success modal is properly closed
+          setTimeout(() => this.showRolesManagement(), 300)
+        }
+      }
+    },
+
+    setupRoleModalInteractions(selectedModules, rolePermissions) {
+      const moduleCheckboxes = document.querySelectorAll('.module-checkbox')
+      const permissionsContainer = document.getElementById('permissions-container')
+
+      const updatePermissionsDisplay = () => {
+        const checkedModules = Array.from(moduleCheckboxes)
+          .filter(cb => cb.checked)
+          .map(cb => cb.value)
+
+        if (checkedModules.length === 0) {
+          permissionsContainer.innerHTML = '<small class="text-muted">Select modules above to configure permissions</small>'
+          return
+        }
+
+        const permissionsHtml = checkedModules.map(module => {
+          const moduleLabel = this.availableModules.find(m => m.value === module)?.label || module
+          const modulePerms = rolePermissions[module] || []
+          
+          const permissionCheckboxes = this.availablePermissions.map(perm => `
+            <div class="form-check form-check-inline">
+              <input 
+                class="form-check-input permission-checkbox" 
+                type="checkbox" 
+                value="${perm.value}" 
+                id="perm-${module}-${perm.value}"
+                data-module="${module}"
+                ${modulePerms.includes(perm.value) ? 'checked' : ''}
+              >
+              <label class="form-check-label" for="perm-${module}-${perm.value}">
+                ${perm.label}
+              </label>
+            </div>
+          `).join('')
+
+          return `
+            <div class="mb-3">
+              <h6 class="mb-2">${moduleLabel}</h6>
+              <div class="ps-3">
+                ${permissionCheckboxes}
+              </div>
+            </div>
+          `
+        }).join('')
+
+        permissionsContainer.innerHTML = permissionsHtml
+      }
+
+      // Initial permissions display
+      updatePermissionsDisplay()
+
+      // Update permissions when modules change
+      moduleCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updatePermissionsDisplay)
+      })
+    },
+
+    validateAndGetRoleData() {
+      const name = document.getElementById('swal-role-name').value.trim()
+      const description = document.getElementById('swal-role-description').value.trim()
+      
+      if (!name) {
+        Swal.showValidationMessage('Role name is required')
+        return false
+      }
+
+      const selectedModules = Array.from(document.querySelectorAll('.module-checkbox:checked'))
+        .map(cb => cb.value)
+
+      if (selectedModules.length === 0) {
+        Swal.showValidationMessage('At least one module must be selected')
+        return false
+      }
+
+      const permissions = {}
+      selectedModules.forEach(module => {
+        const modulePermissions = Array.from(
+          document.querySelectorAll(`.permission-checkbox[data-module="${module}"]:checked`)
+        ).map(cb => cb.value)
+        
+        if (modulePermissions.length > 0) {
+          permissions[module] = modulePermissions
+        }
+      })
+
+      return {
+        name,
+        description,
+        modules: selectedModules,
+        permissions
+      }
+    },
+
+    async createRole(roleData) {
+      try {
+        logger.info('Creating role:', roleData)
+        const response = await apiService.createRole(roleData)
+        
+        if (response.success) {
+          await this.loadRoles() // Refresh roles list
+          
+          // Show success modal and wait for user acknowledgment
+          await Swal.fire({
+            title: 'Success!',
+            text: 'Role created successfully',
+            icon: 'success',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#198754',
+            timer: 3000, // Auto-close after 3 seconds
+            timerProgressBar: true,
+            showConfirmButton: true,
+            allowOutsideClick: false
+          })
+          
+          return true // Operation successful
+        }
+      } catch (error) {
+        logger.error('Error creating role:', error)
+        
+        // Show error modal and wait for user acknowledgment
+        await Swal.fire({
+          title: 'Error!',
+          text: error.response?.data?.message || 'Failed to create role',
+          icon: 'error',
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#dc3545'
+        })
+        
+        return false // Operation failed
+      }
+    },
+
+    async editRole(roleId) {
+      try {
+        const role = this.roles.find(r => r._id === roleId)
+        if (!role) {
+          throw new Error('Role not found')
+        }
+        
+        Swal.close() // Close the roles management modal
+        setTimeout(() => this.showRoleModal(role), 100)
+      } catch (error) {
+        logger.error('Error editing role:', error)
+        Swal.fire({
+          title: 'Error!',
+          text: 'Failed to load role for editing',
+          icon: 'error',
+          confirmButtonColor: '#dc3545'
+        })
+      }
+    },
+
+    async updateRole(roleId, roleData) {
+      try {
+        logger.info('Updating role:', roleId, roleData)
+        const response = await apiService.updateRole(roleId, roleData)
+        
+        if (response.success) {
+          await this.loadRoles() // Refresh roles list
+          
+          // Show success modal and wait for user acknowledgment
+          await Swal.fire({
+            title: 'Success!',
+            text: 'Role updated successfully',
+            icon: 'success',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#198754',
+            timer: 3000, // Auto-close after 3 seconds
+            timerProgressBar: true,
+            showConfirmButton: true,
+            allowOutsideClick: false
+          })
+          
+          return true // Operation successful
+        }
+      } catch (error) {
+        logger.error('Error updating role:', error)
+        
+        // Show error modal and wait for user acknowledgment
+        await Swal.fire({
+          title: 'Error!',
+          text: error.response?.data?.message || 'Failed to update role',
+          icon: 'error',
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#dc3545'
+        })
+        
+        return false // Operation failed
+      }
+    },
+
+    async deleteRole(roleId) {
+      try {
+        const role = this.roles.find(r => r._id === roleId)
+        if (!role) {
+          throw new Error('Role not found')
+        }
+
+        if (role.isSystem) {
+          Swal.fire({
+            title: 'Cannot Delete!',
+            text: 'System roles cannot be deleted',
+            icon: 'warning',
+            confirmButtonColor: '#ffc107'
+          })
+          return
+        }
+
+        const result = await Swal.fire({
+          title: 'Delete Role?',
+          text: `Are you sure you want to delete the role "${role.name}"? This action cannot be undone.`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Yes, Delete',
+          cancelButtonText: 'Cancel',
+          confirmButtonColor: '#dc3545',
+          cancelButtonColor: '#6c757d'
+        })
+
+        if (result.isConfirmed) {
+          const response = await apiService.deleteRole(roleId)
+          
+          if (response.success) {
+            await this.loadRoles() // Refresh roles list
+            
+            // Show success modal and wait for user acknowledgment
+            await Swal.fire({
+              title: 'Deleted!',
+              text: 'Role deleted successfully',
+              icon: 'success',
+              confirmButtonText: 'OK',
+              confirmButtonColor: '#198754',
+              timer: 3000, // Auto-close after 3 seconds
+              timerProgressBar: true,
+              showConfirmButton: true,
+              allowOutsideClick: false
+            })
+            
+            // Return to roles management modal after user acknowledges
+            setTimeout(() => this.showRolesManagement(), 300)
+          }
+        }
+      } catch (error) {
+        logger.error('Error deleting role:', error)
+        
+        // Show error modal and wait for user acknowledgment
+        await Swal.fire({
+          title: 'Error!',
+          text: error.response?.data?.message || 'Failed to delete role',
+          icon: 'error',
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#dc3545'
+        })
+      }
     }
   }
 }
@@ -392,7 +1011,10 @@ export default {
             <button class="btn btn-staff-primary btn-sm" @click="addNewUser">
               <i class="bi bi-plus me-2"></i>Add User
             </button>
-            <button class="btn btn-outline-staff-secondary btn-sm" @click="loadUsers">
+            <button class="btn btn-success btn-sm" @click="showRolesManagement">
+              <i class="bi bi-gear me-2"></i>Roles
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" @click="loadUsers">
               <i class="bi bi-arrow-clockwise me-2"></i>Refresh
             </button>
           </div>
@@ -403,7 +1025,7 @@ export default {
     <!-- Filters -->
     <div class="row mb-4">
       <div class="col-12">
-        <div class="staff-card">
+        <div class="card p-0 border-0 shadow-sm">
           <div class="card-body">
             <div class="row g-3">
               <div class="col-md-4">
@@ -414,11 +1036,12 @@ export default {
                   id="searchQuery"
                   placeholder="Search by name or email..."
                   v-model="searchQuery"
+                  @input="onSearch"
                 >
               </div>
               <div class="col-md-3">
                 <label for="roleFilter" class="form-label">Role</label>
-                <select class="form-select" id="roleFilter" v-model="roleFilter">
+                <select class="form-select" id="roleFilter" v-model="roleFilter" @change="onFilterChange">
                   <option v-for="role in roleOptions" :key="role.value" :value="role.value">
                     {{ role.label }}
                   </option>
@@ -426,15 +1049,15 @@ export default {
               </div>
               <div class="col-md-3">
                 <label for="statusFilter" class="form-label">Status</label>
-                <select class="form-select" id="statusFilter" v-model="statusFilter">
+                <select class="form-select" id="statusFilter" v-model="statusFilter" @change="onFilterChange">
                   <option v-for="status in statusOptions" :key="status.value" :value="status.value">
                     {{ status.label }}
                   </option>
                 </select>
               </div>
               <div class="col-md-2 d-flex align-items-end">
-                <button class="btn btn-outline-staff-primary w-100" @click="loadUsers">
-                  <i class="bi bi-funnel me-2"></i>Filter
+                <button class="btn btn-outline-staff-primary btn-sm w-100" @click="onFilterChange">
+                  <i class="bi bi-funnel me-2"></i>Apply Filters
                 </button>
               </div>
             </div>
@@ -455,13 +1078,14 @@ export default {
     <div v-else class="row">
       <div class="col-12">
         <div class="staff-card">
-          <div class="card-header bg-transparent border-bottom">
+          <!-- <div class="card-header bg-transparent border-bottom">
             <div class="d-flex justify-content-between align-items-center">
               <h5 class="mb-0 fw-bold">
-                Users ({{ filteredUsers.length }} of {{ totalUsers }})
+                Users ({{ totalUsers }} total)
               </h5>
+              <small class="text-muted">Page {{ currentPage }} of {{ totalPages }}</small>
             </div>
-          </div>
+          </div> -->
           <div class="card-body p-0">
             <div class="table-responsive">
               <table class="table table-hover mb-0">
@@ -470,35 +1094,39 @@ export default {
                     <th>User</th>
                     <th>Contact</th>
                     <th>Role</th>
-                    <th>Department</th>
+                    <th>Department/Position</th>
                     <th>Status</th>
-                    <th>Last Login</th>
+                    <th>Created</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="user in paginatedUsers" :key="user.id">
+                  <tr v-for="user in users" :key="user._id">
                     <td>
                       <div class="d-flex align-items-center">
                         <div class="bg-staff-light rounded-circle p-2 me-2">
                           <i class="bi bi-person text-staff-primary"></i>
                         </div>
                         <div>
-                          <div class="fw-medium">{{ user.firstName }} {{ user.lastName }}</div>
-                          <div class="small text-muted">ID: {{ user.id }}</div>
+                          <div class="fw-medium">{{ user.firstName }} {{ user.otherName }} {{ user.lastName }}</div>
+                          <div class="small text-muted" v-if="user.staffId">Staff ID: {{ user.staffId }}</div>
+                          <div class="small text-muted" v-else>ID: {{ user._id.slice(-6) }}</div>
                         </div>
                       </div>
                     </td>
                     <td>
                       <div>
                         <div class="small">{{ user.email }}</div>
-                        <div class="small text-muted">{{ user.phone }}</div>
+                        <!-- <div class="small text-muted" v-if="user.otherName"></div> -->
                       </div>
                     </td>
                     <td>
                       <span class="badge rounded-pill" :class="getRoleBadgeClass(user.role)">
                         {{ user.role.toUpperCase() }}
                       </span>
+                      <div class="small text-muted" v-if="user.roleName">
+                        {{ user.roleName }}
+                      </div>
                     </td>
                     <td>
                       <div>
@@ -507,13 +1135,13 @@ export default {
                       </div>
                     </td>
                     <td>
-                      <span class="badge rounded-pill" :class="getStatusBadgeClass(user.status)">
-                        {{ user.status.toUpperCase() }}
+                      <span class="badge rounded-pill" :class="getStatusBadgeClass(user.isActive)">
+                        {{ user.isActive ? 'ACTIVE' : 'INACTIVE' }}
                       </span>
                     </td>
                     <td>
                       <div class="small">
-                        {{ user.lastLogin ? formatDateTime(user.lastLogin) : 'Never' }}
+                        {{ formatDate(user.createdAt) }}
                       </div>
                     </td>
                     <td>
@@ -526,7 +1154,7 @@ export default {
                           <i class="bi bi-eye"></i>
                         </button>
                         <button 
-                          class="btn btn-outline-staff-secondary btn-sm" 
+                          class="btn btn-outline-secondary btn-sm" 
                           @click="editUser(user)"
                           title="Edit User"
                           v-if="authStore.hasPermission('edit') || authStore.hasPermission('users:edit')"
@@ -538,20 +1166,21 @@ export default {
                             type="button" 
                             class="btn btn-outline-warning btn-sm dropdown-toggle" 
                             data-bs-toggle="dropdown"
-                            title="Update Status"
+                            title="More Actions"
                             v-if="authStore.hasPermission('manage') || authStore.hasPermission('users:manage')"
                           >
                             <i class="bi bi-gear"></i>
                           </button>
                           <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#" @click.prevent="updateUserStatus(user, 'active')">
-                              <i class="bi bi-check-circle text-success me-2"></i>Activate
+                            <li><a class="dropdown-item" href="#" @click.prevent="updateUserStatus(user)">
+                              <i class="bi bi-arrow-repeat text-primary me-2"></i>{{ user.isActive ? 'Deactivate' : 'Activate' }}
                             </a></li>
-                            <li><a class="dropdown-item" href="#" @click.prevent="updateUserStatus(user, 'inactive')">
-                              <i class="bi bi-pause-circle text-warning me-2"></i>Deactivate
+                            <li><a class="dropdown-item" href="#" @click.prevent="resetPassword(user)">
+                              <i class="bi bi-key text-warning me-2"></i>Reset Password
                             </a></li>
-                            <li><a class="dropdown-item" href="#" @click.prevent="updateUserStatus(user, 'suspended')">
-                              <i class="bi bi-ban text-danger me-2"></i>Suspend
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="#" @click.prevent="deleteUser(user)">
+                              <i class="bi bi-trash me-2"></i>Delete User
                             </a></li>
                           </ul>
                         </div>
@@ -564,26 +1193,26 @@ export default {
           </div>
 
           <!-- Pagination -->
-          <div class="card-footer bg-transparent" v-if="totalPages > 1">
+          <div class="card-footer bg-transparent py-2" v-if="totalPages > 0">
             <nav>
               <ul class="pagination pagination-sm mb-0 justify-content-center">
                 <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                  <button class="page-link" @click="currentPage = currentPage - 1" :disabled="currentPage === 1">
+                  <button class="page-link" @click="onPageChange(currentPage - 1)" :disabled="currentPage === 1">
                     Previous
                   </button>
                 </li>
                 <li 
                   class="page-item" 
                   :class="{ active: currentPage === page }"
-                  v-for="page in totalPages" 
+                  v-for="page in Math.min(totalPages, 10)" 
                   :key="page"
                 >
-                  <button class="page-link" @click="currentPage = page">
+                  <button class="page-link" @click="onPageChange(page)">
                     {{ page }}
                   </button>
                 </li>
                 <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                  <button class="page-link" @click="currentPage = currentPage + 1" :disabled="currentPage === totalPages">
+                  <button class="page-link" @click="onPageChange(currentPage + 1)" :disabled="currentPage === totalPages">
                     Next
                   </button>
                 </li>
@@ -594,80 +1223,201 @@ export default {
       </div>
     </div>
 
-    <!-- User Modal -->
+    <!-- User Modal (Unified for all user types) -->
     <div class="modal fade" :class="{ show: showUserModal }" :style="{ display: showUserModal ? 'block' : 'none' }" tabindex="-1">
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title">
-              {{ selectedUser?.id ? 'Edit User' : 'Add New User' }}
+              <i class="bi bi-person-plus me-2 text-primary"></i>
+              {{ isEditMode ? 'Edit User' : 'Add New User' }}
             </h5>
-            <button type="button" class="btn-close" @click="closeModal"></button>
+            <button type="button" class="btn-close" @click="closeUserModal"></button>
           </div>
           <div class="modal-body">
+            <div class="alert alert-info d-flex align-items-center" role="alert">
+              <i class="bi bi-info-circle me-2"></i>
+              <div>
+                Login credentials will be automatically generated and emailed to the user.
+                {{ showStaffFields ? `Staff ID will be generated as: ${staffIdPrefix}xxx` : '' }}
+              </div>
+            </div>
+            
             <form @submit.prevent="saveUser">
+              <!-- Basic Information -->
               <div class="row">
                 <div class="col-md-6 mb-3">
-                  <label for="firstName" class="form-label">First Name *</label>
-                  <input type="text" class="form-control" id="firstName" v-model="userForm.firstName" required>
+                  <label for="userFirstName" class="form-label">First Name *</label>
+                  <input type="text" class="form-control" id="userFirstName" v-model="userForm.firstName" required>
                 </div>
                 <div class="col-md-6 mb-3">
-                  <label for="lastName" class="form-label">Last Name *</label>
-                  <input type="text" class="form-control" id="lastName" v-model="userForm.lastName" required>
+                  <label for="userLastName" class="form-label">Last Name *</label>
+                  <input type="text" class="form-control" id="userLastName" v-model="userForm.lastName" required>
                 </div>
               </div>
+              
               <div class="row">
                 <div class="col-md-6 mb-3">
-                  <label for="email" class="form-label">Email *</label>
-                  <input type="email" class="form-control" id="email" v-model="userForm.email" required>
+                  <label for="userOtherName" class="form-label">Other Name</label>
+                  <input type="text" class="form-control" id="userOtherName" v-model="userForm.otherName">
                 </div>
                 <div class="col-md-6 mb-3">
-                  <label for="phone" class="form-label">Phone</label>
-                  <input type="tel" class="form-control" id="phone" v-model="userForm.phone">
+                  <label for="userEmail" class="form-label">Email Address *</label>
+                  <input type="email" class="form-control" id="userEmail" v-model="userForm.email" required>
                 </div>
               </div>
+
+              <!-- User Type -->
               <div class="row">
                 <div class="col-md-6 mb-3">
-                  <label for="role" class="form-label">Role *</label>
-                  <select class="form-select" id="role" v-model="userForm.role" required>
-                    <option value="admin">Administrator</option>
-                    <option value="manager">Manager</option>
-                    <option value="staff">Staff</option>
-                    <option value="student">Student</option>
+                  <label for="userType" class="form-label">User Type *</label>
+                  <select class="form-select" id="userType" v-model="userForm.type" required>
+                    <option v-for="type in userTypes" :key="type.value" :value="type.value" :disabled="!type.enabled">
+                      {{ type.label }} {{ !type.enabled ? '(Coming Soon)' : '' }}
+                    </option>
                   </select>
                 </div>
                 <div class="col-md-6 mb-3">
-                  <label for="status" class="form-label">Status *</label>
-                  <select class="form-select" id="status" v-model="userForm.status" required>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
+                  <div class="form-check mt-4">
+                    <input class="form-check-input" type="checkbox" id="isActive" v-model="userForm.isActive">
+                    <label class="form-check-label" for="isActive">
+                      Active User
+                    </label>
+                  </div>
                 </div>
               </div>
-              <div class="row" v-if="userForm.role !== 'student'">
-                <div class="col-md-6 mb-3">
-                  <label for="department" class="form-label">Department</label>
-                  <select class="form-select" id="department" v-model="userForm.department">
-                    <option value="">Select Department</option>
-                    <option v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</option>
-                  </select>
+
+              <!-- Staff/Admin Specific Fields -->
+              <div v-if="showStaffFields">
+                <hr class="my-4">
+                <h6 class="fw-bold mb-3">Staff Information</h6>
+                <div class="alert alert-info">
+                  <small><i class="bi bi-info-circle me-1"></i>
+                    Both administrators and staff are considered staff members and require department, position, and role assignments.
+                  </small>
                 </div>
-                <div class="col-md-6 mb-3">
-                  <label for="position" class="form-label">Position</label>
-                  <select class="form-select" id="position" v-model="userForm.position">
-                    <option value="">Select Position</option>
-                    <option v-for="pos in positions" :key="pos" :value="pos">{{ pos }}</option>
-                  </select>
+                
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label for="userDepartment" class="form-label">Department *</label>
+                    <select class="form-select" id="userDepartment" v-model="userForm.department" required>
+                      <option value="">Select Department</option>
+                      <option v-for="dept in departments" :key="dept.value" :value="dept.value">
+                        {{ dept.label }}
+                      </option>
+                    </select>
+                    <small class="text-muted">
+                      This determines the Staff ID prefix: 
+                      Academics (ALCN/ACD/xxx), Administration (ALCN/ADM/xxx)
+                    </small>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="userPosition" class="form-label">Position *</label>
+                    <select class="form-select" id="userPosition" v-model="userForm.position" required>
+                      <option value="">Select Position</option>
+                      <option v-for="pos in positions" :key="pos" :value="pos">{{ pos }}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label for="userRole" class="form-label">Role/Permissions *</label>
+                    <select class="form-select" id="userRole" v-model="userForm.roleId" required>
+                      <option value="">Select Role</option>
+                      <option v-for="role in roles" :key="role._id" :value="role._id">
+                        {{ role.name }}
+                        <span v-if="role.description" class="text-muted"> - {{ role.description }}</span>
+                      </option>
+                    </select>
+                  </div>
+                  <div class="col-md-6 mb-3" v-if="userForm.department">
+                    <label class="form-label">Generated Staff ID Preview</label>
+                    <div class="form-control-plaintext bg-light p-2 rounded">
+                      <strong>{{ staffIdPrefix }}###</strong>
+                      <small class="d-block text-muted">Final number will be auto-generated</small>
+                    </div>
+                  </div>
                 </div>
               </div>
             </form>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closeModal">Cancel</button>
-            <button type="button" class="btn btn-staff-primary" @click="saveUser">
-              {{ selectedUser?.id ? 'Update User' : 'Add User' }}
+            <button type="button" class="btn btn-secondary" @click="closeUserModal">Cancel</button>
+            <button 
+              type="button" 
+              class="btn btn-primary" 
+              @click="saveUser"
+              :disabled="isSavingUser"
+            >
+              <span v-if="isSavingUser" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              <i v-else class="bi bi-person-plus me-2"></i>
+              {{ isSavingUser ? 'Creating...' : (isEditMode ? 'Update User' : 'Create User') }}
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Details View Modal -->
+    <div class="modal fade" :class="{ show: showUserModal && selectedUser && !isEditMode }" :style="{ display: showUserModal && selectedUser && !isEditMode ? 'block' : 'none' }" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-person-circle me-2"></i>
+              User Details
+            </h5>
+            <button type="button" class="btn-close" @click="closeUserModal"></button>
+          </div>
+          <div class="modal-body" v-if="selectedUser">
+            <div class="row">
+              <div class="col-md-8">
+                <h6 class="fw-bold">{{ selectedUser.firstName }} {{ selectedUser.lastName }}</h6>
+                <p class="text-muted mb-2" v-if="selectedUser.otherName">Other Name: {{ selectedUser.otherName }}</p>
+                <p class="mb-2"><strong>Email:</strong> {{ selectedUser.email }}</p>
+                <p class="mb-2"><strong>Role:</strong> 
+                  <span class="badge rounded-pill" :class="getRoleBadgeClass(selectedUser.role)">
+                    {{ selectedUser.role.toUpperCase() }}
+                  </span>
+                </p>
+                <p class="mb-2" v-if="selectedUser.staffId"><strong>Staff ID:</strong> {{ selectedUser.staffId }}</p>
+                <p class="mb-2" v-if="selectedUser.department"><strong>Department:</strong> {{ selectedUser.department }}</p>
+                <p class="mb-2" v-if="selectedUser.position"><strong>Position:</strong> {{ selectedUser.position }}</p>
+                <p class="mb-2" v-if="selectedUser.roleName"><strong>Role:</strong> {{ selectedUser.roleName }}</p>
+                <p class="mb-2"><strong>Status:</strong> 
+                  <span class="badge rounded-pill" :class="getStatusBadgeClass(selectedUser.isActive)">
+                    {{ selectedUser.isActive ? 'ACTIVE' : 'INACTIVE' }}
+                  </span>
+                </p>
+                <p class="mb-2"><strong>Email Verified:</strong> 
+                  <span :class="selectedUser.isEmailVerified ? 'text-success' : 'text-warning'">
+                    {{ selectedUser.isEmailVerified ? 'Yes' : 'No' }}
+                  </span>
+                </p>
+                <p class="mb-2"><strong>Created:</strong> {{ formatDateTime(selectedUser.createdAt) }}</p>
+                <p class="mb-2" v-if="selectedUser.updatedAt"><strong>Last Updated:</strong> {{ formatDateTime(selectedUser.updatedAt) }}</p>
+              </div>
+              <div class="col-md-4">
+                <div class="bg-light p-3 rounded">
+                  <h6 class="fw-bold mb-3">Quick Actions</h6>
+                  <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary btn-sm" @click="editUser(selectedUser)">
+                      <i class="bi bi-pencil me-2"></i>Edit User
+                    </button>
+                    <button class="btn btn-outline-warning btn-sm" @click="resetPassword(selectedUser)">
+                      <i class="bi bi-key me-2"></i>Reset Password
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" @click="updateUserStatus(selectedUser)">
+                      <i class="bi bi-arrow-repeat me-2"></i>{{ selectedUser.isActive ? 'Deactivate' : 'Activate' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="closeUserModal">Close</button>
           </div>
         </div>
       </div>
@@ -701,7 +1451,51 @@ export default {
   border-color: var(--staff-light);
 }
 
+/* Roles Management Modal Styles */
+:global(.roles-management-modal) {
+  z-index: 9999;
+}
+
+:global(.roles-management-modal .table) {
+  margin-bottom: 0;
+  font-size: 0.9rem;
+}
+
+:global(.roles-management-modal .table td), 
+:global(.roles-management-modal .table th) {
+  padding: 0.75rem 0.5rem;
+  vertical-align: middle;
+}
+
+:global(.roles-management-modal .btn-sm) {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* Role Modal Form Styles */
+:global(.swal2-popup .form-check-input:checked) {
+  background-color: var(--staff-primary, #1a5f5f);
+  border-color: var(--staff-primary, #1a5f5f);
+}
+
+:global(.swal2-popup .form-check-label) {
+  font-size: 0.9rem;
+  margin-bottom: 0;
+}
+
+:global(.swal2-popup #permissions-container) {
+  max-height: 300px;
+  overflow-y: auto;
+  background-color: #f8f9fa;
+}
+
+:global(.swal2-popup .form-check-inline) {
+  margin-right: 1rem;
+  margin-bottom: 0.5rem;
+}
+
 .pagination .page-item.active .page-link {
+  color: white;
   background-color: var(--staff-primary);
   border-color: var(--staff-primary);
 }

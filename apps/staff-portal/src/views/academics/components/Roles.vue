@@ -1,168 +1,3 @@
-<template>
-  <div>
-    <!-- Search and Add Button -->
-    <div class="row mb-4">
-      <div class="col-12">
-        <div class="card p-0 border-0 shadow-sm">
-          <div class="card-body">
-            <div class="row g-3 align-items-end">
-              <div class="col-md-8">
-                <label class="form-label">Search Roles</label>
-                <input
-                  v-model="searchQuery"
-                  type="text"
-                  class="form-control"
-                  placeholder="Search by role name, description, or modules..."
-                >
-              </div>
-              <div class="col-md-4">
-                <button
-                  class="btn btn-staff-primary w-100"
-                  @click="showAddRoleModal"
-                >
-                  <i class="bi bi-plus-circle me-2"></i>Add New Role
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Loading State -->
-    <div v-if="isLoading" class="text-center py-5">
-      <div class="spinner-border text-staff-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <p class="mt-3 text-muted">Loading roles...</p>
-    </div>
-
-    <!-- Roles Table -->
-    <div v-else class="row">
-      <div class="col-12">
-        <div class="card p-0 border-0 shadow-sm">
-          <div class="card-body p-0">
-            <div class="table-responsive">
-              <table class="table table-hover mb-0">
-                <thead class="table-light">
-                  <tr>
-                    <th>Role Name</th>
-                    <th>Description</th>
-                    <th>Modules</th>
-                    <th>Permissions</th>
-                    <th width="120">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="role in paginatedRoles" :key="role.id">
-                    <td>
-                      <div class="fw-semibold">{{ role.name }}</div>
-                    </td>
-                    <td>
-                      <div class="text-muted">{{ role.description || 'No description' }}</div>
-                    </td>
-                    <td>
-                      <div class="d-flex flex-wrap gap-1">
-                        <span 
-                          v-for="module in role.modules" 
-                          :key="module"
-                          class="badge bg-primary"
-                        >
-                          {{ formatModuleName(module) }}
-                        </span>
-                        <span v-if="role.modules.length === 0" class="text-muted small">
-                          No modules assigned
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <div class="d-flex flex-wrap gap-1">
-                        <span 
-                          v-for="permission in getUniquePermissions(role.permissions)" 
-                          :key="permission"
-                          class="badge bg-success"
-                        >
-                          {{ formatPermissionName(permission) }}
-                        </span>
-                        <span v-if="getUniquePermissions(role.permissions).length === 0" class="text-muted small">
-                          No permissions assigned
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <div class="btn-group" role="group">
-                        <button
-                          class="btn btn-sm btn-outline-staff-primary"
-                          @click="editRole(role)"
-                          title="Edit Role"
-                        >
-                          <i class="bi bi-pencil"></i>
-                        </button>
-                        <button
-                          class="btn btn-sm btn-outline-danger"
-                          @click="deleteRole(role)"
-                          title="Delete Role"
-                          :disabled="role.isSystem"
-                        >
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr v-if="paginatedRoles.length === 0">
-                    <td colspan="5" class="text-center py-4 text-muted">
-                      <i class="bi bi-person-badge display-6 d-block mb-2"></i>
-                      {{ searchQuery ? 'No roles found matching your search.' : 'No roles available. Create one to get started.' }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Pagination -->
-    <div v-if="totalPages > 1" class="row mt-4">
-      <div class="col-12">
-        <nav aria-label="Roles pagination">
-          <ul class="pagination justify-content-center mb-0">
-            <li class="page-item" :class="{ disabled: currentPage === 1 }">
-              <button class="page-link" @click="currentPage = 1" :disabled="currentPage === 1">
-                First
-              </button>
-            </li>
-            <li class="page-item" :class="{ disabled: currentPage === 1 }">
-              <button class="page-link" @click="currentPage--" :disabled="currentPage === 1">
-                Previous
-              </button>
-            </li>
-            <li 
-              v-for="page in visiblePages" 
-              :key="page" 
-              class="page-item" 
-              :class="{ active: page === currentPage }"
-            >
-              <button class="page-link" @click="currentPage = page">{{ page }}</button>
-            </li>
-            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-              <button class="page-link" @click="currentPage++" :disabled="currentPage === totalPages">
-                Next
-              </button>
-            </li>
-            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-              <button class="page-link" @click="currentPage = totalPages" :disabled="currentPage === totalPages">
-                Last
-              </button>
-            </li>
-          </ul>
-        </nav>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script>
 import { apiService } from '../../../services/api.js'
 import { logger } from '@shared/utils/logger'
@@ -653,6 +488,172 @@ export default {
   }
 }
 </script>
+
+<template>
+  <div>
+    <!-- Search and Add Button -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card p-0 border-0 shadow-sm">
+          <div class="card-body">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-8">
+                <label class="form-label">Search Roles</label>
+                <input
+                  v-model="searchQuery"
+                  type="text"
+                  class="form-control"
+                  placeholder="Search by role name, description, or modules..."
+                >
+              </div>
+              <div class="col-md-4">
+                <button
+                  class="btn btn-staff-primary w-100"
+                  @click="showAddRoleModal"
+                >
+                  <i class="bi bi-plus-circle me-2"></i>Add New Role
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="isLoading" class="text-center py-5">
+      <div class="spinner-border text-staff-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-3 text-muted">Loading roles...</p>
+    </div>
+
+    <!-- Roles Table -->
+    <div v-else class="row">
+      <div class="col-12">
+        <div class="card p-0 border-0 shadow-sm">
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Role Name</th>
+                    <th>Description</th>
+                    <th>Modules</th>
+                    <th>Permissions</th>
+                    <th width="120">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="role in paginatedRoles" :key="role.id">
+                    <td>
+                      <div class="fw-semibold">{{ role.name }}</div>
+                    </td>
+                    <td>
+                      <div class="text-muted">{{ role.description || 'No description' }}</div>
+                    </td>
+                    <td>
+                      <div class="d-flex flex-wrap gap-1">
+                        <span 
+                          v-for="module in role.modules" 
+                          :key="module"
+                          class="badge bg-primary"
+                        >
+                          {{ formatModuleName(module) }}
+                        </span>
+                        <span v-if="role.modules.length === 0" class="text-muted small">
+                          No modules assigned
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="d-flex flex-wrap gap-1">
+                        <span 
+                          v-for="permission in getUniquePermissions(role.permissions)" 
+                          :key="permission"
+                          class="badge bg-success"
+                        >
+                          {{ formatPermissionName(permission) }}
+                        </span>
+                        <span v-if="getUniquePermissions(role.permissions).length === 0" class="text-muted small">
+                          No permissions assigned
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="btn-group" role="group">
+                        <button
+                          class="btn btn-sm btn-outline-staff-primary"
+                          @click="editRole(role)"
+                          title="Edit Role"
+                        >
+                          <i class="bi bi-pencil"></i>
+                        </button>
+                        <button
+                          class="btn btn-sm btn-outline-danger"
+                          @click="deleteRole(role)"
+                          title="Delete Role"
+                          :disabled="role.isSystem"
+                        >
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-if="paginatedRoles.length === 0">
+                    <td colspan="5" class="text-center py-4 text-muted">
+                      <i class="bi bi-person-badge display-6 d-block mb-2"></i>
+                      {{ searchQuery ? 'No roles found matching your search.' : 'No roles available. Create one to get started.' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div v-if="totalPages > 1" class="row mt-4">
+      <div class="col-12">
+        <nav aria-label="Roles pagination">
+          <ul class="pagination justify-content-center mb-0">
+            <li class="page-item" :class="{ disabled: currentPage === 1 }">
+              <button class="page-link" @click="currentPage = 1" :disabled="currentPage === 1">
+                First
+              </button>
+            </li>
+            <li class="page-item" :class="{ disabled: currentPage === 1 }">
+              <button class="page-link" @click="currentPage--" :disabled="currentPage === 1">
+                Previous
+              </button>
+            </li>
+            <li 
+              v-for="page in visiblePages" 
+              :key="page" 
+              class="page-item" 
+              :class="{ active: page === currentPage }"
+            >
+              <button class="page-link" @click="currentPage = page">{{ page }}</button>
+            </li>
+            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+              <button class="page-link" @click="currentPage++" :disabled="currentPage === totalPages">
+                Next
+              </button>
+            </li>
+            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+              <button class="page-link" @click="currentPage = totalPages" :disabled="currentPage === totalPages">
+                Last
+              </button>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+  </div>
+</template>
+
 
 <style scoped>
 .btn-staff-primary {

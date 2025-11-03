@@ -28,6 +28,7 @@ import { User, UserDocument } from "../schemas/user.schema";
 import { EmailService } from "./email.service";
 import { QueueService } from "./queue.service";
 import { GradingService } from "./grading.service";
+import { ContentSanitizationService } from "./content-sanitization.service";
 import * as bcrypt from "bcrypt";
 import * as mammoth from "mammoth";
 import * as XLSX from "xlsx";
@@ -53,7 +54,8 @@ export class ExamService {
         @Inject(forwardRef(() => EmailService)) private emailService: EmailService,
         @Inject(forwardRef(() => QueueService)) private queueService: QueueService,
         @Inject(forwardRef(() => GradingService))
-        private gradingService: GradingService
+        private gradingService: GradingService,
+        private contentSanitizationService: ContentSanitizationService
     ) { }
 
     async getExamQuestionsForManagement(
@@ -105,6 +107,24 @@ export class ExamService {
                 JSON.stringify(questionData, null, 2)
             );
 
+            // Validate and sanitize question content
+            const contentValidation = this.contentSanitizationService.validateQuestionContent(
+                questionData.questionText
+            );
+
+            if (!contentValidation.isValid) {
+                throw new BadRequestException(
+                    `Invalid question content: ${contentValidation.warnings.join(', ')}`
+                );
+            }
+
+            // Log warnings if any
+            if (contentValidation.warnings.length > 0) {
+                this.logger.warn(
+                    `Question content warnings: ${contentValidation.warnings.join(', ')}`
+                );
+            }
+
             // Normalize question type - map 'multiple-choice' to 'mcq'
             let normalizedType = questionData.type;
             if (questionData.type === "multiple-choice") {
@@ -114,12 +134,13 @@ export class ExamService {
             // Transform the data to match the schema
             const questionDoc = {
                 examId: new Types.ObjectId(examId),
-                questionText: questionData.questionText,
+                questionText: contentValidation.sanitizedContent, // Use sanitized content
                 type: normalizedType,
                 mark: questionData.mark || 1,
                 status: "active",
                 metadata: {
                     difficulty: questionData.difficulty || "medium",
+                    contentMetadata: contentValidation.metadata, // Store content metadata
                 },
                 createdBy: new Types.ObjectId(userId),
             };
@@ -179,6 +200,118 @@ export class ExamService {
             return question;
         } catch (error) {
             this.logger.error("Error creating question:", error.message);
+            this.logger.error(
+                "Question data that failed:",
+                JSON.stringify(questionData, null, 2)
+            );
+            throw error;
+        }
+    }
+
+    async updateQuestion(
+        questionId: string,
+        questionData: any,
+        userId: string,
+        userRole?: string
+    ): Promise<QuestionDocument> {
+        try {
+            const existingQuestion = await this.questionModel.findById(questionId);
+            if (!existingQuestion) {
+                throw new NotFoundException("Question not found");
+            }
+
+            // Check permissions - allow update if user is admin, staff, or creator
+            const isCreator =
+                existingQuestion.createdBy &&
+                existingQuestion.createdBy.equals(new Types.ObjectId(userId));
+            const isPrivileged = userRole === "admin" || userRole === "staff";
+
+            if (!isCreator && !isPrivileged) {
+                throw new BadRequestException(
+                    "You do not have permission to update this question"
+                );
+            }
+
+            // Get the exam to check status
+            const exam = await this.examModel.findById(existingQuestion.examId);
+            if (!exam) {
+                throw new NotFoundException("Associated exam not found");
+            }
+
+            // Check if exam is in a state that allows question editing
+            if (!["draft", "scheduled"].includes(exam.status)) {
+                throw new BadRequestException(
+                    `Cannot update questions in exam with status "${exam.status}". Only draft or scheduled exams can be modified.`
+                );
+            }
+
+            // Prepare update data
+            const updateData: any = {
+                questionText: questionData.questionText,
+                type: questionData.type,
+                mark: questionData.mark || 1,
+                difficulty: questionData.difficulty,
+                updatedBy: new Types.ObjectId(userId),
+                updatedAt: new Date(),
+            };
+
+            // Handle different question types
+            const normalizedType = questionData.type?.toLowerCase();
+            if (
+                ["mcq", "multi"].includes(normalizedType) ||
+                questionData.type === "multiple-choice"
+            ) {
+                // Handle options
+                if (Array.isArray(questionData.options)) {
+                    // Options are in array format, convert to object
+                    const options = {};
+                    questionData.options.forEach((text: string, index: number) => {
+                        options[String.fromCharCode(97 + index)] = text; // a, b, c, d, e
+                    });
+                    updateData["options"] = options;
+                } else if (
+                    typeof questionData.options === "object" &&
+                    questionData.options !== null
+                ) {
+                    // Options are already in object format
+                    updateData["options"] = questionData.options;
+                }
+
+                // Handle correct answer
+                if (typeof questionData.answer === "number") {
+                    // Answer is an index, convert to letter
+                    updateData["answer"] = String.fromCharCode(97 + questionData.answer);
+                } else if (Array.isArray(questionData.answer)) {
+                    // Multiple answers (for multi type)
+                    updateData["answer"] = questionData.answer.map((index: number) =>
+                        String.fromCharCode(97 + index)
+                    );
+                } else {
+                    // Answer is already in correct format (letter or array of letters)
+                    updateData["answer"] = questionData.answer;
+                }
+            }
+
+            this.logger.log(
+                `Updating question ${questionId} with data:`,
+                JSON.stringify(updateData, null, 2)
+            );
+
+            const updatedQuestion = await this.questionModel.findByIdAndUpdate(
+                questionId,
+                updateData,
+                { new: true, runValidators: true }
+            );
+
+            if (!updatedQuestion) {
+                throw new NotFoundException("Question not found after update");
+            }
+
+            this.logger.log(`Successfully updated question ${questionId}`);
+
+            return updatedQuestion;
+        } catch (error) {
+            this.logger.error("Error updating question:", error.message);
             this.logger.error(
                 "Question data that failed:",
                 JSON.stringify(questionData, null, 2)
@@ -3340,6 +3473,7 @@ export class ExamService {
     private async autoSubmitExpiredAttempts(): Promise<void> {
         try {
             const now = new Date();
+            this.logger.log(`Checking for expired attempts at ${now.toISOString()}`);
 
             // Find all in-progress attempts where the exam time has ended
             const expiredAttempts = await this.attemptModel.aggregate([
@@ -3355,25 +3489,42 @@ export class ExamService {
                     $unwind: "$exam",
                 },
                 {
+                    $addFields: {
+                        examEndTime: {
+                            $add: [
+                                "$exam.examTimestamp",
+                                { $multiply: ["$exam.duration", 60 * 1000] },
+                            ],
+                        },
+                    },
+                },
+                {
                     $match: {
                         status: "in-progress",
                         $expr: {
-                            $lt: [
-                                {
-                                    $add: [
-                                        "$exam.examTimestamp",
-                                        { $multiply: ["$exam.duration", 60 * 1000] },
-                                    ],
-                                },
-                                now,
-                            ],
+                            $lt: ["$examEndTime", now],
                         },
                     },
                 },
             ]);
 
+            this.logger.log(`Found ${expiredAttempts.length} expired attempts to auto-submit`);
+
             for (const attempt of expiredAttempts) {
                 try {
+                    const examStartTime = new Date(attempt.exam.examTimestamp);
+                    const examEndTime = new Date(attempt.examEndTime);
+                    const userStartTime = new Date(attempt.startedAt);
+
+                    this.logger.log(`Auto-submitting attempt ${attempt._id}:`, {
+                        examScheduledStart: examStartTime.toISOString(),
+                        examScheduledEnd: examEndTime.toISOString(),
+                        userStartedAt: userStartTime.toISOString(),
+                        currentTime: now.toISOString(),
+                        durationMinutes: attempt.exam.duration,
+                        examTitle: attempt.exam.title
+                    });
+
                     // Auto-submit the attempt
                     await this.attemptModel.findByIdAndUpdate(attempt._id, {
                         status: "auto-submitted",
@@ -3381,26 +3532,24 @@ export class ExamService {
                         autoSubmitted: true,
                     });
 
-                    // Create a result record
-                    const result = new this.resultModel({
-                        examId: attempt.examId,
-                        userId: attempt.userId,
-                        attemptId: attempt._id,
-                        totalQuestions: attempt.answers?.length || 0,
-                        questionsAttempted:
-                            attempt.answers?.filter((a) => a.selected)?.length || 0,
-                        correctAnswers: 0, // Will be calculated during grading
-                        totalScore: 0, // Will be calculated during grading
-                        maxScore: 0, // Will be calculated from questions
-                        percentage: 0,
-                        status: "fail", // Will be updated after grading
-                        gradingType: "auto",
-                        questionResults: [],
-                        released: false,
-                        autoSubmitted: true,
-                    });
+                    // Don't create result here - let the grading service handle it
+                    // This ensures consistent result creation logic between manual and auto submissions
 
-                    await result.save();
+                    // Get exam details for grading
+                    const exam = await this.examModel.findById(attempt.examId);
+                    if (!exam) {
+                        this.logger.error(`Exam not found for auto-submitted attempt ${attempt._id}`);
+                        continue;
+                    }
+
+                    // Handle grading based on exam's grading mode
+                    if (exam.gradingMode === "auto") {
+                        // Queue automatic grading immediately
+                        this.logger.log(`Queueing automatic grading for auto-submitted attempt ${attempt._id}`);
+                        await this.queueGradingAsync(attempt._id.toString(), attempt.examId.toString(), attempt.userId.toString());
+                    } else {
+                        this.logger.log(`Auto-submitted attempt ${attempt._id} requires ${exam.gradingMode} grading - awaiting staff action`);
+                    }
 
                     // Send completion email for auto-submitted attempt
                     try {
@@ -3411,8 +3560,10 @@ export class ExamService {
                                     user.email,
                                     user.firstName || "Student",
                                     attempt.exam.title,
-                                    now
-                                    // No score yet as it needs grading
+                                    now,
+                                    undefined, // score - will be available after grading
+                                    undefined, // totalMarks - will be available after grading
+                                    true // isAutoSubmitted
                                 )
                                 .catch((error) => {
                                     this.logger.error(
@@ -3429,7 +3580,7 @@ export class ExamService {
                     }
 
                     this.logger.log(
-                        `Auto-submitted expired attempt ${attempt._id} for exam ${attempt.examId}`
+                        `Successfully auto-submitted expired attempt ${attempt._id} for exam ${attempt.examId}`
                     );
                 } catch (attemptError) {
                     this.logger.error(

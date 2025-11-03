@@ -1,29 +1,31 @@
 <script>
-import { useAuthStore } from '../../../stores/auth.js'
-import { apiService } from '../../../services/api.js'
-import { logger } from '@shared/utils/logger'
-import QuestionFormatGuide from './QuestionFormatGuide.vue'
-import QuestionFormModal from './QuestionFormModal.vue'
-import QuestionViewModal from './QuestionViewModal.vue'
+import { useAuthStore } from "../../../stores/auth.js";
+import { apiService } from "../../../services/api.js";
+import { logger } from "@shared/utils/logger";
+import QuestionFormatGuide from "./QuestionFormatGuide.vue";
+import QuestionFormModal from "./QuestionFormModal.vue";
+import QuestionViewModal from "./QuestionViewModal.vue";
+import RichContentDisplay from "../../../components/RichContentDisplay.vue";
 
 export default {
-  name: 'QuestionBank',
+  name: "QuestionBank",
   components: {
     QuestionFormatGuide,
     QuestionFormModal,
-    QuestionViewModal
+    QuestionViewModal,
+    RichContentDisplay,
   },
   setup() {
-    const authStore = useAuthStore()
-    return { authStore }
+    const authStore = useAuthStore();
+    return { authStore };
   },
   data() {
     return {
       exams: [],
       questions: [],
-      selectedExamId: '',
+      selectedExamId: "",
       isLoading: false,
-      searchQuery: '',
+      searchQuery: "",
       currentPage: 1,
       perPage: 10,
 
@@ -36,274 +38,321 @@ export default {
       selectedQuestion: null,
 
       // Import
-      importFormat: 'excel',
+      importFormat: "excel",
       selectedFile: null,
       isImporting: false,
 
       formatInstructions: {
         excel: {
-          title: 'Excel Format Requirements',
-          description: 'Use columns: Question, Type (mcq/multi/essay), Option_A, Option_B, Option_C, Option_D, Option_E, Answer, Mark, Tags'
+          title: "Excel Format Requirements",
+          description:
+            "Use columns: Question, Type (mcq/multi/essay), Option_A, Option_B, Option_C, Option_D, Option_E, Answer, Mark, Tags",
         },
         csv: {
-          title: 'CSV Format Requirements',
-          description: 'Same as Excel but in CSV format. Use semicolons (;) for multiple answers and tags.'
+          title: "CSV Format Requirements",
+          description:
+            "Same as Excel but in CSV format. Use semicolons (;) for multiple answers and tags.",
         },
         pdf: {
-          title: 'PDF Format Requirements',
-          description: 'Use AI parsing. Format questions clearly with numbers (1., 2., etc.) and answer choices (a), b), c), d).'
+          title: "PDF Format Requirements",
+          description:
+            "Use AI parsing. Format questions clearly with numbers (1., 2., etc.) and answer choices (a), b), c), d).",
         },
         docx: {
-          title: 'Word Document Format Requirements',
-          description: 'Similar to PDF. Use numbered questions with clear answer choices. AI will parse the content.'
-        }
-      }
-    }
+          title: "Word Document Format Requirements",
+          description:
+            "Similar to PDF. Use numbered questions with clear answer choices. AI will parse the content.",
+        },
+      },
+    };
   },
   computed: {
     selectedExam() {
-      return this.exams.find(exam => exam._id === this.selectedExamId) || null
+      return (
+        this.exams.find((exam) => exam._id === this.selectedExamId) || null
+      );
     },
 
     canEditQuestions() {
-      if (!this.selectedExam) return false
-      return this.selectedExam.status === 'draft' || this.selectedExam.status === 'scheduled'
+      if (!this.selectedExam) return false;
+      return (
+        this.selectedExam.status === "draft" ||
+        this.selectedExam.status === "scheduled"
+      );
     },
 
     filteredQuestions() {
-      if (!this.searchQuery) return this.questions
+      if (!this.searchQuery) return this.questions;
 
-      const query = this.searchQuery.toLowerCase()
-      return this.questions.filter(question =>
-        question.questionText.toLowerCase().includes(query) ||
-        question.tags.some(tag => tag.toLowerCase().includes(query))
-      )
+      const query = this.searchQuery.toLowerCase();
+      return this.questions.filter(
+        (question) =>
+          question.questionText.toLowerCase().includes(query) ||
+          question.tags.some((tag) => tag.toLowerCase().includes(query))
+      );
     },
 
     paginatedQuestions() {
-      const start = (this.currentPage - 1) * this.perPage
-      const end = start + this.perPage
-      return this.filteredQuestions.slice(start, end)
+      const start = (this.currentPage - 1) * this.perPage;
+      const end = start + this.perPage;
+      return this.filteredQuestions.slice(start, end);
     },
 
     totalPages() {
-      return Math.ceil(this.filteredQuestions.length / this.perPage)
+      return Math.ceil(this.filteredQuestions.length / this.perPage);
     },
 
     visiblePages() {
-      const total = this.totalPages
-      const current = this.currentPage
-      const delta = 2
-      const range = []
+      const total = this.totalPages;
+      const current = this.currentPage;
+      const delta = 2;
+      const range = [];
 
-      for (let i = Math.max(1, current - delta);
-           i <= Math.min(total, current + delta);
-           i++) {
-        range.push(i)
+      for (
+        let i = Math.max(1, current - delta);
+        i <= Math.min(total, current + delta);
+        i++
+      ) {
+        range.push(i);
       }
 
-      return range
-    }
+      return range;
+    },
   },
   async mounted() {
-    await this.loadExams()
+    await this.loadExams();
   },
 
   methods: {
     async loadExams() {
       try {
-        const response = await apiService.getExams()
+        const response = await apiService.getExams();
         if (response.success) {
-          this.exams = response.exams || []
+          this.exams = response.exams || [];
         }
       } catch (error) {
-        logger.error('Error loading exams:', error)
+        logger.error("Error loading exams:", error);
         this.$swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to load exams. Please try again.',
-          confirmButtonColor: '#dc3545'
-        })
+          icon: "error",
+          title: "Error",
+          text: "Failed to load exams. Please try again.",
+          confirmButtonColor: "#dc3545",
+        });
       }
     },
 
     handleAddQuestion() {
       if (!this.selectedExamId) {
         this.$swal.fire({
-          icon: 'warning',
-          title: 'Select an Exam',
-          text: 'Please select an exam first before adding questions.',
-          confirmButtonColor: '#1a5f5f'
-        })
-        return
+          icon: "warning",
+          title: "Select an Exam",
+          text: "Please select an exam first before adding questions.",
+          confirmButtonColor: "#1a5f5f",
+        });
+        return;
       }
-      
+
       if (!this.canEditQuestions) {
         this.$swal.fire({
-          icon: 'error',
-          title: 'Cannot Add Questions',
+          icon: "error",
+          title: "Cannot Add Questions",
           text: `This exam has status "${this.selectedExam.status}" and cannot be modified. Only exams with status "draft" or "scheduled" can have questions added.`,
-          confirmButtonColor: '#dc3545'
-        })
-        return
+          confirmButtonColor: "#dc3545",
+        });
+        return;
       }
-      
-      this.showCreateQuestionModal = true
+
+      // Clear any previously selected question to ensure fresh form
+      this.selectedQuestion = null;
+      this.showCreateQuestionModal = true;
     },
 
     async loadQuestions() {
       if (!this.selectedExamId) {
-        this.questions = []
-        return
+        this.questions = [];
+        return;
       }
 
       try {
-        this.isLoading = true
-        this.questions = []
-        const response = await apiService.getQuestions(this.selectedExamId)
+        this.isLoading = true;
+        this.questions = [];
+        const response = await apiService.getQuestions(this.selectedExamId);
         if (response.success) {
-          this.questions = response.questions || []
+          this.questions = response.questions || [];
           if (this.questions.length === 0) {
             this.$swal.fire({
-              icon: 'info',
-              title: 'No Questions',
-              text: 'No questions found for this exam. Add questions using the button above.',
-              confirmButtonColor: '#1a5f5f'
-            })
+              icon: "info",
+              title: "No Questions",
+              text: "No questions found for this exam. Add questions using the button above.",
+              confirmButtonColor: "#1a5f5f",
+            });
           }
         } else {
-          throw new Error(response.message || 'Failed to load questions')
+          throw new Error(response.message || "Failed to load questions");
         }
       } catch (error) {
-        logger.error('Error loading questions:', error)
+        logger.error("Error loading questions:", error);
         this.$swal.fire({
-          icon: 'error',
-          title: 'Loading Failed',
-          text: 'Failed to load questions.',
-          confirmButtonColor: '#1a5f5f'
-        })
+          icon: "error",
+          title: "Loading Failed",
+          text: "Failed to load questions.",
+          confirmButtonColor: "#1a5f5f",
+        });
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
     changePage(page) {
       if (page >= 1 && page <= this.totalPages) {
-        this.currentPage = page
+        this.currentPage = page;
       }
     },
 
     // Import methods
     getFileAccept() {
       const accepts = {
-        excel: '.xlsx,.xls',
-        csv: '.csv',
-        pdf: '.pdf',
-        docx: '.docx'
-      }
-      return accepts[this.importFormat] || '*'
+        excel: ".xlsx,.xls",
+        csv: ".csv",
+        pdf: ".pdf",
+        docx: ".docx",
+      };
+      return accepts[this.importFormat] || "*";
     },
 
     handleFileSelect(event) {
-      const file = event.target.files[0]
+      const file = event.target.files[0];
       if (file) {
         // Validate file size (10MB max)
         if (file.size > 10 * 1024 * 1024) {
           this.$swal.fire({
-            icon: 'error',
-            title: 'File Too Large',
-            text: 'Please select a file smaller than 10MB.',
-            confirmButtonColor: '#dc3545'
-          })
-          this.$refs.fileInput.value = ''
-          return
+            icon: "error",
+            title: "File Too Large",
+            text: "Please select a file smaller than 10MB.",
+            confirmButtonColor: "#dc3545",
+          });
+          this.$refs.fileInput.value = "";
+          return;
         }
-        this.selectedFile = file
+        this.selectedFile = file;
       }
     },
 
     async importQuestions() {
-      if (!this.selectedFile || !this.selectedExamId) return
-      
+      if (!this.selectedFile || !this.selectedExamId) return;
+
       if (!this.canEditQuestions) {
         this.$swal.fire({
-          icon: 'error',
-          title: 'Cannot Import Questions',
+          icon: "error",
+          title: "Cannot Import Questions",
           text: `This exam has status "${this.selectedExam.status}" and cannot be modified. Only exams with status "draft" or "scheduled" can have questions imported.`,
-          confirmButtonColor: '#dc3545'
-        })
-        return
+          confirmButtonColor: "#dc3545",
+        });
+        return;
       }
 
       try {
-        this.isImporting = true
-        
+        this.isImporting = true;
+
         // Step 1: Generate preview
         const previewResponse = await apiService.bulkImportPreview(
           this.selectedFile,
           this.importFormat
-        )
+        );
 
         if (previewResponse.success) {
           // Show preview modal with the parsed questions
-          await this.showImportPreview(previewResponse.preview)
+          await this.showImportPreview(previewResponse.preview);
         }
       } catch (error) {
         this.$swal.fire({
-          icon: 'error',
-          title: 'Import Failed',
-          text: error.message || 'Failed to import questions.',
-          confirmButtonColor: '#dc3545'
-        })
+          icon: "error",
+          title: "Import Failed",
+          text: error.message || "Failed to import questions.",
+          confirmButtonColor: "#dc3545",
+        });
       } finally {
-        this.isImporting = false
+        this.isImporting = false;
       }
     },
 
     async showImportPreview(previewData) {
-      const { filename, totalQuestions, validQuestions, invalidQuestions, questions } = previewData
+      const {
+        filename,
+        totalQuestions,
+        validQuestions,
+        invalidQuestions,
+        questions,
+      } = previewData;
 
       // Create preview table HTML
       const createPreviewTable = (questionsToShow, page = 0, perPage = 5) => {
-        const start = page * perPage
-        const end = start + perPage
-        const pageQuestions = questionsToShow.slice(start, end)
-        
-        let tableRows = pageQuestions.map(q => {
-          const validationStatus = q.isValid ? 
-            '<span class="badge bg-success">Valid</span>' : 
-            '<span class="badge bg-danger">Invalid</span>'
-          
-          const optionsHtml = Object.entries(q.options || {})
-            .map(([key, value]) => `<strong>${key.toUpperCase()})</strong> ${value}`)
-            .join('<br>')
-          
-          const errorsHtml = q.validationErrors && q.validationErrors.length > 0 ?
-            `<br><small class="text-danger">${q.validationErrors.join(', ')}</small>` : ''
-          
-          return `
-            <tr class="${!q.isValid ? 'table-warning' : ''}">
+        const start = page * perPage;
+        const end = start + perPage;
+        const pageQuestions = questionsToShow.slice(start, end);
+
+        let tableRows = pageQuestions
+          .map((q) => {
+            const validationStatus = q.isValid
+              ? '<span class="badge bg-success">Valid</span>'
+              : '<span class="badge bg-danger">Invalid</span>';
+
+            const optionsHtml = Object.entries(q.options || {})
+              .map(
+                ([key, value]) =>
+                  `<strong>${key.toUpperCase()})</strong> ${value}`
+              )
+              .join("<br>");
+
+            const errorsHtml =
+              q.validationErrors && q.validationErrors.length > 0
+                ? `<br><small class="text-danger">${q.validationErrors.join(
+                    ", "
+                  )}</small>`
+                : "";
+
+            return `
+            <tr class="${!q.isValid ? "table-warning" : ""}">
               <td>${q.rowNumber}</td>
-              <td>${q.questionText || 'N/A'}</td>
+              <td>${q.questionText || "N/A"}</td>
               <td>${optionsHtml}</td>
-              <td>${q.correctAnswer || 'N/A'}</td>
+              <td>${q.correctAnswer || "N/A"}</td>
               <td>${validationStatus}${errorsHtml}</td>
             </tr>
-          `
-        }).join('')
+          `;
+          })
+          .join("");
 
-        const totalPages = Math.ceil(questionsToShow.length / perPage)
-        const pagination = totalPages > 1 ? `
+        const totalPages = Math.ceil(questionsToShow.length / perPage);
+        const pagination =
+          totalPages > 1
+            ? `
           <div class="d-flex justify-content-between align-items-center mt-3">
             <div>
-              Showing ${start + 1}-${Math.min(end, questionsToShow.length)} of ${questionsToShow.length} questions
+              Showing ${start + 1}-${Math.min(
+                end,
+                questionsToShow.length
+              )} of ${questionsToShow.length} questions
             </div>
             <div>
-              ${page > 0 ? `<button class="btn btn-sm btn-outline-primary me-2" onclick="showPage(${page - 1})">Previous</button>` : ''}
-              ${page + 1 < totalPages ? `<button class="btn btn-sm btn-outline-primary" onclick="showPage(${page + 1})">Next</button>` : ''}
+              ${
+                page > 0
+                  ? `<button class="btn btn-sm btn-outline-primary me-2" onclick="showPage(${
+                      page - 1
+                    })">Previous</button>`
+                  : ""
+              }
+              ${
+                page + 1 < totalPages
+                  ? `<button class="btn btn-sm btn-outline-primary" onclick="showPage(${
+                      page + 1
+                    })">Next</button>`
+                  : ""
+              }
             </div>
           </div>
-        ` : ''
+        `
+            : "";
 
         return `
           <div class="table-responsive">
@@ -323,11 +372,11 @@ export default {
             </table>
             ${pagination}
           </div>
-        `
-      }
+        `;
+      };
 
-      let currentPage = 0
-      const perPage = 5
+      let currentPage = 0;
+      const perPage = 5;
 
       // Show the preview modal
       const result = await this.$swal.fire({
@@ -345,229 +394,239 @@ export default {
             </div>
           </div>
         `,
-        width: '90%',
+        width: "90%",
         showCancelButton: true,
-        confirmButtonText: validQuestions > 0 ? `Import ${validQuestions} Valid Questions` : 'No Valid Questions',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: validQuestions > 0 ? '#1a5f5f' : '#6c757d',
+        confirmButtonText:
+          validQuestions > 0
+            ? `Import ${validQuestions} Valid Questions`
+            : "No Valid Questions",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: validQuestions > 0 ? "#1a5f5f" : "#6c757d",
         allowOutsideClick: false,
         didOpen: () => {
           // Add pagination functionality
           window.showPage = (page) => {
-            currentPage = page
-            document.getElementById('preview-table').innerHTML = createPreviewTable(questions, currentPage, perPage)
-          }
+            currentPage = page;
+            document.getElementById("preview-table").innerHTML =
+              createPreviewTable(questions, currentPage, perPage);
+          };
         },
         preConfirm: () => {
           if (validQuestions === 0) {
-            this.$swal.showValidationMessage('No valid questions to import')
-            return false
+            this.$swal.showValidationMessage("No valid questions to import");
+            return false;
           }
-          return true
-        }
-      })
+          return true;
+        },
+      });
 
       // Clean up global function
       if (window.showPage) {
-        delete window.showPage
+        delete window.showPage;
       }
 
       if (result.isConfirmed && validQuestions > 0) {
-        await this.saveImportedQuestions(questions.filter(q => q.isValid))
+        await this.saveImportedQuestions(questions.filter((q) => q.isValid));
       }
     },
 
     async saveImportedQuestions(validQuestions) {
       try {
-        this.isImporting = true
-        
+        this.isImporting = true;
+
         const saveResponse = await apiService.saveBulkImportQuestions(
           this.selectedExamId,
           validQuestions
-        )
+        );
 
         if (saveResponse.success) {
           await this.$swal.fire({
-            icon: 'success',
-            title: 'Import Successful',
+            icon: "success",
+            title: "Import Successful",
             text: `Successfully imported ${saveResponse.result.successCount} questions.`,
-            confirmButtonColor: '#1a5f5f'
-          })
-          this.closeImportModal()
-          this.loadQuestions()
+            confirmButtonColor: "#1a5f5f",
+          });
+          this.closeImportModal();
+          this.loadQuestions();
         }
       } catch (error) {
         await this.$swal.fire({
-          icon: 'error',
-          title: 'Save Failed',
-          text: error.message || 'Failed to save questions.',
-          confirmButtonColor: '#dc3545'
-        })
+          icon: "error",
+          title: "Save Failed",
+          text: error.message || "Failed to save questions.",
+          confirmButtonColor: "#dc3545",
+        });
       } finally {
-        this.isImporting = false
+        this.isImporting = false;
       }
     },
 
     closeImportModal() {
-      this.showImportModal = false
-      this.selectedFile = null
+      this.showImportModal = false;
+      this.selectedFile = null;
       if (this.$refs.fileInput) {
-        this.$refs.fileInput.value = ''
+        this.$refs.fileInput.value = "";
       }
     },
 
     // Question CRUD methods
     viewQuestion(question) {
-      this.selectedQuestion = question
-      this.showViewQuestionModal = true
+      this.selectedQuestion = question;
+      this.showViewQuestionModal = true;
     },
 
     editQuestion(question) {
       if (!this.canEditQuestions) {
         this.$swal.fire({
-          icon: 'error',
-          title: 'Cannot Edit Question',
+          icon: "error",
+          title: "Cannot Edit Question",
           text: `This exam has status "${this.selectedExam.status}" and cannot be modified. Only exams with status "draft" or "scheduled" can have questions edited.`,
-          confirmButtonColor: '#dc3545'
-        })
-        return
+          confirmButtonColor: "#dc3545",
+        });
+        return;
       }
-      
-      this.selectedQuestion = question
-      this.showEditQuestionModal = true
+
+      this.selectedQuestion = question;
+      this.showEditQuestionModal = true;
     },
 
     async deleteQuestion(question) {
       if (!this.canEditQuestions) {
         this.$swal.fire({
-          icon: 'error',
-          title: 'Cannot Delete Question',
+          icon: "error",
+          title: "Cannot Delete Question",
           text: `This exam has status "${this.selectedExam.status}" and cannot be modified. Only exams with status "draft" or "scheduled" can have questions deleted.`,
-          confirmButtonColor: '#dc3545'
-        })
-        return
+          confirmButtonColor: "#dc3545",
+        });
+        return;
       }
-      
+
       const result = await this.$swal.fire({
-        title: 'Delete Question',
-        text: 'Are you sure you want to delete this question?',
-        icon: 'warning',
+        title: "Delete Question",
+        text: "Are you sure you want to delete this question?",
+        icon: "warning",
         showCancelButton: true,
-        confirmButtonText: 'Yes, Delete',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#dc3545'
-      })
+        confirmButtonText: "Yes, Delete",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#dc3545",
+      });
 
       if (result.isConfirmed) {
         try {
-          const response = await apiService.deleteQuestion(question._id)
+          const response = await apiService.deleteQuestion(question._id);
           if (response.success) {
             // Show success alert first
             await this.$swal.fire({
-              icon: 'success',
-              title: 'Question Deleted',
-              text: 'Question has been successfully deleted.',
-              confirmButtonColor: '#1a5f5f',
+              icon: "success",
+              title: "Question Deleted",
+              text: "Question has been successfully deleted.",
+              confirmButtonColor: "#1a5f5f",
               timer: 2000,
-              showConfirmButton: false
-            })
+              showConfirmButton: false,
+            });
             // Then reload questions (this will show "No Questions" alert if needed)
-            this.loadQuestions()
+            this.loadQuestions();
           }
         } catch (error) {
           this.$swal.fire({
-            icon: 'error',
-            title: 'Delete Failed',
-            text: 'Failed to delete question.',
-            confirmButtonColor: '#dc3545'
-          })
+            icon: "error",
+            title: "Delete Failed",
+            text: "Failed to delete question.",
+            confirmButtonColor: "#dc3545",
+          });
         }
       }
     },
 
     closeQuestionModal() {
-      this.showCreateQuestionModal = false
-      this.showEditQuestionModal = false
-      this.selectedQuestion = null
+      this.showCreateQuestionModal = false;
+      this.showEditQuestionModal = false;
+      this.selectedQuestion = null;
     },
 
     async handleQuestionSave(questionData) {
       if (!this.canEditQuestions) {
         this.$swal.fire({
-          icon: 'error',
-          title: 'Cannot Save Question',
+          icon: "error",
+          title: "Cannot Save Question",
           text: `This exam has status "${this.selectedExam.status}" and cannot be modified. Only exams with status "draft" or "scheduled" can have questions saved.`,
-          confirmButtonColor: '#dc3545'
-        })
-        return
+          confirmButtonColor: "#dc3545",
+        });
+        return;
       }
-      
+
       try {
         if (this.selectedQuestion) {
           // Update existing question
-          const response = await apiService.updateQuestion(this.selectedQuestion._id, questionData)
+          const response = await apiService.updateQuestion(
+            this.selectedQuestion._id,
+            questionData
+          );
           if (response.success) {
             this.$swal.fire({
-              icon: 'success',
-              title: 'Question Updated',
-              text: 'The question has been updated successfully.',
+              icon: "success",
+              title: "Question Updated",
+              text: "The question has been updated successfully.",
               timer: 1500,
-              showConfirmButton: false
-            })
+              showConfirmButton: false,
+            });
           }
         } else {
           // Create new question
-          const response = await apiService.createQuestion(this.selectedExamId, questionData)
+          const response = await apiService.createQuestion(
+            this.selectedExamId,
+            questionData
+          );
           if (response.success) {
             this.$swal.fire({
-              icon: 'success',
-              title: 'Question Added',
-              text: 'The question has been added successfully.',
+              icon: "success",
+              title: "Question Added",
+              text: "The question has been added successfully.",
               timer: 1500,
-              showConfirmButton: false
-            })
+              showConfirmButton: false,
+            });
           }
         }
-        this.closeQuestionModal()
-        await this.loadQuestions()
+        this.closeQuestionModal();
+        await this.loadQuestions();
       } catch (error) {
         this.$swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: error.message || 'Failed to save question. Please try again.',
-          confirmButtonColor: '#dc3545'
-        })
+          icon: "error",
+          title: "Error",
+          text: error.message || "Failed to save question. Please try again.",
+          confirmButtonColor: "#dc3545",
+        });
       }
     },
 
     // Utility methods
     formatFileSize(bytes) {
-      if (bytes === 0) return '0 Bytes'
-      const k = 1024
-      const sizes = ['Bytes', 'KB', 'MB', 'GB']
-      const i = Math.floor(Math.log(bytes) / Math.log(k))
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+      if (bytes === 0) return "0 Bytes";
+      const k = 1024;
+      const sizes = ["Bytes", "KB", "MB", "GB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
     },
 
     formatQuestionType(type) {
       const types = {
-        mcq: 'Multiple Choice',
-        multi: 'Multi-Select',
-        essay: 'Essay'
-      }
-      return types[type] || type
+        mcq: "Multiple Choice",
+        multi: "Multi-Select",
+        essay: "Essay",
+      };
+      return types[type] || type;
     },
 
     getQuestionTypeBadge(type) {
       const badges = {
-        mcq: 'bg-primary',
-        multi: 'bg-info',
-        essay: 'bg-warning text-dark'
-      }
-      return badges[type] || 'bg-secondary'
-    }
-  }
-}
+        mcq: "bg-primary",
+        multi: "bg-info",
+        essay: "bg-warning text-dark",
+      };
+      return badges[type] || "bg-secondary";
+    },
+  },
+};
 </script>
 
 <template>
@@ -585,17 +644,17 @@ export default {
           <i class="bi bi-info-circle me-1"></i>
           Import Format Guide
         </button>
-        <button 
+        <button
           v-if="canEditQuestions"
-          class="btn btn-outline-primary" 
+          class="btn btn-outline-primary"
           @click="showImportModal = true"
         >
           <i class="bi bi-upload me-1"></i>
           Bulk Import
         </button>
-        <button 
+        <button
           v-if="canEditQuestions"
-          class="btn btn-primary" 
+          class="btn btn-primary"
           @click="handleAddQuestion"
         >
           <i class="bi bi-plus-circle me-1"></i>
@@ -636,11 +695,15 @@ export default {
     </div>
 
     <!-- Exam Status Information -->
-    <div v-if="selectedExam && !canEditQuestions" class="alert alert-warning mb-4">
+    <div
+      v-if="selectedExam && !canEditQuestions"
+      class="alert alert-warning mb-4"
+    >
       <i class="bi bi-exclamation-triangle me-2"></i>
-      <strong>Questions cannot be modified:</strong> 
-      This exam has status "{{ selectedExam.status }}" and is no longer editable. 
-      Only exams with status "draft" or "scheduled" can have questions added, edited, or removed.
+      <strong>Questions cannot be modified:</strong>
+      This exam has status "{{ selectedExam.status }}" and is no longer
+      editable. Only exams with status "draft" or "scheduled" can have questions
+      added, edited, or removed.
     </div>
 
     <!-- Questions List -->
@@ -677,21 +740,36 @@ export default {
                   <td>
                     <div class="question-preview">
                       <div class="question-text">
-                        {{ question.questionText.substring(0, 100) }}
-                        {{ question.questionText.length > 100 ? "..." : "" }}
+                        <RichContentDisplay
+                          :content="question.questionText"
+                        />
                       </div>
                       <div
-                        v-if="question.type === 'mcq' && question.options"
+                        v-if="['mcq', 'multi'].includes(question.type) && question.options"
                         class="options-preview mt-2"
                       >
-                        <small class="text-muted">
-                          Options:
-                          {{
-                            Object.values(question.options)
-                              .join(", ")
-                              .substring(0, 60)
-                          }}...
-                        </small>
+                        <small class="text-muted">Options: </small>
+                        <span class="options-inline">
+                          <span
+                            v-for="(optionText, key, index) in question.options"
+                            :key="key"
+                            v-show="index < 2"
+                            class="option-preview me-2"
+                          >
+                            <strong>{{ key.toUpperCase() }}:</strong>
+                            <span class="option-content-inline">
+                              <RichContentDisplay
+                                :content="optionText"
+                                max-width="150px"
+                                max-height="30px"
+                                style="font-size: 0.75rem; display: inline;"
+                              />
+                            </span> ; 
+                          </span>
+                          <span v-if="Object.keys(question.options).length > 2" class="text-muted">
+                            ... ({{ Object.keys(question.options).length }} total)
+                          </span>
+                        </span>
                       </div>
                       <div v-if="question.tags.length > 0" class="tags mt-1">
                         <span
@@ -809,7 +887,7 @@ export default {
         <div class="d-flex gap-2 justify-content-center">
           <button
             class="btn btn-primary"
-            @click="showCreateQuestionModal = true"
+            @click="handleAddQuestion"
           >
             <i class="bi bi-plus-circle me-1"></i>
             Add Question
@@ -859,9 +937,10 @@ export default {
             </div>
             <div v-else-if="!canEditQuestions" class="alert alert-danger">
               <i class="bi bi-exclamation-triangle me-2"></i>
-              <strong>Cannot Import Questions:</strong> 
-              The selected exam has status "{{ selectedExam?.status }}" and cannot be modified. 
-              Only exams with status "draft" or "scheduled" can have questions imported.
+              <strong>Cannot Import Questions:</strong>
+              The selected exam has status "{{ selectedExam?.status }}" and
+              cannot be modified. Only exams with status "draft" or "scheduled"
+              can have questions imported.
             </div>
             <div v-else>
               <div class="mb-3">
@@ -917,7 +996,12 @@ export default {
               type="button"
               class="btn btn-primary"
               @click="importQuestions"
-              :disabled="!selectedFile || !selectedExamId || isImporting || !canEditQuestions"
+              :disabled="
+                !selectedFile ||
+                !selectedExamId ||
+                isImporting ||
+                !canEditQuestions
+              "
             >
               <span
                 v-if="isImporting"
@@ -971,6 +1055,45 @@ export default {
 
 .options-preview {
   font-size: 0.75rem;
+}
+
+.options-inline {
+  display: inline;
+}
+
+.option-preview {
+  display: inline-flex;
+  margin-right: 8px;
+  font-size: 0.75rem;
+}
+
+.option-content-inline {
+  display: inline;
+}
+
+/* Ensure option images are very small in preview */
+.option-content-inline :deep(img) {
+  max-width: 20px !important;
+  max-height: 15px !important;
+  object-fit: contain;
+  margin: 0 1px;
+  vertical-align: middle;
+}
+
+/* Truncate long text in options */
+.option-content-inline :deep(p) {
+  margin: 0;
+  display: inline;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+/* Handle formulas in compact view */
+.option-content-inline :deep(.katex) {
+  font-size: 0.7rem !important;
+  display: inline !important;
 }
 
 .tags .badge {

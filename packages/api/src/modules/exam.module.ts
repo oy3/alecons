@@ -15,6 +15,7 @@ import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { EmailService } from '../services/email.service';
 import { SchedulerService } from '../services/scheduler.service';
+import { ContentSanitizationService } from '../services/content-sanitization.service';
 
 @Module({
     imports: [
@@ -35,7 +36,7 @@ import { SchedulerService } from '../services/scheduler.service';
         ),
     ],
     controllers: [ExamController, QuestionController],
-    providers: [ExamService, GradingService, QueueService, EmailService, SchedulerService],
-    exports: [ExamService, GradingService, QueueService, EmailService, SchedulerService],
+    providers: [ExamService, GradingService, QueueService, EmailService, SchedulerService, ContentSanitizationService],
+    exports: [ExamService, GradingService, QueueService, EmailService, SchedulerService, ContentSanitizationService],
 })
 export class ExamModule { }

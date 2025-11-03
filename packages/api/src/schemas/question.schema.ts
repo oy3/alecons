@@ -11,7 +11,7 @@ export class Question {
     @Prop({ type: Types.ObjectId, ref: 'Exam', required: true })
     examId: Types.ObjectId;
 
-    @Prop({ required: true, trim: true, maxlength: 5000 })
+    @Prop({ required: true, trim: true, maxlength: 100000 })
     questionText: string;
 
     @Prop({ enum: ['mcq', 'multi', 'essay'], required: true })

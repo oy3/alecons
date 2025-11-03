@@ -7,6 +7,11 @@ async function bootstrap() {
     const logger = new Logger('Bootstrap');
     const app = await NestFactory.create(AppModule);
 
+    // Configure body parser with larger limits for questions with images
+    const express = require('express');
+    app.use(express.json({ limit: '5mb' }));
+    app.use(express.urlencoded({ limit: '5mb', extended: true }));
+
     // Enable CORS
     const allowedOrigins = [
         process.env.FRONTEND_URL,
@@ -17,6 +22,9 @@ async function bootstrap() {
         process.env.WEBSITE_URL,
         // Development origins
         'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
+        'http://localhost:3004',
         'http://localhost:5173',
         'http://localhost:5174',
     ].filter(Boolean); // Remove undefined values
@@ -24,7 +32,15 @@ async function bootstrap() {
     logger.log(`🌐 CORS enabled for origins: ${allowedOrigins.join(', ')}`);
 
     app.enableCors({
-        origin: allowedOrigins,
+        origin: (origin, callback) => {
+            logger.log(`🔍 CORS request from origin: ${origin}`);
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                logger.warn(`❌ CORS blocked origin: ${origin}`);
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],

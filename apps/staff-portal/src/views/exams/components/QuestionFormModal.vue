@@ -1,6 +1,11 @@
 <script>
+import RichTextEditor from '../../../components/RichTextEditor.vue'
+
 export default {
   name: 'QuestionFormModal',
+  components: {
+    RichTextEditor
+  },
   props: {
     show: {
       type: Boolean,
@@ -16,6 +21,7 @@ export default {
     return {
       isLoading: false,
       errors: {},
+      createModeId: Math.random().toString(36).substr(2, 9), // Generate once for create mode
       form: {
         questionText: '',
         type: '',
@@ -29,6 +35,11 @@ export default {
   computed: {
     isValid() {
       return !Object.keys(this.errors).length
+    },
+    editorKey() {
+      // Generate a unique key that changes when switching between create/edit modes
+      // This forces the RichTextEditor to completely re-render and reset its state
+      return this.question ? `edit-${this.question._id}` : `create-${this.createModeId}`
     }
   },
   watch: {
@@ -62,6 +73,7 @@ export default {
             difficulty: newQuestion.metadata?.difficulty?.toLowerCase() || ''
           }
         } else {
+          // When question becomes null (e.g., modal closing or creating new), reset form
           this.resetForm()
         }
       },
@@ -69,6 +81,13 @@ export default {
     },
     show(newValue) {
       if (!newValue) {
+        // Only reset form when modal is closing and we're not editing
+        if (!this.question) {
+          this.resetForm()
+        }
+        this.errors = {}
+      } else if (newValue && !this.question) {
+        // When opening modal for creating new question, ensure form is clean
         this.resetForm()
         this.errors = {}
       }
@@ -76,6 +95,7 @@ export default {
   },
   methods: {
     resetForm() {
+      this.createModeId = Math.random().toString(36).substr(2, 9) // Generate new ID for fresh editor
       this.form = {
         questionText: '',
         type: '',
@@ -126,6 +146,11 @@ export default {
       // Required fields
       if (!this.form.questionText?.trim()) {
         errors.questionText = 'Question text is required'
+      } else {
+        // Check if rich content exceeds length limit
+        if (this.form.questionText.length > 100000) {
+          errors.questionText = 'Question content exceeds maximum length of 100,000 characters'
+        }
       }
       
       if (!this.form.type) {
@@ -167,6 +192,15 @@ export default {
       this.errors = errors
       return Object.keys(errors).length === 0
     },
+    validateQuestionText() {
+      // Real-time validation for question text
+      if (this.errors.questionText && this.form.questionText?.trim()) {
+        const contentLength = this.form.questionText.length
+        if (contentLength <= 100000) {
+          delete this.errors.questionText
+        }
+      }
+    },
     async handleSubmit(e) {
       if (!this.validate()) {
         e.preventDefault()
@@ -176,6 +210,8 @@ export default {
       try {
         this.isLoading = true
         await this.$emit('save', { ...this.form })
+        // Reset form after successful save
+        this.resetForm()
         this.close()
       } catch (err) {
         console.error('Error saving question:', err)
@@ -212,16 +248,20 @@ export default {
           <div class="modal-body">
             <div class="mb-3">
               <label for="questionText" class="form-label">Question Text</label>
-              <textarea 
-                id="questionText"
-                v-model="form.questionText" 
-                class="form-control" 
-                :class="{ 'is-invalid': errors.questionText }"
-                rows="3" 
-                required
-              ></textarea>
-              <div class="invalid-feedback">
-                {{ errors.questionText || 'Question text is required' }}
+              <RichTextEditor
+                :key="editorKey"
+                v-model="form.questionText"
+                placeholder="Enter your question text. You can include formulas, images, and formatting."
+                :max-length="100000"
+                :has-error="!!errors.questionText"
+                :error-message="errors.questionText"
+                @change="validateQuestionText"
+              />
+              <div class="form-text">
+                <small class="text-muted">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Use the toolbar to add formulas (∑), images, and formatting to your question.
+                </small>
               </div>
             </div>
             
@@ -247,42 +287,53 @@ export default {
             
             <div v-if="['mcq', 'multi'].includes(form.type)" class="mb-3">
               <label class="form-label d-block">Options</label>
-              <div v-for="(option, index) in form.options" :key="index" class="input-group mb-2">
-                <div class="input-group-text">
-                  <input 
-                    v-if="form.type === 'mcq'"
-                    type="radio" 
-                    :name="'answer'" 
-                    :value="index"
-                    v-model="form.answer"
-                    required
-                  >
-                  <input 
-                    v-else
-                    type="checkbox" 
-                    :value="index"
-                    v-model="form.answer"
-                    required
-                  >
-                </div>
-                <input 
-                  v-model="form.options[index]" 
-                  type="text" 
-                  class="form-control"
-                  :class="{ 'is-invalid': errors.options?.[index] }"
-                  :placeholder="`Option ${String.fromCharCode(65 + index)}`"
-                  required
-                >
-                <button 
-                  type="button"
-                  class="btn btn-outline-danger"
-                  @click="removeOption(index)"
-                  :disabled="form.options.length <= 2"
-                >
-                  <i class="bi bi-trash"></i>
-                </button>
-                <div class="invalid-feedback">
-                  {{ errors.options?.[index] || 'Option text is required' }}
+              <div v-for="(option, index) in form.options" :key="index" class="mb-3">
+                <div class="d-flex align-items-start gap-2">
+                  <div class="flex-shrink-0 mt-2">
+                    <input 
+                      v-if="form.type === 'mcq'"
+                      type="radio" 
+                      :name="'answer'" 
+                      :value="index"
+                      v-model="form.answer"
+                      :id="`answer-${index}`"
+                      required
+                    >
+                    <input 
+                      v-else
+                      type="checkbox" 
+                      :value="index"
+                      v-model="form.answer"
+                      :id="`answer-${index}`"
+                      required
+                    >
+                    <label :for="`answer-${index}`" class="form-check-label ms-1">
+                      {{ String.fromCharCode(65 + index) }}
+                    </label>
+                  </div>
+                  <div class="flex-grow-1">
+                    <RichTextEditor
+                      :key="`${editorKey}-option-${index}`"
+                      v-model="form.options[index]"
+                      :placeholder="`Option ${String.fromCharCode(65 + index)}`"
+                      compact
+                      :class="{ 'is-invalid': errors.options?.[index] }"
+                    />
+                    <div v-if="errors.options?.[index]" class="text-danger small mt-1">
+                      {{ errors.options?.[index] || 'Option text is required' }}
+                    </div>
+                  </div>
+                  <div class="flex-shrink-0">
+                    <button 
+                      type="button"
+                      class="btn btn-outline-danger btn-sm"
+                      @click="removeOption(index)"
+                      :disabled="form.options.length <= 2"
+                      title="Remove option"
+                    >
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
               

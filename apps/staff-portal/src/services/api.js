@@ -770,6 +770,86 @@ class StaffApiService {
             }
         })
     }
+
+    // User Management API methods
+    async getUsers(params = {}) {
+        const queryParams = new URLSearchParams()
+
+        if (params.page) queryParams.append('page', params.page)
+        if (params.limit) queryParams.append('limit', params.limit)
+        if (params.role) queryParams.append('role', params.role)
+        if (params.status) queryParams.append('status', params.status)
+        if (params.search) queryParams.append('search', params.search)
+
+        return this.makeRequest(`/staff/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`)
+    }
+
+    async getUser(id) {
+        return this.makeRequest(`/staff/users/${id}`)
+    }
+
+    async getRoles() {
+        return this.makeRequest('/staff/users/roles')
+    }
+
+    // Role Management Methods
+    async createRole(roleData) {
+        return this.post('/staff/roles', roleData)
+    }
+
+    async updateRole(id, roleData) {
+        return this.put(`/staff/roles/${id}`, roleData)
+    }
+
+    async deleteRole(id) {
+        return this.delete(`/staff/roles/${id}`)
+    }
+
+    async createUser(userData) {
+        return this.makeRequest('/staff/users', {
+            method: 'POST',
+            body: JSON.stringify(userData),
+        })
+    }
+
+    async createAdminUser(userData) {
+        // Use unified endpoint - admin is just staff with admin role
+        const unifiedData = {
+            ...userData,
+            type: 'admin'
+        }
+        return this.post('/staff/users', unifiedData)
+    }
+
+    async createStaffUser(staffData) {
+        // Use unified endpoint - handles both admin and staff
+        return this.post('/staff/users', staffData)
+    }
+
+    // Unified method for creating any staff member (admin or staff)
+    async createUnifiedUser(userData) {
+        return this.post('/staff/users', userData)
+    }
+
+    async updateUser(id, userData) {
+        return this.put(`/staff/users/${id}`, userData)
+    }
+
+    async updateStaff(id, staffData) {
+        return this.put(`/staff/users/${id}/staff`, staffData)
+    }
+
+    async updateUserStatus(id, isActive) {
+        return this.put(`/staff/users/${id}/status`, { isActive })
+    }
+
+    async resetUserPassword(id) {
+        return this.post(`/staff/users/${id}/reset-password`)
+    }
+
+    async deleteUser(id) {
+        return this.delete(`/staff/users/${id}`)
+    }
 }
 
 export const apiService = new StaffApiService()

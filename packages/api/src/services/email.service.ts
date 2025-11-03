@@ -1233,4 +1233,230 @@ export class EmailService {
             throw error;
         }
     }
+
+    async sendAdminLoginCredentials(email: string, firstName: string, password: string): Promise<void> {
+        try {
+            const mailOptions = {
+                from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+                to: email,
+                subject: 'Admin Account Created - ALECONS Staff Portal',
+                html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Admin Account Created</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
+                            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
+                            .header { background-color: #2d7d7d; color: white; text-align: center; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }
+                            .credentials { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }
+                            .warning { background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                            .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1>ALECONS Staff Portal</h1>
+                                <h2>Admin Account Created</h2>
+                            </div>
+                            
+                            <h2>Hello ${firstName},</h2>
+                            
+                            <p>Your administrator account has been created for the ALECONS Staff Portal. You can now access all administrative functions.</p>
+                            
+                            <div class="credentials">
+                                <h3>Your Login Credentials:</h3>
+                                <p><strong>Email:</strong> ${email}</p>
+                                <p><strong>Password:</strong> ${password}</p>
+                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL}/staff</p>
+                            </div>
+                            
+                            <div class="warning">
+                                <strong>Important Security Notice:</strong>
+                                <ul>
+                                    <li>Please change your password immediately after your first login</li>
+                                    <li>Do not share your credentials with anyone</li>
+                                    <li>Log out when not using the system</li>
+                                </ul>
+                            </div>
+                            
+                            <p>As an administrator, you have full access to:</p>
+                            <ul>
+                                <li>User Management</li>
+                                <li>Application Processing</li>
+                                <li>Exam Management</li>
+                                <li>System Configuration</li>
+                                <li>Reports and Analytics</li>
+                            </ul>
+                            
+                            <p>If you have any questions or need assistance, please contact the IT department.</p>
+                            
+                            <div class="footer">
+                                <p>This email contains sensitive information. Please handle it securely.</p>
+                                <p>© ${new Date().getFullYear()} Alebiosu College of Nursing Sciences. All rights reserved.</p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                `
+            };
+
+            await this.transporter.sendMail(mailOptions);
+            this.logger.log(`Admin login credentials sent to ${email}`);
+
+        } catch (error) {
+            this.logger.error(`Failed to send admin login credentials to ${email}:`, error.message);
+            throw error;
+        }
+    }
+
+    async sendStaffLoginCredentials(email: string, firstName: string, password: string, staffId: string): Promise<void> {
+        try {
+            const mailOptions = {
+                from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+                to: email,
+                subject: 'Staff Account Created - ALECONS Staff Portal',
+                html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Staff Account Created</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
+                            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
+                            .header { background-color: #2d7d7d; color: white; text-align: center; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }
+                            .credentials { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }
+                            .warning { background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                            .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1>ALECONS Staff Portal</h1>
+                                <h2>Welcome to the Team!</h2>
+                            </div>
+                            
+                            <h2>Hello ${firstName},</h2>
+                            
+                            <p>Welcome to Alebiosu College of Nursing Sciences! Your staff account has been created and you can now access the Staff Portal.</p>
+                            
+                            <div class="credentials">
+                                <h3>Your Login Credentials:</h3>
+                                <p><strong>Staff ID:</strong> ${staffId}</p>
+                                <p><strong>Email:</strong> ${email}</p>
+                                <p><strong>Password:</strong> ${password}</p>
+                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL || process.env.FRONTEND_URL}/staff</p>
+                            </div>
+                            
+                            <div class="warning">
+                                <strong>Important Security Notice:</strong>
+                                <ul>
+                                    <li>Please change your password immediately after your first login</li>
+                                    <li>Keep your Staff ID and credentials secure</li>
+                                    <li>Do not share your login details with anyone</li>
+                                    <li>Log out when finished using the system</li>
+                                </ul>
+                            </div>
+                            
+                            <p>Through the Staff Portal, you will be able to access features based on your assigned role and permissions.</p>
+                            
+                            <p>If you have any questions or encounter any issues accessing the portal, please contact the IT department or your supervisor.</p>
+                            
+                            <div class="footer">
+                                <p>This email contains sensitive information. Please handle it securely.</p>
+                                <p>© ${new Date().getFullYear()} Alebiosu College of Nursing Sciences. All rights reserved.</p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                `
+            };
+
+            await this.transporter.sendMail(mailOptions);
+            this.logger.log(`Staff login credentials sent to ${email} for Staff ID: ${staffId}`);
+
+        } catch (error) {
+            this.logger.error(`Failed to send staff login credentials to ${email}:`, error.message);
+            throw error;
+        }
+    }
+
+    async sendPasswordReset(email: string, firstName: string, newPassword: string): Promise<void> {
+        try {
+            const mailOptions = {
+                from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+                to: email,
+                subject: 'Password Reset - ALECONS Portal',
+                html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Password Reset</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
+                            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
+                            .header { background-color: #dc3545; color: white; text-align: center; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }
+                            .credentials { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }
+                            .warning { background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                            .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1>Password Reset</h1>
+                                <h2>ALECONS Portal</h2>
+                            </div>
+                            
+                            <h2>Hello ${firstName},</h2>
+                            
+                            <p>Your password has been reset by an administrator. Please use the new password below to log into your account.</p>
+                            
+                            <div class="credentials">
+                                <h3>Your New Password:</h3>
+                                <p><strong>Email:</strong> ${email}</p>
+                                <p><strong>New Password:</strong> ${newPassword}</p>
+                            </div>
+                            
+                            <div class="warning">
+                                <strong>Security Requirements:</strong>
+                                <ul>
+                                    <li><strong>Change this password immediately</strong> after logging in</li>
+                                    <li>Choose a strong, unique password</li>
+                                    <li>Do not share this password with anyone</li>
+                                    <li>This email will not be sent again for security reasons</li>
+                                </ul>
+                            </div>
+                            
+                            <p>If you did not request this password reset or have any concerns about your account security, please contact the IT department immediately.</p>
+                            
+                            <p><strong>Portal Access:</strong><br>
+                            ${process.env.STAFF_PORTAL_URL || process.env.FRONTEND_URL}</p>
+                            
+                            <div class="footer">
+                                <p><strong>Important:</strong> Delete this email after changing your password.</p>
+                                <p>© ${new Date().getFullYear()} Alebiosu College of Nursing Sciences. All rights reserved.</p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                `
+            };
+
+            await this.transporter.sendMail(mailOptions);
+            this.logger.log(`Password reset email sent to ${email}`);
+
+        } catch (error) {
+            this.logger.error(`Failed to send password reset email to ${email}:`, error.message);
+            throw error;
+        }
+    }
 }

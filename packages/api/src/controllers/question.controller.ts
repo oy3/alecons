@@ -1,4 +1,4 @@
-import { Controller, Post, Delete, UseGuards, Request, Param, Body, UseInterceptors, UploadedFile, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Delete, Put, UseGuards, Request, Param, Body, UseInterceptors, UploadedFile, HttpException, HttpStatus } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -38,6 +38,38 @@ export class QuestionController {
             this.logger.error(`Error deleting question ${questionId}:`, error.message);
             throw new HttpException(
                 error.message || 'Failed to delete question',
+                error.status || HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Put(':questionId')
+    @Roles('staff', 'admin')
+    @ApiOperation({ summary: 'Update a question' })
+    @ApiResponse({ status: 200, description: 'Question updated successfully' })
+    async updateQuestion(
+        @Param('questionId') questionId: string,
+        @Body() questionData: any,
+        @Request() req
+    ): Promise<any> {
+        try {
+            const { userId, role } = req.user;
+            const updatedQuestion = await this.examService.updateQuestion(
+                questionId,
+                questionData,
+                userId,
+                role
+            );
+
+            return {
+                success: true,
+                message: 'Question updated successfully',
+                question: updatedQuestion
+            };
+        } catch (error) {
+            this.logger.error(`Error updating question ${questionId}:`, error.message);
+            throw new HttpException(
+                error.message || 'Failed to update question',
                 error.status || HttpStatus.INTERNAL_SERVER_ERROR
             );
         }

@@ -5,7 +5,6 @@ import AcademicSessions from './components/AcademicSessions.vue'
 import Departments from './components/Departments.vue'
 import Programs from './components/Programs.vue'
 import Payments from './components/Payments.vue'
-import Roles from './components/Roles.vue'
 
 export default {
   name: 'AcademicsManagement',
@@ -13,8 +12,7 @@ export default {
     AcademicSessions,
     Departments,
     Programs,
-    Payments,
-    Roles
+    Payments
   },
   setup() {
     const authStore = useAuthStore()
@@ -135,16 +133,6 @@ export default {
               <i class="bi bi-credit-card me-2"></i>Payments
             </button>
           </li>
-          <li class="nav-item" role="presentation">
-            <button
-              class="nav-link"
-              :class="{ active: activeTab === 'roles' }"
-              type="button"
-              @click="activeTab = 'roles'"
-            >
-              <i class="bi bi-shield-check me-2"></i>Roles
-            </button>
-          </li>
         </ul>
       </div>
     </div>
@@ -185,15 +173,6 @@ export default {
         :class="{ 'show active': activeTab === 'payments' }"
       >
         <Payments @refresh="refreshCurrentTab" />
-      </div>
-
-      <!-- Roles Tab -->
-      <div
-        v-show="activeTab === 'roles'"
-        class="tab-pane fade"
-        :class="{ 'show active': activeTab === 'roles' }"
-      >
-        <Roles @refresh="refreshCurrentTab" />
       </div>
     </div>
   </div>

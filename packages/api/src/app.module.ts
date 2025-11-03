@@ -13,6 +13,7 @@ import { UploadModule } from './modules/upload.module';
 import { AcademicSessionsModule } from './modules/academic-sessions.module';
 import { DepartmentsModule } from './modules/departments.module';
 import { ExamModule } from './modules/exam.module';
+import { UserManagementModule } from './modules/user-management.module';
 import { StaffApplicationsController } from './controllers/staff-applications.controller';
 import { ExamResultsController } from './controllers/exam-results.controller';
 import { Application, ApplicationSchema } from './schemas/application.schema';
@@ -21,12 +22,13 @@ import { User, UserSchema } from './schemas/user.schema';
 import { Student, StudentSchema } from './schemas/student.schema';
 import { EmailService } from './services/email.service';
 import { MatriculationService } from './services/matriculation.service';
+import { ContentSanitizationService } from './services/content-sanitization.service';
 
 @Module({
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
-            envFilePath: '.env',
+            envFilePath: process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development',
         }),
         MongooseModule.forRoot(process.env.DATABASE_URL),
         MongooseModule.forFeature([
@@ -56,8 +58,9 @@ import { MatriculationService } from './services/matriculation.service';
         AcademicSessionsModule,
         DepartmentsModule,
         ExamModule,
+        UserManagementModule,
     ],
     controllers: [AppController, StaffApplicationsController, ExamResultsController],
-    providers: [AppService, EmailService, MatriculationService],
+    providers: [AppService, EmailService, MatriculationService, ContentSanitizationService],
 })
 export class AppModule { }

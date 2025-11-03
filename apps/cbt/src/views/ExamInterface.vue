@@ -5,6 +5,7 @@ import { examStore } from "../stores/exam.js";
 import { apiService } from "../services/api.js";
 import SubmitConfirmationModal from "../components/SubmitConfirmationModal.vue";
 import ExamCompletionModal from "../components/ExamCompletionModal.vue";
+import RichContentDisplay from "../components/RichContentDisplay.vue";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
 
@@ -13,6 +14,7 @@ export default {
   components: {
     SubmitConfirmationModal,
     ExamCompletionModal,
+    RichContentDisplay,
   },
   setup() {
     const route = useRoute();
@@ -29,8 +31,8 @@ export default {
     const autoSaveStatus = ref("saved");
     const isSubmitting = ref(false);
     const completionData = ref({
-      gradingMessage: '',
-      isAutoSubmit: false
+      gradingMessage: "",
+      isAutoSubmit: false,
     });
 
     // Auto-save timer
@@ -157,43 +159,49 @@ export default {
       try {
         const attemptId = examStore.currentAttemptId;
         const examId = examStore.currentExamId;
-        
+
         // Validate required parameters
         if (!attemptId || attemptId === "undefined" || attemptId === "null") {
           logger.warn("Cannot record security violation: invalid attempt ID", {
             attemptId,
             examId,
-            violationType: type
+            violationType: type,
           });
           return;
         }
-        
+
         if (!examId) {
           logger.warn("Cannot record security violation: invalid exam ID", {
             attemptId,
             examId,
-            violationType: type
+            violationType: type,
           });
           return;
         }
-        
+
         // Check if exam is loaded to avoid early violations
         if (!exam.value) {
-          logger.debug("Delaying security violation recording until exam loads", {
-            type,
-            details
-          });
+          logger.debug(
+            "Delaying security violation recording until exam loads",
+            {
+              type,
+              details,
+            }
+          );
           // Could implement a queue here if needed, but for now just skip early violations
           return;
         }
 
-        await apiService.reportSecurityViolation(
-          examId,
+        await apiService.reportSecurityViolation(examId, attemptId, {
+          type,
+          details,
+          timestamp: new Date(),
+        });
+
+        logger.info(`Security violation recorded: ${type}`, {
           attemptId,
-          { type, details, timestamp: new Date() }
-        );
-        
-        logger.info(`Security violation recorded: ${type}`, { attemptId, details });
+          details,
+        });
       } catch (error) {
         logger.error("Failed to record security violation:", error);
       }
@@ -224,7 +232,9 @@ export default {
 
         // Validate that we have the required session data
         if (!examId) {
-          logger.error("No exam ID found in session - redirecting to dashboard");
+          logger.error(
+            "No exam ID found in session - redirecting to dashboard"
+          );
           await Swal.fire({
             icon: "warning",
             title: "Session Invalid",
@@ -238,10 +248,12 @@ export default {
         }
 
         if (!attemptId) {
-          logger.error("No attempt ID found in session - redirecting to dashboard");
+          logger.error(
+            "No attempt ID found in session - redirecting to dashboard"
+          );
           await Swal.fire({
             icon: "warning",
-            title: "Session Invalid", 
+            title: "Session Invalid",
             text: "No active exam attempt found. Please start an exam from the dashboard.",
             confirmButtonColor: "#1a5f5f",
             allowOutsideClick: false,
@@ -344,8 +356,13 @@ export default {
           const attemptData = attemptResponse.data;
 
           // Check if attempt is already submitted - redirect to dashboard
-          if (attemptData.status === 'submitted' || attemptData.status === 'auto-submitted') {
-            logger.warn(`Attempt ${attemptId} is already ${attemptData.status} - redirecting to dashboard`);
+          if (
+            attemptData.status === "submitted" ||
+            attemptData.status === "auto-submitted"
+          ) {
+            logger.warn(
+              `Attempt ${attemptId} is already ${attemptData.status} - redirecting to dashboard`
+            );
             await Swal.fire({
               icon: "info",
               title: "Exam Already Submitted",
@@ -512,11 +529,11 @@ export default {
 
     const handleCompletionContinue = async () => {
       logger.info("User clicked continue from completion modal");
-      
+
       try {
         // Exit fullscreen mode first
         await exitFullscreen();
-        
+
         // Clear all exam store data immediately
         examStore.currentExam = null;
         examStore.currentAttempt = null;
@@ -526,15 +543,15 @@ export default {
         examStore.timeRemaining = 0;
         examStore.isSubmitted = true;
         examStore.isFullscreen = false;
-        examStore.autoSaveStatus = 'saved';
+        examStore.autoSaveStatus = "saved";
         examStore.tabSwitchCount = 0;
         examStore.blurCount = 0;
         examStore.timeUpTriggered = null;
         examStore.securityViolations = [];
-        
+
         // Clear session data for security
         examStore.clearSession();
-        
+
         // Stop all timers
         if (autoSaveTimer) {
           clearTimeout(autoSaveTimer);
@@ -552,20 +569,20 @@ export default {
           clearTimeout(securityWarningTimer);
           securityWarningTimer = null;
         }
-        
+
         // Hide the completion modal
         showCompletionModal.value = false;
-        
+
         // Longer delay to ensure all cleanup is complete and component unmounting
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
         // Navigate to dashboard with clean history
         logger.info("Navigating to dashboard from completion modal");
-        router.replace('/dashboard');
+        router.replace("/dashboard");
       } catch (error) {
         logger.error("Error during completion continue:", error);
         // Force navigation even if there's an error
-        router.replace('/dashboard');
+        router.replace("/dashboard");
       }
     };
 
@@ -612,29 +629,32 @@ export default {
         Swal.close();
 
         if (response && response.success) {
-          logger.info("Submission successful, cleaning up and showing completion modal");
-          
+          logger.info(
+            "Submission successful, cleaning up and showing completion modal"
+          );
+
           // Stop timer and cleanup
           examStore.stopTimer();
           if (timeCheckTimer) {
             clearInterval(timeCheckTimer);
             timeCheckTimer = null;
           }
-          
+
           // IMPORTANT: Remove beforeunload listener to prevent navigation warnings
           removeBeforeUnloadListener();
-          
+
           // Clear exam store to prevent any state issues
           examStore.currentExam = null;
           examStore.currentAttempt = null;
           examStore.questions = [];
           examStore.answers = {};
           examStore.isSubmitted = true;
-          
+
           // Set completion data for the modal
           completionData.value = {
-            gradingMessage: response.data?.gradingMessage || "Your exam is being graded.",
-            isAutoSubmit: false
+            gradingMessage:
+              response.data?.gradingMessage || "Your exam is being graded.",
+            isAutoSubmit: false,
           };
 
           // Show completion modal instead of SweetAlert
@@ -646,16 +666,19 @@ export default {
       } catch (error) {
         logger.error("Error submitting exam:", error);
         Swal.close(); // Make sure loading is closed
-        
+
         // Show detailed error information
-        const errorMessage = error.response?.data?.message || error.message || "Failed to submit exam. Please try again.";
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to submit exam. Please try again.";
         logger.error("Detailed error info:", {
           message: errorMessage,
           response: error.response?.data,
           status: error.response?.status,
-          stack: error.stack
+          stack: error.stack,
         });
-        
+
         Swal.fire({
           icon: "error",
           title: "Submission Failed",
@@ -713,7 +736,7 @@ export default {
         if (response.success) {
           // IMPORTANT: Remove beforeunload listener to prevent navigation warnings
           removeBeforeUnloadListener();
-          
+
           // Clear exam store to prevent any state issues
           examStore.currentExam = null;
           examStore.currentAttempt = null;
@@ -723,8 +746,9 @@ export default {
 
           // Set completion data for auto-submit modal
           completionData.value = {
-            gradingMessage: "Your answers have been saved and your exam has been automatically submitted.",
-            isAutoSubmit: true
+            gradingMessage:
+              "Your answers have been saved and your exam has been automatically submitted.",
+            isAutoSubmit: true,
           };
 
           // Show completion modal
@@ -741,8 +765,9 @@ export default {
         // Even if auto-submit fails, we should still show completion modal
         // since the time is up. The backend scheduler will catch expired attempts.
         completionData.value = {
-          gradingMessage: "Time expired. Your answers have been saved and will be automatically processed.",
-          isAutoSubmit: true
+          gradingMessage:
+            "Time expired. Your answers have been saved and will be automatically processed.",
+          isAutoSubmit: true,
         };
 
         showCompletionModal.value = true;
@@ -790,7 +815,9 @@ export default {
     onMounted(async () => {
       // First check if exam is already submitted to prevent unauthorized access
       if (examStore.isSubmitted) {
-        logger.warn("Attempted to access exam interface after submission - redirecting");
+        logger.warn(
+          "Attempted to access exam interface after submission - redirecting"
+        );
         await Swal.fire({
           icon: "info",
           title: "Exam Already Submitted",
@@ -814,7 +841,7 @@ export default {
       // Update state - the overlay will show if not in fullscreen
       isFullscreen.value = isInFullscreen;
       examStore.isFullscreen = isInFullscreen;
-      
+
       if (isInFullscreen) {
         logger.info("Exam interface loaded in fullscreen mode");
       } else {
@@ -845,7 +872,7 @@ export default {
           // Let F11 work naturally for fullscreen
           return;
         }
-        
+
         if (
           (e.ctrlKey &&
             (e.key === "c" ||
@@ -901,7 +928,12 @@ export default {
     watch(
       () => examStore.timeRemaining,
       (newTime) => {
-        if (newTime === 0 && !isSubmitting.value && !showCompletionModal.value && examStore.currentExamId) {
+        if (
+          newTime === 0 &&
+          !isSubmitting.value &&
+          !showCompletionModal.value &&
+          examStore.currentExamId
+        ) {
           logger.warn("Timer reached 0 - triggering auto-submit");
           autoSubmitExam();
         }
@@ -929,7 +961,13 @@ export default {
     watch(
       () => examStore.timeUpTriggered,
       (timestamp) => {
-        if (timestamp && examStore.timeRemaining === 0 && !isSubmitting.value && !showCompletionModal.value && examStore.currentExamId) {
+        if (
+          timestamp &&
+          examStore.timeRemaining === 0 &&
+          !isSubmitting.value &&
+          !showCompletionModal.value &&
+          examStore.currentExamId
+        ) {
           logger.warn("TimeUp timestamp detected - triggering auto-submit");
           autoSubmitExam();
         }
@@ -985,7 +1023,8 @@ export default {
         </div>
         <h3 class="mb-3">Fullscreen Mode Required</h3>
         <p class="mb-4">
-          For exam security and integrity, you must enter fullscreen mode to continue taking this exam.
+          For exam security and integrity, you must enter fullscreen mode to
+          continue taking this exam.
         </p>
         <div class="security-features mb-4">
           <div class="security-item">
@@ -1001,8 +1040,8 @@ export default {
             Ensures exam integrity
           </div>
         </div>
-        <button 
-          @click="enterFullscreen" 
+        <button
+          @click="enterFullscreen"
           class="btn btn-primary btn-lg fullscreen-btn"
         >
           <i class="bi bi-fullscreen me-2"></i>
@@ -1065,10 +1104,10 @@ export default {
             <h6 class="question-number">
               Question {{ currentQuestionNumber }}
             </h6>
-            <div
+            <RichContentDisplay
+              :content="currentQuestion.questionText"
               class="question-content"
-              v-html="currentQuestion.questionText"
-            ></div>
+            />
 
             <!-- Question Media -->
             <div
@@ -1119,9 +1158,9 @@ export default {
                     :name="`question-${currentQuestion._id}`"
                     @change="handleAnswerChange"
                   />
-                  <label :for="`option-${key}`" class="form-check-label">
+                  <label :for="`option-${key}`" class="form-check-label d-flex">
                     <span class="option-letter">{{ key.toUpperCase() }}.</span>
-                    <span class="option-text">{{ option }}</span>
+                    <RichContentDisplay :content="option" class="option-text" />
                   </label>
                 </div>
               </div>
@@ -1149,7 +1188,7 @@ export default {
                   />
                   <label :for="`multi-option-${key}`" class="form-check-label">
                     <span class="option-letter">{{ key.toUpperCase() }}.</span>
-                    <span class="option-text">{{ option }}</span>
+                    <RichContentDisplay :content="option" class="option-text" />
                   </label>
                 </div>
               </div>
@@ -1274,18 +1313,19 @@ export default {
         </div>
 
         <!-- Submit Button -->
-                 <!-- <div class="exam-controls"> -->
-          <button
-            v-if="!isFullscreen"
-            @click="enterFullscreen"
-            class="btn btn-sm btn-warning me-2 pulse-animation"
-            title="Enter Fullscreen - Required for Exam Security"
-          >
-            <i class="bi bi-fullscreen me-1"></i>
-            Fullscreen
-          </button>
+        <!-- <div class="exam-controls"> -->
+        <button
+          v-if="!isFullscreen"
+          @click="enterFullscreen"
+          class="btn btn-sm btn-warning me-2 pulse-animation"
+          title="Enter Fullscreen - Required for Exam Security"
+        >
+          <i class="bi bi-fullscreen me-1"></i>
+          Fullscreen
+        </button>
         <!-- </div> -->
-        <button v-else
+        <button
+          v-else
           class="btn btn-danger"
           @click="showSubmitConfirmation"
           :disabled="isSubmitting"
@@ -1477,6 +1517,13 @@ export default {
   line-height: 1.6;
 }
 
+.question-content p img {
+  max-height: 300px !important;
+  max-width: 100% !important;
+  height: auto !important;
+  object-fit: contain;
+}
+
 .option-item {
   cursor: pointer;
   transition: background-color 0.2s ease;
@@ -1496,6 +1543,15 @@ export default {
 
 .option-text {
   font-size: 1rem;
+}
+
+/* Ensure all images in exam content are properly sized */
+.question-content :deep(img),
+.option-text :deep(img) {
+  max-height: 300px !important;
+  max-width: 100% !important;
+  height: auto !important;
+  object-fit: contain;
 }
 
 .form-check-input:checked ~ .form-check-label {

@@ -11,10 +11,11 @@ export class PaymentsController {
     constructor(private readonly paymentsService: PaymentsService) { }
 
     @Get('summary')
-    async getStudentPaymentsSummary(@Request() req) {
+    async getStudentPaymentsSummary(@Request() req, @Query('context') context?: 'application-portal' | 'student-portal') {
         try {
             const userId = req.user._id.toString(); // User ID from authenticated user
-            const summary = await this.paymentsService.getStudentPaymentsSummary(userId);
+            const paymentContext = context || 'application-portal'; // Default to application portal
+            const summary = await this.paymentsService.getStudentPaymentsSummary(userId, paymentContext);
 
             return {
                 success: true,
@@ -375,6 +376,47 @@ export class StaffPaymentsController {
                 {
                     success: false,
                     message: 'Failed to delete payment',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Get('student-payments/stats')
+    @ApiOperation({ summary: 'Get student payments statistics for dashboard' })
+    @ApiResponse({ status: 200, description: 'Student payments statistics retrieved successfully' })
+    async getStudentPaymentsStats(
+        @Query('academicSessionId') academicSessionId?: string,
+        @Query('status') status?: string,
+        @Query('page') page: number = 1,
+        @Query('limit') limit: number = 1000
+    ) {
+        try {
+            this.logger.log('Getting student payments stats with filters:', {
+                academicSessionId,
+                status,
+                page,
+                limit
+            });
+
+            const result = await this.paymentsService.getStudentPaymentsStats({
+                academicSessionId,
+                status: status as any,
+                page: Number(page),
+                limit: Number(limit)
+            });
+
+            return {
+                success: true,
+                data: result
+            };
+        } catch (error) {
+            this.logger.error('Error getting student payments stats:', error);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to fetch student payments statistics',
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR

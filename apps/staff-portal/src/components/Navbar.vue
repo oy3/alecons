@@ -86,7 +86,7 @@ export default {
       <div class="d-flex align-items-center">
         <!-- Notifications -->
         <div class="dropdown me-3">
-          <button
+          <!-- <button
             class="btn btn-link text-dark p-1"
             type="button"
             id="notificationsDropdown"
@@ -101,7 +101,7 @@ export default {
                 3
               </span>
             </i>
-          </button>
+          </button> -->
           <ul
             class="dropdown-menu dropdown-menu-end"
             aria-labelledby="notificationsDropdown"

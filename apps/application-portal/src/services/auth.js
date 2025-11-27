@@ -77,9 +77,9 @@ class AuthManager {
         return !!user.value && !!token.value;
     }
 
-    // Check if current user is an applicant
+    // Check if current user is an applicant or student (both can access application portal)
     isApplicant() {
-        return user.value?.role === 'applicant';
+        return user.value?.role === 'applicant' || user.value?.role === 'student';
     }
 
     // Get current user

@@ -26,8 +26,8 @@ export class Student {
     @Prop({ required: true })
     admissionYear: number;
 
-    @Prop({ required: true })
-    academicSession: string; // e.g., "2025/2026"
+    @Prop({ type: Types.ObjectId, ref: 'AcademicSession', required: true })
+    academicSession: Types.ObjectId; // Reference to AcademicSession collection
 
     @Prop({ default: 'active' })
     status: string; // active, suspended, graduated, withdrawn

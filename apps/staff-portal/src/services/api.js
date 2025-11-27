@@ -41,8 +41,16 @@ class StaffApiService {
 
             if (!response.ok) {
                 if (response.status === 401) {
-                    this.handleTokenExpiration()
-                    throw new Error('Unauthorized access')
+                    // Try to get the specific error message from the response
+                    const errorData = await response.json().catch(() => ({}))
+                    const errorMessage = errorData.message || 'Unauthorized access'
+
+                    // Only handle token expiration for authenticated requests (when we have a token)
+                    if (this.token && (errorMessage === 'Unauthorized access' || errorMessage.includes('token') || errorMessage.includes('expired'))) {
+                        this.handleTokenExpiration()
+                    }
+
+                    throw new Error(errorMessage)
                 }
 
                 const errorData = await response.json().catch(() => ({}))
@@ -274,6 +282,18 @@ class StaffApiService {
         return this.makeRequest(`/staff/payments/${id}`, {
             method: 'DELETE',
         })
+    }
+
+    // Student Payments
+    async getStudentPayments(filters = {}) {
+        const queryParams = new URLSearchParams(filters).toString()
+        return this.makeRequest(`/staff/studentpayments${queryParams ? `?${queryParams}` : ''}`)
+    }
+
+    // Student Payments Statistics
+    async getStudentPaymentsStats(filters = {}) {
+        const queryParams = new URLSearchParams(filters).toString()
+        return this.makeRequest(`/staff/payments/student-payments/stats${queryParams ? `?${queryParams}` : ''}`)
     }
 
     // Academic Sessions Management
@@ -576,8 +596,9 @@ class StaffApiService {
 
             if (!response.ok) {
                 if (response.status === 401) {
+                    // For PDF downloads, treat 401 as authentication required
                     this.handleTokenExpiration()
-                    throw new Error('Unauthorized access')
+                    throw new Error('Authentication required for PDF download')
                 }
 
                 const errorData = await response.json().catch(() => ({}))
@@ -651,8 +672,9 @@ class StaffApiService {
 
             if (!response.ok) {
                 if (response.status === 401) {
+                    // For PDF exports, treat 401 as authentication required
                     this.handleTokenExpiration()
-                    throw new Error('Unauthorized access')
+                    throw new Error('Authentication required for PDF export')
                 }
 
                 const errorData = await response.json().catch(() => ({}))

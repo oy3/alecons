@@ -342,7 +342,7 @@ export default {
       }).then((result) => {
         if (result.isConfirmed) {
           // Get student portal URL from environment or use default
-          const studentPortalUrl = import.meta.env.VITE_APP_STUDENT_PORTAL_URL || 'http://localhost:3000/student-portal';
+          const studentPortalUrl = import.meta.env.VITE_APP_STUDENT_PORTAL_URL;
           window.open(studentPortalUrl, '_blank');
         }
       });

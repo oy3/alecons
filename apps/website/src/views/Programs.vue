@@ -17,6 +17,14 @@ export default {
 
   name: "Programs",
   components: {},
+    computed: {
+    registrationUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
+    },
+    applicationPortalUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
+    }
+  }
 };
 </script>
 
@@ -202,9 +210,14 @@ export default {
               community leader
             </li>
           </ul>
-          <button class="btn btn-acon-primary btn-lg mt-3">
+          <a
+            :href="registrationUrl"
+            target="_blank"
+            class="btn btn-acon-primary btn-lg mt-3"
+            rel="noopener noreferrer"
+          >
             Start Application
-          </button>
+          </a>
         </div>
 
         <div class="col-md-6 order-1 order-md-2">
@@ -375,7 +388,14 @@ export default {
           becoming a healthcare professional.
         </p>
         <div class="d-grid d-md-flex justify-content-center gap-3 mx-auto">
-          <button class="btn btn-acon-primary">Apply Now</button>
+                  <a
+          :href="registrationUrl"
+          target="_blank"
+          class="btn btn-acon-primary"
+          rel="noopener noreferrer"
+        >
+          Apply Now
+        </a>
           <button class="btn btn-outline-acon-primary">
             Download Brochure
           </button>

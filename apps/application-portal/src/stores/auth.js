@@ -15,7 +15,8 @@ export const useAuthStore = defineStore('auth', () => {
     // Getters
     const isAuthenticated = computed(() => !!user.value && !!token.value);
     const currentStage = computed(() => application.value?.currentStage || 0);
-    const isApplicant = computed(() => user.value?.role === 'applicant');
+    // Note: isApplicant allows both 'applicant' and 'student' roles to access the application portal
+    const isApplicant = computed(() => user.value?.role === 'applicant' || user.value?.role === 'student');
 
     // Actions
     async function initialize() {

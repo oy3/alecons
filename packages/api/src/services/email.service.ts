@@ -1,71 +1,194 @@
-import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
+import { Injectable, Logger } from "@nestjs/common";
+import { google } from "googleapis";
 
 @Injectable()
 export class EmailService {
-    private readonly logger = new Logger(EmailService.name);
-    private transporter: nodemailer.Transporter;
+  private readonly logger = new Logger(EmailService.name);
+  private gmail: any;
+  private oauth2Client: any;
 
-    constructor() {
-        this.logger.log('Email service initialization:', {
-            host: process.env.SMTP_HOST,
-            port: process.env.SMTP_PORT,
-            user: process.env.SMTP_USER,
-            hasPassword: !!process.env.SMTP_PASS,
-            hasClientId: !!process.env.GOOGLE_CLIENT_ID,
-            hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-            hasRefreshToken: !!process.env.GOOGLE_REFRESH_TOKEN
-        });
+  constructor() {
+    this.logger.log("Email service initialization:", {
+      user: process.env.SMTP_USER,
+      hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+      hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+      hasRefreshToken: !!process.env.GOOGLE_REFRESH_TOKEN,
+    });
 
-        // Use OAuth2 if credentials are available, otherwise fall back to App Password
-        const useOAuth2 = process.env.GOOGLE_CLIENT_ID &&
-            process.env.GOOGLE_CLIENT_SECRET &&
-            process.env.GOOGLE_REFRESH_TOKEN;
+    // Check if OAuth2 credentials are available
+    const hasOAuth2 =
+      process.env.GOOGLE_CLIENT_ID &&
+      process.env.GOOGLE_CLIENT_SECRET &&
+      process.env.GOOGLE_REFRESH_TOKEN;
 
-        if (useOAuth2) {
-            this.transporter = nodemailer.createTransport({
-                service: 'gmail',
-                auth: {
-                    type: 'OAuth2',
-                    user: process.env.SMTP_USER,
-                    clientId: process.env.GOOGLE_CLIENT_ID,
-                    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-                    refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
-                },
-            });
-        } else {
-            this.transporter = nodemailer.createTransport({
-                host: process.env.SMTP_HOST || 'smtp.gmail.com',
-                port: parseInt(process.env.SMTP_PORT) || 587,
-                secure: false, // true for 465, false for other ports
-                auth: {
-                    user: process.env.SMTP_USER,
-                    pass: process.env.SMTP_PASS,
-                },
-            });
-        }
-
-        // Test the connection
-        this.testConnection();
+    if (!hasOAuth2) {
+      this.logger.error(
+        "OAuth2 credentials not configured. Please set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN in your environment variables."
+      );
+      throw new Error(
+        "Email service cannot be initialized: OAuth2 credentials are required."
+      );
     }
 
-    private async testConnection(): Promise<void> {
-        try {
-            await this.transporter.verify();
-            this.logger.log('SMTP connection verified successfully');
-        } catch (error) {
-            this.logger.error('SMTP connection failed:', error.message);
+    this.logger.log("Configuring Gmail API with OAuth2...");
+
+    // Initialize OAuth2 client
+    this.oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      "https://developers.google.com/oauthplayground" // Redirect URL
+    );
+
+    // Set credentials
+    this.oauth2Client.setCredentials({
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+    });
+
+    // Initialize Gmail API
+    this.gmail = google.gmail({ version: "v1", auth: this.oauth2Client });
+
+    this.logger.log("Gmail API initialized successfully");
+
+    // Test the connection
+    this.testConnection();
+  }
+
+  private async testConnection(): Promise<void> {
+    try {
+      await this.gmail.users.getProfile({ userId: "me" });
+      this.logger.log("Gmail API connection verified successfully");
+    } catch (error) {
+      this.logger.error(
+        "Gmail API connection failed:",
+        error.message
+      );
+    }
+  }
+
+  /**
+   * Send email using Gmail API
+   * This method uses HTTPS (port 443) instead of SMTP ports which may be blocked by cloud providers
+   */
+  private async sendEmailViaGmailAPI(mailOptions: any): Promise<void> {
+    try {
+      let message: string;
+
+      if (mailOptions.attachments && mailOptions.attachments.length > 0) {
+        // Create multipart MIME message with attachments
+        const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+        const messageParts = [
+          `From: ${mailOptions.from}`,
+          `To: ${mailOptions.to}`,
+          `Subject: ${mailOptions.subject}`,
+          "MIME-Version: 1.0",
+          `Content-Type: multipart/mixed; boundary="${boundary}"`,
+          "",
+          `--${boundary}`,
+          'Content-Type: text/html; charset="UTF-8"',
+          "Content-Transfer-Encoding: 7bit",
+          "",
+          mailOptions.html,
+          ""
+        ];
+
+        // Add each attachment
+        for (const attachment of mailOptions.attachments) {
+          messageParts.push(`--${boundary}`);
+          messageParts.push(`Content-Type: ${attachment.contentType || 'application/octet-stream'}; name="${attachment.filename}"`);
+          messageParts.push('Content-Transfer-Encoding: base64');
+          messageParts.push(`Content-Disposition: attachment; filename="${attachment.filename}"`);
+          messageParts.push("");
+
+          // Convert buffer to base64
+          const base64Content = attachment.content.toString('base64');
+          // Split into 76 character lines (RFC 2045)
+          const lines = base64Content.match(/.{1,76}/g) || [];
+          messageParts.push(...lines);
+          messageParts.push("");
         }
+
+        messageParts.push(`--${boundary}--`);
+        message = messageParts.join("\r\n");
+      } else {
+        // Simple text/html message without attachments
+        const messageParts = [
+          `From: ${mailOptions.from}`,
+          `To: ${mailOptions.to}`,
+          `Subject: ${mailOptions.subject}`,
+          "MIME-Version: 1.0",
+          'Content-Type: text/html; charset="UTF-8"',
+          "",
+          mailOptions.html,
+        ];
+        message = messageParts.join("\n");
+      }
+
+      // Encode the message in base64url format
+      const encodedMessage = Buffer.from(message)
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+      // Send the email using Gmail API
+      const res = await this.gmail.users.messages.send({
+        userId: "me",
+        requestBody: {
+          raw: encodedMessage,
+        },
+      });
+
+      this.logger.log(`Email sent via Gmail API. Message ID: ${res.data.id}`);
+    } catch (error) {
+      this.logger.error("Failed to send email via Gmail API:", error.message);
+      throw error;
+    }
+  }
+
+  private async sendEmailWithRetry(
+    mailOptions: any,
+    maxRetries: number = 3
+  ): Promise<void> {
+    let lastError: Error;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.sendEmailViaGmailAPI(mailOptions);
+        this.logger.log(
+          `Email sent successfully on attempt ${attempt}`
+        );
+        return;
+      } catch (error) {
+        lastError = error;
+        this.logger.warn(
+          `Email send attempt ${attempt} failed:`,
+          error.message
+        );
+
+        if (attempt < maxRetries) {
+          // Wait before retry (exponential backoff)
+          const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
     }
 
-    async sendVerificationEmail(email: string, firstName: string, verificationToken: string): Promise<void> {
-        const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+    throw lastError;
+  }
 
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject: 'Verify Your Email Address - Alebiosu College of Nursing',
-            html: `
+  async sendVerificationEmail(
+    email: string,
+    firstName: string,
+    verificationToken: string
+  ): Promise<void> {
+    const verificationUrl = `${process.env.APPLICATION_PORTAL_URL}/verify-email?token=${verificationToken}`;
+
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Verify Your Email Address - Alebiosu College of Nursing",
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -123,23 +246,26 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
-        try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Verification email sent successfully to ${email}`);
-        } catch (error) {
-            this.logger.error(`Failed to send verification email to ${email}:`, error);
-            throw error;
-        }
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Verification email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send verification email to ${email}:`,
+        error
+      );
+      throw error;
     }
+  }
 
-    async sendWelcomeEmail(email: string, firstName: string): Promise<void> {
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject: 'Email Verified Successfully - Alebiosu College of Nursing',
-            html: `
+  async sendWelcomeEmail(email: string, firstName: string): Promise<void> {
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Email Verified Successfully - Alebiosu College of Nursing",
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -190,36 +316,36 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
-        try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Welcome email sent successfully to ${email}`);
-        } catch (error) {
-            this.logger.error(`Failed to send welcome email to ${email}:`, error);
-            throw error;
-        }
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Welcome email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send welcome email to ${email}:`, error);
+      throw error;
     }
+  }
 
-    async sendEntranceExamScheduledEmail(
-        email: string,
-        firstName: string,
-        examDate: Date,
-        examTime: string,
-        examLink: string
-    ): Promise<void> {
-        const formattedDate = examDate.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
+  async sendEntranceExamScheduledEmail(
+    email: string,
+    firstName: string,
+    examDate: Date,
+    examTime: string,
+    examLink: string
+  ): Promise<void> {
+    const formattedDate = examDate.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
 
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject: 'Entrance Examination Scheduled - Alebiosu College of Nursing',
-            html: `
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Entrance Examination Scheduled - Alebiosu College of Nursing",
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -280,36 +406,41 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
-        try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Entrance exam scheduled email sent successfully to ${email}`);
-        } catch (error) {
-            this.logger.error(`Failed to send entrance exam email to ${email}:`, error);
-            throw error;
-        }
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(
+        `Entrance exam scheduled email sent successfully to ${email}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send entrance exam email to ${email}:`,
+        error
+      );
+      throw error;
     }
+  }
 
-    async sendScreeningScheduledEmail(
-        email: string,
-        firstName: string,
-        screeningDate: Date,
-        screeningTime: string,
-        venue: string
-    ): Promise<void> {
-        const formattedDate = screeningDate.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
+  async sendScreeningScheduledEmail(
+    email: string,
+    firstName: string,
+    screeningDate: Date,
+    screeningTime: string,
+    venue: string
+  ): Promise<void> {
+    const formattedDate = screeningDate.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
 
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject: 'Screening & Interview Scheduled - Alebiosu College of Nursing',
-            html: `
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Screening & Interview Scheduled - Alebiosu College of Nursing",
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -375,23 +506,38 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
-        try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Screening scheduled email sent successfully to ${email}`);
-        } catch (error) {
-            this.logger.error(`Failed to send screening email to ${email}:`, error);
-            throw error;
-        }
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(
+        `Screening scheduled email sent successfully to ${email}`
+      );
+    } catch (error) {
+      this.logger.error(`Failed to send screening email to ${email}:`, error);
+      throw error;
     }
+  }
 
-    async sendAdmissionLetterEmail(email: string, firstName: string, admissionLetterUrl: string): Promise<void> {
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject: '🎉 Admission Offer - Alebiosu College of Nursing',
-            html: `
+  async sendAdmissionLetterEmail(
+    email: string,
+    firstName: string,
+    pdfBuffer: Buffer,
+    programName: string,
+    academicSession: string
+  ): Promise<void> {
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Congratulations! Admission Offer - Alebiosu College of Nursing",
+      attachments: [
+        {
+          filename: `Admission_Letter_${firstName.replace(/\s+/g, '_')}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf'
+        }
+      ],
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -416,22 +562,23 @@ export class EmailService {
                         
                         <div class="celebration">
                             <h2>Dear ${firstName},</h2>
-                            <p><strong>We are delighted to offer you admission to Alebiosu College of Nursing!</strong></p>
+                            <p><strong>We are delighted to offer you admission to Alebiosu College of Nursing for the ${academicSession} Academic Session!</strong></p>
                         </div>
                         
-                        <p>After careful review of your application, we are pleased to inform you that you have been selected to join our prestigious nursing program.</p>
+                        <p>After careful review of your application and your performance in our entrance examination, we are pleased to inform you that you have been selected to join our prestigious <strong>${programName}</strong> programme.</p>
                         
-                        <div style="text-align: center;">
-                            <a href="${admissionLetterUrl}" class="btn">Download Admission Letter</a>
+                        <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <p style="margin: 0;"><strong>📎 Your Official Admission Letter is attached to this email.</strong></p>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; color: #856404;">Please download, print, and keep it safe. You will need to present it during registration.</p>
                         </div>
                         
                         <div class="next-steps">
                             <h3>📋 Next Steps:</h3>
                             <ol>
-                                <li><strong>Download and read your admission letter</strong></li>
-                                <li><strong>Pay Acceptance Fee</strong> - Confirm your acceptance</li>
+                                <li><strong>Download and Print your admission letter</strong> (attached to this email)</li>
+                                <li><strong>Pay Acceptance Fee</strong> - Confirm your acceptance within 4 days</li>
                                 <li><strong>Pay Sundry Fees</strong> - Administrative charges</li>
-                                <li><strong>Pay School Fees</strong> - Tuition and other fees</li>
+                                <li><strong>Pay School Fees</strong> - Tuition and accommodation</li>
                                 <li><strong>Complete Registration</strong> - Finalize your enrollment</li>
                             </ol>
                         </div>
@@ -450,23 +597,30 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
-        try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Admission letter email sent successfully to ${email}`);
-        } catch (error) {
-            this.logger.error(`Failed to send admission letter email to ${email}:`, error);
-            throw error;
-        }
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Admission letter email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send admission letter email to ${email}:`,
+        error
+      );
+      throw error;
     }
+  }
 
-    async sendRejectionEmail(email: string, firstName: string, reason?: string): Promise<void> {
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject: 'Application Update - Alebiosu College of Nursing',
-            html: `
+  async sendRejectionEmail(
+    email: string,
+    firstName: string,
+    reason?: string
+  ): Promise<void> {
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Application Update - Alebiosu College of Nursing",
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -495,7 +649,10 @@ export class EmailService {
                             <p>After careful consideration of all applications, we regret to inform you that we are unable to offer you admission at this time.</p>
                         </div>
                         
-                        ${reason ? `<p><strong>Feedback:</strong> ${reason}</p>` : ''}
+                        ${reason
+          ? `<p><strong>Feedback:</strong> ${reason}</p>`
+          : ""
+        }
                         
                         <div class="encouragement">
                             <h4>We encourage you to:</h4>
@@ -518,28 +675,28 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
-        try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Rejection email sent successfully to ${email}`);
-        } catch (error) {
-            this.logger.error(`Failed to send rejection email to ${email}:`, error);
-            throw error;
-        }
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Rejection email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send rejection email to ${email}:`, error);
+      throw error;
     }
+  }
 
-    async sendMatriculationEmail(
-        email: string,
-        firstName: string,
-        matricNumber: string,
-        studentPortalUrl: string
-    ): Promise<void> {
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject: '🎓 Welcome to ALECONS - Your Matriculation Details',
-            html: `
+  async sendMatriculationEmail(
+    email: string,
+    firstName: string,
+    matricNumber: string,
+    studentPortalUrl: string
+  ): Promise<void> {
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Welcome to ALECONS - Your Matriculation Details",
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -607,43 +764,46 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
-        try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Matriculation email sent successfully to ${email}`);
-        } catch (error) {
-            this.logger.error(`Failed to send matriculation email to ${email}:`, error);
-            throw error;
-        }
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Matriculation email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send matriculation email to ${email}:`,
+        error
+      );
+      throw error;
     }
+  }
 
-    /**
-     * Send exam scheduled notification to target audience
-     */
-    async sendExamScheduledEmail(
-        email: string,
-        firstName: string,
-        examTitle: string,
-        examDate: Date,
-        examDuration: number,
-        targetType: string
-    ): Promise<void> {
-        const examDateTime = examDate.toLocaleDateString('en-NG', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'Africa/Lagos'
-        });
+  /**
+   * Send exam scheduled notification to target audience
+   */
+  async sendExamScheduledEmail(
+    email: string,
+    firstName: string,
+    examTitle: string,
+    examDate: Date,
+    examDuration: number,
+    targetType: string
+  ): Promise<void> {
+    const examDateTime = examDate.toLocaleDateString("en-NG", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Africa/Lagos",
+    });
 
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject: `Exam Scheduled: ${examTitle} - Alebiosu College of Nursing`,
-            html: `
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: `Exam Scheduled: ${examTitle} - Alebiosu College of Nursing`,
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -674,7 +834,9 @@ export class EmailService {
                             <h3><strong>${examTitle}</strong></h3>
                             <p><strong>📅 Date & Time:</strong> ${examDateTime}</p>
                             <p><strong>⏱️ Duration:</strong> ${examDuration} minutes</p>
-                            <p><strong>👥 Target Audience:</strong> ${targetType.charAt(0).toUpperCase() + targetType.slice(1)}</p>
+                            <p><strong>👥 Target Audience:</strong> ${targetType.charAt(0).toUpperCase() +
+        targetType.slice(1)
+        }</p>
                         </div>
 
                         <div class="alert">
@@ -688,7 +850,8 @@ export class EmailService {
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL}/dashboard" class="btn">Access Portal</a>
+                            <a href="${process.env.FRONTEND_URL
+        }/dashboard" class="btn">Access Portal</a>
                         </div>
                         
                         <p>If you have any questions about this exam, please contact the administration office.</p>
@@ -703,52 +866,59 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
-        try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Exam scheduled email sent successfully to ${email} for exam: ${examTitle}`);
-        } catch (error) {
-            this.logger.error(`Failed to send exam scheduled email to ${email}:`, error);
-            throw error;
-        }
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(
+        `Exam scheduled email sent successfully to ${email} for exam: ${examTitle}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send exam scheduled email to ${email}:`,
+        error
+      );
+      throw error;
     }
+  }
 
-    /**
-     * Send exam password notification
-     */
-    async sendExamPasswordEmail(
-        email: string,
-        firstName: string,
-        examTitle: string,
-        examPassword: string,
-        examDate: Date,
-        isRegenerated: boolean = false
-    ): Promise<void> {
-        const examDateTime = examDate.toLocaleDateString('en-NG', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'Africa/Lagos'
-        });
+  /**
+   * Send exam password notification
+   */
+  async sendExamPasswordEmail(
+    email: string,
+    firstName: string,
+    examTitle: string,
+    examPassword: string,
+    examDate: Date,
+    isRegenerated: boolean = false
+  ): Promise<void> {
+    const examDateTime = examDate.toLocaleDateString("en-NG", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Africa/Lagos",
+    });
 
-        const subject = isRegenerated ?
-            `New Exam Password: ${examTitle} - Alebiosu College of Nursing` :
-            `Exam Password: ${examTitle} - Alebiosu College of Nursing`;
+    const subject = isRegenerated
+      ? `New Exam Password: ${examTitle} - Alebiosu College of Nursing`
+      : `Exam Password: ${examTitle} - Alebiosu College of Nursing`;
 
-        const headerText = isRegenerated ? '🔄 Exam Password Regenerated' : '🔐 Exam Password';
-        const messageText = isRegenerated ?
-            'A new password has been generated for your exam. Please use this new password:' :
-            'Here is your password for the upcoming exam:';
+    const headerText = isRegenerated
+      ? "🔄 Exam Password Regenerated"
+      : "🔐 Exam Password";
+    const messageText = isRegenerated
+      ? "A new password has been generated for your exam. Please use this new password:"
+      : "Here is your password for the upcoming exam:";
 
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject,
-            html: `
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject,
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -793,12 +963,16 @@ export class EmailService {
                                 <li><strong>Keep this password confidential</strong> - do not share with anyone</li>
                                 <li>You will need this password to start your exam</li>
                                 <li>Copy this password or write it down safely</li>
-                                <li>${isRegenerated ? 'Any previous passwords are now invalid' : 'This password is only valid for this exam'}</li>
+                                <li>${isRegenerated
+          ? "Any previous passwords are now invalid"
+          : "This password is only valid for this exam"
+        }</li>
                             </ul>
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL}/dashboard" class="btn">Access Portal</a>
+                            <a href="${process.env.FRONTEND_URL
+        }/dashboard" class="btn">Access Portal</a>
                         </div>
                         
                         <p>If you have any issues accessing your exam, please contact the administration office immediately.</p>
@@ -813,41 +987,46 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
-        try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Exam password email sent successfully to ${email} for exam: ${examTitle}`);
-        } catch (error) {
-            this.logger.error(`Failed to send exam password email to ${email}:`, error);
-            throw error;
-        }
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(
+        `Exam password email sent successfully to ${email} for exam: ${examTitle}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send exam password email to ${email}:`,
+        error
+      );
+      throw error;
     }
+  }
 
-    /**
-     * Send 30-minute reminder before exam
-     */
-    async sendExamReminderEmail(
-        email: string,
-        firstName: string,
-        examTitle: string,
-        examDate: Date
-    ): Promise<void> {
-        const examDateTime = examDate.toLocaleDateString('en-NG', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'Africa/Lagos'
-        });
+  /**
+   * Send 30-minute reminder before exam
+   */
+  async sendExamReminderEmail(
+    email: string,
+    firstName: string,
+    examTitle: string,
+    examDate: Date
+  ): Promise<void> {
+    const examDateTime = examDate.toLocaleDateString("en-NG", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Africa/Lagos",
+    });
 
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject: `⏰ Exam Reminder: ${examTitle} starts in 30 minutes`,
-            html: `
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: `⏰ Exam Reminder: ${examTitle} starts in 30 minutes`,
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -912,48 +1091,55 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
-        try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Exam reminder email sent successfully to ${email} for exam: ${examTitle}`);
-        } catch (error) {
-            this.logger.error(`Failed to send exam reminder email to ${email}:`, error);
-            throw error;
-        }
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(
+        `Exam reminder email sent successfully to ${email} for exam: ${examTitle}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send exam reminder email to ${email}:`,
+        error
+      );
+      throw error;
     }
+  }
 
-    /**
-     * Send exam completion confirmation
-     */
-    async sendExamCompletionEmail(
-        email: string,
-        firstName: string,
-        examTitle: string,
-        submissionTime: Date,
-        score?: number,
-        totalMarks?: number,
-        isAutoSubmitted?: boolean
-    ): Promise<void> {
-        const submissionDateTime = submissionTime.toLocaleDateString('en-NG', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            timeZone: 'Africa/Lagos'
-        });
+  /**
+   * Send exam completion confirmation
+   */
+  async sendExamCompletionEmail(
+    email: string,
+    firstName: string,
+    examTitle: string,
+    submissionTime: Date,
+    score?: number,
+    totalMarks?: number,
+    isAutoSubmitted?: boolean
+  ): Promise<void> {
+    const submissionDateTime = submissionTime.toLocaleDateString("en-NG", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZone: "Africa/Lagos",
+    });
 
-        const showScore = score !== undefined && totalMarks !== undefined;
-        const percentage = showScore ? ((score / totalMarks) * 100).toFixed(1) : null;
+    const showScore = score !== undefined && totalMarks !== undefined;
+    const percentage = showScore
+      ? ((score / totalMarks) * 100).toFixed(1)
+      : null;
 
-        const mailOptions = {
-            from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
-            to: email,
-            subject: `✅ Exam Completed: ${examTitle} - Alebiosu College of Nursing`,
-            html: `
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: `✅ Exam Completed: ${examTitle} - Alebiosu College of Nursing`,
+      html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -975,50 +1161,75 @@ export class EmailService {
                 <body>
                     <div class="container">
                         <div class="header">
-                            <h1>✅ Exam ${isAutoSubmitted ? 'Auto-Submitted' : 'Successfully Completed'}!</h1>
+                            <h1>✅ Exam ${isAutoSubmitted
+          ? "Auto-Submitted"
+          : "Successfully Completed"
+        }!</h1>
                         </div>
                         
                         <div class="success">
-                            <h2>🎉 ${isAutoSubmitted ? 'Time\'s Up!' : 'Congratulations'} ${firstName}!</h2>
+                            <h2>🎉 ${isAutoSubmitted ? "Time's Up!" : "Congratulations"
+        } ${firstName}!</h2>
                             <p>${isAutoSubmitted
-                    ? 'Your exam time has expired and has been automatically submitted for grading.'
-                    : 'You have successfully completed your exam.'}</p>
+          ? "Your exam time has expired and has been automatically submitted for grading."
+          : "You have successfully completed your exam."
+        }</p>
                         </div>
                         
                         <div class="exam-details">
                             <h3><strong>${examTitle}</strong></h3>
-                            <p><strong>📅 ${isAutoSubmitted ? 'Auto-Submitted On:' : 'Submitted On:'}</strong> ${submissionDateTime}</p>
-                            ${isAutoSubmitted ? '<p><strong>⏰ Reason:</strong> Exam time limit reached</p>' : ''}
+                            <p><strong>📅 ${isAutoSubmitted
+          ? "Auto-Submitted On:"
+          : "Submitted On:"
+        }</strong> ${submissionDateTime}</p>
+                            ${isAutoSubmitted
+          ? "<p><strong>⏰ Reason:</strong> Exam time limit reached</p>"
+          : ""
+        }
                         </div>
 
-                        ${showScore ? `
+                        ${showScore
+          ? `
                         <div class="score-box">
                             <h3>📊 Your Score</h3>
                             <p style="font-size: 20px; font-weight: bold; color: #856404;">
                                 ${score} out of ${totalMarks} (${percentage}%)
                             </p>
                         </div>
-                        ` : ''}
+                        `
+          : ""
+        }
 
                         <div class="info">
                             <p><strong>📋 What's Next?</strong></p>
                             <ul>
-                                ${isAutoSubmitted ? '<li>Don\'t worry - all your answered questions have been saved</li>' : ''}
-                                <li>${showScore ? 'Your results have been automatically graded' : 'Your exam is being reviewed and graded'}</li>
+                                ${isAutoSubmitted
+          ? "<li>Don't worry - all your answered questions have been saved</li>"
+          : ""
+        }
+                                <li>${showScore
+          ? "Your results have been automatically graded"
+          : "Your exam is being reviewed and graded"
+        }</li>
                                 <li>You will be notified once final results are published</li>
                                 <li>Check your dashboard regularly for updates</li>
                                 <li>Keep this email as confirmation of your submission</li>
-                                ${isAutoSubmitted ? '<li>If you have any concerns, please contact our support team</li>' : ''}
+                                ${isAutoSubmitted
+          ? "<li>If you have any concerns, please contact our support team</li>"
+          : ""
+        }
                             </ul>
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL}/dashboard" class="btn">View Dashboard</a>
+                            <a href="${process.env.FRONTEND_URL
+        }/dashboard" class="btn">View Dashboard</a>
                         </div>
                         
                         <p>${isAutoSubmitted
-                    ? 'Thank you for your participation. Even though time ran out, your answers have been safely submitted for grading.'
-                    : 'Thank you for taking the exam. We wish you the best of luck with your results!'}</p>
+          ? "Thank you for your participation. Even though time ran out, your answers have been safely submitted for grading."
+          : "Thank you for taking the exam. We wish you the best of luck with your results!"
+        }</p>
                         
                         <div class="footer">
                             <p><strong>Alebiosu College of Nursing Services</strong><br>
@@ -1030,90 +1241,98 @@ export class EmailService {
                 </body>
                 </html>
             `,
-        };
+    };
 
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(
+        `Exam completion email sent successfully to ${email} for exam: ${examTitle}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send exam completion email to ${email}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Send bulk emails with rate limiting
+   */
+  async sendBulkEmails(
+    emails: string[],
+    emailFunction: (email: string, ...args: any[]) => Promise<void>,
+    ...args: any[]
+  ): Promise<{ successful: number; failed: string[] }> {
+    const successful = 0;
+    const failed: string[] = [];
+    const batchSize = 10; // Send in batches to avoid overwhelming the SMTP server
+    const delay = 1000; // 1 second delay between batches
+
+    this.logger.log(`Starting bulk email send to ${emails.length} recipients`);
+
+    for (let i = 0; i < emails.length; i += batchSize) {
+      const batch = emails.slice(i, i + batchSize);
+      const batchPromises = batch.map(async (email) => {
         try {
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Exam completion email sent successfully to ${email} for exam: ${examTitle}`);
+          await emailFunction.call(this, email, ...args);
+          return { email, success: true };
         } catch (error) {
-            this.logger.error(`Failed to send exam completion email to ${email}:`, error);
-            throw error;
+          this.logger.error(`Failed to send email to ${email}:`, error.message);
+          return { email, success: false };
         }
+      });
+
+      const results = await Promise.allSettled(batchPromises);
+      results.forEach((result) => {
+        if (result.status === "fulfilled") {
+          if (result.value.success) {
+            (successful as any)++;
+          } else {
+            failed.push(result.value.email);
+          }
+        } else {
+          // This shouldn't happen with our current setup, but handle it anyway
+          this.logger.error("Unexpected promise rejection:", result.reason);
+        }
+      });
+
+      // Add delay between batches (except for the last batch)
+      if (i + batchSize < emails.length) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
 
-    /**
-     * Send bulk emails with rate limiting
-     */
-    async sendBulkEmails(
-        emails: string[],
-        emailFunction: (email: string, ...args: any[]) => Promise<void>,
-        ...args: any[]
-    ): Promise<{ successful: number; failed: string[] }> {
-        const successful = 0;
-        const failed: string[] = [];
-        const batchSize = 10; // Send in batches to avoid overwhelming the SMTP server
-        const delay = 1000; // 1 second delay between batches
+    this.logger.log(
+      `Bulk email send completed: ${successful} successful, ${failed.length} failed`
+    );
+    return { successful, failed };
+  }
 
-        this.logger.log(`Starting bulk email send to ${emails.length} recipients`);
+  /**
+   * Send exam result notification email to student
+   */
+  async sendExamResultEmail(
+    email: string,
+    firstName: string,
+    examTitle: string,
+    score: number,
+    totalQuestions: number,
+    percentage: number,
+    status: string,
+    gradedAt: Date
+  ): Promise<void> {
+    try {
+      const subject = `📊 Exam Results Released - ${examTitle}`;
+      const statusColor = status === "pass" ? "#28a745" : "#dc3545";
+      const statusText = status === "pass" ? "PASSED" : "FAILED";
+      const resultMessage =
+        status === "pass"
+          ? "Congratulations! You have successfully passed this exam."
+          : "Unfortunately, you did not meet the passing requirements for this exam.";
 
-        for (let i = 0; i < emails.length; i += batchSize) {
-            const batch = emails.slice(i, i + batchSize);
-            const batchPromises = batch.map(async (email) => {
-                try {
-                    await emailFunction.call(this, email, ...args);
-                    return { email, success: true };
-                } catch (error) {
-                    this.logger.error(`Failed to send email to ${email}:`, error.message);
-                    return { email, success: false };
-                }
-            });
-
-            const results = await Promise.allSettled(batchPromises);
-            results.forEach((result) => {
-                if (result.status === 'fulfilled') {
-                    if (result.value.success) {
-                        (successful as any)++;
-                    } else {
-                        failed.push(result.value.email);
-                    }
-                } else {
-                    // This shouldn't happen with our current setup, but handle it anyway
-                    this.logger.error('Unexpected promise rejection:', result.reason);
-                }
-            });
-
-            // Add delay between batches (except for the last batch)
-            if (i + batchSize < emails.length) {
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-        }
-
-        this.logger.log(`Bulk email send completed: ${successful} successful, ${failed.length} failed`);
-        return { successful, failed };
-    }
-
-    /**
-     * Send exam result notification email to student
-     */
-    async sendExamResultEmail(
-        email: string,
-        firstName: string,
-        examTitle: string,
-        score: number,
-        totalQuestions: number,
-        percentage: number,
-        status: string,
-        gradedAt: Date
-    ): Promise<void> {
-        try {
-            const subject = `📊 Exam Results Released - ${examTitle}`;
-            const statusColor = status === 'pass' ? '#28a745' : '#dc3545';
-            const statusText = status === 'pass' ? 'PASSED' : 'FAILED';
-            const resultMessage = status === 'pass'
-                ? 'Congratulations! You have successfully passed this exam.'
-                : 'Unfortunately, you did not meet the passing requirements for this exam.';
-
-            const html = `
+      const html = `
             <!DOCTYPE html>
             <html>
             <head>
@@ -1184,14 +1403,14 @@ export class EmailService {
                         <div style="margin: 30px 0;">
                             <h4 style="color: #333333; margin: 0 0 15px 0; font-size: 18px;">What's Next?</h4>
                             <ul style="color: #666666; line-height: 1.6; padding-left: 20px; margin: 0;">
-                                ${status === 'pass'
-                    ? `<li>Continue to the next phase of your academic journey</li>
+                                ${status === "pass"
+          ? `<li>Continue to the next phase of your academic journey</li>
                                        <li>Check your student portal for any additional requirements</li>
                                        <li>Contact the academic office if you have any questions</li>`
-                    : `<li>Review the exam material for areas of improvement</li>
+          : `<li>Review the exam material for areas of improvement</li>
                                        <li>Contact your instructor for additional guidance</li>
                                        <li>Check if retake opportunities are available</li>`
-                }
+        }
                             </ul>
                         </div>
 
@@ -1219,28 +1438,36 @@ export class EmailService {
             </html>
             `;
 
-            await this.transporter.sendMail({
-                from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-                to: email,
-                subject,
-                html,
-            });
+      await this.sendEmailWithRetry({
+        from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject,
+        html,
+      });
 
-            this.logger.log(`Exam result email sent successfully to ${email} for exam: ${examTitle}`);
-
-        } catch (error) {
-            this.logger.error(`Failed to send exam result email to ${email}:`, error.message);
-            throw error;
-        }
+      this.logger.log(
+        `Exam result email sent successfully to ${email} for exam: ${examTitle}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send exam result email to ${email}:`,
+        error.message
+      );
+      throw error;
     }
+  }
 
-    async sendAdminLoginCredentials(email: string, firstName: string, password: string): Promise<void> {
-        try {
-            const mailOptions = {
-                from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-                to: email,
-                subject: 'Admin Account Created - ALECONS Staff Portal',
-                html: `
+  async sendAdminLoginCredentials(
+    email: string,
+    firstName: string,
+    password: string
+  ): Promise<void> {
+    try {
+      const mailOptions = {
+        from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject: "Admin Account Created - ALECONS Staff Portal",
+        html: `
                     <!DOCTYPE html>
                     <html>
                     <head>
@@ -1271,7 +1498,8 @@ export class EmailService {
                                 <h3>Your Login Credentials:</h3>
                                 <p><strong>Email:</strong> ${email}</p>
                                 <p><strong>Password:</strong> ${password}</p>
-                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL}/staff</p>
+                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL
+          }/staff</p>
                             </div>
                             
                             <div class="warning">
@@ -1301,25 +1529,32 @@ export class EmailService {
                         </div>
                     </body>
                     </html>
-                `
-            };
+                `,
+      };
 
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Admin login credentials sent to ${email}`);
-
-        } catch (error) {
-            this.logger.error(`Failed to send admin login credentials to ${email}:`, error.message);
-            throw error;
-        }
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Admin login credentials sent to ${email}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send admin login credentials to ${email}:`,
+        error.message
+      );
+      throw error;
     }
+  }
 
-    async sendStaffLoginCredentials(email: string, firstName: string, password: string, staffId: string): Promise<void> {
-        try {
-            const mailOptions = {
-                from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-                to: email,
-                subject: 'Staff Account Created - ALECONS Staff Portal',
-                html: `
+  async sendStaffLoginCredentials(
+    email: string,
+    firstName: string,
+    password: string,
+    staffId: string
+  ): Promise<void> {
+    try {
+      const mailOptions = {
+        from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject: "Staff Account Created - ALECONS Staff Portal",
+        html: `
                     <!DOCTYPE html>
                     <html>
                     <head>
@@ -1351,7 +1586,9 @@ export class EmailService {
                                 <p><strong>Staff ID:</strong> ${staffId}</p>
                                 <p><strong>Email:</strong> ${email}</p>
                                 <p><strong>Password:</strong> ${password}</p>
-                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL || process.env.FRONTEND_URL}/staff</p>
+                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL ||
+          process.env.FRONTEND_URL
+          }/staff</p>
                             </div>
                             
                             <div class="warning">
@@ -1375,25 +1612,33 @@ export class EmailService {
                         </div>
                     </body>
                     </html>
-                `
-            };
+                `,
+      };
 
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Staff login credentials sent to ${email} for Staff ID: ${staffId}`);
-
-        } catch (error) {
-            this.logger.error(`Failed to send staff login credentials to ${email}:`, error.message);
-            throw error;
-        }
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(
+        `Staff login credentials sent to ${email} for Staff ID: ${staffId}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send staff login credentials to ${email}:`,
+        error.message
+      );
+      throw error;
     }
+  }
 
-    async sendPasswordReset(email: string, firstName: string, newPassword: string): Promise<void> {
-        try {
-            const mailOptions = {
-                from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
-                to: email,
-                subject: 'Password Reset - ALECONS Portal',
-                html: `
+  async sendPasswordReset(
+    email: string,
+    firstName: string,
+    newPassword: string
+  ): Promise<void> {
+    try {
+      const mailOptions = {
+        from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject: "Password Reset - ALECONS Portal",
+        html: `
                     <!DOCTYPE html>
                     <html>
                     <head>
@@ -1439,7 +1684,9 @@ export class EmailService {
                             <p>If you did not request this password reset or have any concerns about your account security, please contact the IT department immediately.</p>
                             
                             <p><strong>Portal Access:</strong><br>
-                            ${process.env.STAFF_PORTAL_URL || process.env.FRONTEND_URL}</p>
+                            ${process.env.STAFF_PORTAL_URL ||
+          process.env.FRONTEND_URL
+          }</p>
                             
                             <div class="footer">
                                 <p><strong>Important:</strong> Delete this email after changing your password.</p>
@@ -1448,15 +1695,17 @@ export class EmailService {
                         </div>
                     </body>
                     </html>
-                `
-            };
+                `,
+      };
 
-            await this.transporter.sendMail(mailOptions);
-            this.logger.log(`Password reset email sent to ${email}`);
-
-        } catch (error) {
-            this.logger.error(`Failed to send password reset email to ${email}:`, error.message);
-            throw error;
-        }
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Password reset email sent to ${email}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send password reset email to ${email}:`,
+        error.message
+      );
+      throw error;
     }
+  }
 }

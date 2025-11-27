@@ -18,11 +18,15 @@ import { StaffApplicationsController } from './controllers/staff-applications.co
 import { ExamResultsController } from './controllers/exam-results.controller';
 import { Application, ApplicationSchema } from './schemas/application.schema';
 import { Program, ProgramSchema } from './schemas/program.schema';
+import { ProgramType, ProgramTypeSchema } from './schemas/program-type.schema';
+import { AcademicSession, AcademicSessionSchema } from './schemas/academic-session.schema';
 import { User, UserSchema } from './schemas/user.schema';
 import { Student, StudentSchema } from './schemas/student.schema';
+import { Payment, PaymentSchema } from './schemas/payment.schema';
 import { EmailService } from './services/email.service';
 import { MatriculationService } from './services/matriculation.service';
 import { ContentSanitizationService } from './services/content-sanitization.service';
+import { AdmissionLetterPdfService } from './services/admission-letter-pdf.service';
 
 @Module({
     imports: [
@@ -34,8 +38,11 @@ import { ContentSanitizationService } from './services/content-sanitization.serv
         MongooseModule.forFeature([
             { name: Application.name, schema: ApplicationSchema },
             { name: Program.name, schema: ProgramSchema },
+            { name: ProgramType.name, schema: ProgramTypeSchema },
+            { name: AcademicSession.name, schema: AcademicSessionSchema },
             { name: User.name, schema: UserSchema },
-            { name: Student.name, schema: StudentSchema }
+            { name: Student.name, schema: StudentSchema },
+            { name: Payment.name, schema: PaymentSchema }
         ]),
         ThrottlerModule.forRoot([
             {
@@ -61,6 +68,6 @@ import { ContentSanitizationService } from './services/content-sanitization.serv
         UserManagementModule,
     ],
     controllers: [AppController, StaffApplicationsController, ExamResultsController],
-    providers: [AppService, EmailService, MatriculationService, ContentSanitizationService],
+    providers: [AppService, EmailService, MatriculationService, ContentSanitizationService, AdmissionLetterPdfService],
 })
 export class AppModule { }

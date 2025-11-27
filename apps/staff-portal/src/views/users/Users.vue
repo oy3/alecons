@@ -72,7 +72,7 @@ export default {
         { value: 'applications', label: 'Applications' },
         { value: 'admissions', label: 'Admissions' },
         { value: 'academics', label: 'Academics' },
-        { value: 'exams', label: 'Academics' },
+        { value: 'exams', label: 'Exams' },
         { value: 'users', label: 'Users' },
         { value: 'reports', label: 'Reports' },
         { value: 'settings', label: 'Settings' },
@@ -210,8 +210,78 @@ export default {
     },
 
     viewUser(user) {
-      this.selectedUser = { ...user }
-      this.showUserModal = true
+      // Get role name for display
+      const role = this.roles.find(r => r._id === user.roleId);
+      const roleName = role ? role.name : (user.role || 'N/A');
+      
+      // Format user details for display
+      const userDetailsHtml = `
+        <div class="text-start">
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Name:</strong></div>
+            <div class="col-sm-8">${user.firstName} ${user.lastName} ${user.otherName || ''}</div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Email:</strong></div>
+            <div class="col-sm-8">${user.email}</div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>User Type:</strong></div>
+            <div class="col-sm-8">${user.role || 'N/A'}</div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Role:</strong></div>
+            <div class="col-sm-8">${roleName}</div>
+          </div>
+          ${user.staffId ? `
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Staff ID:</strong></div>
+            <div class="col-sm-8">${user.staffId}</div>
+          </div>
+          ` : ''}
+          ${user.department ? `
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Department:</strong></div>
+            <div class="col-sm-8">${user.department}</div>
+          </div>
+          ` : ''}
+          ${user.position ? `
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Position:</strong></div>
+            <div class="col-sm-8">${user.position}</div>
+          </div>
+          ` : ''}
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Status:</strong></div>
+            <div class="col-sm-8">
+              <span class="badge ${user.isActive ? 'bg-success' : 'bg-danger'}">
+                ${user.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Created:</strong></div>
+            <div class="col-sm-8">${this.formatDate(user.createdAt)}</div>
+          </div>
+          ${user.lastLogin ? `
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Last Login:</strong></div>
+            <div class="col-sm-8">${this.formatDate(user.lastLogin)}</div>
+          </div>
+          ` : ''}
+        </div>
+      `;
+
+      Swal.fire({
+        title: 'User Details',
+        html: userDetailsHtml,
+        icon: 'info',
+        width: '600px',
+        confirmButtonText: 'Close',
+        customClass: {
+          container: 'user-details-modal'
+        }
+      });
     },
 
     editUser(user) {
@@ -1087,7 +1157,6 @@ export default {
             </div>
           </div> -->
           <div class="card-body p-0">
-            <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead class="table-light">
                   <tr>
@@ -1189,7 +1258,6 @@ export default {
                   </tr>
                 </tbody>
               </table>
-            </div>
           </div>
 
           <!-- Pagination -->

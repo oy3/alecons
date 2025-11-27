@@ -18,6 +18,14 @@ export default {
   },
   name: "Home",
   components: { Hero, CTA },
+    computed: {
+    registrationUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
+    },
+    applicationPortalUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
+    }
+  }
 };
 </script>
 

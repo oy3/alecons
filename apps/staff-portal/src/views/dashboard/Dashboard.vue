@@ -16,15 +16,16 @@ export default {
       stats: {
         totalApplications: 0,
         pendingApplications: 0,
-        approvedApplications: 0,
-        rejectedApplications: 0,
+        admittedStudents: 0,
+        totalRevenue: 0,
         totalUsers: 0,
-        activeUsers: 0,
         systemHealth: 'Good'
       },
       recentApplications: [],
       isLoading: true,
-      chartData: null
+      currentAcademicSession: null,
+      chartData: null,
+      error: null
     }
   },
   async mounted() {
@@ -34,61 +35,163 @@ export default {
     async loadDashboardData() {
       try {
         this.isLoading = true
+        this.error = null
         logger.info('Loading staff dashboard data...')
 
-        // Simulate API call - replace with actual API calls
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        // Fetch all necessary data in parallel
+        const [
+          academicSessionsResponse,
+          recentAppsResponse,
+          allAppsResponse,
+          usersResponse,
+          programTypesResponse,
+          programModesResponse,
+          studentPaymentsStatsResponse
+        ] = await Promise.all([
+          apiService.getAcademicSessions(),
+          apiService.getApplications({ limit: 5, sort: 'createdAt', order: 'desc' }),
+          apiService.getApplications({ limit: 1000 }),
+          apiService.getUsers(),
+          apiService.getProgramTypes(),
+          apiService.getProgramModes(),
+          apiService.getStudentPaymentsStats({ limit: 1000 })
+        ])
 
-        // Mock data - replace with actual API responses
-        this.stats = {
-          totalApplications: 1247,
-          pendingApplications: 89,
-          approvedApplications: 1098,
-          rejectedApplications: 60,
-          totalUsers: 2340,
-          activeUsers: 1876,
-          totalRevenue: 12050000,
-          systemHealth: 'Excellent'
+        // Process academic sessions
+        if (academicSessionsResponse.success) {
+          const sessionsData = academicSessionsResponse.data?.sessions || []
+          const sessions = Array.isArray(sessionsData) ? sessionsData : []
+
+          if (sessions.length > 0) {
+            this.currentAcademicSession = sessions.find(session => session.status === 'open') ||
+                                         sessions.find(session => session.status === 'ongoing') ||
+                                         sessions[0]
+          }
         }
 
-        this.recentApplications = [
-          {
-            id: '1',
-            applicantName: 'John Doe',
-            applicationNumber: 'APP-2025-001',
-            program: 'Nursing',
-            status: 'pending',
-            submittedAt: '2025-09-30T10:30:00Z'
-          },
-          {
-            id: '2',
-            applicantName: 'Jane Smith',
-            applicationNumber: 'APP-2025-002',
-            program: 'Nursing',
-            status: 'approved',
-            submittedAt: '2025-09-29T14:15:00Z'
-          },
-          {
-            id: '3',
-            applicantName: 'Mike Johnson',
-            applicationNumber: 'APP-2025-003',
-            program: 'Nursing',
-            status: 'under_review',
-            submittedAt: '2025-09-29T09:45:00Z'
-          },
-          {
-            id: '4',
-            applicantName: 'Jenny Johnson',
-            applicationNumber: 'APP-2025-004',
-            program: 'Nursing',
-            status: 'rejected',
-            submittedAt: '2025-09-29T09:45:00Z'
+        // Get program types and modes for reference
+        let programTypesMap = new Map()
+        let programModesMap = new Map()
+
+        if (programTypesResponse.success) {
+          const typesData = programTypesResponse.data?.data || programTypesResponse.data || []
+          if (Array.isArray(typesData)) {
+            typesData.forEach(type => {
+              programTypesMap.set(type.id || type._id, type.type || type.description)
+            })
           }
-        ]
+        }
+
+        if (programModesResponse.success) {
+          const modesData = programModesResponse.data?.data || programModesResponse.data || []
+          if (Array.isArray(modesData)) {
+            modesData.forEach(mode => {
+              programModesMap.set(mode.id || mode._id, mode.mode || mode.description)
+            })
+          }
+        }
+
+        // Process recent applications
+        if (recentAppsResponse.success) {
+          const recentAppsData = recentAppsResponse.data?.applications ||
+                               recentAppsResponse.data?.data ||
+                               recentAppsResponse.data || []
+          const recentApps = Array.isArray(recentAppsData) ? recentAppsData : []
+
+          this.recentApplications = recentApps.map(app => {
+            let programDisplay = 'N/A'
+
+            if (app.programType && app.programMode && app.program) {
+              const programType = app.programType.type || app.programType.description || ''
+              const programMode = app.programMode.mode || app.programMode.description || ''
+              const programName = app.program.name || ''
+              programDisplay = `${programType} ${programMode} ${programName}`.trim()
+            } else if (app.programTypeId && app.programModeId && app.programName) {
+              const programType = programTypesMap.get(app.programTypeId) || ''
+              const programMode = programModesMap.get(app.programModeId) || ''
+              const programName = app.programName || ''
+              programDisplay = `${programType} ${programMode} ${programName}`.trim()
+            } else {
+              programDisplay = app.programName || 'N/A'
+            }
+
+            return {
+              id: app.id || app._id,
+              applicantName: app.applicantName || 'N/A',
+              applicationNumber: app.applicationNumber,
+              program: programDisplay,
+              status: app.status,
+              submittedAt: app.createdAt
+            }
+          })
+        } else {
+          this.recentApplications = []
+        }
+
+        // Process all applications for stats calculation
+        if (allAppsResponse.success) {
+          const allAppsData = allAppsResponse.data?.applications ||
+                            allAppsResponse.data?.data ||
+                            allAppsResponse.data || []
+          const allApps = Array.isArray(allAppsData) ? allAppsData : []
+
+          this.stats.pendingApplications = allApps.filter(app => app.status === 'pending').length
+          this.stats.admittedStudents = allApps.filter(app =>
+            app.admissionDecision === 'admitted' ||
+            app.status === 'admitted' ||
+            (app.status === 'completed' && app.admissionDecision === 'admitted')
+          ).length
+        } else {
+          this.stats.pendingApplications = 0
+          this.stats.admittedStudents = 0
+        }
+
+        // Process users data
+        if (usersResponse.success) {
+          const usersData = usersResponse.data?.data ||
+                          usersResponse.data?.users ||
+                          usersResponse.data || []
+          const users = Array.isArray(usersData) ? usersData : []
+          this.stats.totalUsers = users.length
+        } else {
+          this.stats.totalUsers = 0
+        }
+
+        // Process student payments for revenue calculation
+        if (studentPaymentsStatsResponse.success) {
+          let revenue = 0
+
+          // If we have a current academic session, get revenue for that session
+          if (this.currentAcademicSession?.id) {
+            try {
+              const sessionFilteredResponse = await apiService.getStudentPaymentsStats({
+                academicSessionId: this.currentAcademicSession.id,
+                status: 'successful',
+                limit: 1000
+              })
+
+              if (sessionFilteredResponse.success) {
+                revenue = sessionFilteredResponse.data?.totalRevenue || 0
+              }
+            } catch (error) {
+              revenue = studentPaymentsStatsResponse.data?.totalRevenue || 0
+            }
+          } else {
+            revenue = studentPaymentsStatsResponse.data?.totalRevenue || 0
+          }
+
+          this.stats.totalRevenue = revenue
+        } else {
+          this.stats.totalRevenue = 0
+        }
+
+        // Set default system health
+        this.stats.systemHealth = 'Good'
 
         logger.info('Staff dashboard data loaded successfully')
       } catch (error) {
         logger.error('Failed to load staff dashboard data:', error)
+        this.error = error.message || 'Failed to load dashboard data. Please try again.'
       } finally {
         this.isLoading = false
       }
@@ -146,14 +249,20 @@ export default {
               Welcome, {{ authStore.user?.firstName }}!
             </h2>
             <p class="text-muted mb-0">
-              Here's a summary of the portal's activity.
+              Here's a summary of the portal's activity
+              <span v-if="currentAcademicSession">
+                for {{ currentAcademicSession.sessionYear }} session </span
+              >.
             </p>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-outline-staff-primary btn-sm">
+            <!-- <button class="btn btn-outline-staff-primary btn-sm">
               <i class="bi bi-download me-2"></i>Export Report
-            </button>
-            <button class="btn btn-staff-primary btn-sm" @click="loadDashboardData">
+            </button> -->
+            <button
+              class="btn btn-outline-staff-primary btn-sm"
+              @click="loadDashboardData"
+            >
               <i class="bi bi-arrow-clockwise me-2"></i>Refresh
             </button>
           </div>
@@ -169,6 +278,18 @@ export default {
       <p class="mt-3 text-muted">Loading dashboard data...</p>
     </div>
 
+    <!-- Error State -->
+    <div v-else-if="error" class="alert alert-danger" role="alert">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      {{ error }}
+      <button
+        class="btn btn-outline-danger btn-sm ms-3"
+        @click="loadDashboardData"
+      >
+        <i class="bi bi-arrow-clockwise me-1"></i>Retry
+      </button>
+    </div>
+
     <!-- Dashboard Content -->
     <div v-else>
       <!-- Stats Cards Row -->
@@ -179,7 +300,8 @@ export default {
               <div class="d-flex align-items-center justify-content-center">
                 <div
                   class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center"
-                  style="width: 60px; height: 60px">
+                  style="width: 60px; height: 60px"
+                >
                   <i class="bi bi-hourglass-split fs-4"></i>
                 </div>
                 <div class="ms-3">
@@ -201,7 +323,8 @@ export default {
               <div class="d-flex align-items-center justify-content-center">
                 <div
                   class="bg-success-subtle text-success rounded-circle d-flex align-items-center justify-content-center"
-                  style="width: 60px; height: 60px">
+                  style="width: 60px; height: 60px"
+                >
                   <i class="bi bi bi-person-check fs-4"></i>
                 </div>
                 <div class="ms-3">
@@ -209,7 +332,7 @@ export default {
                     Admitted Students
                   </h6>
                   <h3 class="fw-bold text-dark mb-0">
-                    {{ stats.approvedApplications.toLocaleString() }}
+                    {{ stats.admittedStudents.toLocaleString() }}
                   </h3>
                 </div>
               </div>
@@ -223,7 +346,8 @@ export default {
               <div class="d-flex align-items-center justify-content-center">
                 <div
                   class="bg-warning-subtle text-warning rounded-circle d-flex align-items-center justify-content-center"
-                  style="width: 60px; height: 60px">
+                  style="width: 60px; height: 60px"
+                >
                   <i class="bi bi-cash-stack fs-4"></i>
                 </div>
                 <div class="ms-3">
@@ -244,7 +368,8 @@ export default {
               <div class="d-flex align-items-center justify-content-center">
                 <div
                   class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center"
-                  style="width: 60px; height: 60px">
+                  style="width: 60px; height: 60px"
+                >
                   <i class="bi bi-people fs-4"></i>
                 </div>
                 <div class="ms-3">
@@ -280,11 +405,16 @@ export default {
                       <th>Program</th>
                       <th class="text-center">Date Applied</th>
                       <th class="text-center">Status</th>
-                      <th class="text-center"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="app in recentApplications" :key="app.id">
+                    <tr v-if="recentApplications.length === 0">
+                      <td colspan="5" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                        No recent applications found
+                      </td>
+                    </tr>
+                    <tr v-else v-for="app in recentApplications" :key="app.id">
                       <td>
                         <code class="text-staff-primary">{{
                           app.applicationNumber
@@ -300,14 +430,12 @@ export default {
                         {{ formatDate(app.submittedAt) }}
                       </td>
                       <td class="text-center">
-                        <span class="badge rounded-pill" :class="getStatusBadgeClass(app.status)">
+                        <span
+                          class="badge rounded-pill"
+                          :class="getStatusBadgeClass(app.status)"
+                        >
                           {{ app.status.replace("_", " ").toUpperCase() }}
                         </span>
-                      </td>
-                      <td class="text-center">
-                        <button class="btn btn-outline-staff-primary btn-sm">
-                          <i class="bi bi-eye"></i>
-                        </button>
                       </td>
                     </tr>
                   </tbody>
@@ -315,8 +443,10 @@ export default {
               </div>
             </div>
             <div class="card-footer bg-transparent border-top-0 text-end py-3">
-              <button class="btn btn-link text-decoration-none text-staff-primary btn-sm fw-bold"
-                @click="navigateToApplications">
+              <button
+                class="btn btn-link text-decoration-none text-staff-primary btn-sm fw-bold"
+                @click="navigateToApplications"
+              >
                 View all applications
                 <i class="bi bi-arrow-right"></i>
               </button>
@@ -328,12 +458,17 @@ export default {
         <div class="col-lg-4">
           <h5 class="mb-3 fw-bold">Quick Actions</h5>
 
-
           <div class="d-grid gap-2">
-            <button class="btn btn-staff-primary" @click="navigateToApplications">
+            <button
+              class="btn btn-staff-primary"
+              @click="navigateToApplications"
+            >
               <i class="bi bi-plus-circle me-2"></i>Review Applications
             </button>
-            <button class="btn btn-outline-staff-primary" @click="navigateToUsers">
+            <button
+              class="btn btn-outline-staff-primary"
+              @click="navigateToUsers"
+            >
               <i class="bi bi-person-plus me-2"></i>Manage Users
             </button>
             <button class="btn btn-outline-staff-primary">
@@ -343,11 +478,10 @@ export default {
               <i class="bi bi-gear me-2"></i>System Settings
             </button>
           </div>
-
         </div>
       </div>
     </div>
-    </div>
+  </div>
 </template>
 
 <style scoped>

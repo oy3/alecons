@@ -2,6 +2,14 @@
 export default {
     name: "CTA",
     components: {},
+      computed: {
+    registrationUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
+    },
+    applicationPortalUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
+    }
+  }
 };
 </script>
 
@@ -12,7 +20,14 @@ export default {
             today and take the
             first step towards becoming a healthcare professional.</p>
         <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-            <button class="btn btn-acon-secondary btn-lg px-5" type="button">Apply Now</button>
+                    <a
+          :href="registrationUrl"
+          target="_blank"
+          class="btn btn-acon-secondary btn-lg px-5"
+          rel="noopener noreferrer"
+        >
+          Apply Now
+        </a>
             <button class="btn btn-outline-light btn-lg px-5" style="--bs-btn-hover-color: #2d7d7d" type="button">Schedule Campus
                 Tour</button>
         </div>

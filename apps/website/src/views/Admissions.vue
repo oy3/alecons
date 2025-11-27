@@ -16,6 +16,14 @@ export default {
   },
     name: "Admissions",
     components: {},
+      computed: {
+    registrationUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
+    },
+    applicationPortalUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
+    }
+  }
 };
 </script>
 
@@ -28,11 +36,14 @@ export default {
         towards a rewarding career in nursing at ALECONS.
       </p>
       <div class="d-grid d-md-flex justify-content-center gap-3 mx-auto">
-        <button
+        <a
+          :href="registrationUrl"
+          target="_blank"
           class="btn btn-acon-secondary px-4 icon-link icon-link-hover d-inline-flex align-items-center justify-content-center gap-1"
+          rel="noopener noreferrer"
         >
           Apply Now <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-        </button>
+        </a>
         <button
           class="btn btn-outline-light px-4 d-inline-flex align-items-center gap-2"
           style="--bs-btn-hover-color: #2d7d7d"
@@ -541,12 +552,14 @@ export default {
         here to help you through every step of the process.
       </p>
       <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-        <button
+        <a
+          :href="registrationUrl"
+          target="_blank"
           class="btn btn-acon-dark px-5 icon-link icon-link-hover d-inline-flex align-items-center justify-content-center gap-1"
-          type="button"
+          rel="noopener noreferrer"
         >
           Start Application <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-        </button>
+        </a>
         <button
           class="btn btn-outline-light px-5"
           style="--bs-btn-hover-color: #1e3a47"

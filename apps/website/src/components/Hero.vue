@@ -2,13 +2,19 @@
 export default {
   name: "Hero",
   components: {},
+  computed: {
+    registrationUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
+    },
+    applicationPortalUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
+    }
+  }
 };
 </script>
 
 <template>
-  <div
-    class="hero-section text-white text-start d-flex align-items-start justify-content-start p-5 pb-3"
-  >
+  <div class="hero-section text-white text-start d-flex align-items-start justify-content-start p-5 pb-3">
     <div class="overlay"></div>
     <div class="hero-content">
       <h1 class="fw-bold display-2 mb-0 lh-1">Excellence in</h1>
@@ -27,24 +33,22 @@ export default {
       </div>
 
       <div class="d-grid gap-2 d-md-block">
-        <button
+                <a
+          :href="registrationUrl"
+          target="_blank"
           class="btn btn-acon-secondary btn-lg icon-link icon-link-hover me-0 me-md-3 px-4"
+          rel="noopener noreferrer"
         >
           Start Your Journey <i class="bi bi-arrow-right-short h3"></i>
-        </button>
-        <router-link
-          to="/programs"
-          class="btn btn-outline-light btn-lg px-4"
-          style="--bs-btn-hover-color: #2d7d7d"
-        >
+        </a>
+        <router-link to="/programs" class="btn btn-outline-light btn-lg px-4" style="--bs-btn-hover-color: #2d7d7d">
           Explore Programs
         </router-link>
       </div>
 
       <div class="col-md-9">
         <div
-          class="stats-container mt-5 p-4 px-md-5 py-md-3 rounded-4 text-white d-flex flex-column flex-md-row justify-content-around align-items-center gap-4"
-        >
+          class="stats-container mt-5 p-4 px-md-5 py-md-3 rounded-4 text-white d-flex flex-column flex-md-row justify-content-around align-items-center gap-4">
           <div class="">
             <div class="d-flex align-items-end justify-content-center">
               <i class="bi bi-people h2 acon-text-secondary me-2"></i>

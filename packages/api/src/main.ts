@@ -20,6 +20,12 @@ async function bootstrap() {
         process.env.STAFF_PORTAL_URL,
         process.env.STUDENT_PORTAL_URL,
         process.env.WEBSITE_URL,
+        // Explicit production origins (backup)
+        'https://alecons.com.ng',
+        'https://apply.alecons.com.ng',
+        'https://staff.alecons.com.ng',
+        'https://portal.alecons.com.ng',
+        'https://cbt.alecons.com.ng',
         // Development origins
         'http://localhost:3000',
         'http://localhost:3001',

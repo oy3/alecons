@@ -723,6 +723,9 @@ pm2 status
 pm2 logs alecons-api
 ```
 
+pm2 flush
+rm -rf /home/nodejs/.pm2/logs/*
+df -h
 ---
 
 ## STEP 8: Monitoring and Maintenance

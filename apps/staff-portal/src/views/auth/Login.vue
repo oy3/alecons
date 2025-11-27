@@ -64,20 +64,66 @@ export default {
           this.$router.push('/dashboard')
         } else {
           logger.error('Staff login failed:', result.error)
+          
+          // Provide more specific error messages based on the error
+          let title = 'Login Failed'
+          let text = result.error || 'Invalid email or password'
+          
+          if (result.error) {
+            if (result.error.includes('No account found')) {
+              title = 'Account Not Found'
+              text = 'No account found with this email address. Please check your email and try again.'
+            } else if (result.error.includes('does not have staff privileges')) {
+              title = 'Access Denied'
+              text = 'Your account does not have staff privileges. Please contact administrator.'
+            } else if (result.error.includes('deactivated')) {
+              title = 'Account Deactivated'
+              text = 'Your staff account has been deactivated. Please contact administrator.'
+            } else if (result.error.includes('Staff record not found')) {
+              title = 'Staff Record Missing'
+              text = 'No staff record found for your account. Please contact administrator.'
+            } else if (result.error.includes('Incorrect password')) {
+              title = 'Wrong Password'
+              text = 'The password you entered is incorrect. Please try again.'
+            }
+          }
+          
           await Swal.fire({
             icon: 'error',
-            title: 'Login Failed',
-            text: result.error || 'Invalid email or password',
+            title: title,
+            text: text,
             confirmButtonColor: '#1a5f5f',
           })
         }
       } catch (error) {
         logger.error('Staff login error:', error)
 
+        // Handle network and other errors
+        let title = 'Connection Error'
+        let text = 'Unable to connect to the server. Please check your internet connection and try again.'
+        
+        if (error.message) {
+          if (error.message.includes('fetch') || error.message.includes('Network')) {
+            title = 'Network Error'
+            text = 'Please check your internet connection and try again.'
+          } else if (error.message.includes('No account found') || 
+                     error.message.includes('does not have staff privileges') ||
+                     error.message.includes('deactivated') ||
+                     error.message.includes('Staff record not found') ||
+                     error.message.includes('Incorrect password')) {
+            // These should be handled by the result.error case above, but just in case
+            title = 'Login Failed'
+            text = error.message
+          } else {
+            title = 'Unexpected Error'
+            text = 'Something went wrong! Please try again.'
+          }
+        }
+
         await Swal.fire({
           icon: 'error',
-          title: 'Oops...',
-          text: 'Something went wrong! Please try again.',
+          title: title,
+          text: text,
           confirmButtonText: 'OK',
           confirmButtonColor: '#1a5f5f',
         })

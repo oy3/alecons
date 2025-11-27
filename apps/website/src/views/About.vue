@@ -16,6 +16,14 @@ export default {
     ]
   },
   components: {},
+    computed: {
+    registrationUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
+    },
+    applicationPortalUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
+    }
+  }
 };
 </script>
 
@@ -339,9 +347,14 @@ export default {
         healthcare education meets compassion. Join a new generation of nurses
         equipped to make a difference in hospitals, communities, and the world.
       </p>
-      <button class="btn btn-outline-light btn-lg px-5" type="button">
-        Apply Now
-      </button>
+              <a
+          :href="registrationUrl"
+          target="_blank"
+          class="btn btn-outline-light btn-lg px-5"
+          rel="noopener noreferrer"
+        >
+          Apply Now
+        </a>
     </div>
   </div>
 </template>

@@ -12,8 +12,8 @@ class PaymentService {
      */
     async getPaymentsSummary() {
         try {
-            logger.info('Fetching payments summary');
-            const response = await apiService.get('/payments/summary');
+            logger.info('Fetching payments summary for application portal');
+            const response = await apiService.get('/payments/summary?context=application-portal');
 
             if (response.success) {
                 logger.info('Successfully fetched payments summary');

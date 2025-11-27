@@ -3,8 +3,9 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Payment, PaymentDocument, PaymentAudience } from '../schemas/payment.schema';
 import { StudentPayment, StudentPaymentDocument, PaymentStatus } from '../schemas/student-payment.schema';
-import { Application, ApplicationDocument } from '../schemas/application.schema';
+import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
+import { Student, StudentDocument } from '../schemas/student.schema';
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
 
@@ -46,11 +47,12 @@ export class PaymentsService {
         @InjectModel(StudentPayment.name) private studentPaymentModel: Model<StudentPaymentDocument>,
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
+        @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
         private matriculationService: MatriculationService,
         private emailService: EmailService,
     ) { }
 
-    async getStudentPaymentsSummary(userId: string): Promise<StudentPaymentsSummary> {
+    async getStudentPaymentsSummary(userId: string, context: 'application-portal' | 'student-portal' = 'application-portal'): Promise<StudentPaymentsSummary> {
         const userObjectId = new Types.ObjectId(userId);
 
         // Get user to determine their role
@@ -59,29 +61,43 @@ export class PaymentsService {
             throw new Error('User not found');
         }
 
-        // Map UserRole to PaymentAudience
-        let userAudience: PaymentAudience;
+        // Map UserRole to PaymentAudience based on context
+        let userAudiences: PaymentAudience[];
         switch (user.role) {
             case UserRole.APPLICANT:
-                userAudience = PaymentAudience.APPLICANT;
+                // Applicants always see applicant payments
+                userAudiences = [PaymentAudience.APPLICANT];
                 break;
             case UserRole.STUDENT:
-                userAudience = PaymentAudience.STUDENT;
+                if (context === 'application-portal') {
+                    // In application portal, students see only their historical applicant payments
+                    userAudiences = [PaymentAudience.APPLICANT];
+                } else {
+                    // In student portal, students see student payments
+                    userAudiences = [PaymentAudience.STUDENT];
+                }
                 break;
             case UserRole.STAFF:
-                userAudience = PaymentAudience.ACADEMIC_STAFF; // You can adjust this logic
+                userAudiences = [PaymentAudience.ACADEMIC_STAFF];
                 break;
             case UserRole.ADMIN:
-                userAudience = PaymentAudience.ADMIN_STAFF;
+                userAudiences = [PaymentAudience.ADMIN_STAFF];
                 break;
             default:
-                userAudience = PaymentAudience.APPLICANT;
+                userAudiences = [PaymentAudience.APPLICANT];
         }
 
-        // Get all active payments that target this user's audience
+        console.log('Payment audience logic:', {
+            userId,
+            userRole: user.role,
+            context,
+            selectedAudiences: userAudiences
+        });
+
+        // Get all active payments that target this user's audiences
         const allPayments = await this.paymentModel.find({
             active: true,
-            targetAudience: { $in: [userAudience] }
+            targetAudience: { $in: userAudiences }
         }).lean();
 
         // Get student's successful payments
@@ -499,14 +515,110 @@ export class PaymentsService {
                 throw new Error('User not found for application completion');
             }
 
+            // Fetch full application with populated fields
+            const fullApplication = await this.applicationModel
+                .findById(application._id)
+                .populate(['userId', 'programId', 'entryAcademicSession'])
+                .exec();
+
+            if (!fullApplication) {
+                throw new Error('Application not found');
+            }
+
             // Generate proper matriculation number using the matriculation service
-            const matriculationNumber = await this.matriculationService.generateMatriculationNumber(application.programId);
+            // Extract just the ObjectId from the populated program document
+            this.logger.log('fullApplication.programId type:', typeof fullApplication.programId);
+            this.logger.log('fullApplication.programId value:', fullApplication.programId);
+            this.logger.log('fullApplication.programId._id:', fullApplication.programId._id);
+
+            const programId = fullApplication.programId._id || fullApplication.programId;
+            this.logger.log('Extracted programId:', programId);
+            this.logger.log('programId.toString():', programId.toString());
+
+            const matriculationNumber = await this.matriculationService.generateMatriculationNumber(
+                programId.toString()
+            );
 
             // Update application with matriculation number and completion status
-            application.matriculationNumber = matriculationNumber;
-            application.status = 'completed';
-            application.currentStage = 10; // Set to final stage
-            await application.save();
+            fullApplication.matriculationNumber = matriculationNumber;
+            fullApplication.status = ApplicationStatus.COMPLETED;
+            fullApplication.currentStage = 10; // Set to final stage
+            await fullApplication.save();
+
+            // Extract the ObjectId from the populated entryAcademicSession
+            const academicSessionId = typeof fullApplication.entryAcademicSession === 'object'
+                && fullApplication.entryAcademicSession !== null
+                ? (fullApplication.entryAcademicSession as any)._id
+                : fullApplication.entryAcademicSession;
+            const admissionYear = new Date().getFullYear();
+
+            this.logger.log('About to check for existing student record...');
+            this.logger.log('User ID for student check:', fullApplication.userId);
+
+            // Create Student record (migrate from applicant to student)
+            try {
+                const existingStudent = await this.studentModel.findOne({
+                    userId: fullApplication.userId
+                });
+
+                this.logger.log('Existing student check result:', existingStudent ? 'Found' : 'Not found');
+
+                if (!existingStudent) {
+                    this.logger.log('Creating new student record...');
+                    this.logger.log('Student data:', {
+                        userId: fullApplication.userId,
+                        applicationId: fullApplication._id,
+                        matriculationNumber: matriculationNumber,
+                        programId: fullApplication.programId,
+                        programTypeId: fullApplication.programTypeId,
+                        programModeId: fullApplication.programModeId,
+                        admissionYear: admissionYear,
+                        academicSession: academicSessionId
+                    });
+
+                    const newStudent = new this.studentModel({
+                        userId: fullApplication.userId,
+                        applicationId: fullApplication._id,
+                        matriculationNumber: matriculationNumber,
+                        programId: fullApplication.programId,
+                        programTypeId: fullApplication.programTypeId,
+                        programModeId: fullApplication.programModeId,
+                        admissionYear: admissionYear,
+                        academicSession: academicSessionId, // Store ObjectId reference
+                        status: 'active',
+                        currentLevel: 1,
+                        currentSemester: 1,
+                        cumulativeGPA: 0.0,
+                        isActive: true
+                    });
+
+                    await newStudent.save();
+                    this.logger.log('✅ Student record created successfully:', newStudent._id);
+                } else {
+                    this.logger.log('Student record already exists:', existingStudent._id);
+                }
+            } catch (studentError) {
+                this.logger.error('❌ Error creating student record:', studentError);
+                throw studentError;
+            }
+
+            this.logger.log('About to update user role...');
+            this.logger.log('Current user role:', user.role);
+
+            // Update User role from APPLICANT to STUDENT
+            try {
+                if (user.role === UserRole.APPLICANT) {
+                    this.logger.log('Updating user role from APPLICANT to STUDENT...');
+                    user.role = UserRole.STUDENT;
+                    await user.save();
+                    this.logger.log('✅ User role updated from APPLICANT to STUDENT:', user._id);
+                } else {
+                    this.logger.log('User role already set to:', user.role);
+                }
+            } catch (userError) {
+                this.logger.error('❌ Error updating user role:', userError);
+                throw userError;
+            }
 
             // Send matriculation email
             const studentPortalUrl = process.env.STUDENT_PORTAL_URL || 'http://localhost:3000/student-portal';
@@ -519,6 +631,7 @@ export class PaymentsService {
 
             this.logger.log('Application completion process finished successfully for user:', userId);
             this.logger.log('Generated matriculation number:', matriculationNumber);
+            this.logger.log('Student record created and user role updated');
             this.logger.log('Matriculation email sent to:', user.email);
 
         } catch (error) {
@@ -792,6 +905,73 @@ export class PaymentsService {
             return true;
         } catch (error) {
             this.logger.error('Error deleting payment:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get student payments statistics for staff dashboard
+     */
+    async getStudentPaymentsStats(filters: {
+        academicSessionId?: string;
+        status?: PaymentStatus;
+        page?: number;
+        limit?: number;
+    } = {}) {
+        try {
+            const {
+                academicSessionId,
+                status = PaymentStatus.SUCCESSFUL,
+                page = 1,
+                limit = 1000
+            } = filters;
+
+            // Build query for successful payments
+            const query: any = { status };
+
+            // If academic session is specified, filter by users in that session
+            let userIds: Types.ObjectId[] = [];
+            if (academicSessionId) {
+                const applications = await this.applicationModel
+                    .find({ academicSessionId: new Types.ObjectId(academicSessionId) })
+                    .select('userId')
+                    .lean();
+
+                userIds = applications.map(app => app.userId);
+                query.userId = { $in: userIds };
+            }
+
+            // Get student payments with pagination
+            const studentPayments = await this.studentPaymentModel
+                .find(query)
+                .populate('paymentId', 'name description amount')
+                .populate('userId', 'firstName lastName email')
+                .sort({ paidAt: -1 })
+                .limit(limit)
+                .skip((page - 1) * limit)
+                .lean();
+
+            // Calculate total revenue
+            const totalRevenue = await this.studentPaymentModel.aggregate([
+                { $match: query },
+                { $group: { _id: null, total: { $sum: '$amount' } } }
+            ]);
+
+            // Get count for pagination
+            const totalCount = await this.studentPaymentModel.countDocuments(query);
+
+            const revenue = totalRevenue.length > 0 ? totalRevenue[0].total : 0;
+
+            return {
+                payments: studentPayments,
+                totalRevenue: revenue,
+                totalCount,
+                page,
+                limit,
+                totalPages: Math.ceil(totalCount / limit)
+            };
+        } catch (error) {
+            this.logger.error('Error getting student payments stats:', error);
             throw error;
         }
     }

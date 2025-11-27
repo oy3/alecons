@@ -379,9 +379,9 @@ export class AuthService {
                 throw new UnauthorizedException('User not found');
             }
 
-            // Find the user's application if they have one
+            // Find the user's application if they have one (for both applicants and students)
             let application = null;
-            if (user.role === UserRole.APPLICANT) {
+            if (user.role === UserRole.APPLICANT || user.role === UserRole.STUDENT) {
                 application = await this.applicationModel
                     .findOne({ userId: user._id })
                     .populate('programId', 'name code')
@@ -391,6 +391,7 @@ export class AuthService {
 
                 this.logger.log('Application data found for user profile:', {
                     userId,
+                    userRole: user.role,
                     hasApplication: !!application,
                     applicationId: application?._id,
                     hasDob: !!application?.dob,
@@ -551,14 +552,16 @@ export class AuthService {
 
         this.logger.log('Staff login attempt:', { email });
 
-        // Find user with staff or admin role
-        const user = await this.userModel.findOne({
-            email,
-            role: { $in: [UserRole.STAFF, UserRole.ADMIN] }
-        });
+        // Find user by email first
+        const user = await this.userModel.findOne({ email });
 
         if (!user) {
-            throw new UnauthorizedException('Invalid staff credentials or insufficient permissions');
+            throw new UnauthorizedException('No account found with this email address');
+        }
+
+        // Check if user has staff or admin role
+        if (!['staff', 'admin'].includes(user.role)) {
+            throw new UnauthorizedException('Access denied: Your account does not have staff privileges');
         }
 
         if (!user.isActive) {
@@ -568,7 +571,7 @@ export class AuthService {
         // Check password
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {
-            throw new UnauthorizedException('Invalid staff credentials');
+            throw new UnauthorizedException('Incorrect password. Please try again');
         }
 
         // Get staff details and role permissions

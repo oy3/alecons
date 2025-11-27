@@ -37,7 +37,7 @@ const router = createRouter({
       component: () => import('../views/dashboard/dashboard.vue'),
       meta: {
         requiresAuth: true,
-        requiresApplicant: true
+        requiresApplicant: true  // Allows both applicant and student roles
       }
     },
     {
@@ -46,7 +46,7 @@ const router = createRouter({
       component: () => import('../views/application_form/application_form.vue'),
       meta: {
         requiresAuth: true,
-        requiresApplicant: true
+        requiresApplicant: true  // Allows both applicant and student roles
       }
     },
     {
@@ -55,7 +55,7 @@ const router = createRouter({
       component: () => import('../views/payment/payment.vue'),
       meta: {
         requiresAuth: true,
-        requiresApplicant: true
+        requiresApplicant: true  // Allows both applicant and student roles
       }
     },
     {
@@ -64,7 +64,7 @@ const router = createRouter({
       component: () => import('../views/settings/settings.vue'),
       meta: {
         requiresAuth: true,
-        requiresApplicant: true
+        requiresApplicant: true  // Allows both applicant and student roles
       }
     },
     {
@@ -128,9 +128,9 @@ router.beforeEach(async (to, from, next) => {
     return next({ name: 'Login' });
   }
 
-  // Handle routes that require applicant role
+  // Handle routes that require applicant or student role
   if (to.meta.requiresApplicant && (!isAuthenticated || !isApplicant)) {
-    logger.info('Non-applicant user trying to access applicant route, redirecting to login');
+    logger.info('Non-applicant/student user trying to access application portal route, redirecting to login');
     return next({ name: 'Login' });
   }
 

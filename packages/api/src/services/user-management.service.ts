@@ -66,8 +66,43 @@ export class UserManagementService {
         return `${prefix}/${deptCode}/${formattedNumber}`;
     }
 
+    /**
+     * Generate a secure random password with:
+     * - At least 1 uppercase letter
+     * - At least 1 lowercase letter
+     * - At least 1 number
+     * - At least 1 special character
+     * - Minimum length of 12 characters
+     */
     private generateRandomPassword(): string {
-        return crypto.randomBytes(8).toString("hex").slice(0, 8);
+        const uppercaseChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const lowercaseChars = 'abcdefghijklmnopqrstuvwxyz';
+        const numberChars = '0123456789';
+        const specialChars = '!@#$%^&*';
+
+        // Ensure at least one of each type
+        const password = [
+            uppercaseChars[Math.floor(Math.random() * uppercaseChars.length)],
+            lowercaseChars[Math.floor(Math.random() * lowercaseChars.length)],
+            numberChars[Math.floor(Math.random() * numberChars.length)],
+            specialChars[Math.floor(Math.random() * specialChars.length)],
+        ];
+
+        // Fill the rest with random characters from all sets
+        const allChars = uppercaseChars + lowercaseChars + numberChars + specialChars;
+        const remainingLength = 12 - password.length; // Total length 12
+
+        for (let i = 0; i < remainingLength; i++) {
+            password.push(allChars[Math.floor(Math.random() * allChars.length)]);
+        }
+
+        // Shuffle the password array to randomize position of required characters
+        for (let i = password.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [password[i], password[j]] = [password[j], password[i]];
+        }
+
+        return password.join('');
     }
 
     async getUsers(page: number, limit: number, filters: any) {
@@ -259,25 +294,30 @@ export class UserManagementService {
 
         await staff.save();
 
-        // Send email with login credentials
-        try {
-            if (type === 'admin') {
-                await this.emailService.sendAdminLoginCredentials(
-                    user.email,
-                    user.firstName,
-                    password
-                );
-            } else {
-                await this.emailService.sendStaffLoginCredentials(
-                    user.email,
-                    user.firstName,
-                    password,
-                    staffId
-                );
+        // Send email with login credentials asynchronously (don't block response)
+        setImmediate(async () => {
+            try {
+                if (type === 'admin') {
+                    await this.emailService.sendAdminLoginCredentials(
+                        user.email,
+                        user.firstName,
+                        password
+                    );
+                    this.logger.log(`Admin login credentials email queued for ${user.email}`);
+                } else {
+                    await this.emailService.sendStaffLoginCredentials(
+                        user.email,
+                        user.firstName,
+                        password,
+                        staffId
+                    );
+                    this.logger.log(`Staff login credentials email queued for ${user.email}`);
+                }
+            } catch (error) {
+                this.logger.error(`Failed to send login credentials email to ${user.email}:`, error.message);
+                // Note: Staff creation succeeded, only email failed
             }
-        } catch (error) {
-            this.logger.error("Failed to send login credentials email:", error);
-        }
+        });
 
         return {
             id: user._id,
@@ -335,17 +375,21 @@ export class UserManagementService {
 
         await staff.save();
 
-        // Send email with login credentials
-        try {
-            await this.emailService.sendStaffLoginCredentials(
-                user.email,
-                user.firstName,
-                password,
-                staffId
-            );
-        } catch (error) {
-            this.logger.error("Failed to send staff login credentials email:", error);
-        }
+        // Send email with login credentials asynchronously (don't block response)
+        setImmediate(async () => {
+            try {
+                await this.emailService.sendStaffLoginCredentials(
+                    user.email,
+                    user.firstName,
+                    password,
+                    staffId
+                );
+                this.logger.log(`Staff login credentials email queued for ${user.email}`);
+            } catch (error) {
+                this.logger.error(`Failed to send staff login credentials email to ${user.email}:`, error.message);
+                // Note: Staff creation succeeded, only email failed
+            }
+        });
 
         return {
             id: user._id,
@@ -462,6 +506,11 @@ export class UserManagementService {
             );
         } catch (error) {
             this.logger.error("Failed to send password reset email:", error);
+            // Rollback password change if email fails
+            await this.userModel.findByIdAndUpdate(id, { passwordHash: user.passwordHash });
+            throw new Error(
+                `Failed to send password reset email to ${user.email}. Please check email configuration and try again.`
+            );
         }
 
         return { message: "Password reset successfully" };

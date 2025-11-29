@@ -10,3 +10,9 @@ yarn.lock
 
 # OS-specific junk
 .DS_Store
+
+# env
+.env
+.env.*
+*.env
+packages/api/.env*

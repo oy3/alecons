@@ -1,3 +1,87 @@
+<script>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth.js'
+import Swal from 'sweetalert2'
+import { logger } from '@shared/utils/logger'
+
+export default {
+  name: 'Login',
+  setup() {
+    const router = useRouter()
+    const auth = useAuthStore()
+
+    const form = ref({
+      email: '',
+      password: '',
+      remember: false
+    })
+
+    const showPassword = ref(false)
+    const loginError = ref('')
+
+    const isFormValid = computed(() => {
+      return form.value.email && form.value.password
+    })
+
+    const togglePassword = () => {
+      showPassword.value = !showPassword.value
+    }
+
+    const handleLogin = async () => {
+      if (!isFormValid.value) return
+      
+      // Clear any previous error
+      loginError.value = ''
+
+      try {
+        const result = await auth.login({
+          email: form.value.email,
+          password: form.value.password
+        })
+
+        if (result.success) {
+          await Swal.fire({
+            icon: 'success',
+            title: 'Welcome Back!',
+            text: `Hello ${auth.userName}, welcome to your student portal.`,
+            timer: 2000,
+            showConfirmButton: false,
+            background: '#fff',
+            color: '#1a5f5f'
+          })
+
+          router.push({ name: 'Dashboard' })
+        } else {
+          loginError.value = result.error || 'Please check your credentials and try again.'
+        }
+      } catch (error) {
+        logger.error('Login error:', error)
+        loginError.value = 'An unexpected error occurred. Please try again.'
+      }
+    }
+
+    onMounted(() => {
+      // Set focus on email input
+      const emailInput = document.getElementById('email')
+      if (emailInput) {
+        emailInput.focus()
+      }
+    })
+
+    return {
+      auth,
+      form,
+      showPassword,
+      loginError,
+      isFormValid,
+      togglePassword,
+      handleLogin
+    }
+  }
+}
+</script>
+
 <template>
   <div class="login-container d-flex align-items-center justify-content-center">
     <div class="login-card card shadow-lg">
@@ -11,9 +95,9 @@
         </div>
 
         <!-- Error Alert -->
-        <div v-if="auth.error" class="alert alert-danger" role="alert">
+        <div v-if="loginError" class="alert alert-danger" role="alert">
           <i class="bi bi-exclamation-triangle-fill me-2"></i>
-          {{ auth.error }}
+          {{ loginError }}
         </div>
 
         <!-- Login Form -->
@@ -98,99 +182,6 @@
     </div>
   </div>
 </template>
-
-<script>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { authStore } from '../stores/auth.js'
-import Swal from 'sweetalert2'
-
-export default {
-  name: 'Login',
-  setup() {
-    const router = useRouter()
-    const auth = authStore()
-
-    const form = ref({
-      email: '',
-      password: '',
-      remember: false
-    })
-
-    const showPassword = ref(false)
-
-    const isFormValid = computed(() => {
-      return form.value.email && form.value.password
-    })
-
-    const togglePassword = () => {
-      showPassword.value = !showPassword.value
-    }
-
-    const handleLogin = async () => {
-      if (!isFormValid.value) return
-
-      auth.clearError()
-
-      try {
-        const result = await auth.login({
-          email: form.value.email,
-          password: form.value.password
-        })
-
-        if (result.success) {
-          await Swal.fire({
-            icon: 'success',
-            title: 'Welcome Back!',
-            text: `Hello ${auth.userName}, welcome to your student portal.`,
-            timer: 2000,
-            showConfirmButton: false,
-            background: '#fff',
-            color: '#1a5f5f'
-          })
-
-          router.push({ name: 'Dashboard' })
-        } else {
-          await Swal.fire({
-            icon: 'error',
-            title: 'Login Failed',
-            text: result.message || 'Please check your credentials and try again.',
-            confirmButtonColor: '#1a5f5f'
-          })
-        }
-      } catch (error) {
-        console.error('Login error:', error)
-        await Swal.fire({
-          icon: 'error',
-          title: 'Login Error',
-          text: 'An unexpected error occurred. Please try again.',
-          confirmButtonColor: '#1a5f5f'
-        })
-      }
-    }
-
-    onMounted(() => {
-      // Clear any previous errors when component mounts
-      auth.clearError()
-      
-      // Set focus on email input
-      const emailInput = document.getElementById('email')
-      if (emailInput) {
-        emailInput.focus()
-      }
-    })
-
-    return {
-      auth,
-      form,
-      showPassword,
-      isFormValid,
-      togglePassword,
-      handleLogin
-    }
-  }
-}
-</script>
 
 <style scoped>
 .login-container {

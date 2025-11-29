@@ -229,9 +229,9 @@ export class AuthService {
         const payload = { email: user.email, sub: user._id, role: user.role };
         const access_token = this.jwtService.sign(payload);
 
-        // Get application if user is an applicant
+        // Get application if user is an applicant or student
         let applicationData = null;
-        if (user.role === UserRole.APPLICANT) {
+        if (user.role === UserRole.APPLICANT || user.role === UserRole.STUDENT) {
             const application = await this.applicationModel
                 .findOne({ userId: user._id })
                 .populate('programId', 'name code')
@@ -280,6 +280,7 @@ export class AuthService {
                 role: user.role,
                 fullName: user.fullName,
                 isEmailVerified: user.isEmailVerified,
+                isActive: user.isActive,
             },
             application: applicationData,
             // Keep backward compatibility
@@ -373,8 +374,18 @@ export class AuthService {
 
     async getCurrentUserProfile(userId: string) {
         try {
+            this.logger.log('getCurrentUserProfile called for userId:', userId);
+
             // Find the user
             const user = await this.userModel.findById(userId).select('-passwordHash');
+            this.logger.log('User lookup result:', {
+                found: !!user,
+                userId: user?._id,
+                email: user?.email,
+                role: user?.role,
+                isActive: user?.isActive
+            });
+
             if (!user) {
                 throw new UnauthorizedException('User not found');
             }
@@ -401,7 +412,7 @@ export class AuthService {
                 });
             }
 
-            return {
+            const result = {
                 success: true,
                 data: {
                     user: {
@@ -445,6 +456,19 @@ export class AuthService {
                     } : null
                 }
             };
+
+            this.logger.log('Profile response being returned:', {
+                success: result.success,
+                hasUser: !!result.data?.user,
+                hasApplication: !!result.data?.application,
+                userRole: result.data?.user?.role,
+                userIsActive: result.data?.user?.isActive
+            });
+
+            // Log the actual result structure being returned
+            this.logger.log('FULL RESULT STRUCTURE:', JSON.stringify(result, null, 2));
+
+            return result;
 
         } catch (error) {
             if (error instanceof UnauthorizedException) {

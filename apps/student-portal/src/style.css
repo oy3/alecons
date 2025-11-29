@@ -48,6 +48,19 @@ body {
     background-color: var(--primary-color) !important;
 }
 
+/* Application Portal matching styles */
+.acon-bg-dark {
+    background: linear-gradient(135deg, #2d7d7d 0%, #1a5a5a 100%) !important;
+}
+
+.acon-text-primary {
+    color: #2d7d7d !important;
+}
+
+.acon-text-secondary {
+    color: #e07a5f !important;
+}
+
 .border-primary {
     border-color: var(--primary-color) !important;
 }

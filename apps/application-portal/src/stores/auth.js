@@ -91,6 +91,14 @@ export const useAuthStore = defineStore('auth', () => {
             const loginData = response.success ? response.data : response;
 
             if (response.success || loginData.access_token) {
+                // Validate user role - only applicants and students can access application portal
+                const userRole = loginData.user?.role;
+                if (userRole !== 'applicant' && userRole !== 'student') {
+                    const errorMsg = `Access denied. This portal is for applicants and students only. Your role: ${userRole}`;
+                    logger.warn('Role access denied:', { userRole, allowedRoles: ['applicant', 'student'] });
+                    return { success: false, error: errorMsg };
+                }
+
                 // Set token
                 const accessToken = loginData.access_token;
                 token.value = accessToken;

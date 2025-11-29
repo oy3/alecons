@@ -1,12 +1,87 @@
 <script>
 import { useAuthStore } from '../stores/auth.js'
+import { studentPaymentService } from '../services/payment.js'
+import { logger } from '@shared/utils/logger'
 
 export default {
     name: 'Dashboard',
+    data() {
+        return {
+            paymentSummary: {
+                totalPaid: 0,
+                totalUnpaid: 0,
+                unpaidFees: []
+            },
+            isLoadingFinance: true,
+            academicSessions: [],
+            selectedSessionId: ''
+        }
+    },
     setup() {
         const auth = useAuthStore()
         return {
             auth
+        }
+    },
+    computed: {
+        accountBalance() {
+            return this.paymentSummary?.totalUnpaid || 0;
+        },
+        
+        hasOutstandingPayments() {
+            return this.accountBalance > 0;
+        },
+        
+        balanceStatusText() {
+            return this.hasOutstandingPayments ? 'Outstanding Payments' : 'All paid';
+        },
+        
+        balanceStatusClass() {
+            return this.hasOutstandingPayments ? 'text-danger' : 'text-success';
+        }
+    },
+    async mounted() {
+        await this.loadFinanceData();
+    },
+    methods: {
+        async loadFinanceData() {
+            try {
+                this.isLoadingFinance = true;
+                
+                // Load academic sessions first
+                const sessionsResponse = await studentPaymentService.getAcademicSessions();
+                if (sessionsResponse.success) {
+                    const sessions = sessionsResponse.data.sessions || [];
+                    this.academicSessions = sessions.map(session => ({
+                        id: session._id,
+                        name: session.sessionYear,
+                        value: session._id
+                    }));
+                    
+                    // Default to the most recent session
+                    if (this.academicSessions.length > 0) {
+                        this.selectedSessionId = this.academicSessions[0].id;
+                    }
+                }
+                
+                // Load payment summary for the current session
+                if (this.selectedSessionId) {
+                    const summaryResponse = await studentPaymentService.getPaymentSummary(this.selectedSessionId);
+                    if (summaryResponse.success) {
+                        this.paymentSummary = summaryResponse.data;
+                        logger.info('Dashboard: Loaded payment summary');
+                    }
+                }
+                
+            } catch (error) {
+                logger.error('Dashboard: Error loading finance data:', error);
+            } finally {
+                this.isLoadingFinance = false;
+            }
+        },
+        
+        formatCurrency(amount) {
+            return studentPaymentService.formatCurrency(amount);
         }
     }
 }
@@ -101,11 +176,40 @@ export default {
               </div>
               <div class="flex-grow-1 ms-3">
                 <h6 class="fw-bold text-dark mb-1">Balance</h6>
-                <h4 class="fw-bold text-info mb-0">₦0</h4>
-                <small class="text-success">All paid</small>
+                <div v-if="isLoadingFinance" class="d-flex align-items-center">
+                  <div class="spinner-border spinner-border-sm text-info me-2"></div>
+                  <span class="text-muted">Loading...</span>
+                </div>
+                <div v-else>
+                  <h4 class="fw-bold mb-0" :class="hasOutstandingPayments ? 'text-danger' : 'text-success'">
+                    {{ formatCurrency(accountBalance) }}
+                  </h4>
+                  <small :class="balanceStatusClass">
+                    {{ balanceStatusText }}
+                  </small>
+                </div>
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Finance Alert for Outstanding Payments -->
+    <div class="row mb-4" v-if="hasOutstandingPayments && !isLoadingFinance">
+      <div class="col-12">
+        <div class="alert alert-warning d-flex align-items-center" role="alert">
+          <i class="bi bi-exclamation-triangle-fill me-3 fs-5"></i>
+          <div class="flex-grow-1">
+            <strong>Outstanding Payment Notice</strong><br>
+            <span class="small">
+              You have {{ paymentSummary?.unpaidFees?.length || 0 }} unpaid fee(s) totaling 
+              <strong>{{ formatCurrency(accountBalance) }}</strong>. 
+            </span>
+          </div>
+          <router-link to="/finance" class="btn btn-warning btn-sm ms-3">
+            <i class="bi bi-credit-card me-1"></i>Pay Now
+          </router-link>
         </div>
       </div>
     </div>
@@ -318,8 +422,16 @@ export default {
               <router-link to="/resources" class="btn btn-outline-primary">
                 <i class="bi bi-download me-2"></i>Download Resources
               </router-link>
-              <router-link to="/finance" class="btn btn-outline-success">
-                <i class="bi bi-credit-card me-2"></i>Pay Fees
+              <router-link 
+                to="/finance" 
+                class="btn" 
+                :class="hasOutstandingPayments ? 'btn-warning' : 'btn-outline-success'"
+              >
+                <i class="bi bi-credit-card me-2"></i>
+                <span v-if="hasOutstandingPayments && !isLoadingFinance">
+                  Pay {{ formatCurrency(accountBalance) }}
+                </span>
+                <span v-else>Pay Fees</span>
               </router-link>
               <router-link to="/settings" class="btn btn-outline-secondary">
                 <i class="bi bi-gear me-2"></i>Account Settings

@@ -981,38 +981,11 @@ export class PaymentsService {
     async getStudentPaymentsSummaryWithSession(userId: string, academicSessionId?: string): Promise<StudentPaymentsSummary> {
         const userObjectId = new Types.ObjectId(userId);
 
-        // Get user to determine their role
+        // Get user to verify they exist
         const user = await this.userModel.findById(userObjectId).lean();
         if (!user) {
             throw new Error('User not found');
         }
-
-        // For student portal context, always get student payments
-        const userAudiences = [PaymentAudience.STUDENT];
-
-        // Get all active payments that target students
-        let paymentQuery: any = {
-            active: true,
-            targetAudience: { $in: userAudiences }
-        };
-
-        // If academic session is provided, filter payments by session controls
-        if (academicSessionId) {
-            const sessionControls = await this.getActivePaymentsForSession(academicSessionId);
-            if (sessionControls.payments.length > 0) {
-                paymentQuery._id = { $in: sessionControls.payments.map(p => new Types.ObjectId(p)) };
-            } else {
-                // If no payments are active for this session, return empty results
-                return {
-                    paidFees: [],
-                    unpaidFees: [],
-                    totalPaid: 0,
-                    totalUnpaid: 0
-                };
-            }
-        }
-
-        const allPayments = await this.paymentModel.find(paymentQuery).lean();
 
         // Get student's successful payments for this session
         let studentPaymentQuery: any = {
@@ -1029,6 +1002,24 @@ export class PaymentsService {
             .populate('paymentId')
             .lean();
 
+        // Get currently active payments for unpaid calculation (filtered by session controls)
+        let unpaidPaymentsQuery: any = {
+            active: true,
+            targetAudience: { $in: [PaymentAudience.STUDENT] }
+        };
+
+        // Filter unpaid payments by session controls if academic session is provided
+        if (academicSessionId) {
+            const sessionControls = await this.getActivePaymentsForSession(academicSessionId);
+            if (sessionControls.payments.length > 0) {
+                unpaidPaymentsQuery._id = { $in: sessionControls.payments.map(p => new Types.ObjectId(p)) };
+            } else {
+                unpaidPaymentsQuery = null; // No active payments for this session
+            }
+        }
+
+        const activePaymentsForUnpaid = unpaidPaymentsQuery ? await this.paymentModel.find(unpaidPaymentsQuery).lean() : [];
+
         // Create a map of paid payment IDs for quick lookup
         const paidPaymentIds = new Set(
             studentPayments.map(sp => sp.paymentId._id.toString())
@@ -1038,18 +1029,15 @@ export class PaymentsService {
         const paidFees: PaymentSummary[] = [];
         const unpaidFees: PaymentSummary[] = [];
 
-        allPayments.forEach(payment => {
-            const paymentId = payment._id.toString();
-            const studentPayment = studentPayments.find(sp =>
-                sp.paymentId._id.toString() === paymentId
-            );
-
-            if (paidPaymentIds.has(paymentId) && studentPayment) {
+        // First, add all paid fees from student payments (even if payment is no longer active)
+        studentPayments.forEach(studentPayment => {
+            if (studentPayment.paymentId && typeof studentPayment.paymentId === 'object') {
+                const payment = studentPayment.paymentId as any; // Type assertion since it's populated
                 paidFees.push({
-                    id: paymentId,
+                    id: payment._id.toString(),
                     name: payment.name,
                     description: payment.description,
-                    amount: payment.amount,
+                    amount: studentPayment.amount, // Use actual paid amount
                     isPaid: true,
                     paymentCode: payment.paymentCode,
                     paidAt: studentPayment.paidAt,
@@ -1058,7 +1046,15 @@ export class PaymentsService {
                     channel: studentPayment.channel,
                     fee: studentPayment.fee
                 });
-            } else {
+            }
+        });
+
+        // Then, add unpaid fees from currently active payments
+        activePaymentsForUnpaid.forEach(payment => {
+            const paymentId = payment._id.toString();
+
+            // Only add to unpaid if not already paid
+            if (!paidPaymentIds.has(paymentId)) {
                 unpaidFees.push({
                     id: paymentId,
                     name: payment.name,

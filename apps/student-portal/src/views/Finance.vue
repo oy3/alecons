@@ -131,6 +131,7 @@ export default {
         const summaryResponse = await studentPaymentService.getPaymentSummary(this.selectedSessionId);
         if (summaryResponse.success) {
           this.paymentSummary = summaryResponse.data;
+          logger.info('Loaded payment summary');
         }
         
         // Load payment history

@@ -246,6 +246,45 @@ class ApiService {
             body: JSON.stringify(data),
         });
     }
+
+    // Academic Sessions methods
+    async getAcademicSessions(params = {}) {
+        const queryParams = new URLSearchParams(params).toString();
+        return this.makeRequest(`/student/academic-sessions${queryParams ? `?${queryParams}` : ''}`);
+    }
+
+    // Payment methods
+    async getPaymentSummary(academicSessionId) {
+        const params = academicSessionId ? `?academicSessionId=${academicSessionId}` : '';
+        return this.makeRequest(`/student/payments/summary${params}`);
+    }
+
+    async getPaymentHistory(academicSessionId, page = 1, limit = 10) {
+        const params = new URLSearchParams({
+            page: page.toString(),
+            limit: limit.toString(),
+            ...(academicSessionId && { academicSessionId })
+        }).toString();
+        return this.makeRequest(`/student/payments/history?${params}`);
+    }
+
+    async getAvailablePayments(academicSessionId) {
+        const params = academicSessionId ? `?academicSessionId=${academicSessionId}` : '';
+        return this.makeRequest(`/student/payments/available${params}`);
+    }
+
+    async initializePayment(data) {
+        return this.makeRequest('/student/payments/initialize', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async verifyPayment(reference) {
+        return this.makeRequest(`/student/payments/verify/${reference}`, {
+            method: 'POST',
+        });
+    }
 }
 
 // Create and export a singleton instance

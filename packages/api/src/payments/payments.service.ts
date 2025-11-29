@@ -975,4 +975,345 @@ export class PaymentsService {
             throw error;
         }
     }
+
+    // Student Portal Specific Methods
+
+    async getStudentPaymentsSummaryWithSession(userId: string, academicSessionId?: string): Promise<StudentPaymentsSummary> {
+        const userObjectId = new Types.ObjectId(userId);
+
+        // Get user to determine their role
+        const user = await this.userModel.findById(userObjectId).lean();
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        // For student portal context, always get student payments
+        const userAudiences = [PaymentAudience.STUDENT];
+
+        // Get all active payments that target students
+        let paymentQuery: any = {
+            active: true,
+            targetAudience: { $in: userAudiences }
+        };
+
+        // If academic session is provided, filter payments by session controls
+        if (academicSessionId) {
+            const sessionControls = await this.getActivePaymentsForSession(academicSessionId);
+            if (sessionControls.payments.length > 0) {
+                paymentQuery._id = { $in: sessionControls.payments.map(p => new Types.ObjectId(p)) };
+            } else {
+                // If no payments are active for this session, return empty results
+                return {
+                    paidFees: [],
+                    unpaidFees: [],
+                    totalPaid: 0,
+                    totalUnpaid: 0
+                };
+            }
+        }
+
+        const allPayments = await this.paymentModel.find(paymentQuery).lean();
+
+        // Get student's successful payments for this session
+        let studentPaymentQuery: any = {
+            userId: userObjectId,
+            status: PaymentStatus.SUCCESSFUL
+        };
+
+        if (academicSessionId) {
+            studentPaymentQuery.academicSessionId = new Types.ObjectId(academicSessionId);
+        }
+
+        const studentPayments = await this.studentPaymentModel
+            .find(studentPaymentQuery)
+            .populate('paymentId')
+            .lean();
+
+        // Create a map of paid payment IDs for quick lookup
+        const paidPaymentIds = new Set(
+            studentPayments.map(sp => sp.paymentId._id.toString())
+        );
+
+        // Separate paid and unpaid fees
+        const paidFees: PaymentSummary[] = [];
+        const unpaidFees: PaymentSummary[] = [];
+
+        allPayments.forEach(payment => {
+            const paymentId = payment._id.toString();
+            const studentPayment = studentPayments.find(sp =>
+                sp.paymentId._id.toString() === paymentId
+            );
+
+            if (paidPaymentIds.has(paymentId) && studentPayment) {
+                paidFees.push({
+                    id: paymentId,
+                    name: payment.name,
+                    description: payment.description,
+                    amount: payment.amount,
+                    isPaid: true,
+                    paymentCode: payment.paymentCode,
+                    paidAt: studentPayment.paidAt,
+                    reference: studentPayment.reference,
+                    status: studentPayment.status,
+                    channel: studentPayment.channel,
+                    fee: studentPayment.fee
+                });
+            } else {
+                unpaidFees.push({
+                    id: paymentId,
+                    name: payment.name,
+                    description: payment.description,
+                    amount: payment.amount,
+                    isPaid: false,
+                    paymentCode: payment.paymentCode
+                });
+            }
+        });
+
+        const totalPaid = paidFees.reduce((sum, fee) => sum + fee.amount, 0);
+        const totalUnpaid = unpaidFees.reduce((sum, fee) => sum + fee.amount, 0);
+
+        return {
+            paidFees,
+            unpaidFees,
+            totalPaid,
+            totalUnpaid
+        };
+    }
+
+    async getStudentPaymentHistory(
+        userId: string,
+        academicSessionId?: string,
+        options: { page?: number; limit?: number } = {}
+    ) {
+        const { page = 1, limit = 10 } = options;
+        const userObjectId = new Types.ObjectId(userId);
+
+        // Build query
+        let query: any = {
+            userId: userObjectId,
+            status: PaymentStatus.SUCCESSFUL
+        };
+
+        if (academicSessionId) {
+            query.academicSessionId = new Types.ObjectId(academicSessionId);
+        }
+
+        // Get payments with pagination
+        const payments = await this.studentPaymentModel
+            .find(query)
+            .populate('paymentId', 'name description amount paymentCode')
+            .populate('academicSessionId', 'sessionYear')
+            .sort({ paidAt: -1 })
+            .limit(limit)
+            .skip((page - 1) * limit)
+            .lean();
+
+        // Get total count for pagination
+        const totalCount = await this.studentPaymentModel.countDocuments(query);
+
+        // Calculate summary
+        const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+
+        return {
+            payments: payments.map(payment => ({
+                id: payment._id,
+                paymentId: payment.paymentId,
+                amount: payment.amount,
+                reference: payment.reference,
+                paidAt: payment.paidAt,
+                channel: payment.channel,
+                fee: payment.fee,
+                status: payment.status,
+                academicSession: payment.academicSessionId
+            })),
+            totalPaid,
+            pagination: {
+                page,
+                limit,
+                totalCount,
+                totalPages: Math.ceil(totalCount / limit)
+            }
+        };
+    }
+
+    async initializeStudentPayment(
+        userId: string,
+        paymentId: string,
+        email: string,
+        academicSessionId?: string
+    ): Promise<PaystackInitializeResponse> {
+        // Check if payment is available for the academic session
+        if (academicSessionId) {
+            const isAvailable = await this.isPaymentAvailableForSession(paymentId, academicSessionId);
+            if (!isAvailable) {
+                throw new Error('Payment is not available for the selected academic session');
+            }
+        }
+
+        // Get payment details
+        const payment = await this.paymentModel.findById(paymentId);
+        if (!payment) {
+            throw new Error('Payment not found');
+        }
+
+        // Check if user is authorized for this payment
+        const user = await this.userModel.findById(userId);
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        if (!payment.targetAudience.includes(PaymentAudience.STUDENT)) {
+            throw new Error('Payment not available for students');
+        }
+
+        // Generate unique reference
+        const reference = `PAY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        // Create student payment record
+        const studentPayment = new this.studentPaymentModel({
+            userId: new Types.ObjectId(userId),
+            paymentId: new Types.ObjectId(paymentId),
+            academicSessionId: academicSessionId ? new Types.ObjectId(academicSessionId) : undefined,
+            amount: payment.amount,
+            reference: reference,
+            status: PaymentStatus.PENDING
+        });
+
+        await studentPayment.save();
+
+        // Initialize with Paystack
+        const paystackResponse = await this.initializePaystackPayment(reference, email, payment.amount);
+
+        return {
+            authorization_url: paystackResponse.authorization_url,
+            access_code: paystackResponse.access_code,
+            reference: reference
+        };
+    }
+
+    async getAvailableStudentPayments(userId: string, academicSessionId?: string) {
+        // Get user to verify they are a student
+        const user = await this.userModel.findById(userId);
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        // Get all active payments for students
+        let paymentQuery: any = {
+            active: true,
+            targetAudience: { $in: [PaymentAudience.STUDENT] }
+        };
+
+        // If academic session is provided, filter by session controls
+        if (academicSessionId) {
+            const sessionControls = await this.getActivePaymentsForSession(academicSessionId);
+            if (sessionControls.payments.length > 0) {
+                paymentQuery._id = { $in: sessionControls.payments.map(p => new Types.ObjectId(p)) };
+            } else {
+                return []; // No payments available for this session
+            }
+        }
+
+        const availablePayments = await this.paymentModel.find(paymentQuery).lean();
+
+        // Get already paid payments by this user for this session
+        let paidQuery: any = {
+            userId: new Types.ObjectId(userId),
+            status: PaymentStatus.SUCCESSFUL
+        };
+
+        if (academicSessionId) {
+            paidQuery.academicSessionId = new Types.ObjectId(academicSessionId);
+        }
+
+        const paidPayments = await this.studentPaymentModel
+            .find(paidQuery)
+            .select('paymentId')
+            .lean();
+
+        const paidPaymentIds = new Set(paidPayments.map(p => p.paymentId.toString()));
+
+        // Filter out already paid payments
+        return availablePayments
+            .filter(payment => !paidPaymentIds.has(payment._id.toString()))
+            .map(payment => ({
+                id: payment._id,
+                name: payment.name,
+                description: payment.description,
+                amount: payment.amount,
+                paymentCode: payment.paymentCode,
+                category: payment.category,
+                isPaid: false
+            }));
+    }
+
+    // Helper method to get active payments for a session
+    private async getActivePaymentsForSession(academicSessionId: string): Promise<{
+        controls: string[];
+        payments: string[];
+    }> {
+        try {
+            // This would require importing SessionControlsService, but to avoid circular dependencies,
+            // we'll implement the logic directly here
+            const sessionControl = await this.paymentModel.db.collection('sessioncontrols')
+                .findOne({ academicSessionId: new Types.ObjectId(academicSessionId) });
+
+            if (!sessionControl) {
+                return { controls: [], payments: [] };
+            }
+
+            const activePayments = sessionControl.payments
+                .filter((p: any) => p.active)
+                .map((p: any) => p.paymentId.toString());
+
+            return {
+                controls: sessionControl.controls?.filter((c: any) => c.active).map((c: any) => c.name) || [],
+                payments: activePayments
+            };
+        } catch (error) {
+            this.logger.error('Error getting active payments for session:', error);
+            return { controls: [], payments: [] };
+        }
+    }
+
+    // Helper method to check if payment is available for session
+    private async isPaymentAvailableForSession(paymentId: string, academicSessionId: string): Promise<boolean> {
+        const sessionControls = await this.getActivePaymentsForSession(academicSessionId);
+        return sessionControls.payments.includes(paymentId);
+    }
+
+    // Helper method for Paystack initialization
+    private async initializePaystackPayment(reference: string, email: string, amount: number) {
+        try {
+            const response = await fetch(`${this.paystackBaseUrl}/transaction/initialize`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.paystackSecretKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: email,
+                    amount: amount * 100, // Convert to kobo
+                    reference: reference,
+                    callback_url: `${process.env.STUDENT_PORTAL_URL}/payment/verify/${reference}`,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Paystack API error: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            if (!data.status) {
+                throw new Error(data.message || 'Paystack initialization failed');
+            }
+
+            return data.data;
+        } catch (error) {
+            this.logger.error('Paystack initialization error:', error);
+            throw error;
+        }
+    }
 }

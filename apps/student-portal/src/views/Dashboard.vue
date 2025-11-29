@@ -19,7 +19,7 @@ export default {
       <div class="col-12">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <h2 class="h3 fw-bold text-dark mb-1">Welcome back, {{ auth.userName }}! 👋</h2>
+            <h2 class="h3 fw-bold text-dark mb-1">Welcome back, {{ auth.userFirstName }}! 👋</h2>
             <p class="text-muted mb-0">Here's what's happening with your studies today.</p>
           </div>
           <div class="d-none d-md-flex">
@@ -44,8 +44,8 @@ export default {
               </div>
               <div class="flex-grow-1 ms-3">
                 <h6 class="fw-bold text-dark mb-1">Courses</h6>
-                <h4 class="fw-bold text-primary mb-0">6</h4>
-                <small class="text-muted">This semester</small>
+                <h4 class="fw-bold text-primary mb-0">0</h4>
+                <small class="text-muted">No courses registered</small>
               </div>
             </div>
           </div>
@@ -63,8 +63,8 @@ export default {
               </div>
               <div class="flex-grow-1 ms-3">
                 <h6 class="fw-bold text-dark mb-1">GPA</h6>
-                <h4 class="fw-bold text-success mb-0">3.85</h4>
-                <small class="text-muted">Cumulative</small>
+                <h4 class="fw-bold text-muted mb-0">-</h4>
+                <small class="text-muted">Not available</small>
               </div>
             </div>
           </div>
@@ -82,8 +82,8 @@ export default {
               </div>
               <div class="flex-grow-1 ms-3">
                 <h6 class="fw-bold text-dark mb-1">Attendance</h6>
-                <h4 class="fw-bold text-warning mb-0">92%</h4>
-                <small class="text-muted">This semester</small>
+                <h4 class="fw-bold text-muted mb-0">-</h4>
+                <small class="text-muted">Not available</small>
               </div>
             </div>
           </div>
@@ -124,7 +124,15 @@ export default {
               </router-link>
             </div>
           </div>
-          <div class="card-body p-0">
+          <div class="card-body">
+            <!-- TODO: Replace with actual course data from backend when course registration system is implemented -->
+            <div class="text-center py-5">
+              <i class="bi bi-book text-muted" style="font-size: 3rem;"></i>
+              <h6 class="text-muted mt-3">No Courses Available</h6>
+              <p class="text-muted small">Course registration and enrollment system will be available soon.</p>
+            </div>
+            
+            <!-- COMMENTED OUT: Mock course data - uncomment when backend is ready
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead class="table-light">
@@ -147,7 +155,7 @@ export default {
                     <td class="py-3">Mon, Wed, Fri - 9:00 AM</td>
                     <td class="py-3">
                       <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-success" style="width: 75%"></div>
+                        <div class="progress-bar bg-primary" style="width: 75%"></div>
                       </div>
                       <small class="text-muted">75% Complete</small>
                     </td>
@@ -179,7 +187,7 @@ export default {
                     <td class="py-3">Mon, Wed - 11:00 AM</td>
                     <td class="py-3">
                       <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-warning" style="width: 45%"></div>
+                        <div class="progress-bar bg-primary" style="width: 45%"></div>
                       </div>
                       <small class="text-muted">45% Complete</small>
                     </td>
@@ -187,6 +195,7 @@ export default {
                 </tbody>
               </table>
             </div>
+            -->
           </div>
         </div>
 
@@ -196,6 +205,14 @@ export default {
             <h5 class="fw-bold mb-0">Upcoming Assignments</h5>
           </div>
           <div class="card-body">
+            <!-- TODO: Replace with actual assignment data from backend when assignment system is implemented -->
+            <div class="text-center py-4">
+              <i class="bi bi-clipboard-check text-muted" style="font-size: 3rem;"></i>
+              <h6 class="text-muted mt-3">No Assignments Available</h6>
+              <p class="text-muted small">Assignment tracking system will be available once courses are set up.</p>
+            </div>
+            
+            <!-- COMMENTED OUT: Mock assignment data - uncomment when backend is ready
             <div class="d-flex align-items-center p-3 bg-light rounded mb-3">
               <div class="me-3">
                 <div class="bg-danger bg-opacity-10 rounded-circle p-2">
@@ -234,6 +251,7 @@ export default {
                 <small class="text-success">Low Priority</small>
               </div>
             </div>
+            -->
           </div>
         </div>
       </div>
@@ -246,19 +264,27 @@ export default {
             <h5 class="fw-bold mb-0">Today's Schedule</h5>
           </div>
           <div class="card-body">
-            <div class="d-flex align-items-center mb-3 p-3 bg-primary bg-opacity-10 rounded">
+            <!-- TODO: Replace with actual schedule data from backend when timetable system is implemented -->
+            <div class="text-center py-4">
+              <i class="bi bi-calendar3 text-muted" style="font-size: 3rem;"></i>
+              <h6 class="text-muted mt-3">No Schedule Available</h6>
+              <p class="text-muted small">Class timetable system will be available once courses are registered.</p>
+            </div>
+            
+            <!-- COMMENTED OUT: Mock schedule data - uncomment when backend is ready
+            <div class="d-flex align-items-center mb-3 p-3 bg-primary text-white bg-opacity-10 rounded">
               <div class="me-3">
-                <strong class="text-primary">9:00 AM</strong>
+                <strong class="">9:00 AM</strong>
               </div>
               <div>
                 <div class="fw-bold">Anatomy Lecture</div>
-                <small class="text-muted">Room 204</small>
+                <small class="">Room 204</small>
               </div>
             </div>
             
             <div class="d-flex align-items-center mb-3 p-3 bg-success bg-opacity-10 rounded">
               <div class="me-3">
-                <strong class="text-success">2:00 PM</strong>
+                <strong class="text-primary">2:00 PM</strong>
               </div>
               <div>
                 <div class="fw-bold">Clinical Practice</div>
@@ -266,15 +292,16 @@ export default {
               </div>
             </div>
             
-            <div class="d-flex align-items-center p-3 bg-info bg-opacity-10 rounded">
+            <div class="d-flex align-items-center p-3  bg-success bg-opacity-10 rounded">
               <div class="me-3">
-                <strong class="text-info">4:00 PM</strong>
+                <strong class="text-primary">4:00 PM</strong>
               </div>
               <div>
                 <div class="fw-bold">Study Group</div>
                 <small class="text-muted">Library - Room 301</small>
               </div>
             </div>
+            -->
           </div>
         </div>
 

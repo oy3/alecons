@@ -26,6 +26,9 @@ export class StudentPayment {
     @Prop({ type: Types.ObjectId, ref: 'Application' })
     applicationId?: Types.ObjectId;
 
+    @Prop({ type: Types.ObjectId, ref: 'AcademicSession' })
+    academicSessionId?: Types.ObjectId;
+
     @Prop({ type: Types.ObjectId, ref: 'Payment', required: true })
     paymentId: Types.ObjectId;
 

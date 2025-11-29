@@ -18,10 +18,10 @@ export default {
             <p class="text-muted mb-0">Access course materials, library resources, and digital content.</p>
           </div>
           <div class="d-flex gap-2 flex-wrap">
-            <button class="btn btn-outline-primary btn-sm">
+            <button class="btn btn-outline-primary btn-sm" disabled>
               <i class="bi bi-search me-1"></i><span class="d-none d-sm-inline">Search Resources</span><span class="d-sm-none">Search</span>
             </button>
-            <button class="btn btn-primary btn-sm">
+            <button class="btn btn-primary btn-sm" disabled>
               <i class="bi bi-cloud-upload me-1"></i><span class="d-none d-sm-inline">Upload File</span><span class="d-sm-none">Upload</span>
             </button>
           </div>
@@ -39,7 +39,7 @@ export default {
             </div>
             <h5 class="fw-bold">Course Materials</h5>
             <p class="text-muted small">Syllabus, lectures, handouts</p>
-            <button class="btn btn-primary btn-sm">Access Now</button>
+            <button class="btn btn-primary btn-sm" disabled>Access Now</button>
           </div>
         </div>
       </div>
@@ -51,7 +51,7 @@ export default {
             </div>
             <h5 class="fw-bold">Digital Library</h5>
             <p class="text-muted small">E-books, journals, research papers</p>
-            <button class="btn btn-success btn-sm">Browse Library</button>
+            <button class="btn btn-success btn-sm" disabled>Browse Library</button>
           </div>
         </div>
       </div>
@@ -63,7 +63,7 @@ export default {
             </div>
             <h5 class="fw-bold">Video Lectures</h5>
             <p class="text-muted small">Recorded sessions, tutorials</p>
-            <button class="btn btn-warning btn-sm">Watch Videos</button>
+            <button class="btn btn-warning btn-sm" disabled>Watch Videos</button>
           </div>
         </div>
       </div>
@@ -75,7 +75,7 @@ export default {
             </div>
             <h5 class="fw-bold">Study Tools</h5>
             <p class="text-muted small">Flashcards, practice tests</p>
-            <button class="btn btn-info btn-sm">Use Tools</button>
+            <button class="btn btn-info btn-sm" disabled>Use Tools</button>
           </div>
         </div>
       </div>
@@ -89,16 +89,15 @@ export default {
             <div class="d-flex justify-content-between align-items-center flex-wrap">
               <h5 class="fw-bold mb-0 mb-2 mb-md-0">Recent Downloads</h5>
               <div class="d-flex gap-2">
-                <select class="form-select form-select-sm" style="width: auto;">
+                <select class="form-select form-select-sm" style="width: auto;" disabled>
                   <option>All Courses</option>
-                  <option>ANA 201</option>
-                  <option>NUR 101</option>
-                  <option>MED 150</option>
                 </select>
               </div>
             </div>
           </div>
-          <div class="card-body p-0">
+          <div class="card-body">
+            <!-- TODO: Replace with actual downloads table when resource management system is implemented -->
+            <!-- 
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead class="table-light">
@@ -112,107 +111,15 @@ export default {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td class="py-3">
-                      <div class="d-flex align-items-center">
-                        <i class="bi bi-file-earmark-pdf text-danger me-2 fs-5"></i>
-                        <div>
-                          <div class="fw-bold">Anatomy Chapter 5.pdf</div>
-                          <small class="text-muted">Muscular System Overview</small>
-                          <div class="d-md-none">
-                            <small class="text-muted">
-                              <span class="badge bg-primary badge-sm me-1">ANA 201</span>
-                              Lecture Notes • 2.4 MB • 2h ago
-                            </small>
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td class="py-3 d-none d-md-table-cell">
-                      <span class="badge bg-primary">ANA 201</span>
-                    </td>
-                    <td class="py-3 d-none d-lg-table-cell">Lecture Notes</td>
-                    <td class="py-3 d-none d-sm-table-cell">2.4 MB</td>
-                    <td class="py-3 d-none d-md-table-cell">2 hours ago</td>
-                    <td class="py-3">
-                      <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary" title="View">
-                          <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-success d-none d-sm-inline-block" title="Download">
-                          <i class="bi bi-download"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="py-3">
-                      <div class="d-flex align-items-center">
-                        <i class="bi bi-file-earmark-play text-warning me-2 fs-5"></i>
-                        <div>
-                          <div class="fw-bold">Nursing Skills Demo.mp4</div>
-                          <small class="text-muted">Basic Patient Care Procedures</small>
-                          <div class="d-md-none">
-                            <small class="text-muted">
-                              <span class="badge bg-success badge-sm me-1">NUR 101</span>
-                              Video • 156 MB • 1d ago
-                            </small>
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td class="py-3 d-none d-md-table-cell">
-                      <span class="badge bg-success">NUR 101</span>
-                    </td>
-                    <td class="py-3 d-none d-lg-table-cell">Video</td>
-                    <td class="py-3 d-none d-sm-table-cell">156 MB</td>
-                    <td class="py-3 d-none d-md-table-cell">1 day ago</td>
-                    <td class="py-3">
-                      <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary" title="View">
-                          <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-success d-none d-sm-inline-block" title="Download">
-                          <i class="bi bi-download"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="py-3">
-                      <div class="d-flex align-items-center">
-                        <i class="bi bi-file-earmark-text text-info me-2 fs-5"></i>
-                        <div>
-                          <div class="fw-bold">Medical Terms Quiz.docx</div>
-                          <small class="text-muted">Practice Questions Set 1</small>
-                          <div class="d-md-none">
-                            <small class="text-muted">
-                              <span class="badge bg-info badge-sm me-1">MED 150</span>
-                              Assignment • 245 KB • 3d ago
-                            </small>
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td class="py-3 d-none d-md-table-cell">
-                      <span class="badge bg-info">MED 150</span>
-                    </td>
-                    <td class="py-3 d-none d-lg-table-cell">Assignment</td>
-                    <td class="py-3 d-none d-sm-table-cell">245 KB</td>
-                    <td class="py-3 d-none d-md-table-cell">3 days ago</td>
-                    <td class="py-3">
-                      <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary" title="View">
-                          <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-success d-none d-sm-inline-block" title="Download">
-                          <i class="bi bi-download"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  Mock data rows would go here
                 </tbody>
               </table>
+            </div>
+            -->
+            <div class="text-center py-5">
+              <i class="bi bi-download text-muted mb-3" style="font-size: 3rem;"></i>
+              <h5 class="text-muted">No Downloads Available</h5>
+              <p class="text-muted mb-0">Resources and files will appear here when courses are active.</p>
             </div>
           </div>
         </div>
@@ -231,35 +138,35 @@ export default {
                   <i class="bi bi-book me-2 text-primary"></i>
                   <span>Textbooks</span>
                 </div>
-                <span class="badge bg-primary rounded-pill">24</span>
+                <span class="badge bg-secondary rounded-pill">0</span>
               </div>
               <div class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
                 <div class="d-flex align-items-center">
                   <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>
                   <span>Lecture Notes</span>
                 </div>
-                <span class="badge bg-danger rounded-pill">67</span>
+                <span class="badge bg-secondary rounded-pill">0</span>
               </div>
               <div class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
                 <div class="d-flex align-items-center">
                   <i class="bi bi-camera-video me-2 text-warning"></i>
                   <span>Video Lectures</span>
                 </div>
-                <span class="badge bg-warning rounded-pill">43</span>
+                <span class="badge bg-secondary rounded-pill">0</span>
               </div>
               <div class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
                 <div class="d-flex align-items-center">
                   <i class="bi bi-journal-text me-2 text-success"></i>
                   <span>Research Papers</span>
                 </div>
-                <span class="badge bg-success rounded-pill">156</span>
+                <span class="badge bg-secondary rounded-pill">0</span>
               </div>
               <div class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
                 <div class="d-flex align-items-center">
                   <i class="bi bi-question-circle me-2 text-info"></i>
                   <span>Practice Tests</span>
                 </div>
-                <span class="badge bg-info rounded-pill">18</span>
+                <span class="badge bg-secondary rounded-pill">0</span>
               </div>
             </div>
           </div>
@@ -273,25 +180,25 @@ export default {
           <div class="card-body">
             <div class="text-center mb-3">
               <div class="progress mx-auto mb-2" style="height: 8px; width: 200px;">
-                <div class="progress-bar bg-primary" style="width: 65%"></div>
+                <div class="progress-bar bg-secondary" style="width: 0%"></div>
               </div>
-              <div class="fw-bold">650 MB of 1 GB used</div>
-              <small class="text-muted">65% storage utilized</small>
+              <div class="fw-bold">0 MB of 1 GB used</div>
+              <small class="text-muted">0% storage utilized</small>
             </div>
             
             <div class="row text-center">
               <div class="col-6">
-                <div class="fw-bold text-primary">324</div>
+                <div class="fw-bold text-muted">0</div>
                 <small class="text-muted">Total Files</small>
               </div>
               <div class="col-6">
-                <div class="fw-bold text-success">89</div>
+                <div class="fw-bold text-muted">0</div>
                 <small class="text-muted">Folders</small>
               </div>
             </div>
 
             <div class="d-grid mt-3">
-              <button class="btn btn-outline-primary">Manage Storage</button>
+              <button class="btn btn-outline-primary" disabled>Manage Storage</button>
             </div>
           </div>
         </div>

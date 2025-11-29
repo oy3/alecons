@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AcademicSessionsController } from '../controllers/academic-sessions.controller';
+import { StudentAcademicSessionsController } from '../controllers/student-academic-sessions.controller';
 import { AcademicSessionsService } from '../services/academic-sessions.service';
 import { SessionControlsService } from '../services/session-controls.service';
 import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
@@ -15,7 +16,7 @@ import { Payment, PaymentSchema } from '../schemas/payment.schema';
             { name: Payment.name, schema: PaymentSchema },
         ]),
     ],
-    controllers: [AcademicSessionsController],
+    controllers: [AcademicSessionsController, StudentAcademicSessionsController],
     providers: [AcademicSessionsService, SessionControlsService],
     exports: [AcademicSessionsService, SessionControlsService],
 })

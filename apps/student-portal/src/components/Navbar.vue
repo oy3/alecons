@@ -35,9 +35,29 @@ export default {
       }
     };
 
+    const showNotifications = () => {
+      Swal.fire({
+        icon: 'info',
+        title: 'Coming Soon',
+        text: 'Notifications feature will be available soon.',
+        confirmButtonText: 'OK'
+      });
+    };
+
+    const showMessages = () => {
+      Swal.fire({
+        icon: 'info',
+        title: 'Coming Soon',
+        text: 'Messages feature will be available soon.',
+        confirmButtonText: 'OK'
+      });
+    };
+
     return {
       auth,
-      logout
+      logout,
+      showNotifications,
+      showMessages
     };
   }
 };
@@ -76,15 +96,15 @@ export default {
         <div class="d-flex align-items-center ms-auto">
           <!-- Notifications -->
           <div class="position-relative me-3">
-            <i class="bi bi-bell fs-5 text-muted cursor-pointer"></i>
+            <i class="bi bi-bell fs-5 text-muted cursor-pointer" @click="showNotifications"></i>
             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger small">
-              3
+              0
             </span>
           </div>
 
           <!-- Messages -->
           <div class="position-relative me-3 d-none d-sm-block">
-            <i class="bi bi-chat-dots fs-5 text-muted cursor-pointer"></i>
+            <i class="bi bi-chat-dots fs-5 text-muted cursor-pointer" @click="showMessages"></i>
           </div>
 
           <!-- User Profile -->

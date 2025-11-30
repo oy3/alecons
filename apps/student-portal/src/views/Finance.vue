@@ -387,7 +387,7 @@ export default {
                   {{ formatCurrency(accountBalance) }}
                 </h4>
                 <small :class="accountBalance > 0 ? 'text-danger' : 'text-success'">
-                  {{ accountBalance > 0 ? 'Outstanding balance' : 'All payments current' }}
+                  {{ accountBalance > 0 ? 'Outstanding payments' : 'All payments current' }}
                 </small>
               </div>
             </div>

@@ -110,7 +110,7 @@ export default {
           <!-- User Profile -->
           <div class="d-flex align-items-center">
             <img
-              :src="auth.user?.profileImageUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(auth.userName) + '&background=2d7d7d&color=fff'"
+              :src="auth.profileImageUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(auth.userName) + '&background=2d7d7d&color=fff'"
               width="40"
               height="40"
               alt="Profile"

@@ -20,6 +20,8 @@ import { Staff, StaffSchema } from '../schemas/staff.schema';
 import { Role, RoleSchema } from '../schemas/role.schema';
 import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
 import { SessionControl, SessionControlSchema } from '../schemas/session-control.schema';
+import { Student, StudentSchema } from '../schemas/student.schema';
+import { StudentService } from '../services/student.service';
 
 @Module({
     imports: [
@@ -33,6 +35,7 @@ import { SessionControl, SessionControlSchema } from '../schemas/session-control
             { name: Role.name, schema: RoleSchema },
             { name: AcademicSession.name, schema: AcademicSessionSchema },
             { name: SessionControl.name, schema: SessionControlSchema },
+            { name: Student.name, schema: StudentSchema },
         ]),
         PassportModule,
         JwtModule.registerAsync({
@@ -47,7 +50,7 @@ import { SessionControl, SessionControlSchema } from '../schemas/session-control
         }),
     ],
     controllers: [AuthController, ApplicationNumberController],
-    providers: [AuthService, JwtStrategy, EmailService, ApplicationNumberService, ApplicationEligibilityService],
+    providers: [AuthService, JwtStrategy, EmailService, ApplicationNumberService, ApplicationEligibilityService, StudentService],
     exports: [AuthService, JwtStrategy],
 })
 export class AuthModule { }

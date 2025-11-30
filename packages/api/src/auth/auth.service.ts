@@ -17,6 +17,7 @@ import { ApplicationEligibilityService } from '../services/application-eligibili
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { StudentService } from '../services/student.service';
 
 @Injectable()
 export class AuthService {
@@ -34,6 +35,7 @@ export class AuthService {
         private emailService: EmailService,
         private applicationNumberService: ApplicationNumberService,
         private applicationEligibilityService: ApplicationEligibilityService,
+        private studentService: StudentService,
     ) { }
 
     async register(registerDto: RegisterDto) {
@@ -359,6 +361,19 @@ export class AuthService {
                 updatedAt: new Date()
             });
 
+            // Send email notification
+            try {
+                await this.emailService.sendPasswordChangeNotification(
+                    user.email,
+                    user.firstName
+                );
+                this.logger.log(`Password change notification sent to ${user.email}`);
+            } catch (emailError) {
+                // Log email error but don't fail the password change
+                this.logger.error(`Failed to send password change notification to ${user.email}:`, emailError.message);
+                // Continue with success response since password was changed successfully
+            }
+
             return {
                 success: true,
                 message: 'Password changed successfully'
@@ -390,7 +405,25 @@ export class AuthService {
                 throw new UnauthorizedException('User not found');
             }
 
-            // Find the user's application if they have one (for both applicants and students)
+            // Handle students differently - use Student collection as primary source
+            if (user.role === UserRole.STUDENT) {
+                this.logger.log('User is a student, delegating to StudentService');
+
+                try {
+                    const studentProfile = await this.studentService.getStudentProfile(userId);
+                    this.logger.log('Student profile obtained from StudentService:', {
+                        success: studentProfile.success,
+                        hasStudent: !!studentProfile.data?.student,
+                        matriculationNumber: studentProfile.data?.student?.matriculationNumber
+                    });
+                    return studentProfile;
+                } catch (error) {
+                    this.logger.warn('StudentService failed, falling back to Application-based profile:', error.message);
+                    // Fall back to application-based profile if student record doesn't exist yet
+                }
+            }
+
+            // Find the user's application (for applicants or students without student records yet)
             let application = null;
             if (user.role === UserRole.APPLICANT || user.role === UserRole.STUDENT) {
                 application = await this.applicationModel

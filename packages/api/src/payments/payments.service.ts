@@ -589,7 +589,8 @@ export class PaymentsService {
                         currentLevel: 1,
                         currentSemester: 1,
                         cumulativeGPA: 0.0,
-                        isActive: true
+                        isActive: true,
+                        profileImageUrl: fullApplication.profileImageUrl // Copy profile image from application
                     });
 
                     await newStudent.save();

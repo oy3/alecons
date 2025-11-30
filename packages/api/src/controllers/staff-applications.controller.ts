@@ -954,7 +954,8 @@ export class StaffApplicationsController {
                     currentLevel: 1,
                     currentSemester: 1,
                     cumulativeGPA: 0.0,
-                    isActive: true
+                    isActive: true,
+                    profileImageUrl: application.profileImageUrl // Copy profile image from application
                 });
 
                 await newStudent.save();

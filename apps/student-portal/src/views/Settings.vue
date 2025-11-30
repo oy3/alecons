@@ -1,5 +1,7 @@
 <script>
 import { useAuthStore } from "../stores/auth.js";
+import { apiService } from "../services/api.js";
+import Swal from "sweetalert2";
 
 export default {
   name: "Settings",
@@ -13,9 +15,13 @@ export default {
       passwordForm: {
         currentPassword: "",
         newPassword: "",
+        confirmPassword: "",
       },
       showCurrentPassword: false,
       showNewPassword: false,
+      showConfirmPassword: false,
+      isChangingPassword: false,
+      passwordErrors: [],
     };
   },
   methods: {
@@ -23,9 +29,126 @@ export default {
       // Handle profile update
       // Implementation will be added later
     },
-    changePassword() {
-      // Handle password change
-      // Implementation will be added later
+
+    validatePassword(password) {
+      const errors = [];
+
+      if (password.length < 8) {
+        errors.push("Password must be at least 8 characters long");
+      }
+
+      if (!/[A-Z]/.test(password)) {
+        errors.push("Password must contain at least one uppercase letter");
+      }
+
+      if (!/[a-z]/.test(password)) {
+        errors.push("Password must contain at least one lowercase letter");
+      }
+
+      if (!/\d/.test(password)) {
+        errors.push("Password must contain at least one number");
+      }
+
+      if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\?]/.test(password)) {
+        errors.push(
+          "Password must contain at least one special character (!@#$%^&*()_+-=[]{};':\"\\|,.<>?)"
+        );
+      }
+
+      return errors;
+    },
+
+    async changePassword() {
+      try {
+        this.isChangingPassword = true;
+        this.passwordErrors = [];
+
+        // Validate form
+        if (!this.passwordForm.currentPassword) {
+          this.passwordErrors.push("Current password is required");
+          return;
+        }
+
+        if (!this.passwordForm.newPassword) {
+          this.passwordErrors.push("New password is required");
+          return;
+        }
+
+        if (!this.passwordForm.confirmPassword) {
+          this.passwordErrors.push("Confirm password is required");
+          return;
+        }
+
+        // Validate new password strength
+        const passwordValidationErrors = this.validatePassword(
+          this.passwordForm.newPassword
+        );
+        if (passwordValidationErrors.length > 0) {
+          this.passwordErrors = passwordValidationErrors;
+          return;
+        }
+
+        // Check if passwords match
+        if (
+          this.passwordForm.newPassword !== this.passwordForm.confirmPassword
+        ) {
+          this.passwordErrors.push(
+            "New password and confirm password do not match"
+          );
+          return;
+        }
+
+        // Check if new password is different from current
+        if (
+          this.passwordForm.currentPassword === this.passwordForm.newPassword
+        ) {
+          this.passwordErrors.push(
+            "New password must be different from current password"
+          );
+          return;
+        }
+
+        // Call API
+        const response = await apiService.changePassword({
+          currentPassword: this.passwordForm.currentPassword,
+          newPassword: this.passwordForm.newPassword,
+        });
+
+        if (response.success) {
+          // Show success message
+          await Swal.fire({
+            icon: "success",
+            title: "Password Changed Successfully!",
+            text: "Your password has been updated. A confirmation email has been sent to your email address.",
+            timer: 4000,
+            showConfirmButton: true,
+            confirmButtonColor: "#2d7d7d",
+            background: "#fff",
+            color: "#1a5f5f",
+          });
+
+          // Clear form
+          this.passwordForm = {
+            currentPassword: "",
+            newPassword: "",
+            confirmPassword: "",
+          };
+
+          // Hide password fields
+          this.showCurrentPassword = false;
+          this.showNewPassword = false;
+          this.showConfirmPassword = false;
+        } else {
+          this.passwordErrors.push(
+            response.error || "Failed to change password"
+          );
+        }
+      } catch (error) {
+        console.error("Change password error:", error);
+        this.passwordErrors.push(error.message || "Failed to change password");
+      } finally {
+        this.isChangingPassword = false;
+      }
     },
   },
 };
@@ -45,6 +168,10 @@ export default {
             <p class="text-muted mb-0">
               Manage your profile, preferences, and security settings.
             </p>
+            <!-- <div v-if="auth.fullProgramName !== 'Not Available'" class="mt-2">
+              <span class="badge bg-primary">{{ auth.fullProgramName }}</span>
+              <span v-if="auth.matriculationNumber" class="badge bg-secondary ms-2">{{ auth.matriculationNumber }}</span>
+            </div> -->
           </div>
         </div>
       </div>
@@ -57,31 +184,56 @@ export default {
           <div class="card-body p-0">
             <div class="list-group list-group-flush">
               <button
-                class="list-group-item list-group-item-action active border-0"
+                :class="[
+                  'list-group-item',
+                  'list-group-item-action',
+                  'border-0',
+                  { active: activeTab === 'profile' },
+                ]"
                 @click="activeTab = 'profile'"
               >
                 <i class="bi bi-person me-2"></i>Profile Information
               </button>
               <button
-                class="list-group-item list-group-item-action border-0"
+                :class="[
+                  'list-group-item',
+                  'list-group-item-action',
+                  'border-0',
+                  { active: activeTab === 'academic' },
+                ]"
                 @click="activeTab = 'academic'"
               >
                 <i class="bi bi-mortarboard me-2"></i>Academic Details
               </button>
               <button
-                class="list-group-item list-group-item-action border-0"
+                :class="[
+                  'list-group-item',
+                  'list-group-item-action',
+                  'border-0',
+                  { active: activeTab === 'security' },
+                ]"
                 @click="activeTab = 'security'"
               >
                 <i class="bi bi-shield-lock me-2"></i>Security
               </button>
               <button
-                class="list-group-item list-group-item-action border-0"
+                :class="[
+                  'list-group-item',
+                  'list-group-item-action',
+                  'border-0',
+                  { active: activeTab === 'notifications' },
+                ]"
                 @click="activeTab = 'notifications'"
               >
                 <i class="bi bi-bell me-2"></i>Notifications
               </button>
               <button
-                class="list-group-item list-group-item-action border-0"
+                :class="[
+                  'list-group-item',
+                  'list-group-item-action',
+                  'border-0',
+                  { active: activeTab === 'preferences' },
+                ]"
                 @click="activeTab = 'preferences'"
               >
                 <i class="bi bi-sliders me-2"></i>Preferences
@@ -105,7 +257,7 @@ export default {
                   <div class="position-relative d-inline-block">
                     <img
                       :src="
-                        auth.user?.profileImageUrl ||
+                        auth.student?.profileImageUrl ||
                         'https://ui-avatars.com/api/?name=' +
                           encodeURIComponent(auth.userName) +
                           '&background=2d7d7d&color=fff'
@@ -115,21 +267,21 @@ export default {
                       alt="Profile"
                       class="rounded-circle border border-3 border-primary"
                     />
-                    <button
+                    <!-- <button
                       type="button"
                       class="btn btn-sm btn-primary position-absolute bottom-0 end-0 rounded-circle"
                     >
                       <i class="bi bi-camera"></i>
-                    </button>
+                    </button> -->
                   </div>
-                  <div class="mt-3">
+                  <!-- <div class="mt-3">
                     <button
                       type="button"
                       class="btn btn-outline-primary btn-sm"
                     >
                       Change Photo
                     </button>
-                  </div>
+                  </div> -->
                 </div>
                 <div class="col-md-8">
                   <div class="row">
@@ -139,7 +291,11 @@ export default {
                         type="text"
                         class="form-control"
                         :value="auth.user?.firstName || ''"
+                        readonly
                       />
+                      <small class="text-muted"
+                        >First name cannot be changed</small
+                      >
                     </div>
                     <div class="col-md-6 mb-3">
                       <label class="form-label fw-bold">Last Name</label>
@@ -147,7 +303,11 @@ export default {
                         type="text"
                         class="form-control"
                         :value="auth.user?.lastName || ''"
+                        readonly
                       />
+                      <small class="text-muted"
+                        >Last name cannot be changed</small
+                      >
                     </div>
                     <div class="col-md-6 mb-3">
                       <label class="form-label fw-bold">Email Address</label>
@@ -164,8 +324,10 @@ export default {
                       <input
                         type="tel"
                         class="form-control"
-                        placeholder="+234 XXX XXX XXXX"
+                        :value="auth.application?.phone || ''"
+                        readonly
                       />
+                      <small class="text-muted">Phone cannot be changed</small>
                     </div>
                     <div class="col-12 mb-3">
                       <label class="form-label fw-bold">Bio</label>
@@ -203,7 +365,7 @@ export default {
                 <input
                   type="text"
                   class="form-control"
-                  value="STU2024001234"
+                  :value="auth.matriculationNumber"
                   readonly
                 />
               </div>
@@ -212,7 +374,16 @@ export default {
                 <input
                   type="text"
                   class="form-control"
-                  value="Bachelor of Nursing Science"
+                  :value="auth.fullProgramName"
+                  readonly
+                />
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">Program Mode</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  :value="auth.programMode || 'Not Available'"
                   readonly
                 />
               </div>
@@ -221,29 +392,43 @@ export default {
                 <input
                   type="text"
                   class="form-control"
-                  value="200 Level"
+                  :value="
+                    auth.currentLevel && auth.currentSemester
+                      ? `Year ${auth.currentLevel} Semester ${auth.currentSemester}`
+                      : 'Not Available'
+                  "
                   readonly
                 />
               </div>
-              <div class="col-md-6 mb-3">
+              <!-- <div class="col-md-6 mb-3">
                 <label class="form-label fw-bold">Academic Session</label>
                 <input
                   type="text"
                   class="form-control"
-                  value="2024/2025"
+                  :value="
+                    auth.student?.academicSession?.sessionYear ||
+                    'Not Available'
+                  "
+                  readonly
+                />
+              </div> -->
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">Current GPA</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  :value="
+                    auth.cumulativeGPA ? auth.cumulativeGPA.toFixed(2) : '0.00'
+                  "
                   readonly
                 />
               </div>
               <div class="col-md-6 mb-3">
-                <label class="form-label fw-bold">Current GPA</label>
-                <input type="text" class="form-control" value="3.85" readonly />
-              </div>
-              <div class="col-md-6 mb-3">
-                <label class="form-label fw-bold">Expected Graduation</label>
+                <label class="form-label fw-bold">Admission Year</label>
                 <input
                   type="text"
                   class="form-control"
-                  value="June 2027"
+                  :value="auth.student?.admissionYear || 'Not Available'"
                   readonly
                 />
               </div>
@@ -266,6 +451,28 @@ export default {
             <!-- Change Password -->
             <form @submit.prevent="changePassword" class="mb-4">
               <h6 class="fw-bold mb-3">Change Password</h6>
+
+              <!-- Error Messages -->
+              <div
+                v-if="passwordErrors.length > 0"
+                class="alert alert-danger alert-dismissible fade show"
+                role="alert"
+              >
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <strong>Please fix the following errors:</strong>
+                <ul class="mb-0 mt-2">
+                  <li v-for="error in passwordErrors" :key="error">
+                    {{ error }}
+                  </li>
+                </ul>
+                <button
+                  type="button"
+                  class="btn-close"
+                  @click="passwordErrors = []"
+                  aria-label="Close"
+                ></button>
+              </div>
+
               <div class="row">
                 <div class="col-md-6 mb-3">
                   <label class="form-label fw-bold">Current Password</label>
@@ -274,10 +481,17 @@ export default {
                       :type="showCurrentPassword ? 'text' : 'password'"
                       class="form-control"
                       v-model="passwordForm.currentPassword"
+                      :class="{
+                        'is-invalid': passwordErrors.some((e) =>
+                          e.includes('current password')
+                        ),
+                      }"
+                      placeholder="Enter your current password"
+                      required
                     />
                     <button
                       type="button"
-                      class="btn btn-outline-secondary"
+                      class="btn btn-primary"
                       @click="showCurrentPassword = !showCurrentPassword"
                     >
                       <i
@@ -295,10 +509,17 @@ export default {
                       :type="showNewPassword ? 'text' : 'password'"
                       class="form-control"
                       v-model="passwordForm.newPassword"
+                      :class="{
+                        'is-invalid': passwordErrors.some((e) =>
+                          e.toLowerCase().includes('password must')
+                        ),
+                      }"
+                      placeholder="Enter your new password"
+                      required
                     />
                     <button
                       type="button"
-                      class="btn btn-outline-secondary"
+                      class="btn btn-primary"
                       @click="showNewPassword = !showNewPassword"
                     >
                       <i
@@ -309,15 +530,90 @@ export default {
                     </button>
                   </div>
                 </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label fw-bold">Confirm New Password</label>
+                  <div class="input-group">
+                    <input
+                      :type="showConfirmPassword ? 'text' : 'password'"
+                      class="form-control"
+                      v-model="passwordForm.confirmPassword"
+                      :class="{
+                        'is-invalid': passwordErrors.some(
+                          (e) =>
+                            e.includes('do not match') ||
+                            e.includes('Confirm password')
+                        ),
+                      }"
+                      placeholder="Confirm your new password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      class="btn btn-primary"
+                      @click="showConfirmPassword = !showConfirmPassword"
+                    >
+                      <i
+                        :class="
+                          showConfirmPassword ? 'bi bi-eye-slash' : 'bi bi-eye'
+                        "
+                      ></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="col-md-6 mb-3 d-flex align-items-end  justify-content-end">
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    :disabled="isChangingPassword"
+                  >
+                    <span
+                      v-if="isChangingPassword"
+                      class="spinner-border spinner-border-sm me-2"
+                      role="status"
+                      aria-hidden="true"
+                    ></span>
+                    {{
+                      isChangingPassword
+                        ? "Updating Password..."
+                        : "Update Password"
+                    }}
+                  </button>
+                </div>
               </div>
-              <button type="submit" class="btn btn-primary">
-                Update Password
-              </button>
+
+              <!-- Password Requirements -->
+              <div class="alert alert-info mb-3">
+                <h6 class="alert-heading">Password Requirements:</h6>
+                <ul class="mb-0">
+                  <li>At least 8 characters long</li>
+                  <li>At least one uppercase letter (A-Z)</li>
+                  <li>At least one lowercase letter (a-z)</li>
+                  <li>At least one number (0-9)</li>
+                  <li>
+                    At least one special character
+                    (!@#$%^&*()_+-=[]{};\':"|,.<>?)
+                  </li>
+                </ul>
+              </div>
             </form>
 
             <hr />
 
-            <!-- Two-Factor Authentication -->
+            <!-- Coming Soon Message for Advanced Security -->
+            <div class="text-center py-4">
+              <i
+                class="bi bi-shield-check text-muted mb-3"
+                style="font-size: 3rem"
+              ></i>
+              <h5 class="text-muted mb-2">Advanced Security Features</h5>
+              <p class="text-muted mb-0">
+                Two-factor authentication and session management are coming
+                soon!
+              </p>
+            </div>
+
+            <!-- Commented out advanced security features - will be activated later -->
+            <!--
             <div class="mb-4">
               <h6 class="fw-bold mb-3">Two-Factor Authentication</h6>
               <div
@@ -325,9 +621,9 @@ export default {
               >
                 <div>
                   <div class="fw-bold">SMS Authentication</div>
-                  <small class="text-muted"
-                    >Receive verification codes via SMS</small
-                  >
+                  <small class="text-muted">
+                    Receive verification codes via Email
+                  </small>
                 </div>
                 <div class="form-check form-switch">
                   <input
@@ -340,7 +636,6 @@ export default {
               </div>
             </div>
 
-            <!-- Login Sessions -->
             <div>
               <h6 class="fw-bold mb-3">Active Sessions</h6>
               <div class="border rounded p-3 mb-2">
@@ -366,6 +661,7 @@ export default {
                 </div>
               </div>
             </div>
+            -->
           </div>
         </div>
 
@@ -378,6 +674,20 @@ export default {
             <h5 class="fw-bold mb-0">Notification Preferences</h5>
           </div>
           <div class="card-body">
+            <!-- Coming Soon Message -->
+            <div class="text-center py-5">
+              <i
+                class="bi bi-bell-slash text-muted mb-3"
+                style="font-size: 4rem"
+              ></i>
+              <h4 class="text-muted mb-2">Notification Settings</h4>
+              <p class="text-muted mb-0">
+                This feature is coming soon! Stay tuned for updates.
+              </p>
+            </div>
+
+            <!-- Commented out notification settings - will be activated later -->
+            <!-- 
             <div class="mb-4">
               <h6 class="fw-bold mb-3">Email Notifications</h6>
               <div class="form-check mb-2">
@@ -458,6 +768,7 @@ export default {
             <button type="button" class="btn btn-primary">
               Save Notification Settings
             </button>
+            -->
           </div>
         </div>
 
@@ -467,6 +778,20 @@ export default {
             <h5 class="fw-bold mb-0">System Preferences</h5>
           </div>
           <div class="card-body">
+            <!-- Coming Soon Message -->
+            <div class="text-center py-5">
+              <i
+                class="bi bi-sliders text-muted mb-3"
+                style="font-size: 4rem"
+              ></i>
+              <h4 class="text-muted mb-2">System Preferences</h4>
+              <p class="text-muted mb-0">
+                This feature is coming soon! Stay tuned for updates.
+              </p>
+            </div>
+
+            <!-- Commented out preferences settings - will be activated later -->
+            <!--
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label class="form-label fw-bold">Language</label>
@@ -537,6 +862,7 @@ export default {
             <button type="button" class="btn btn-primary">
               Save Preferences
             </button>
+            -->
           </div>
         </div>
       </div>
@@ -559,7 +885,7 @@ export default {
 }
 
 .list-group-item.active {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
+  background-color: #2d7d7d;
+  border-color: #2d7d7d;
 }
 </style>

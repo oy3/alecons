@@ -1708,4 +1708,100 @@ export class EmailService {
       throw error;
     }
   }
+
+  async sendPasswordChangeNotification(
+    email: string,
+    firstName: string
+  ): Promise<void> {
+    try {
+      const mailOptions = {
+        from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject: "Password Changed Successfully - Student Portal",
+        html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Password Changed</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
+                            .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
+                            .header { background-color: #28a745; color: white; text-align: center; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }
+                            .security-info { background-color: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                            .warning { background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                            .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; }
+                            .timestamp { background-color: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 14px; margin: 15px 0; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1>✓ Password Changed Successfully</h1>
+                                <h2>Student Portal</h2>
+                            </div>
+                            
+                            <h2>Hello ${firstName},</h2>
+                            
+                            <p>This email confirms that your password has been successfully changed for your Student Portal account.</p>
+                            
+                            <div class="timestamp">
+                                <strong>Change Date & Time:</strong> ${new Date().toLocaleString('en-GB', {
+          timeZone: 'Africa/Lagos',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        })} (WAT)
+                            </div>
+                            
+                            <div class="security-info">
+                                <h3>🔒 Security Confirmation</h3>
+                                <ul>
+                                    <li>Your account password has been updated successfully</li>
+                                    <li>This change was made from your authenticated session</li>
+                                    <li>Your account security remains protected</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="warning">
+                                <h3>⚠️ Did not make this change?</h3>
+                                <p><strong>If you did not change your password:</strong></p>
+                                <ul>
+                                    <li>Contact the IT department immediately</li>
+                                    <li>Your account may have been compromised</li>
+                                    <li>Do not ignore this notification</li>
+                                </ul>
+                                <p><strong>Contact Information:</strong><br>
+                                Email: it@alecons.edu.ng<br>
+                                Phone: +234 (0)708 460 1610</p>
+                            </div>
+                            
+                            <p><strong>Portal Access:</strong><br>
+                            <a href="${process.env.STUDENT_PORTAL_URL || process.env.FRONTEND_URL}">${process.env.STUDENT_PORTAL_URL || process.env.FRONTEND_URL}</a></p>
+                            
+                            <div class="footer">
+                                <p><strong>Security Tip:</strong> Keep your password secure and never share it with anyone.</p>
+                                <p>© ${new Date().getFullYear()} Alebiosu College of Nursing Sciences. All rights reserved.</p>
+                                <p><em>This is an automated security notification. Please do not reply to this email.</em></p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                `,
+      };
+
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Password change notification sent to ${email}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send password change notification to ${email}:`,
+        error.message
+      );
+      throw error;
+    }
+  }
 }

@@ -207,6 +207,14 @@ class ApiService {
         return result;
     }
 
+    // Change password
+    async changePassword(passwordData) {
+        return this.makeRequest('/auth/change-password', {
+            method: 'POST',
+            body: JSON.stringify(passwordData),
+        });
+    }
+
     // Logout
     logout() {
         this.setToken(null);
@@ -215,6 +223,11 @@ class ApiService {
     // Get current user profile
     async getProfile() {
         return this.makeRequest('/auth/profile');
+    }
+
+    // Get student-specific profile (uses Student collection as primary)
+    async getStudentProfile() {
+        return this.makeRequest('/student/profile');
     }
 
     // Health check

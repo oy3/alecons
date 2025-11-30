@@ -46,6 +46,9 @@ export class Student {
 
     @Prop({ default: true })
     isActive: boolean;
+
+    @Prop()
+    profileImageUrl?: string; // Profile image stored in Digital Ocean Spaces
 }
 
 export const StudentSchema = SchemaFactory.createForClass(Student);

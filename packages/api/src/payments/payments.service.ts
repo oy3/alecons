@@ -6,6 +6,7 @@ import { StudentPayment, StudentPaymentDocument, PaymentStatus } from '../schema
 import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
+import { TenancyAgreement, TenancyAgreementDocument } from '../schemas/tenancy-agreement.schema';
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
 
@@ -48,6 +49,7 @@ export class PaymentsService {
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
         @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
+        @InjectModel(TenancyAgreement.name) private tenancyAgreementModel: Model<TenancyAgreementDocument>,
         private matriculationService: MatriculationService,
         private emailService: EmailService,
     ) { }
@@ -1162,6 +1164,30 @@ export class PaymentsService {
 
         if (!payment.targetAudience.includes(PaymentAudience.STUDENT)) {
             throw new Error('Payment not available for students');
+        }
+
+        // Check if this is an accommodation payment and if tenancy agreement is required
+        if (payment.paymentCode === 'accommodationFee') {
+            // Import TenancyAgreementService and check if agreement exists
+            // For now, we'll implement a direct check to avoid circular dependency
+            const student = await this.studentModel.findOne({
+                userId: new Types.ObjectId(userId)
+            });
+
+            if (!student) {
+                throw new Error('Student record not found');
+            }
+
+            // Check if tenancy agreement exists for this student
+            const tenancyAgreement = await this.tenancyAgreementModel.findOne({
+                studentId: student._id
+            });
+
+            if (!tenancyAgreement) {
+                throw new Error('You must sign the tenancy agreement before making accommodation fee payments. Please go to the Tenancy Agreement section first.');
+            }
+
+            this.logger.log(`Accommodation payment authorized for user ${userId} - tenancy agreement signed`);
         }
 
         // Generate unique reference

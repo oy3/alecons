@@ -1,4 +1,4 @@
-<script lang="js">
+x<script lang="js">
 import BrandLogo from "./BrandLogo.vue";
 import { useAuthStore } from "../stores/auth.js";
 import { useRouter } from 'vue-router';
@@ -173,6 +173,16 @@ export default {
         >
           <i class="bi bi-credit-card h5 me-3 mb-0"></i> 
           <span>Finance</span>
+        </router-link>
+        
+        <router-link
+          to="/tenancy-agreement"
+          class="nav-link text-white py-3 acon-mobile-link rounded mb-2"
+          active-class="active"
+          @click="closeOffcanvas"
+        >
+          <i class="bi bi-file-text h5 me-3 mb-0"></i> 
+          <span>Tenancy Agreement</span>
         </router-link>
         
         <router-link

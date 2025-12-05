@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { PaymentsService } from '../payments/payments.service';
+import { PaymentAudience } from '../schemas/payment.schema';
 import { Logger } from '@nestjs/common';
 
 const logger = new Logger('SeedPayments');
@@ -62,6 +63,15 @@ async function seedPayments() {
                 amount: 75000,
                 category: 'graduation',
                 isActive: false
+            },
+            {
+                name: 'Accommodation Fee',
+                description: 'Annual hostel accommodation fee (₦100,000 + ₦5,000 general maintenance)',
+                amount: 105000,
+                category: 'accommodation',
+                paymentCode: 'accommodationFee',
+                isActive: true,
+                targetAudience: [PaymentAudience.STUDENT]
             }
         ];
 

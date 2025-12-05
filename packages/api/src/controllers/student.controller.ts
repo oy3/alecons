@@ -1,6 +1,7 @@
-import { Controller, Get, Put, Body, UseGuards, Request, Logger } from '@nestjs/common';
+import { Controller, Get, Put, Post, Body, UseGuards, Request, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { StudentService } from '../services/student.service';
+import { TenancyAgreementService } from '../services/tenancy-agreement.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from '../schemas/user.schema';
 
@@ -11,7 +12,10 @@ import { UserRole } from '../schemas/user.schema';
 export class StudentController {
     private readonly logger = new Logger(StudentController.name);
 
-    constructor(private readonly studentService: StudentService) { }
+    constructor(
+        private readonly studentService: StudentService,
+        private readonly tenancyAgreementService: TenancyAgreementService
+    ) { }
 
     @Get('profile')
     @ApiOperation({ summary: 'Get current student profile (Student-centric data)' })
@@ -103,6 +107,81 @@ export class StudentController {
 
         } catch (error) {
             this.logger.error('Student record check error:', error.message);
+            throw error;
+        }
+    }
+
+    // Tenancy Agreement Endpoints
+
+    @Post('tenancy-agreement/submit')
+    @ApiOperation({ summary: 'Submit tenancy agreement' })
+    @ApiResponse({ status: 201, description: 'Tenancy agreement submitted successfully' })
+    @ApiResponse({ status: 400, description: 'Invalid data or already signed' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async submitTenancyAgreement(@Request() req, @Body() agreementData: any) {
+        this.logger.log('Tenancy agreement submission endpoint called for user:', req.user?._id);
+
+        // Verify user is a student
+        if (req.user?.role !== UserRole.STUDENT) {
+            throw new Error('Access denied. This endpoint is for students only.');
+        }
+
+        try {
+            const result = await this.tenancyAgreementService.submitTenancyAgreement(
+                req.user._id,
+                agreementData
+            );
+
+            this.logger.log('Tenancy agreement submitted successfully for user:', req.user._id);
+            return result;
+
+        } catch (error) {
+            this.logger.error('Tenancy agreement submission error:', error.message);
+            throw error;
+        }
+    }
+
+    @Get('tenancy-agreement/status')
+    @ApiOperation({ summary: 'Get tenancy agreement status' })
+    @ApiResponse({ status: 200, description: 'Tenancy agreement status retrieved' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async getTenancyAgreementStatus(@Request() req) {
+        this.logger.log('Tenancy agreement status endpoint called for user:', req.user?._id);
+
+        // Verify user is a student
+        if (req.user?.role !== UserRole.STUDENT) {
+            throw new Error('Access denied. This endpoint is for students only.');
+        }
+
+        try {
+            const result = await this.tenancyAgreementService.getTenancyAgreementStatus(req.user._id);
+            return result;
+
+        } catch (error) {
+            this.logger.error('Tenancy agreement status error:', error.message);
+            throw error;
+        }
+    }
+
+    @Get('tenancy-agreement/document')
+    @ApiOperation({ summary: 'Get tenancy agreement document' })
+    @ApiResponse({ status: 200, description: 'Tenancy agreement document retrieved' })
+    @ApiResponse({ status: 404, description: 'Document not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async getTenancyAgreementDocument(@Request() req) {
+        this.logger.log('Tenancy agreement document endpoint called for user:', req.user?._id);
+
+        // Verify user is a student
+        if (req.user?.role !== UserRole.STUDENT) {
+            throw new Error('Access denied. This endpoint is for students only.');
+        }
+
+        try {
+            const result = await this.tenancyAgreementService.getTenancyAgreementDocument(req.user._id);
+            return result;
+
+        } catch (error) {
+            this.logger.error('Tenancy agreement document error:', error.message);
             throw error;
         }
     }

@@ -8,6 +8,7 @@ import Academics from '../views/Academics.vue'
 import Resources from '../views/Resources.vue'
 import Finance from '../views/Finance.vue'
 import Settings from '../views/Settings.vue'
+import TenancyAgreement from '../views/TenancyAgreement.vue'
 
 const routes = [
     {
@@ -58,6 +59,15 @@ const routes = [
         meta: {
             requiresAuth: true,
             title: 'Finance - Student Portal'
+        }
+    },
+    {
+        path: '/tenancy-agreement',
+        name: 'TenancyAgreement',
+        component: TenancyAgreement,
+        meta: {
+            requiresAuth: true,
+            title: 'Tenancy Agreement - Student Portal'
         }
     },
     {

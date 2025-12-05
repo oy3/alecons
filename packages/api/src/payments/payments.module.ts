@@ -9,6 +9,7 @@ import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Program, ProgramSchema } from '../schemas/program.schema';
 import { Student, StudentSchema } from '../schemas/student.schema';
+import { TenancyAgreement, TenancyAgreementSchema } from '../schemas/tenancy-agreement.schema';
 import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
@@ -22,6 +23,7 @@ import { EmailService } from '../services/email.service';
             { name: User.name, schema: UserSchema },
             { name: Program.name, schema: ProgramSchema },
             { name: Student.name, schema: StudentSchema },
+            { name: TenancyAgreement.name, schema: TenancyAgreementSchema },
             { name: AcademicSession.name, schema: AcademicSessionSchema },
         ]),
     ],

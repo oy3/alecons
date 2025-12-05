@@ -1,5 +1,6 @@
 <script>
 import { studentPaymentService } from '../services/payment.js';
+import { tenancyAgreementService } from '../services/tenancyAgreement.js';
 import { apiService } from '../services/api.js';
 import { logger } from '@shared/utils/logger';
 import { useAuthStore } from '../stores/auth.js';
@@ -187,10 +188,46 @@ export default {
       await this.loadPaymentData();
     },
     
-    async makePayment(paymentId) {
+    async makePayment(paymentId, paymentCode = null) {
       try {
         if (!this.user?.email) {
           throw new Error('User email not found');
+        }
+        
+        // Find the payment details if not provided
+        let payment = null;
+        if (!paymentCode) {
+          payment = this.paymentSummary?.unpaidFees?.find(fee => fee.id === paymentId) ||
+                   this.availablePayments?.find(payment => payment.id === paymentId);
+          paymentCode = payment?.paymentCode || '';
+        }
+        
+        // Check if this is an accommodation payment and if tenancy agreement is required
+        if (tenancyAgreementService.isAccommodationPayment(paymentCode)) {
+          logger.info('Checking tenancy agreement for accommodation payment');
+          
+          const eligibilityCheck = await tenancyAgreementService.canMakeAccommodationPayment();
+          
+          if (!eligibilityCheck.canPay) {
+            // Show dialog to redirect to tenancy agreement
+            const result = await Swal.fire({
+              icon: 'warning',
+              title: 'Tenancy Agreement Required',
+              text: 'You must complete and sign the tenancy agreement before making accommodation fee payments.',
+              showCancelButton: true,
+              confirmButtonText: 'Sign Agreement',
+              cancelButtonText: 'Cancel',
+              confirmButtonColor: '#28a745',
+              cancelButtonColor: '#6c757d'
+            });
+            
+            if (result.isConfirmed) {
+              // Redirect to tenancy agreement page
+              this.$router.push('/tenancy-agreement');
+            }
+            
+            return; // Stop payment process
+          }
         }
         
         this.isPaymentLoading = true;
@@ -327,9 +364,9 @@ export default {
       this.showPaymentModal = false;
     },
     
-    async makePaymentFromModal(paymentId) {
+    async makePaymentFromModal(paymentId, paymentCode) {
       // Use the same payment method but with modal-specific handling
-      await this.makePayment(paymentId);
+      await this.makePayment(paymentId, paymentCode);
     },
     
     handleKeydown(event) {
@@ -576,7 +613,7 @@ export default {
                     <td class="py-3 d-none d-sm-table-cell">
                       <button 
                         class="btn btn-sm btn-success px-3 py-2" 
-                        @click="makePayment(unpaidFee.id)"
+                        @click="makePayment(unpaidFee.id, unpaidFee.paymentCode)"
                         :disabled="isPaymentLoading"
                       >
                         <span v-if="isPaymentLoading" class="spinner-border spinner-border-sm me-1"></span>
@@ -764,7 +801,7 @@ export default {
                     <td class="py-3 text-center">
                       <button 
                         class="btn btn-success px-4 py-2" 
-                        @click="makePaymentFromModal(unpaidFee.id)"
+                        @click="makePaymentFromModal(unpaidFee.id, unpaidFee.paymentCode)"
                         :disabled="isPaymentLoading"
                       >
                         <span v-if="isPaymentLoading" class="spinner-border spinner-border-sm me-2"></span>

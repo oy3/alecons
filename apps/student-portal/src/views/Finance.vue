@@ -1,381 +1,395 @@
 <script>
-import { studentPaymentService } from '../services/payment.js';
-import { tenancyAgreementService } from '../services/tenancyAgreement.js';
-import { apiService } from '../services/api.js';
-import { logger } from '@shared/utils/logger';
-import { useAuthStore } from '../stores/auth.js';
-import Swal from 'sweetalert2';
+import { studentPaymentService } from "../services/payment.js";
+import { tenancyAgreementService } from "../services/tenancyAgreement.js";
+import { apiService } from "../services/api.js";
+import { logger } from "@shared/utils/logger";
+import { useAuthStore } from "../stores/auth.js";
+import Swal from "sweetalert2";
 
 export default {
-  name: 'Finance',
+  name: "Finance",
   data() {
     return {
       // Academic sessions
       academicSessions: [],
-      selectedSessionId: '',
-      
+      selectedSessionId: "",
+
       // Payment data
       paymentSummary: {
         paidFees: [],
         unpaidFees: [],
         totalPaid: 0,
-        totalUnpaid: 0
+        totalUnpaid: 0,
       },
       paymentHistory: [],
       availablePayments: [],
-      
+
       // UI state
       isLoading: true,
       isHistoryLoading: false,
       isPaymentLoading: false,
       error: null,
-      
+
       // Pagination
       currentPage: 1,
       totalPages: 1,
       perPage: 10,
-      
+
       // User data
       user: null,
-      
+
       // Modal
-      showPaymentModal: false
-    }
+      showPaymentModal: false,
+    };
   },
-  
+
   computed: {
     accountBalance() {
       return this.paymentSummary?.totalUnpaid || 0;
     },
-    
+
     totalPaidThisYear() {
       return this.paymentSummary?.totalPaid || 0;
     },
-    
+
     pendingAmount() {
       return this.paymentSummary?.totalUnpaid || 0;
     },
-    
+
     hasOutstandingPayments() {
       return (this.paymentSummary?.unpaidFees?.length || 0) > 0;
-    }
+    },
   },
-  
+
   async mounted() {
     await this.initializePage();
-    
+
     // Add ESC key listener for modal
-    document.addEventListener('keydown', this.handleKeydown);
+    document.addEventListener("keydown", this.handleKeydown);
   },
-  
+
   beforeUnmount() {
     // Remove ESC key listener
-    document.removeEventListener('keydown', this.handleKeydown);
+    document.removeEventListener("keydown", this.handleKeydown);
   },
-  
+
   methods: {
     async initializePage() {
       try {
         this.isLoading = true;
         this.error = null;
-        
+
         // Get user data from auth store
         const authStore = useAuthStore();
         this.user = authStore.user;
-        
+
         // Load academic sessions
         await this.loadAcademicSessions();
-        
+
         // Load initial payment data
         if (this.academicSessions.length > 0) {
           // Default to the most recent session
           this.selectedSessionId = this.academicSessions[0].id;
           await this.loadPaymentData();
         }
-        
       } catch (error) {
-        logger.error('Error initializing finance page:', error);
-        this.error = 'Failed to load financial data';
+        logger.error("Error initializing finance page:", error);
+        this.error = "Failed to load financial data";
       } finally {
         this.isLoading = false;
       }
     },
-    
+
     async loadAcademicSessions() {
       try {
-        logger.info('Loading academic sessions');
+        logger.info("Loading academic sessions");
         const response = await studentPaymentService.getAcademicSessions();
-        
+
         if (response.success) {
           // The response.data contains the result from academicSessionsService.findAll()
           const sessions = response.data.sessions || [];
-          this.academicSessions = sessions.map(session => ({
+          this.academicSessions = sessions.map((session) => ({
             id: session._id,
             name: session.sessionYear,
-            value: session._id
+            value: session._id,
           }));
-          logger.info('Loaded academic sessions:', this.academicSessions.length);
+          logger.info(
+            "Loaded academic sessions:",
+            this.academicSessions.length
+          );
         } else {
           throw new Error(response.message);
         }
       } catch (error) {
-        logger.error('Error loading academic sessions:', error);
+        logger.error("Error loading academic sessions:", error);
         this.academicSessions = [];
       }
     },
-    
+
     async loadPaymentData() {
       try {
-        logger.info('Loading payment data for session:', this.selectedSessionId);
-        
+        logger.info(
+          "Loading payment data for session:",
+          this.selectedSessionId
+        );
+
         // Load payment summary
-        const summaryResponse = await studentPaymentService.getPaymentSummary(this.selectedSessionId);
+        const summaryResponse = await studentPaymentService.getPaymentSummary(
+          this.selectedSessionId
+        );
         if (summaryResponse.success) {
           this.paymentSummary = summaryResponse.data;
-          logger.info('Loaded payment summary');
+          logger.info("Loaded payment summary");
         }
-        
+
         // Load payment history
         await this.loadPaymentHistory();
-        
+
         // Load available payments
         await this.loadAvailablePayments();
-        
       } catch (error) {
-        logger.error('Error loading payment data:', error);
-        this.error = 'Failed to load payment data';
+        logger.error("Error loading payment data:", error);
+        this.error = "Failed to load payment data";
       }
     },
-    
+
     async loadPaymentHistory() {
       try {
         this.isHistoryLoading = true;
-        
+
         const response = await studentPaymentService.getPaymentHistory(
           this.selectedSessionId,
           this.currentPage,
           this.perPage
         );
-        
+
         if (response.success) {
           this.paymentHistory = response.data.payments;
           this.totalPages = response.data.pagination.totalPages;
-          logger.info('Loaded payment history:', this.paymentHistory.length);
+          logger.info("Loaded payment history:", this.paymentHistory.length);
         }
       } catch (error) {
-        logger.error('Error loading payment history:', error);
+        logger.error("Error loading payment history:", error);
       } finally {
         this.isHistoryLoading = false;
       }
     },
-    
+
     async loadAvailablePayments() {
       try {
-        const response = await studentPaymentService.getAvailablePayments(this.selectedSessionId);
-        
+        const response = await studentPaymentService.getAvailablePayments(
+          this.selectedSessionId
+        );
+
         if (response.success) {
           this.availablePayments = response.data;
-          logger.info('Loaded available payments:', this.availablePayments.length);
+          logger.info(
+            "Loaded available payments:",
+            this.availablePayments.length
+          );
         }
       } catch (error) {
-        logger.error('Error loading available payments:', error);
+        logger.error("Error loading available payments:", error);
         this.availablePayments = [];
       }
     },
-    
+
     async onSessionChange() {
-      logger.info('Academic session changed to:', this.selectedSessionId);
+      logger.info("Academic session changed to:", this.selectedSessionId);
       await this.loadPaymentData();
     },
-    
+
     async makePayment(paymentId, paymentCode = null) {
       try {
         if (!this.user?.email) {
-          throw new Error('User email not found');
+          throw new Error("User email not found");
         }
-        
+
         // Find the payment details if not provided
         let payment = null;
         if (!paymentCode) {
-          payment = this.paymentSummary?.unpaidFees?.find(fee => fee.id === paymentId) ||
-                   this.availablePayments?.find(payment => payment.id === paymentId);
-          paymentCode = payment?.paymentCode || '';
+          payment =
+            this.paymentSummary?.unpaidFees?.find(
+              (fee) => fee.id === paymentId
+            ) ||
+            this.availablePayments?.find((payment) => payment.id === paymentId);
+          paymentCode = payment?.paymentCode || "";
         }
-        
+
         // Check if this is an accommodation payment and if tenancy agreement is required
         if (tenancyAgreementService.isAccommodationPayment(paymentCode)) {
-          logger.info('Checking tenancy agreement for accommodation payment');
-          
-          const eligibilityCheck = await tenancyAgreementService.canMakeAccommodationPayment();
-          
+          logger.info("Checking tenancy agreement for accommodation payment");
+
+          const eligibilityCheck =
+            await tenancyAgreementService.canMakeAccommodationPayment();
+
           if (!eligibilityCheck.canPay) {
             // Show dialog to redirect to tenancy agreement
             const result = await Swal.fire({
-              icon: 'warning',
-              title: 'Tenancy Agreement Required',
-              text: 'You must complete and sign the tenancy agreement before making accommodation fee payments.',
+              icon: "warning",
+              title: "Tenancy Agreement Required",
+              text: "You must complete and sign the tenancy agreement before making accommodation fee payments.",
               showCancelButton: true,
-              confirmButtonText: 'Sign Agreement',
-              cancelButtonText: 'Cancel',
-              confirmButtonColor: '#28a745',
-              cancelButtonColor: '#6c757d'
+              confirmButtonText: "Sign Agreement",
+              cancelButtonText: "Cancel",
+              confirmButtonColor: "#28a745",
+              cancelButtonColor: "#6c757d",
             });
-            
+
             if (result.isConfirmed) {
               // Redirect to tenancy agreement page
-              this.$router.push('/tenancy-agreement');
+              this.$router.push("/tenancy-agreement");
             }
-            
+
             return; // Stop payment process
           }
         }
-        
+
         this.isPaymentLoading = true;
-        logger.info('Initiating payment:', paymentId);
-        
+        logger.info("Initiating payment:", paymentId);
+
         // Initialize payment
         const response = await studentPaymentService.initializePayment(
           paymentId,
           this.user.email,
           this.selectedSessionId
         );
-        
+
         if (response.success) {
           // Launch Paystack popup
           try {
-            const paymentResult = await studentPaymentService.launchPaystackPayment(response.data);
-            
+            const paymentResult =
+              await studentPaymentService.launchPaystackPayment(response.data);
+
             if (paymentResult.success) {
               // Close modal if open
               this.closePaymentModal();
-              
+
               // Payment completed, reload data
               await this.loadPaymentData();
-              
+
               // Show success message
               Swal.fire({
-                icon: 'success',
-                title: 'Payment Successful!',
-                text: 'Your payment has been processed successfully.',
-                confirmButtonText: 'OK',
+                icon: "success",
+                title: "Payment Successful!",
+                text: "Your payment has been processed successfully.",
+                confirmButtonText: "OK",
                 timer: 3000,
-                timerProgressBar: true
+                timerProgressBar: true,
               });
             }
-            
           } catch (paymentError) {
             if (!paymentError.cancelled) {
               throw paymentError;
             } else {
               // Payment was cancelled by user
               Swal.fire({
-                icon: 'info',
-                title: 'Payment Cancelled',
-                text: 'You cancelled the payment process.',
-                confirmButtonText: 'OK'
+                icon: "info",
+                title: "Payment Cancelled",
+                text: "You cancelled the payment process.",
+                confirmButtonText: "OK",
               });
             }
           }
         } else {
           throw new Error(response.message);
         }
-        
       } catch (error) {
-        logger.error('Error making payment:', error);
-        
+        logger.error("Error making payment:", error);
+
         Swal.fire({
-          icon: 'error',
-          title: 'Payment Failed',
-          text: error.message || 'Payment failed. Please try again.',
-          confirmButtonText: 'OK'
+          icon: "error",
+          title: "Payment Failed",
+          text: error.message || "Payment failed. Please try again.",
+          confirmButtonText: "OK",
         });
       } finally {
         this.isPaymentLoading = false;
       }
     },
-    
+
     async downloadReceipt(payment) {
       try {
-        logger.info('Downloading receipt for payment:', payment.reference);
+        logger.info("Downloading receipt for payment:", payment.reference);
         // TODO: Implement receipt download functionality
         Swal.fire({
-          icon: 'info',
-          title: 'Coming Soon',
-          text: 'Receipt download functionality will be implemented soon.',
-          confirmButtonText: 'OK'
+          icon: "info",
+          title: "Coming Soon",
+          text: "Receipt download functionality will be implemented soon.",
+          confirmButtonText: "OK",
         });
       } catch (error) {
-        logger.error('Error downloading receipt:', error);
+        logger.error("Error downloading receipt:", error);
       }
     },
-    
+
     async exportStatement() {
       try {
-        logger.info('Exporting financial statement');
+        logger.info("Exporting financial statement");
         // TODO: Implement statement export functionality
         Swal.fire({
-          icon: 'info',
-          title: 'Coming Soon',
-          text: 'Statement export functionality will be implemented soon.',
-          confirmButtonText: 'OK'
+          icon: "info",
+          title: "Coming Soon",
+          text: "Statement export functionality will be implemented soon.",
+          confirmButtonText: "OK",
         });
       } catch (error) {
-        logger.error('Error exporting statement:', error);
+        logger.error("Error exporting statement:", error);
       }
     },
-    
+
     formatCurrency(amount) {
       return studentPaymentService.formatCurrency(amount);
     },
-    
+
     formatDate(date) {
       return studentPaymentService.formatDate(date);
     },
-    
+
     getStatusBadgeClass(status) {
       return studentPaymentService.getStatusBadgeClass(status);
     },
-    
+
     getStatusText(status) {
       return studentPaymentService.getStatusText(status);
     },
-    
+
     getPaymentReference(payment) {
-      return payment.reference || 'Not generated';
+      return payment.reference || "Not generated";
     },
-    
+
     showPaymentOptions() {
       const unpaidFees = this.paymentSummary?.unpaidFees || [];
       if (unpaidFees.length === 0) {
         Swal.fire({
-          icon: 'info',
-          title: 'No Outstanding Payments',
-          text: 'You have no pending payments at this time.',
-          confirmButtonText: 'OK'
+          icon: "info",
+          title: "No Outstanding Payments",
+          text: "You have no pending payments at this time.",
+          confirmButtonText: "OK",
         });
         return;
       }
-      
+
       // Open the payment modal
       this.showPaymentModal = true;
     },
-    
+
     closePaymentModal() {
       this.showPaymentModal = false;
     },
-    
+
     async makePaymentFromModal(paymentId, paymentCode) {
       // Use the same payment method but with modal-specific handling
       await this.makePayment(paymentId, paymentCode);
     },
-    
+
     handleKeydown(event) {
-      if (event.key === 'Escape' && this.showPaymentModal) {
+      if (event.key === "Escape" && this.showPaymentModal) {
         this.closePaymentModal();
       }
-    }
-  }
-}
+    },
+  },
+};
 </script>
 
 <template>
@@ -383,24 +397,37 @@ export default {
     <!-- Page Header -->
     <div class="row mb-4">
       <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div
+          class="d-flex justify-content-between align-items-center flex-wrap"
+        >
           <div class="mb-2 mb-md-0">
             <h2 class="h3 fw-bold text-dark mb-1">
               <i class="bi bi-credit-card me-2 text-primary"></i>
               Financial Dashboard
             </h2>
-            <p class="text-muted mb-0">Manage your tuition, fees, and payment history.</p>
+            <p class="text-muted mb-0">
+              Manage your tuition, fees, and payment history.
+            </p>
           </div>
           <div class="d-flex gap-2 flex-wrap">
-            <button class="btn btn-outline-primary btn-sm" @click="exportStatement" :disabled="isLoading">
-              <i class="bi bi-download me-1"></i><span class="d-none d-sm-inline">Export Statement</span><span class="d-sm-none">Export</span>
+            <button
+              class="btn btn-outline-primary btn-sm"
+              @click="exportStatement"
+              :disabled="isLoading"
+            >
+              <i class="bi bi-download me-1"></i
+              ><span class="d-none d-sm-inline">Export Statement</span
+              ><span class="d-sm-none">Export</span>
             </button>
-            <button class="btn btn-success btn-sm" 
+            <button
+              class="btn btn-success btn-sm"
               @click="showPaymentOptions"
               :disabled="isLoading || !hasOutstandingPayments"
               v-if="hasOutstandingPayments"
             >
-              <i class="bi bi-credit-card me-1"></i><span class="d-none d-sm-inline">Make Payment</span><span class="d-sm-none">Pay</span>
+              <i class="bi bi-credit-card me-1"></i
+              ><span class="d-none d-sm-inline">Make Payment</span
+              ><span class="d-sm-none">Pay</span>
             </button>
           </div>
         </div>
@@ -414,24 +441,35 @@ export default {
           <div class="card-body">
             <div class="d-flex align-items-center">
               <div class="flex-shrink-0">
-                <div class="bg-success bg-opacity-10 rounded-3 p-3">
-                  <i class="bi bi-check-circle text-success fs-4"></i>
+                <div
+                  class="bg-opacity-10 rounded-3 p-3"
+                  :class="accountBalance > 0 ? 'bg-danger' : 'bg-success'"
+                >
+                  <i
+                    class="bi fs-4"
+                    :class="accountBalance > 0 ? 'bi-exclamation-triangle text-danger' : 'bi-check-circle text-success'"
+                  ></i>
                 </div>
               </div>
               <div class="flex-grow-1 ms-3">
-                <h6 class="fw-bold text-dark mb-1">Account Balance</h6>
-                <h4 class="fw-bold mb-0" :class="accountBalance > 0 ? 'text-danger' : 'text-success'">
+                <h6 class="fw-bold text-dark mb-1">Balance</h6>
+                <h4
+                  class="fw-bold mb-0"
+                  :class="accountBalance > 0 ? 'text-danger' : 'text-success'"
+                >
                   {{ formatCurrency(accountBalance) }}
                 </h4>
-                <small :class="accountBalance > 0 ? 'text-danger' : 'text-success'">
-                  {{ accountBalance > 0 ? 'Outstanding payments' : 'All payments current' }}
+                <small
+                  :class="accountBalance > 0 ? 'text-danger' : 'text-success'"
+                >
+                  {{ accountBalance > 0 ? "Outstanding" : "" }}
                 </small>
               </div>
             </div>
           </div>
         </div>
       </div>
-      
+
       <div class="col-lg-3 col-md-6 mb-3">
         <div class="card border-0 shadow-sm">
           <div class="card-body">
@@ -443,14 +481,16 @@ export default {
               </div>
               <div class="flex-grow-1 ms-3">
                 <h6 class="fw-bold text-dark mb-1">Total Paid</h6>
-                <h4 class="fw-bold text-primary mb-0">{{ formatCurrency(totalPaidThisYear) }}</h4>
+                <h4 class="fw-bold text-primary mb-0">
+                  {{ formatCurrency(totalPaidThisYear) }}
+                </h4>
                 <small class="text-muted">Selected session</small>
               </div>
             </div>
           </div>
         </div>
       </div>
-      
+
       <div class="col-lg-3 col-md-6 mb-3">
         <div class="card border-0 shadow-sm">
           <div class="card-body">
@@ -462,14 +502,19 @@ export default {
               </div>
               <div class="flex-grow-1 ms-3">
                 <h6 class="fw-bold text-dark mb-1">Pending</h6>
-                <h4 class="fw-bold text-warning mb-0">{{ formatCurrency(pendingAmount) }}</h4>
-                <small class="text-muted">{{ paymentSummary?.unpaidFees?.length || 0 }} payment(s) due</small>
+                <h4 class="fw-bold text-warning mb-0">
+                  {{ formatCurrency(pendingAmount) }}
+                </h4>
+                <small class="text-muted"
+                  >{{ paymentSummary?.unpaidFees?.length || 0 }} payment(s)
+                  due</small
+                >
               </div>
             </div>
           </div>
         </div>
       </div>
-      
+
       <div class="col-lg-3 col-md-6 mb-3">
         <div class="card border-0 shadow-sm">
           <div class="card-body">
@@ -481,8 +526,8 @@ export default {
               </div>
               <div class="flex-grow-1 ms-3">
                 <h6 class="fw-bold text-dark mb-1">Next Due</h6>
-                <h4 class="fw-bold text-info mb-0">Jan 15</h4>
-                <small class="text-muted">Spring semester</small>
+                <h4 class="fw-bold text-info mb-0">N/A</h4>
+                <small class="text-muted">N/A</small>
               </div>
             </div>
           </div>
@@ -495,20 +540,22 @@ export default {
       <div class="col-lg-8 mb-4">
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white border-0 py-3">
-            <div class="d-flex justify-content-between align-items-center flex-wrap">
+            <div
+              class="d-flex justify-content-between align-items-center flex-wrap"
+            >
               <h5 class="fw-bold mb-0 mb-2 mb-md-0">Payment History</h5>
               <div class="d-flex gap-2">
-                <select 
-                  class="form-select form-select-sm" 
-                  style="width: auto;"
+                <select
+                  class="form-select form-select-sm"
+                  style="width: auto"
                   v-model="selectedSessionId"
                   @change="onSessionChange"
                   :disabled="isLoading"
                 >
                   <option value="">All Sessions</option>
-                  <option 
-                    v-for="session in academicSessions" 
-                    :key="session.id" 
+                  <option
+                    v-for="session in academicSessions"
+                    :key="session.id"
                     :value="session.id"
                   >
                     {{ session.name }}
@@ -528,7 +575,10 @@ export default {
 
             <!-- Error State -->
             <div v-else-if="error" class="text-center py-5">
-              <i class="bi bi-exclamation-triangle text-warning mb-3" style="font-size: 3rem;"></i>
+              <i
+                class="bi bi-exclamation-triangle text-warning mb-3"
+                style="font-size: 3rem"
+              ></i>
               <h5 class="text-muted">{{ error }}</h5>
               <button class="btn btn-primary mt-3" @click="loadPaymentData">
                 <i class="bi bi-arrow-clockwise me-2"></i>Retry
@@ -541,10 +591,16 @@ export default {
                 <thead class="table-light">
                   <tr>
                     <th class="border-0 fw-bold">Transaction</th>
-                    <th class="border-0 fw-bold d-none d-md-table-cell">Amount</th>
+                    <th class="border-0 fw-bold d-none d-md-table-cell">
+                      Amount
+                    </th>
                     <th class="border-0 fw-bold">Status</th>
-                    <th class="border-0 fw-bold d-none d-lg-table-cell">Reference</th>
-                    <th class="border-0 fw-bold d-none d-sm-table-cell">Actions</th>
+                    <th class="border-0 fw-bold d-none d-lg-table-cell">
+                      Reference
+                    </th>
+                    <th class="border-0 fw-bold d-none d-sm-table-cell">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -553,19 +609,28 @@ export default {
                     <td class="py-3">
                       <div>
                         <div class="fw-bold">{{ payment.paymentId.name }}</div>
-                        <small class="text-muted">{{ payment.paymentId.description }}</small>
+                        <small class="text-muted">{{
+                          payment.paymentId.description
+                        }}</small>
                         <div class="d-md-none">
                           <small class="text-muted">
-                            {{ formatDate(payment.paidAt) }} • {{ formatCurrency(payment.amount) }} • {{ payment.reference }}
+                            {{ formatDate(payment.paidAt) }} •
+                            {{ formatCurrency(payment.amount) }} •
+                            {{ payment.reference }}
                           </small>
                         </div>
                       </div>
                     </td>
                     <td class="py-3 d-none d-md-table-cell">
-                      <span class="fw-bold text-success">{{ formatCurrency(payment.amount) }}</span>
+                      <span class="fw-bold text-success">{{
+                        formatCurrency(payment.amount)
+                      }}</span>
                     </td>
                     <td class="py-3">
-                      <span class="badge" :class="getStatusBadgeClass(payment.status)">
+                      <span
+                        class="badge"
+                        :class="getStatusBadgeClass(payment.status)"
+                      >
                         {{ getStatusText(payment.status) }}
                       </span>
                     </td>
@@ -574,10 +639,18 @@ export default {
                     </td>
                     <td class="py-3 d-none d-sm-table-cell">
                       <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary" title="View Receipt" @click="downloadReceipt(payment)">
+                        <button
+                          class="btn btn-outline-primary"
+                          title="View Receipt"
+                          @click="downloadReceipt(payment)"
+                        >
                           <i class="bi bi-receipt"></i>
                         </button>
-                        <button class="btn btn-outline-secondary" title="Download" @click="downloadReceipt(payment)">
+                        <button
+                          class="btn btn-outline-secondary"
+                          title="Download"
+                          @click="downloadReceipt(payment)"
+                        >
                           <i class="bi bi-download"></i>
                         </button>
                       </div>
@@ -585,24 +658,29 @@ export default {
                   </tr>
 
                   <!-- Unpaid Transactions -->
-                  <tr 
-                    v-for="unpaidFee in (paymentSummary?.unpaidFees || [])" 
+                  <tr
+                    v-for="unpaidFee in paymentSummary?.unpaidFees || []"
                     :key="'unpaid-' + unpaidFee.id"
                     class="table-warning"
                   >
                     <td class="py-3">
                       <div>
                         <div class="fw-bold">{{ unpaidFee.name }}</div>
-                        <small class="text-muted">{{ unpaidFee.description }}</small>
+                        <small class="text-muted">{{
+                          unpaidFee.description
+                        }}</small>
                         <div class="d-md-none">
                           <small class="text-muted">
-                            Pending • {{ formatCurrency(unpaidFee.amount) }} • Due now
+                            Pending • {{ formatCurrency(unpaidFee.amount) }} •
+                            Due now
                           </small>
                         </div>
                       </div>
                     </td>
                     <td class="py-3 d-none d-md-table-cell">
-                      <span class="fw-bold text-warning">{{ formatCurrency(unpaidFee.amount) }}</span>
+                      <span class="fw-bold text-warning">{{
+                        formatCurrency(unpaidFee.amount)
+                      }}</span>
                     </td>
                     <td class="py-3">
                       <span class="badge bg-warning">Pending</span>
@@ -611,12 +689,17 @@ export default {
                       <small class="text-muted">Not generated</small>
                     </td>
                     <td class="py-3 d-none d-sm-table-cell">
-                      <button 
-                        class="btn btn-sm btn-success px-3 py-2" 
-                        @click="makePayment(unpaidFee.id, unpaidFee.paymentCode)"
+                      <button
+                        class="btn btn-sm btn-success px-3 py-2"
+                        @click="
+                          makePayment(unpaidFee.id, unpaidFee.paymentCode)
+                        "
                         :disabled="isPaymentLoading"
                       >
-                        <span v-if="isPaymentLoading" class="spinner-border spinner-border-sm me-1"></span>
+                        <span
+                          v-if="isPaymentLoading"
+                          class="spinner-border spinner-border-sm me-1"
+                        ></span>
                         <i v-else class="bi bi-credit-card me-1"></i>
                         Pay Now
                       </button>
@@ -624,11 +707,21 @@ export default {
                   </tr>
 
                   <!-- Empty State -->
-                  <tr v-if="paymentHistory.length === 0 && (paymentSummary?.unpaidFees?.length || 0) === 0">
+                  <tr
+                    v-if="
+                      paymentHistory.length === 0 &&
+                      (paymentSummary?.unpaidFees?.length || 0) === 0
+                    "
+                  >
                     <td colspan="5" class="text-center py-5">
-                      <i class="bi bi-receipt text-muted mb-3" style="font-size: 3rem;"></i>
+                      <i
+                        class="bi bi-receipt text-muted mb-3"
+                        style="font-size: 3rem"
+                      ></i>
                       <h5 class="text-muted">No Payment History</h5>
-                      <p class="text-muted mb-0">No payments found for the selected academic session.</p>
+                      <p class="text-muted mb-0">
+                        No payments found for the selected academic session.
+                      </p>
                     </td>
                   </tr>
                 </tbody>
@@ -647,43 +740,64 @@ export default {
           </div>
           <div class="card-body">
             <!-- Paid Fees -->
-            <div 
-              v-for="paidFee in (paymentSummary?.paidFees || [])" 
+            <div
+              v-for="paidFee in paymentSummary?.paidFees || []"
               :key="paidFee.id"
               class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
             >
               <span class="text-muted">{{ paidFee.name }}</span>
-              <span class="fw-bold text-success">{{ formatCurrency(paidFee.amount) }}</span>
+              <span class="fw-bold text-success">{{
+                formatCurrency(paidFee.amount)
+              }}</span>
             </div>
 
             <!-- Unpaid Fees -->
-            <div 
-              v-for="unpaidFee in (paymentSummary?.unpaidFees || [])" 
+            <div
+              v-for="unpaidFee in paymentSummary?.unpaidFees || []"
               :key="unpaidFee.id"
               class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
             >
               <span class="text-muted">{{ unpaidFee.name }}</span>
-              <span class="fw-bold text-warning">{{ formatCurrency(unpaidFee.amount) }}</span>
+              <span class="fw-bold text-warning">{{
+                formatCurrency(unpaidFee.amount)
+              }}</span>
             </div>
 
             <!-- Summary -->
-            <div class="payment-summary-item d-flex justify-content-between py-3 bg-light rounded mt-2">
+            <div
+              class="payment-summary-item d-flex justify-content-between py-3 bg-light rounded mt-2"
+            >
               <span class="fw-bold">Total Paid</span>
-              <span class="fw-bold text-success fs-5">{{ formatCurrency(paymentSummary?.totalPaid || 0) }}</span>
+              <span class="fw-bold text-success fs-5">{{
+                formatCurrency(paymentSummary?.totalPaid || 0)
+              }}</span>
             </div>
-            
-            <div 
+
+            <div
               v-if="(paymentSummary?.totalUnpaid || 0) > 0"
               class="payment-summary-item d-flex justify-content-between py-2 text-warning"
             >
               <span class="fw-bold">Outstanding</span>
-              <span class="fw-bold">{{ formatCurrency(paymentSummary?.totalUnpaid || 0) }}</span>
+              <span class="fw-bold">{{
+                formatCurrency(paymentSummary?.totalUnpaid || 0)
+              }}</span>
             </div>
 
             <!-- Empty State -->
-            <div v-if="(paymentSummary?.paidFees?.length || 0) === 0 && (paymentSummary?.unpaidFees?.length || 0) === 0" class="text-center py-4">
-              <i class="bi bi-receipt text-muted mb-3" style="font-size: 2rem;"></i>
-              <p class="text-muted mb-0">No payment information available for the selected session.</p>
+            <div
+              v-if="
+                (paymentSummary?.paidFees?.length || 0) === 0 &&
+                (paymentSummary?.unpaidFees?.length || 0) === 0
+              "
+              class="text-center py-4"
+            >
+              <i
+                class="bi bi-receipt text-muted mb-3"
+                style="font-size: 2rem"
+              ></i>
+              <p class="text-muted mb-0">
+                No payment information available for the selected session.
+              </p>
             </div>
           </div>
         </div>
@@ -743,11 +857,11 @@ export default {
     </div>
 
     <!-- Outstanding Payments Modal -->
-    <div 
-      class="modal fade" 
-      id="paymentModal" 
-      tabindex="-1" 
-      aria-labelledby="paymentModalLabel" 
+    <div
+      class="modal fade"
+      id="paymentModal"
+      tabindex="-1"
+      aria-labelledby="paymentModalLabel"
       aria-hidden="true"
       :class="{ show: showPaymentModal }"
       :style="{ display: showPaymentModal ? 'block' : 'none' }"
@@ -759,21 +873,27 @@ export default {
               <i class="bi bi-credit-card me-2 text-primary"></i>
               Outstanding Payments
             </h5>
-            <button 
-              type="button" 
-              class="btn-close" 
+            <button
+              type="button"
+              class="btn-close"
               @click="closePaymentModal"
               aria-label="Close"
             ></button>
           </div>
           <div class="modal-body">
             <div class="mb-3">
-              <div class="alert alert-warning d-flex align-items-center" role="alert">
+              <div
+                class="alert alert-warning d-flex align-items-center"
+                role="alert"
+              >
                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
                 <div>
-                  You have <strong>{{ paymentSummary?.unpaidFees?.length || 0 }}</strong> 
-                  outstanding payment(s) totaling 
-                  <strong>{{ formatCurrency(paymentSummary?.totalUnpaid || 0) }}</strong>
+                  You have
+                  <strong>{{ paymentSummary?.unpaidFees?.length || 0 }}</strong>
+                  outstanding payment(s) totaling
+                  <strong>{{
+                    formatCurrency(paymentSummary?.totalUnpaid || 0)
+                  }}</strong>
                 </div>
               </div>
             </div>
@@ -788,23 +908,40 @@ export default {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="unpaidFee in (paymentSummary?.unpaidFees || [])" :key="unpaidFee.id">
+                  <tr
+                    v-for="unpaidFee in paymentSummary?.unpaidFees || []"
+                    :key="unpaidFee.id"
+                  >
                     <td class="py-3">
                       <div>
-                        <div class="fw-bold text-dark">{{ unpaidFee.name }}</div>
-                        <small class="text-muted">{{ unpaidFee.description }}</small>
+                        <div class="fw-bold text-dark">
+                          {{ unpaidFee.name }}
+                        </div>
+                        <small class="text-muted">{{
+                          unpaidFee.description
+                        }}</small>
                       </div>
                     </td>
                     <td class="py-3 text-end">
-                      <span class="fw-bold text-warning fs-5">{{ formatCurrency(unpaidFee.amount) }}</span>
+                      <span class="fw-bold text-warning fs-5">{{
+                        formatCurrency(unpaidFee.amount)
+                      }}</span>
                     </td>
                     <td class="py-3 text-center">
-                      <button 
-                        class="btn btn-success px-4 py-2" 
-                        @click="makePaymentFromModal(unpaidFee.id, unpaidFee.paymentCode)"
+                      <button
+                        class="btn btn-success px-4 py-2"
+                        @click="
+                          makePaymentFromModal(
+                            unpaidFee.id,
+                            unpaidFee.paymentCode
+                          )
+                        "
                         :disabled="isPaymentLoading"
                       >
-                        <span v-if="isPaymentLoading" class="spinner-border spinner-border-sm me-2"></span>
+                        <span
+                          v-if="isPaymentLoading"
+                          class="spinner-border spinner-border-sm me-2"
+                        ></span>
                         <i v-else class="bi bi-credit-card me-2"></i>
                         Pay Now
                       </button>
@@ -815,7 +952,9 @@ export default {
                   <tr>
                     <th class="py-3">Total Outstanding</th>
                     <th class="py-3 text-end">
-                      <span class="fw-bold text-danger fs-4">{{ formatCurrency(paymentSummary?.totalUnpaid || 0) }}</span>
+                      <span class="fw-bold text-danger fs-4">{{
+                        formatCurrency(paymentSummary?.totalUnpaid || 0)
+                      }}</span>
                     </th>
                     <th class="py-3"></th>
                   </tr>
@@ -824,18 +963,30 @@ export default {
             </div>
 
             <!-- Empty State -->
-            <div v-if="(paymentSummary?.unpaidFees?.length || 0) === 0" class="text-center py-5">
-              <i class="bi bi-check-circle text-success mb-3" style="font-size: 3rem;"></i>
+            <div
+              v-if="(paymentSummary?.unpaidFees?.length || 0) === 0"
+              class="text-center py-5"
+            >
+              <i
+                class="bi bi-check-circle text-success mb-3"
+                style="font-size: 3rem"
+              ></i>
               <h5 class="text-success">All Payments Up to Date!</h5>
-              <p class="text-muted mb-0">You have no outstanding payments at this time.</p>
+              <p class="text-muted mb-0">
+                You have no outstanding payments at this time.
+              </p>
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closePaymentModal">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              @click="closePaymentModal"
+            >
               Close
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               class="btn btn-primary"
               @click="closePaymentModal"
               v-if="(paymentSummary?.unpaidFees?.length || 0) > 0"
@@ -849,8 +1000,8 @@ export default {
     </div>
 
     <!-- Modal Backdrop -->
-    <div 
-      v-if="showPaymentModal" 
+    <div
+      v-if="showPaymentModal"
       class="modal-backdrop fade show"
       @click="closePaymentModal"
     ></div>

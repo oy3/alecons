@@ -1,6 +1,7 @@
 import { createApp } from "vue";
 import { createMetaManager } from "vue-meta";
 import "./style.css";
+import '@shared/styles/style.css'
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap";
 import "bootstrap-icons/font/bootstrap-icons.css";

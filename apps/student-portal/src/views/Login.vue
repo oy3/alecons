@@ -88,7 +88,7 @@ export default {
       <div class="card-body p-5">
         <div class="login-header">
           <div class="mb-4">
-            <i class="bi bi-mortarboard-fill text-primary" style="font-size: 3rem;"></i>
+          <img src="@shared/assets/logo.png" alt="Logo" width="70" class="" />
           </div>
           <h2>Student Portal</h2>
           <p>Sign in to access your courses and academic progress</p>
@@ -125,7 +125,7 @@ export default {
             <div class="input-group">
               <input
                 :type="showPassword ? 'text' : 'password'"
-                class="form-control"
+                class="form-control border-end-0"
                 id="password"
                 v-model="form.password"
                 :disabled="auth.loading"
@@ -135,7 +135,7 @@ export default {
               />
               <button
                 type="button"
-                class="btn btn-outline-secondary"
+                class="btn bg-white border-2 border-light-subtle border-start-0"
                 @click="togglePassword"
                 :disabled="auth.loading"
               >
@@ -185,7 +185,7 @@ export default {
 
 <style scoped>
 .login-container {
-  background: linear-gradient(135deg, #1a5f5f 0%, #2d7a7a 100%);
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
   position: relative;
   overflow: hidden;
 }

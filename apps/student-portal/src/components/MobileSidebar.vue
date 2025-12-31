@@ -104,7 +104,7 @@ export default {
     id="mobileSidebar"
     aria-labelledby="mobileSidebarLabel"
   >
-    <div class="offcanvas-header border-bottom border-secondary">
+    <div class="offcanvas-header border-bottom border-light-subtle">
       <div class="w-100">
         <BrandLogo />
       </div>
@@ -195,7 +195,7 @@ export default {
           <span>Settings</span>
         </router-link>
 
-        <hr class="border-secondary my-4">
+        <hr class="border-light my-4">
 
         <!-- Logout -->
         <button
@@ -211,9 +211,6 @@ export default {
 </template>
 
 <style scoped>
-.acon-bg-dark {
-  background: linear-gradient(135deg, #2d7d7d 0%, #1a5a5a 100%);
-}
 
 .acon-mobile-link {
   transition: all 0.3s ease;

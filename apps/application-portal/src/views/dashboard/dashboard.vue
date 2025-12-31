@@ -337,7 +337,7 @@ export default {
         showCancelButton: true,
         confirmButtonText: 'Continue to Student Portal',
         cancelButtonText: 'Stay Here',
-        confirmButtonColor: '#1a5f5f',
+        confirmButtonColor: '#8B2C2C',
         cancelButtonColor: '#6c757d'
       }).then((result) => {
         if (result.isConfirmed) {
@@ -363,14 +363,16 @@ export default {
           class="mb-4"
           :stages="stages"
           :currentStage="application?.currentStage || 0"
-          :name="user?.firstName || 'Student'"
+          :userName="user?.firstName || ''"
           :resumeConfig="resumeButtonConfig"
           @show-modal="showExamScreeningModal"
           @redirectToStudentPortal="redirectToStudentPortal"
         />
 
         <!-- To-do List -->
+         <div class="">
           <TodoList :todos="todos" />
+         </div>
       </div>
 
       <!-- Bio Data Card -->
@@ -384,20 +386,6 @@ export default {
           :gender="application?.gender || 'N/A'"
           :location="userLocation"
         />
-
-        <!-- Show application prompt if no application -->
-        <!-- <div v-if="!application && user?.role === 'applicant'" class="mt-3">
-          <div class="card border-warning">
-            <div class="card-body text-center">
-              <i class="bi bi-exclamation-triangle text-warning mb-2" style="font-size: 2rem;"></i>
-              <h6 class="card-title">Application Not Started</h6>
-              <p class="card-text text-muted">Complete your application to get started.</p>
-              <button @click="$router.push({ name: 'ApplicationForm' })" class="btn btn-warning btn-sm">
-                Start Application
-              </button>
-            </div>
-          </div>
-        </div> -->
       </div>
     </div>
   </div>

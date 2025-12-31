@@ -10,7 +10,7 @@ export default {
   setup() {
     const authStore = useAuthStore();
     return {
-      authStore
+      authStore,
     };
   },
   methods: {
@@ -19,7 +19,7 @@ export default {
       if (event) {
         event.preventDefault();
       }
-      
+
       // Navigate to the route
       this.$router
         .push(routePath)
@@ -42,7 +42,7 @@ export default {
       // Use Bootstrap's data-bs-dismiss by programmatically clicking the close button
       const offcanvasElement = document.getElementById("mobileSidebar");
       if (offcanvasElement) {
-        const closeButton = offcanvasElement.querySelector('.btn-close');
+        const closeButton = offcanvasElement.querySelector(".btn-close");
         if (closeButton) {
           closeButton.click();
         }
@@ -63,7 +63,7 @@ export default {
       if (result.isConfirmed) {
         logger.info("User confirmed logout");
         await this.authStore.logout();
-        
+
         this.$router.push({ name: "Login" }).then(() => {
           // Complete the logout process after navigation
           this.authStore.completeLogout();
@@ -86,7 +86,7 @@ export default {
 
 <template>
   <div
-    class="offcanvas offcanvas-start acon-bg-dark text-white"
+    class="offcanvas offcanvas-start acon-bg-primary-dark text-white"
     id="mobileSidebar"
   >
     <div class="offcanvas-header">
@@ -102,28 +102,32 @@ export default {
     </div>
     <div class="offcanvas-body">
       <nav class="nav flex-column">
-        <a
-          @click="navigateAndClose('/dashboard', $event)"
-          href="#"
-          class="nav-link text-white py-4 acon-link"
+        <router-link
+          to="/dashboard"
+          class="nav-link text-white py-4"
+          active-class="active"
         >
           <i class="bi bi-house h5 me-2"></i> Home
-        </a>
-        <a
-          @click="navigateAndClose('/payment', $event)"
-          href="#"
-          class="nav-link text-white py-4 acon-link"
+        </router-link>
+        <router-link
+          to="/payment"
+          class="nav-link text-white py-4"
+          active-class="active"
         >
           <i class="bi bi-credit-card h5 me-2"></i> Payments
-        </a>
-        <a
-          @click="navigateAndClose('/settings', $event)"
-          href="#"
-          class="nav-link text-white py-4 acon-link"
+        </router-link>
+        <router-link
+          to="/settings"
+          class="nav-link text-white py-4"
+          active-class="active"
         >
           <i class="bi bi-gear h5 me-2"></i> Settings
-        </a>
-        <li @click="logout" class="nav-link text-white mt-auto py-4 acon-link">
+        </router-link>
+        <li
+          @click="logout"
+          class="nav-link text-white mt-auto py-4"
+          active-class="active"
+        >
           <i class="bi bi-box-arrow-right h5 me-2"></i> Logout
         </li>
       </nav>
@@ -134,5 +138,15 @@ export default {
 <style scoped>
 .offcanvas {
   width: 250px;
+}
+
+.nav-link.active {
+  background-color: rgba(255, 255, 255, 0.2); /* highlight */
+  font-weight: bold;
+  border-radius: 10px;
+}
+
+.nav-link:hover {
+  color: var(--acon-secondary) !important;
 }
 </style>

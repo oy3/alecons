@@ -13,7 +13,8 @@ export default defineConfig(({ mode }) => {
         },
         server: {
             port: 3004,
-            host: true
+            host: true,
+            strictPort: true
         },
         envDir: './',
         envPrefix: 'VITE_'

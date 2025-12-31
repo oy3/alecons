@@ -20,7 +20,7 @@ export default {
 </script>
 
 <template>
-  <div class="container-fluid acon-bg-primary">
+  <div class="container-fluid acon-bg-dark">
     <footer class="pt-5">
       <div class="row">
         <div class="col-md-4 mb-3">
@@ -29,9 +29,9 @@ export default {
             class="navbar-brand d-flex align-items-center mb-3"
           >
             <img
-              src="../assets/img/logo.png"
+              src="@shared/assets/logo.png"
               alt="ALECON logo"
-              class="bg-white rounded-circle p-1 me-2"
+              class="bg-white rounded-circle p-0 me-2"
               width="60"
             />
             <div class="text-start text-uppercase d-flex flex-column">
@@ -53,15 +53,15 @@ export default {
 
           <ul class="no-bullets fw-light small">
             <li>
-              <i class="bi bi-geo-alt acon-text-secondary fs-5 me-2"></i>
+              <i class="bi bi-geo-alt acon-text-accent fs-5 me-2"></i>
               <span>Omuo Oke, Ekiti State, Nigeria</span>
             </li>
             <li>
-              <i class="bi bi-telephone acon-text-secondary fs-5 me-2"></i>
+              <i class="bi bi-telephone acon-text-accent fs-5 me-2"></i>
               <span>+234 708 460 1610, +234 916 000 8679</span>
             </li>
             <li>
-              <i class="bi bi-envelope acon-text-secondary fs-5 me-2"></i>
+              <i class="bi bi-envelope acon-text-accent fs-5 me-2"></i>
               <span>admissions@alecons.edu.ng</span>
             </li>
           </ul>
@@ -250,7 +250,7 @@ export default {
 .nav-item .nav-link.active,
 .nav-item .nav-link:hover,
 .nav-item .nav-link.active:hover {
-  color: #e07a5f !important;
+  color:  var(--acon-accent)!important;
 }
 
 ul.no-bullets {
@@ -260,7 +260,7 @@ ul.no-bullets {
 }
 
 .social-link:hover {
-  background-color: #e07a5f !important;
+  background-color: var(--acon-accent) !important;
   color: white !important;
 }
 </style>

@@ -603,6 +603,86 @@ export class AuthService {
         }
     }
 
+    async forgotPassword(email: string) {
+        try {
+            this.logger.log('Password reset requested for:', email);
+
+            // Find user by email (applicants and students)
+            const user = await this.userModel.findOne({
+                email,
+                role: { $in: [UserRole.APPLICANT, UserRole.STUDENT] }
+            });
+
+            if (!user) {
+                throw new BadRequestException('No account found with this email address');
+            }
+
+            // Generate random password
+            const newPassword = this.generateRandomPassword();
+
+            // Update user password (the pre-save hook will handle hashing)
+            user.passwordHash = newPassword;
+            await user.save();
+
+            // Send email with new password
+            try {
+                await this.emailService.sendPasswordReset(
+                    user.email,
+                    user.firstName,
+                    newPassword
+                );
+
+                this.logger.log('Password reset email sent successfully to:', email);
+
+                return {
+                    success: true,
+                    message: 'New password has been sent to your email address'
+                };
+            } catch (emailError) {
+                this.logger.error('Failed to send password reset email:', emailError);
+                throw new BadRequestException('Failed to send password reset email. Please try again later.');
+            }
+
+        } catch (error) {
+            this.logger.error('Password reset failed:', error);
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to reset password');
+        }
+    }
+
+    private generateRandomPassword(): string {
+        const uppercaseChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const lowercaseChars = 'abcdefghijklmnopqrstuvwxyz';
+        const numberChars = '0123456789';
+        const specialChars = '!@#$%^&*';
+
+        // Ensure at least one of each type
+        const password = [
+            uppercaseChars[Math.floor(Math.random() * uppercaseChars.length)],
+            lowercaseChars[Math.floor(Math.random() * lowercaseChars.length)],
+            numberChars[Math.floor(Math.random() * numberChars.length)],
+            specialChars[Math.floor(Math.random() * specialChars.length)],
+        ];
+
+        // Fill the rest with random characters from all sets
+        const allChars = uppercaseChars + lowercaseChars + numberChars + specialChars;
+        const remainingLength = 12 - password.length; // Total length 12
+
+        for (let i = 0; i < remainingLength; i++) {
+            password.push(allChars[Math.floor(Math.random() * allChars.length)]);
+        }
+
+        // Shuffle the password array to randomize position of required characters
+        for (let i = password.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [password[i], password[j]] = [password[j], password[i]];
+        }
+
+        return password.join('');
+    }
+
     // Staff authentication methods
     async staffLogin(loginDto: LoginDto) {
         const { email, password } = loginDto;

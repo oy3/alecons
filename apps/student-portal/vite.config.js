@@ -6,7 +6,8 @@ export default defineConfig({
     plugins: [vue()],
     server: {
         port: 3002,
-        host: true
+        host: true,
+        strictPort: true
     },
     preview: {
         port: 3002,

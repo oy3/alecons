@@ -885,7 +885,7 @@ export default {
 }
 
 .list-group-item.active {
-  background-color: #2d7d7d;
-  border-color: #2d7d7d;
+  background-color: var(--primary-dark);
+  border-color: var(--primary-dark);
 }
 </style>

@@ -74,58 +74,81 @@ button:focus-visible {
   }
 }
 
-/* Custom CSS */
+/* Custom CSS - Consolidated from all apps */
+
+:root {
+  --acon-primary: #C62828;
+  --acon-primary-dark: #8B2C2C;
+  --acon-secondary: #e07a5f;
+  --acon-accent: #28C6C6;
+  --acon-dark: #264653;
+  --acon-light: #EDF2F4;
+}
 
 .acon-text-primary {
-  color: #2d7d7d !important;
+  color: var(--acon-primary) !important;
 }
 
 .acon-text-dark {
-  color: #264653 !important;
+  color: var(--acon-dark) !important;
 }
 
 .acon-text-secondary {
-  color: #e07a5f !important;
+  color: var(--acon-secondary) !important;
+}
+
+.acon-text-accent {
+  color: var(--acon-accent) !important;
 }
 
 .acon-bg-primary {
-  background-color: #2d7d7d !important;
+  background-color: var(--acon-primary) !important;
   color: #fff !important;
 }
 
 .acon-bg-light {
-  background-color: #f0f8f8;
+  background-color: var(--acon-light) !important;
 }
 
 .acon-bg-secondary {
-  background-color: #e07a5f !important;
+  background-color: var(--acon-secondary) !important;
+  color: #fff !important;
+}
+
+.acon-bg-primary-dark {
+  background-color: var(--acon-primary-dark) !important;
   color: #fff !important;
 }
 
 .acon-bg-dark {
-  background-color: #264653 !important;
+  background-color: var(--acon-dark) !important;
+  color: #fff !important;
+}
+
+.acon-bg-accent {
+  background-color: var(--acon-accent) !important;
   color: #fff !important;
 }
 
 .btn-acon-primary {
   --bs-btn-font-weight: 400;
   --bs-btn-color: #fff !important;
-  --bs-btn-bg: #2d7d7d !important;
-  --bs-btn-border-color: #2d7d7d !important;
+  --bs-btn-bg: var(--acon-primary) !important;
+  --bs-btn-border-color: var(--acon-primary) !important;
   --bs-btn-hover-color: #fff;
-  --bs-btn-hover-bg: #256868;
-  --bs-btn-hover-border-color: #256868 !important;
-  --bs-btn-focus-shadow-rgb: 45, 125, 125;
+  --bs-btn-hover-bg: #a81e1e;
+  --bs-btn-hover-border-color: #a81e1e !important;
+  --bs-btn-focus-shadow-rgb: 198, 40, 40;
   --bs-btn-active-color: #fff;
-  --bs-btn-active-bg: #1e5555;
-  --bs-btn-active-border-color: #1e5555;
+  --bs-btn-active-bg: #7c1a1a;
+  --bs-btn-active-border-color: #7c1a1a;
 }
 
 .btn-acon-secondary {
   --bs-btn-font-weight: 400;
   --bs-btn-color: #fff !important;
-  --bs-btn-bg: #e07a5f !important;
-  --bs-btn-border-color: #e07a5f !important;
+  --bs-btn-bg: var(--acon-secondary) !important;
+  --bs-btn-border-color: var(--acon-secondary) !important;
   --bs-btn-hover-color: #fff;
   --bs-btn-hover-bg: #c56a53;
   --bs-btn-hover-border-color: #c56a53 !important;
@@ -137,24 +160,24 @@ button:focus-visible {
 
 .btn-outline-acon-primary {
   --bs-btn-font-weight: 400;
-  --bs-btn-color: #2d7d7d !important;
-  --bs-btn-border-color: #2d7d7d !important;
+  --bs-btn-color: var(--acon-primary) !important;
+  --bs-btn-border-color: var(--acon-primary) !important;
   --bs-btn-hover-color: #fff !important;
-  --bs-btn-hover-bg: #2d7d7d;
-  --bs-btn-hover-border-color: #2d7d7d !important;
-  --bs-btn-focus-shadow-rgb: 45, 125, 125;
+  --bs-btn-hover-bg: var(--acon-primary);
+  --bs-btn-hover-border-color: var(--acon-primary) !important;
+  --bs-btn-focus-shadow-rgb: 198, 40, 40;
   --bs-btn-active-color: #fff;
-  --bs-btn-active-bg: #1e5555;
-  --bs-btn-active-border-color: #1e5555;
+  --bs-btn-active-bg: #7c1a1a;
+  --bs-btn-active-border-color: #7c1a1a;
 }
 
 .btn-outline-acon-secondary {
   --bs-btn-font-weight: 400;
-  --bs-btn-color: #e07a5f !important;
-  --bs-btn-border-color: #e07a5f !important;
+  --bs-btn-color: var(--acon-secondary) !important;
+  --bs-btn-border-color: var(--acon-secondary) !important;
   --bs-btn-hover-color: #fff !important;
-  --bs-btn-hover-bg: #e07a5f;
-  --bs-btn-hover-border-color: #e07a5f !important;
+  --bs-btn-hover-bg: var(--acon-secondary);
+  --bs-btn-hover-border-color: var(--acon-secondary) !important;
   --bs-btn-focus-shadow-rgb: 224, 122, 95;
   --bs-btn-active-color: #fff;
   --bs-btn-active-bg: #a85a45;
@@ -164,8 +187,8 @@ button:focus-visible {
 .btn-acon-dark {
   --bs-btn-font-weight: 400;
   --bs-btn-color: #fff !important;
-  --bs-btn-bg: #264653 !important;
-  --bs-btn-border-color: #264653 !important;
+  --bs-btn-bg: var(--acon-dark) !important;
+  --bs-btn-border-color: var(--acon-dark) !important;
   --bs-btn-hover-color: #fff;
   --bs-btn-hover-bg: #1e3a47;
   --bs-btn-hover-border-color: #1e3a47 !important;
@@ -175,13 +198,23 @@ button:focus-visible {
   --bs-btn-active-border-color: #1e5555;
 }
 
-
-
-
+.btn-acon-accent {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: var(--acon-accent) !important;
+  --bs-btn-border-color: var(--acon-accent) !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #209e9e;
+  --bs-btn-hover-border-color: #209e9e !important;
+  --bs-btn-focus-shadow-rgb: 40, 198, 198;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #167c7c;
+  --bs-btn-active-border-color: #167c7c;
+}
 
 .acon-btn-primary:focus,
 .acon-btn-primary:active {
-  box-shadow: 0 0 0 0.2rem rgb(45, 125, 125, 0.5) !important;
+  box-shadow: 0 0 0 0.2rem rgb(198, 40, 40, 0.5) !important;
   outline: none;
 }
 
@@ -193,7 +226,7 @@ button:focus-visible {
 
 .acon-btn-outline-primary:focus,
 .acon-btn-outline-primary:active {
-  box-shadow: 0 0 0 0.2rem rgb(45, 125, 125, 0.5);
+  box-shadow: 0 0 0 0.2rem rgb(198, 40, 40, 0.5);
   outline: none;
 }
 
@@ -204,17 +237,17 @@ button:focus-visible {
 }
 
 .acon-border-primary {
-  border-color: #2d7d7d !important;
+  border-color: var(--acon-primary) !important;
 }
 
 .acon-border-secondary {
-  border-color: #e07a5f !important;
+  border-color: var(--acon-secondary) !important;
 }
 
 /* Focused input style */
 .form-control:focus {
-  border-color: #0c6980 !important;
-  box-shadow: 0 0 0 0.2rem rgba(12, 105, 128, 0.25) !important;
+  border-color: var(--acon-primary) !important;
+  box-shadow: 0 0 0 0.2rem rgba(198, 40, 40, 0.25) !important;
   outline: none !important;
 }
 
@@ -223,11 +256,11 @@ button:focus-visible {
 }
 
 .acon-link:hover {
-  color: #e07a5f !important;
+  color: var(--acon-secondary) !important;
 }
 
 .acon-bullet li::marker {
-  color: #e07a5f !important;
+  color: var(--acon-secondary) !important;
 }
 
 .acon-secondary-link {
@@ -235,5 +268,5 @@ button:focus-visible {
 }
 
 .acon-primary-link:hover {
-  color: #2d7d7d !important;
+  color: var(--acon-primary) !important;
 }

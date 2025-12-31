@@ -22,6 +22,7 @@ export default defineConfig(({ command, mode }) => ({
     },
     server: {
         port: 3001, // Different port from application-portal
-        host: true
+        host: true,
+        strictPort: true
     }
 }));

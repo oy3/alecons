@@ -1,10 +1,10 @@
 :root {
-    --primary-color: #1a5f5f;
-    --primary-light: #2d7a7a;
-    --primary-dark: #0d4545;
-    --secondary-color: #f8f9fa;
-    --accent-color: #ffc107;
-    --text-dark: #2c3e50;
+    --primary-color: #C62828;
+    --primary-light: #dc2e2e;
+    --primary-dark: #8B2C2C;
+    --secondary-color: #e07a5f;
+    --accent-color: #28C6C6;
+    --text-dark: #8B2C2C;
     --text-muted: #6c757d;
     --border-color: #dee2e6;
     --success-color: #28a745;
@@ -40,6 +40,15 @@ body {
     box-shadow: 0 0 0 0.2rem rgba(26, 95, 95, 0.25);
 }
 
+.btn-primary.disabled,
+.btn-primary:disabled {
+    color: var(--bs-btn-disabled-color);
+    pointer-events: none;
+    background-color: var(--primary-color);
+    border-color: var(--primary-dark);
+    opacity: var(--bs-btn-disabled-opacity);
+}
+
 .text-primary {
     color: var(--primary-color) !important;
 }
@@ -50,15 +59,15 @@ body {
 
 /* Application Portal matching styles */
 .acon-bg-dark {
-    background: linear-gradient(135deg, #2d7d7d 0%, #1a5a5a 100%) !important;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%) !important;
 }
 
 .acon-text-primary {
-    color: #2d7d7d !important;
+    color: var(--primary-color) !important;
 }
 
 .acon-text-secondary {
-    color: #e07a5f !important;
+    color: var(--secondary-color) !important;
 }
 
 .border-primary {

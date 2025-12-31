@@ -152,10 +152,6 @@ export default {
   font-weight: 600;
 }
 
-.acon-bg-dark {
-  background: linear-gradient(135deg, #2d7d7d 0%, #1a5a5a 100%);
-}
-
 /* Button specific styles for logout */
 .btn-link.acon-link {
   border: none;

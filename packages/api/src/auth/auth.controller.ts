@@ -100,6 +100,15 @@ export class AuthController {
         return this.authService.resendVerificationEmail(body.email);
     }
 
+    @Post('forgot-password')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Request password reset for applicant' })
+    @ApiResponse({ status: 200, description: 'Password reset email sent' })
+    @ApiResponse({ status: 404, description: 'User not found' })
+    async forgotPassword(@Body() body: { email: string }) {
+        return this.authService.forgotPassword(body.email);
+    }
+
     // Staff authentication endpoints
     @Post('staff/login')
     @HttpCode(HttpStatus.OK)

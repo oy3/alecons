@@ -8,11 +8,10 @@ export default {
   <router-link class="d-flex align-items-center" to="/">
     <img src="@shared/assets/logo.png" alt="Logo" width="50" class="me-2" />
     <div class="text-start text-uppercase d-flex flex-column">
-      <span class="fw-bold acon-text-primary"         style="letter-spacing: 1.5px">ALEBIOSU COLLEGE</span>
-      <span
-        class="fw-light text-secondary fs-6"
-        style="letter-spacing: 0.5px"
+      <span class="fw-bold acon-text-primary" style="letter-spacing: 1.5px"
+        >ALEBIOSU COLLEGE</span
       >
+      <span class="fw-light subtext text-secondary fs-6" style="letter-spacing: 0.5px">
         OF NURSING SCIENCES
       </span>
     </div>
@@ -20,4 +19,10 @@ export default {
 </template>
 
 <style scoped>
+@media (max-width:  767.98px) {
+  .subtext{
+    color: white !important;
+  }
+}
+
 </style>

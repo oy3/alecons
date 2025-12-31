@@ -4,16 +4,16 @@ export default {
   props: {
     stages: Array,
     currentStage: Number,
-    name: { type: String, default: "John" },
-    resumeConfig: { 
-      type: Object, 
-      default: () => ({ 
-        text: 'Continue', 
-        route: '/dashboard', 
-        disabled: false, 
-        variant: 'btn-acon-secondary' 
-      }) 
-    }
+    userName: { type: String, default: "" },
+    resumeConfig: {
+      type: Object,
+      default: () => ({
+        text: "Continue",
+        route: "/dashboard",
+        disabled: false,
+        variant: "btn-acon-secondary",
+      }),
+    },
   },
   computed: {
     progressPercent() {
@@ -21,20 +21,20 @@ export default {
       // If currentStage = 3 (working on stage 3), then 2 stages are completed
       const completedStages = Math.max(0, this.currentStage - 1);
       return (completedStages / (this.stages.length - 1)) * 100;
-    }
+    },
   },
   methods: {
     handleResumeClick() {
       if (this.resumeConfig.showModal) {
-        this.$emit('show-modal');
+        this.$emit("show-modal");
       } else if (this.resumeConfig.action) {
         // Handle custom actions
         this.$emit(this.resumeConfig.action);
       } else if (this.resumeConfig.route) {
         this.$router.push(this.resumeConfig.route);
       }
-    }
-  }
+    },
+  },
 };
 </script>
 
@@ -44,8 +44,9 @@ export default {
       <h5 class="card-title mb-4">Your Progress</h5>
 
       <p class="mb-4">
-        <span class="acon-text-dark fw-bold">Hi {{ name }}</span>, You have
-        completed {{ progressPercent.toFixed(0) }}% of your application process. Keep going.
+        <span class="acon-text-primary fw-bold">Hi {{ userName }}</span
+        >, You have completed {{ progressPercent.toFixed(0) }}% of your
+        application process. Keep going.
       </p>
 
       <div class="position-relative mb-5">
@@ -63,40 +64,76 @@ export default {
           ></div>
 
           <!-- Dots -->
-          <div class="dots-overlay d-flex justify-content-between position-absolute start-0 w-100">
+          <div
+            class="dots-overlay d-flex justify-content-between position-absolute start-0 w-100"
+          >
             <div
               v-for="(stage, index) in stages"
               :key="index"
               class="d-flex flex-column align-items-center"
               style="width: 0"
             >
-              <span class="dot" :class="{ completed: index < Math.max(0, currentStage) }"></span>
-              <small class="text-muted text-center">{{ stage }}</small>
+              <span
+                class="dot"
+                :class="{ completed: index < Math.max(0, currentStage) }"
+              ></span>
+              <small
+                class="text-muted text-center stage-label"
+                :class="{ 'current-stage': index === currentStage - 1 }"
+              >
+                {{ stage }}
+              </small>
             </div>
           </div>
         </div>
       </div>
 
-      <button 
+      <button
         v-if="!resumeConfig.disabled"
         @click="handleResumeClick"
-        :class="['btn', 'btn-sm', 'rounded-4', 'px-4', 'mt-3', resumeConfig.variant]"
+        :class="[
+          'btn',
+          'btn-sm',
+          'rounded-4',
+          'px-4',
+          'mt-3',
+          resumeConfig.variant,
+        ]"
       >
-        {{ resumeConfig.text || 'Resume' }}
+        {{ resumeConfig.text || "Resume" }}
       </button>
-      
-      <button 
+
+      <button
         v-else
         :disabled="resumeConfig.disabled"
-        :class="['btn', 'btn-sm', 'rounded-4', 'px-4', 'mt-3', resumeConfig.variant]"
+        :class="[
+          'btn',
+          'btn-sm',
+          'rounded-4',
+          'px-4',
+          'mt-3',
+          resumeConfig.variant,
+        ]"
       >
-        {{ resumeConfig.text || 'Resume' }}
+        {{ resumeConfig.text || "Resume" }}
       </button>
     </div>
   </div>
 </template>
 
 <style scoped>
+@media screen and (max-width: 768px) {
+  /* Hide all stage labels on mobile */
+  .stage-label {
+    display: none;
+  }
+
+  /* Only show the current stage label on mobile */
+  .stage-label.current-stage {
+    display: block;
+  }
+}
+
 .dots-overlay {
   top: 50%;
   transform: translateY(-50%);
@@ -107,11 +144,11 @@ export default {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background-color: var(--bs-secondary-bg);
+  background-color: var(--acon-primary) !important;
   flex-shrink: 0;
   transform: translateY(-50%);
 }
 .dot.completed {
-  background-color: #2d7d7d;
+  background-color: var(--acon-primary);
 }
 </style>

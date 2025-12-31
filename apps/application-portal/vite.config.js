@@ -19,5 +19,9 @@ export default defineConfig(({ command, mode }) => ({
   },
   optimizeDeps: {
     include: ['bootstrap', '@popperjs/core']
+  },
+  server: {
+    port: 5174,
+    strictPort: true
   }
 }));

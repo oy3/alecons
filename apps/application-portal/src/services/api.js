@@ -225,6 +225,11 @@ class ApiService {
         this.setToken(null);
     }
 
+    // Forgot Password
+    async forgotPassword(email) {
+        return this.post('/auth/forgot-password', { email });
+    }
+
     // Get current user profile
     async getProfile() {
         return this.makeRequest('/auth/profile');

@@ -35,6 +35,20 @@ export default {
     }
   },
   methods: {
+    showProfilePictureInfo() {
+      Swal.fire({
+        icon: 'info',
+        title: 'Profile Picture Update',
+        html: `
+          <p>To update your profile picture, please contact the admissions office.</p>
+          <p class="mb-2"><strong>Email:</strong></p>
+          <p><a href="mailto:admissions@alecons.edu.ng" class="text-decoration-none">admissions@alecons.edu.ng</a></p>
+        `,
+        confirmButtonText: 'Got it',
+        confirmButtonColor: '#2d7d7d',
+      });
+    },
+
     togglePasswordVisibility(field) {
       if (field === 'current') {
         this.showCurrentPassword = !this.showCurrentPassword;
@@ -153,17 +167,20 @@ export default {
       <div class="col-md-8">
         <div class="d-flex align-items-center mb-5">
           <img
-            :src="application.profileImageUrl || 'https://placehold.co/100?text=IMG'"
+            :src="
+              application.profileImageUrl || 'https://placehold.co/100?text=IMG'
+            "
             class="rounded-circle me-3"
             width="100"
             height="100"
           />
           <div>
             <h6>Profile picture</h6>
-            <p class="small text-muted mb-0">PNG, JPG up to 5MB</p>
+            <p class="small text-muted mb-0">PNG, JPG up to 2MB</p>
             <a
               class="small link-offset-2 link-offset-3-hover link-underline link-underline-opacity-0 link-underline-opacity-75-hover"
               href="#"
+              @click.prevent="showProfilePictureInfo"
             >
               Update
             </a>

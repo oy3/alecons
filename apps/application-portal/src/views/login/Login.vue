@@ -2,6 +2,7 @@
 import BrandLogo from '../../components/BrandLogo.vue';
 import { logger } from '@shared/utils/logger';
 import { useAuthStore } from '../../stores/auth.js';
+import { apiService } from '../../services/api.js';
 import Swal from 'sweetalert2';
 
 export default {
@@ -110,6 +111,18 @@ export default {
           return;
         }
 
+        // Email format validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(this.resetEmail)) {
+          await Swal.fire({
+            icon: 'warning',
+            title: 'Invalid Email',
+            text: 'Please enter a valid email address',
+            confirmButtonColor: '#2d7d7d',
+          });
+          return;
+        }
+
         // Show loading state
         Swal.fire({
           title: 'Sending Reset Link...',
@@ -120,34 +133,41 @@ export default {
           },
         });
 
-        // Simulate API call (replace with actual API call)
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        logger.info("Requesting password reset for:", this.resetEmail);
 
-        logger.info("Sending reset link to:", this.resetEmail);
+        // Call API to reset password
+        const result = await apiService.forgotPassword(this.resetEmail);
 
-        // Show success message
-        await Swal.fire({
-          icon: 'success',
-          title: 'Reset Link Sent!',
-          text: `Password reset instructions have been sent to ${this.resetEmail}`,
-          confirmButtonColor: '#2d7d7d',
-        });
+        if (result.success) {
+          // Clear email field
+          this.resetEmail = '';
+          
+          // Close modal programmatically using the close button
+          const closeButton = document.querySelector('#forgotPasswordModal .btn-close');
+          if (closeButton) {
+            closeButton.click();
+          }
 
-        // Close modal programmatically
-        const modal = bootstrap.Modal.getInstance(
-          document.getElementById("forgotPasswordModal")
-        );
-        modal.hide();
-
-        // Clear email field
-        this.resetEmail = '';
+          // Show success message after modal starts closing
+          await Swal.fire({
+            icon: 'success',
+            title: 'Password Reset Sent!',
+            text: `A new password has been sent to ${this.resetEmail}. Please check your email.`,
+            confirmButtonColor: '#2d7d7d',
+          });
+          
+          logger.info('Password reset successful');
+        } else {
+          // Handle API error
+          throw new Error(result.error || 'Failed to reset password');
+        }
       } catch (error) {
         logger.error('Password reset error:', error);
 
         await Swal.fire({
           icon: 'error',
-          title: 'Oops...',
-          text: 'Failed to send reset link. Please try again.',
+          title: 'Reset Failed',
+          text: error.message || 'Failed to send reset link. Please try again.',
           confirmButtonColor: '#2d7d7d',
         });
       }
@@ -216,7 +236,7 @@ export default {
         <div class="text-end mb-3">
           <a
             href="#"
-            class="acon-link acon-text-primary text-opacity-75 text-decoration-none small"
+            class="acon-link acon-text-secondary text-opacity-75 text-decoration-none small"
             data-bs-toggle="modal"
             data-bs-target="#forgotPasswordModal"
           >

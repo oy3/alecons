@@ -33,7 +33,7 @@ export default {
 
 <template>
   <nav class="navbar navbar-expand-lg d-flex flex-column fixed-top pt-0">
-    <div class="container-fluid acon-bg-primary small">
+    <div class="container-fluid acon-bg-primary-dark small">
       <div>
         <span class="navbar-text text-white me-3">
           <i class="bi bi-telephone me-1"></i> +234 708 460 1610
@@ -45,9 +45,10 @@ export default {
       <span class="navbar-text text-white">Omuo Oke, Ekiti State, Nigeria</span>
     </div>
     <div class="container-fluid bg-white py-2">
-      <a class="navbar-brand d-flex align-items-center" href="#">
+        <router-link
+              to="/"class="navbar-brand d-flex align-items-center">
         <img
-          src="/src/assets/img/logo.png"
+          src="@shared/assets/logo.png"
           alt="Logo"
           width="50"
           class="d-inline-block align-text-top me-2"
@@ -61,7 +62,7 @@ export default {
             OF NURSING SCIENCES
           </span>
         </div>
-      </a>
+      </router-link>
       <button
         class="navbar-toggler"
         type="button"
@@ -154,7 +155,7 @@ export default {
 
 <style scoped>
 .nav-link.acon-active {
-  color: #2d7d7d !important;
+  color: #C62828 !important;
   font-weight: 600 !important;
 }
 </style>

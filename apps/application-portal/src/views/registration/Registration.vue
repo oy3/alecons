@@ -434,7 +434,7 @@ export default {
     <div class="row min-vh-100">
       <div class="col-md-5 d-none d-md-block px-0">
         <img
-          src="../../assets/stethoscope.png"
+          src="@shared/assets/schoolImg3.jpg"
           class="img-fluid min-vh-100 w-100 object-fit-cover"
           alt=""
         />
@@ -444,7 +444,7 @@ export default {
         <div class="scrollable-content p-2 p-md-5">
           <div class="content-wrapper w-100">
             <div class="mt-md-0 mt-5">
-              <h2 class="mb-4 pt-md-0 pt-5">
+              <h2 class="mb-4 pt-md-0 pt-5 acon-text-primary page-title">
                 Registration
                 <span v-if="currentAcademicSession"
                   >for {{ currentAcademicSession?.sessionYear }} Session</span
@@ -750,7 +750,7 @@ export default {
                   <div class="col-12 mt-5">
                     <button
                       type="submit"
-                      class="btn btn-primary w-100"
+                      class="btn btn-acon-primary py-2 w-100"
                       :disabled="isLoading || !registrationAllowed"
                     >
                       <span v-if="!registrationAllowed"
@@ -766,7 +766,7 @@ export default {
 
               <p class="mt-3">
                 Already have an account?
-                <router-link to="/">Sign in</router-link>
+                <router-link to="/" class="acon-text-secondary">Sign in</router-link>
               </p>
             </div>
           </div>
@@ -784,9 +784,13 @@ export default {
 }
 
 /* Image as background for mobile view */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
+  .page-title{
+color: white !important;
+  }
+
   .form-container {
-    background: url("../../assets/stethoscope.png") no-repeat center center;
+    background: url("@shared/assets/schoolImg3.jpg") no-repeat center center;
     background-size: cover;
     position: relative;
     padding: 2rem;

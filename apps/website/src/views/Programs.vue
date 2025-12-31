@@ -143,7 +143,7 @@ export default {
       </div>
     </div>
 
-    <div class="p-5 acon-bg-primary text-center">
+    <div class="p-5 acon-bg-primary-dark text-center">
       <h2 class="fw-bold my-5">Why Choose ALECONS Programs?</h2>
 
       <div class="row g-4">

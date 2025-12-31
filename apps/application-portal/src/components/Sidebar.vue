@@ -28,7 +28,7 @@ export default {
       if (result.isConfirmed) {
           logger.info("User confirmed logout");
           await this.authStore.logout();
-          
+
           this.$router.push({ name: "Login" }).then(() => {
             // Complete the logout process after navigation
             this.authStore.completeLogout();
@@ -50,7 +50,7 @@ export default {
 
 <template>
   <aside
-    class="sidebar d-none d-md-flex flex-column acon-bg-dark rounded-start-0 nav-custom-rounded text-white p-3"
+    class="sidebar d-none d-md-flex flex-column acon-bg-primary-dark rounded-start-0 nav-custom-rounded text-white p-3"
   >
     <div class="text-center my-4">
       <!-- <BrandLogo /> -->
@@ -59,28 +59,28 @@ export default {
     <nav class="nav flex-column">
       <router-link
         to="/dashboard"
-        class="nav-link text-white py-4 acon-link"
+        class="nav-link text-white py-4"
         active-class="active"
       >
         <i class="bi bi-house h5 me-2"></i> Home
       </router-link>
       <router-link
         to="/payment"
-        class="nav-link text-white py-4 acon-link"
+        class="nav-link text-white py-4"
         active-class="active"
       >
         <i class="bi bi-credit-card h5 me-2"></i> Payments
       </router-link>
       <router-link
         to="/settings"
-        class="nav-link text-white py-4 acon-link"
+        class="nav-link text-white py-4"
         active-class="active"
       >
         <i class="bi bi-gear h5 me-2"></i> Settings
       </router-link>
       <li
         @click="logout"
-        class="nav-link text-white mt-auto py-4 acon-link"
+        class="nav-link text-white mt-auto py-4"
         active-class="active"
       >
         <i class="bi bi-box-arrow-right h5 me-2"></i> Logout
@@ -104,5 +104,9 @@ export default {
   background-color: rgba(255, 255, 255, 0.2); /* highlight */
   font-weight: bold;
   border-radius: 10px;
+}
+
+.nav-link:hover {
+  color: var(--acon-secondary) !important;
 }
 </style>

@@ -58,10 +58,7 @@ export class EmailService {
       await this.gmail.users.getProfile({ userId: "me" });
       this.logger.log("Gmail API connection verified successfully");
     } catch (error) {
-      this.logger.error(
-        "Gmail API connection failed:",
-        error.message
-      );
+      this.logger.error("Gmail API connection failed:", error.message);
     }
   }
 
@@ -75,7 +72,9 @@ export class EmailService {
 
       if (mailOptions.attachments && mailOptions.attachments.length > 0) {
         // Create multipart MIME message with attachments
-        const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const boundary = `----=_Part_${Date.now()}_${Math.random()
+          .toString(36)
+          .substring(7)}`;
 
         const messageParts = [
           `From: ${mailOptions.from}`,
@@ -89,19 +88,25 @@ export class EmailService {
           "Content-Transfer-Encoding: 7bit",
           "",
           mailOptions.html,
-          ""
+          "",
         ];
 
         // Add each attachment
         for (const attachment of mailOptions.attachments) {
           messageParts.push(`--${boundary}`);
-          messageParts.push(`Content-Type: ${attachment.contentType || 'application/octet-stream'}; name="${attachment.filename}"`);
-          messageParts.push('Content-Transfer-Encoding: base64');
-          messageParts.push(`Content-Disposition: attachment; filename="${attachment.filename}"`);
+          messageParts.push(
+            `Content-Type: ${
+              attachment.contentType || "application/octet-stream"
+            }; name="${attachment.filename}"`
+          );
+          messageParts.push("Content-Transfer-Encoding: base64");
+          messageParts.push(
+            `Content-Disposition: attachment; filename="${attachment.filename}"`
+          );
           messageParts.push("");
 
           // Convert buffer to base64
-          const base64Content = attachment.content.toString('base64');
+          const base64Content = attachment.content.toString("base64");
           // Split into 76 character lines (RFC 2045)
           const lines = base64Content.match(/.{1,76}/g) || [];
           messageParts.push(...lines);
@@ -155,9 +160,7 @@ export class EmailService {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await this.sendEmailViaGmailAPI(mailOptions);
-        this.logger.log(
-          `Email sent successfully on attempt ${attempt}`
-        );
+        this.logger.log(`Email sent successfully on attempt ${attempt}`);
         return;
       } catch (error) {
         lastError = error;
@@ -532,10 +535,10 @@ export class EmailService {
       subject: "Congratulations! Admission Offer - Alebiosu College of Nursing",
       attachments: [
         {
-          filename: `Admission_Letter_${firstName.replace(/\s+/g, '_')}.pdf`,
+          filename: `Admission_Letter_${firstName.replace(/\s+/g, "_")}.pdf`,
           content: pdfBuffer,
-          contentType: 'application/pdf'
-        }
+          contentType: "application/pdf",
+        },
       ],
       html: `
                 <!DOCTYPE html>
@@ -649,10 +652,11 @@ export class EmailService {
                             <p>After careful consideration of all applications, we regret to inform you that we are unable to offer you admission at this time.</p>
                         </div>
                         
-                        ${reason
-          ? `<p><strong>Feedback:</strong> ${reason}</p>`
-          : ""
-        }
+                        ${
+                          reason
+                            ? `<p><strong>Feedback:</strong> ${reason}</p>`
+                            : ""
+                        }
                         
                         <div class="encouragement">
                             <h4>We encourage you to:</h4>
@@ -834,9 +838,10 @@ export class EmailService {
                             <h3><strong>${examTitle}</strong></h3>
                             <p><strong>📅 Date & Time:</strong> ${examDateTime}</p>
                             <p><strong>⏱️ Duration:</strong> ${examDuration} minutes</p>
-                            <p><strong>👥 Target Audience:</strong> ${targetType.charAt(0).toUpperCase() +
-        targetType.slice(1)
-        }</p>
+                            <p><strong>👥 Target Audience:</strong> ${
+                              targetType.charAt(0).toUpperCase() +
+                              targetType.slice(1)
+                            }</p>
                         </div>
 
                         <div class="alert">
@@ -850,8 +855,9 @@ export class EmailService {
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL
-        }/dashboard" class="btn">Access Portal</a>
+                            <a href="${
+                              process.env.FRONTEND_URL
+                            }/dashboard" class="btn">Access Portal</a>
                         </div>
                         
                         <p>If you have any questions about this exam, please contact the administration office.</p>
@@ -963,16 +969,18 @@ export class EmailService {
                                 <li><strong>Keep this password confidential</strong> - do not share with anyone</li>
                                 <li>You will need this password to start your exam</li>
                                 <li>Copy this password or write it down safely</li>
-                                <li>${isRegenerated
-          ? "Any previous passwords are now invalid"
-          : "This password is only valid for this exam"
-        }</li>
+                                <li>${
+                                  isRegenerated
+                                    ? "Any previous passwords are now invalid"
+                                    : "This password is only valid for this exam"
+                                }</li>
                             </ul>
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL
-        }/dashboard" class="btn">Access Portal</a>
+                            <a href="${
+                              process.env.FRONTEND_URL
+                            }/dashboard" class="btn">Access Portal</a>
                         </div>
                         
                         <p>If you have any issues accessing your exam, please contact the administration office immediately.</p>
@@ -1161,35 +1169,41 @@ export class EmailService {
                 <body>
                     <div class="container">
                         <div class="header">
-                            <h1>✅ Exam ${isAutoSubmitted
-          ? "Auto-Submitted"
-          : "Successfully Completed"
-        }!</h1>
+                            <h1>✅ Exam ${
+                              isAutoSubmitted
+                                ? "Auto-Submitted"
+                                : "Successfully Completed"
+                            }!</h1>
                         </div>
                         
                         <div class="success">
-                            <h2>🎉 ${isAutoSubmitted ? "Time's Up!" : "Congratulations"
-        } ${firstName}!</h2>
-                            <p>${isAutoSubmitted
-          ? "Your exam time has expired and has been automatically submitted for grading."
-          : "You have successfully completed your exam."
-        }</p>
+                            <h2>🎉 ${
+                              isAutoSubmitted ? "Time's Up!" : "Congratulations"
+                            } ${firstName}!</h2>
+                            <p>${
+                              isAutoSubmitted
+                                ? "Your exam time has expired and has been automatically submitted for grading."
+                                : "You have successfully completed your exam."
+                            }</p>
                         </div>
                         
                         <div class="exam-details">
                             <h3><strong>${examTitle}</strong></h3>
-                            <p><strong>📅 ${isAutoSubmitted
-          ? "Auto-Submitted On:"
-          : "Submitted On:"
-        }</strong> ${submissionDateTime}</p>
-                            ${isAutoSubmitted
-          ? "<p><strong>⏰ Reason:</strong> Exam time limit reached</p>"
-          : ""
-        }
+                            <p><strong>📅 ${
+                              isAutoSubmitted
+                                ? "Auto-Submitted On:"
+                                : "Submitted On:"
+                            }</strong> ${submissionDateTime}</p>
+                            ${
+                              isAutoSubmitted
+                                ? "<p><strong>⏰ Reason:</strong> Exam time limit reached</p>"
+                                : ""
+                            }
                         </div>
 
-                        ${showScore
-          ? `
+                        ${
+                          showScore
+                            ? `
                         <div class="score-box">
                             <h3>📊 Your Score</h3>
                             <p style="font-size: 20px; font-weight: bold; color: #856404;">
@@ -1197,39 +1211,44 @@ export class EmailService {
                             </p>
                         </div>
                         `
-          : ""
-        }
+                            : ""
+                        }
 
                         <div class="info">
                             <p><strong>📋 What's Next?</strong></p>
                             <ul>
-                                ${isAutoSubmitted
-          ? "<li>Don't worry - all your answered questions have been saved</li>"
-          : ""
-        }
-                                <li>${showScore
-          ? "Your results have been automatically graded"
-          : "Your exam is being reviewed and graded"
-        }</li>
+                                ${
+                                  isAutoSubmitted
+                                    ? "<li>Don't worry - all your answered questions have been saved</li>"
+                                    : ""
+                                }
+                                <li>${
+                                  showScore
+                                    ? "Your results have been automatically graded"
+                                    : "Your exam is being reviewed and graded"
+                                }</li>
                                 <li>You will be notified once final results are published</li>
                                 <li>Check your dashboard regularly for updates</li>
                                 <li>Keep this email as confirmation of your submission</li>
-                                ${isAutoSubmitted
-          ? "<li>If you have any concerns, please contact our support team</li>"
-          : ""
-        }
+                                ${
+                                  isAutoSubmitted
+                                    ? "<li>If you have any concerns, please contact our support team</li>"
+                                    : ""
+                                }
                             </ul>
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL
-        }/dashboard" class="btn">View Dashboard</a>
+                            <a href="${
+                              process.env.FRONTEND_URL
+                            }/dashboard" class="btn">View Dashboard</a>
                         </div>
                         
-                        <p>${isAutoSubmitted
-          ? "Thank you for your participation. Even though time ran out, your answers have been safely submitted for grading."
-          : "Thank you for taking the exam. We wish you the best of luck with your results!"
-        }</p>
+                        <p>${
+                          isAutoSubmitted
+                            ? "Thank you for your participation. Even though time ran out, your answers have been safely submitted for grading."
+                            : "Thank you for taking the exam. We wish you the best of luck with your results!"
+                        }</p>
                         
                         <div class="footer">
                             <p><strong>Alebiosu College of Nursing Services</strong><br>
@@ -1403,14 +1422,15 @@ export class EmailService {
                         <div style="margin: 30px 0;">
                             <h4 style="color: #333333; margin: 0 0 15px 0; font-size: 18px;">What's Next?</h4>
                             <ul style="color: #666666; line-height: 1.6; padding-left: 20px; margin: 0;">
-                                ${status === "pass"
-          ? `<li>Continue to the next phase of your academic journey</li>
+                                ${
+                                  status === "pass"
+                                    ? `<li>Continue to the next phase of your academic journey</li>
                                        <li>Check your student portal for any additional requirements</li>
                                        <li>Contact the academic office if you have any questions</li>`
-          : `<li>Review the exam material for areas of improvement</li>
+                                    : `<li>Review the exam material for areas of improvement</li>
                                        <li>Contact your instructor for additional guidance</li>
                                        <li>Check if retake opportunities are available</li>`
-        }
+                                }
                             </ul>
                         </div>
 
@@ -1498,8 +1518,9 @@ export class EmailService {
                                 <h3>Your Login Credentials:</h3>
                                 <p><strong>Email:</strong> ${email}</p>
                                 <p><strong>Password:</strong> ${password}</p>
-                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL
-          }/staff</p>
+                                <p><strong>Portal URL:</strong> ${
+                                  process.env.STAFF_PORTAL_URL
+                                }/staff</p>
                             </div>
                             
                             <div class="warning">
@@ -1586,9 +1607,10 @@ export class EmailService {
                                 <p><strong>Staff ID:</strong> ${staffId}</p>
                                 <p><strong>Email:</strong> ${email}</p>
                                 <p><strong>Password:</strong> ${password}</p>
-                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL ||
-          process.env.FRONTEND_URL
-          }/staff</p>
+                                <p><strong>Portal URL:</strong> ${
+                                  process.env.STAFF_PORTAL_URL ||
+                                  process.env.FRONTEND_URL
+                                }/staff</p>
                             </div>
                             
                             <div class="warning">
@@ -1637,7 +1659,7 @@ export class EmailService {
       const mailOptions = {
         from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
         to: email,
-        subject: "Password Reset - ALECONS Portal",
+        subject: "Password Reset - Application Portal",
         html: `
                     <!DOCTYPE html>
                     <html>
@@ -1658,7 +1680,7 @@ export class EmailService {
                         <div class="container">
                             <div class="header">
                                 <h1>Password Reset</h1>
-                                <h2>ALECONS Portal</h2>
+                                <h2>Application Portal</h2>
                             </div>
                             
                             <h2>Hello ${firstName},</h2>
@@ -1684,9 +1706,10 @@ export class EmailService {
                             <p>If you did not request this password reset or have any concerns about your account security, please contact the IT department immediately.</p>
                             
                             <p><strong>Portal Access:</strong><br>
-                            ${process.env.STAFF_PORTAL_URL ||
-          process.env.FRONTEND_URL
-          }</p>
+                            ${
+                              process.env.APPLICATION_PORTAL_URL ||
+                              process.env.FRONTEND_URL
+                            }</p>
                             
                             <div class="footer">
                                 <p><strong>Important:</strong> Delete this email after changing your password.</p>
@@ -1747,15 +1770,18 @@ export class EmailService {
                             <p>This email confirms that your password has been successfully changed for your Student Portal account.</p>
                             
                             <div class="timestamp">
-                                <strong>Change Date & Time:</strong> ${new Date().toLocaleString('en-GB', {
-          timeZone: 'Africa/Lagos',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        })} (WAT)
+                                <strong>Change Date & Time:</strong> ${new Date().toLocaleString(
+                                  "en-GB",
+                                  {
+                                    timeZone: "Africa/Lagos",
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    second: "2-digit",
+                                  }
+                                )} (WAT)
                             </div>
                             
                             <div class="security-info">
@@ -1781,7 +1807,12 @@ export class EmailService {
                             </div>
                             
                             <p><strong>Portal Access:</strong><br>
-                            <a href="${process.env.STUDENT_PORTAL_URL || process.env.FRONTEND_URL}">${process.env.STUDENT_PORTAL_URL || process.env.FRONTEND_URL}</a></p>
+                            <a href="${
+                              process.env.STUDENT_PORTAL_URL ||
+                              process.env.FRONTEND_URL
+                            }">${
+          process.env.STUDENT_PORTAL_URL || process.env.FRONTEND_URL
+        }</a></p>
                             
                             <div class="footer">
                                 <p><strong>Security Tip:</strong> Keep your password secure and never share it with anyone.</p>

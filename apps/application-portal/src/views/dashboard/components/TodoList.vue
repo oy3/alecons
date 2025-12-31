@@ -57,6 +57,13 @@ export default {
 </template>
 
 <style scoped>
+
+@media screen and (max-width: 768px) {
+  .todo-container {
+    width: 90vw;
+  }
+    
+  }
 /* Thin scrollbar */
 .todo-container {
   scrollbar-width: thin;

@@ -14,7 +14,7 @@ export default {
 </script>
 
 <template>
-    <div class="container-fluid acon-bg-primary p-5 text-center rounded-5">
+    <div class="container-fluid acon-bg-primary-dark p-5 text-center rounded-5">
         <h2>Ready to Start Your Nursing Career?</h2>
         <p class="fs-5 fw-light mx-0 mx-md-5">Join thousands of successful nursing graduates who started their journey at ALECONS. Apply
             today and take the
@@ -28,7 +28,7 @@ export default {
         >
           Apply Now
         </a>
-            <button class="btn btn-outline-light btn-lg px-5" style="--bs-btn-hover-color: #2d7d7d" type="button">Schedule Campus
+            <button class="btn btn-outline-light btn-lg px-5" style="--bs-btn-hover-color: #C62828" type="button">Schedule Campus
                 Tour</button>
         </div>
     </div>

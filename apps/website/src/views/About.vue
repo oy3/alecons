@@ -340,7 +340,7 @@ export default {
       </div>
     </div>
 
-    <div class="acon-bg-dark p-5 text-center">
+    <div class="acon-bg-primary-dark p-5 text-center">
       <h2 class="fw-bold">Start Your Journey at ALECONS Today!</h2>
       <p class="fs-5 fw-light mx-0 mx-md-5 mb-4" style="color: #fff3f0">
         Apply Now to Alebiosu College of Nursing Sciences – where excellence in

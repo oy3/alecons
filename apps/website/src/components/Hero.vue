@@ -36,12 +36,12 @@ export default {
                 <a
           :href="registrationUrl"
           target="_blank"
-          class="btn btn-acon-secondary btn-lg icon-link icon-link-hover me-0 me-md-3 px-4"
+          class="btn btn-acon-primary btn-lg icon-link icon-link-hover me-0 me-md-3 px-4"
           rel="noopener noreferrer"
         >
           Start Your Journey <i class="bi bi-arrow-right-short h3"></i>
         </a>
-        <router-link to="/programs" class="btn btn-outline-light btn-lg px-4" style="--bs-btn-hover-color: #2d7d7d">
+        <router-link to="/programs" class="btn btn-outline-light btn-lg px-4" style="--bs-btn-hover-color: #a81e1e">
           Explore Programs
         </router-link>
       </div>
@@ -51,7 +51,7 @@ export default {
           class="stats-container mt-5 p-4 px-md-5 py-md-3 rounded-4 text-white d-flex flex-column flex-md-row justify-content-around align-items-center gap-4">
           <div class="">
             <div class="d-flex align-items-end justify-content-center">
-              <i class="bi bi-people h2 acon-text-secondary me-2"></i>
+              <i class="bi bi-people h2 acon-text-accent me-2"></i>
               <h2 class="fw-bold mt-2">500+</h2>
             </div>
 
@@ -60,7 +60,7 @@ export default {
 
           <div class="">
             <div class="d-flex align-items-end justify-content-center">
-              <i class="bi bi-award h2 acon-text-secondary me-2"></i>
+              <i class="bi bi-award h2 acon-text-accent me-2"></i>
               <h2 class="fw-bold mt-2">95%</h2>
             </div>
             <p class="mb-0">Graduate Success Rate</p>
@@ -68,7 +68,7 @@ export default {
 
           <div>
             <div class="d-flex align-items-end justify-content-center">
-              <i class="bi bi-geo-alt h2 acon-text-secondary me-2"></i>
+              <i class="bi bi-geo-alt h2 acon-text-accent me-2"></i>
               <h2 class="fw-bold mt-2">15+</h2>
             </div>
             <p class="mb-0">Years of Excellence</p>
@@ -86,7 +86,7 @@ export default {
 <style scoped>
 .hero-section {
   position: relative;
-  background-image: url("/src/assets/img/campus.jpg");
+  background-image: url("@shared/assets/schoolImg2.jpg");
   background-size: cover;
   background-position: center;
   height: 100%;
@@ -99,8 +99,8 @@ export default {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: #2d7d7d;
-  opacity: 0.8;
+  background-color: #000;
+  opacity: 0.5;
   z-index: 1;
 }
 

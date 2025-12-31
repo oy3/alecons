@@ -168,7 +168,7 @@ export default {
         <div class="col-md-6">
           <div class="rounded-4 overflow-hidden shadow">
             <img
-              src="/src/assets/img/campus.jpg"
+              src="@shared/assets/schoolImg2.jpg"
               alt="Campus"
               class="img-fluid w-100 h-100"
               style="object-fit: cover"

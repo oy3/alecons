@@ -144,11 +144,11 @@ export default {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background-color: var(--acon-primary) !important;
+  background-color: var(--bs-secondary-bg) !important;
   flex-shrink: 0;
   transform: translateY(-50%);
 }
 .dot.completed {
-  background-color: var(--acon-primary);
+  background-color: var(--acon-primary) !important;
 }
 </style>

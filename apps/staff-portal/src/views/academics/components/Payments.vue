@@ -84,7 +84,7 @@ export default {
           }))
 
           logger.info(`Loaded ${this.allPayments.length} payments`)
-          console.log('All payments loaded:', this.allPayments)
+          logger.info('All payments loaded:', this.allPayments)
         } else {
           throw new Error(response.message || 'Failed to load payments')
         }

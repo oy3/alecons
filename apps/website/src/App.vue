@@ -3,6 +3,10 @@ import { RouterView } from 'vue-router';
 import Navbar from './components/Header.vue'
 import Footer from './components/Footer.vue';
 
+const siteName = import.meta.env.VITE_APP_FULL_NAME || 'Alecons College of Nursing Sciences'
+const siteUrl = (import.meta.env.VITE_APP_SITE_URL || 'https://alecons.edu.ng').replace(/\/$/, '')
+const siteNumber = import.meta.env.VITE_APP_PHONE || '+2349160008679'
+
 export default {
    metaInfo: {
     script: [
@@ -11,19 +15,19 @@ export default {
         json: {
           "@context": "https://schema.org",
           "@type": "CollegeOrPolytechnic",
-          "name": "Alecons College of Nursing Sciences",
-          "url": "https://alecons.com.ng",
-          "logo": "https://alecons.com.ng/assets/logo-DuXenZg8.png",
+          "name": siteName,
+          "url": siteUrl,
+          "logo": `${siteUrl}/assets/logo-DuXenZg8.png`,
           "address": {
             "@type": "PostalAddress",
-            "streetAddress": "Omuo Oke, Ekiti State",
+            "streetAddress": "Iyamoye-Abuja Road",
             "addressLocality": "Omuo Oke",
             "addressRegion": "Ekiti",
             "addressCountry": "NG"
           },
           "contactPoint": {
             "@type": "ContactPoint",
-            "telephone": "+2347084601610",
+            "telephone": siteNumber,
             "contactType": "Admissions Office"
           }
         }

@@ -2,7 +2,7 @@ import { SitemapStream, streamToPromise } from 'sitemap';
 import { createWriteStream } from 'fs';
 
 (async () => {
-  const sitemap = new SitemapStream({ hostname: 'https://alecons.com.ng' });
+  const sitemap = new SitemapStream({ hostname: 'https://alecons.edu.ng' });
 
   const links = [
     { url: '/', changefreq: 'monthly', priority: 1.0 },

@@ -13,27 +13,34 @@ async function bootstrap() {
     app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
     // Enable CORS
-    const allowedOrigins = [
-        process.env.FRONTEND_URL,
-        process.env.APPLICATION_PORTAL_URL,
-        process.env.CBT_PORTAL_URL,
-        process.env.STAFF_PORTAL_URL,
-        process.env.STUDENT_PORTAL_URL,
-        process.env.WEBSITE_URL,
-        // Explicit production origins (backup)
-        'https://alecons.com.ng',
-        'https://apply.alecons.com.ng',
-        'https://staff.alecons.com.ng',
-        'https://portal.alecons.com.ng',
-        'https://cbt.alecons.com.ng',
-        // Development origins
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://localhost:3002',
-        'http://localhost:3004',
-        'http://localhost:5173',
-        'http://localhost:5174',
-    ].filter(Boolean); // Remove undefined values
+    const allowedOrigins = Array.from(
+        new Set(
+            [
+                process.env.FRONTEND_URL,
+                process.env.APPLICATION_PORTAL_URL,
+                process.env.CBT_PORTAL_URL,
+                process.env.STAFF_PORTAL_URL,
+                process.env.STUDENT_PORTAL_URL,
+                process.env.WEBSITE_URL,
+                // Explicit production origins (new domain)
+                'https://alecons.edu.ng',
+                'https://apply.alecons.edu.ng',
+                'https://staff.alecons.edu.ng',
+                'https://portal.alecons.edu.ng',
+                'https://cbt.alecons.edu.ng',
+                'https://api.alecons.edu.ng',
+                // Explicit production origins (old domain, transitional)
+                'https://alecons.com.ng',
+                // Development origins
+                'http://localhost:3000',
+                'http://localhost:3001',
+                'http://localhost:3002',
+                'http://localhost:3004',
+                'http://localhost:5173',
+                'http://localhost:5174',
+            ].filter(Boolean),
+        ),
+    );
 
     logger.log(`🌐 CORS enabled for origins: ${allowedOrigins.join(', ')}`);
 

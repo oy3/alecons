@@ -1,16 +1,16 @@
 <script lang="js">
-import { useAuthStore } from '../../stores/auth.js';
-import { apiService } from '../../services/api.js';
-import { logger } from '@shared/utils/logger';
-import { Country, State, City } from 'country-state-city';
-import Swal from 'sweetalert2';
-import vSelect from 'vue-select';
-import 'vue-select/dist/vue-select.css';
+import { useAuthStore } from "../../stores/auth.js";
+import { apiService } from "../../services/api.js";
+import { logger } from "@shared/utils/logger";
+import { Country, State, City } from "country-state-city";
+import Swal from "sweetalert2";
+import vSelect from "vue-select";
+import "vue-select/dist/vue-select.css";
 
 export default {
   name: "ApplicationForm",
   components: {
-    vSelect
+    vSelect,
   },
   setup() {
     const authStore = useAuthStore();
@@ -20,18 +20,11 @@ export default {
   },
   data() {
     return {
-      stages: [
-        "Personal",
-        "Academic",
-        "Upload",
-        "Submit"
-      ],
+      stages: ["Personal", "Academic", "Upload", "Submit"],
       currentStage: 0,
-      sittings: [
-        { examType: "", examYear: "", examNumber: "" }
-      ],
+      sittings: [{ examType: "", examYear: "", examNumber: "" }],
       maxSittings: 2,
-      examTypes: ["WAEC/SSCE", "NECO", "GCE"],
+      examTypes: ["WAEC/SSCE", "NECO", "GCE", "NABTEB"],
       years: [],
       subjects: [
         { subject: "English Language", grade: "", sitting: "", locked: true },
@@ -55,7 +48,7 @@ export default {
         "Food & Nutrition",
         "Home Management",
         "Christian Religious Studies",
-        "Islamic Religious Studies"
+        "Islamic Religious Studies",
       ],
       maxSubjects: 9,
       grades: ["A1", "B2", "B3", "C4", "C5", "C6", "D7", "E8", "F9"],
@@ -76,7 +69,6 @@ export default {
         "Hinduism",
         "Judaism",
         "Other",
-        "Prefer not to say"
       ],
 
       // Next of Kin Relationship options
@@ -89,7 +81,7 @@ export default {
         "Grandparent",
         "Cousin",
         "Friend",
-        "Other"
+        "Other",
       ],
 
       // Upload states
@@ -100,7 +92,7 @@ export default {
       uploadedDocuments: {
         profile: null,
         olevels: {},
-        references: {}
+        references: {},
       },
 
       // Personal Information - will be prefilled from auth store
@@ -140,9 +132,12 @@ export default {
       secondarySchool: "",
       secondarySchoolStart: "",
       secondarySchoolEnd: "",
+      isJambExempt: false,
+      jambRegistrationNumber: "",
+      jambScore: "",
 
       // Validation
-      validationErrors: {}
+      validationErrors: {},
     };
   },
   computed: {
@@ -156,45 +151,68 @@ export default {
       return this.authStore.application;
     },
     selectedCountry() {
-      return this.countries.find(country => country.name === this.nationality);
+      return this.countries.find(
+        (country) => country.name === this.nationality,
+      );
     },
     selectedState() {
-      return this.states.find(state => state.name === this.state);
+      return this.states.find((state) => state.name === this.state);
     },
     // For vue-select display, we need the actual selected objects
     selectedNationalityObject() {
-      return this.countries.find(country => country.name === this.nationality);
+      return this.countries.find(
+        (country) => country.name === this.nationality,
+      );
     },
     selectedStateObject() {
-      return this.states.find(state => state.name === this.state);
+      return this.states.find((state) => state.name === this.state);
     },
     selectedLgaObject() {
-      return this.cities.find(city => city.name === this.lga);
+      return this.cities.find((city) => city.name === this.lga);
     },
     // Filter available subjects to exclude already selected ones
     getAvailableSubjectsFor() {
       return (currentIndex) => {
         // Get all selected subjects except the current row being edited
         const selectedSubjects = this.subjects
-          .map((subject, index) => index !== currentIndex ? subject.subject : null)
-          .filter(subject => subject && subject.trim() !== '');
+          .map((subject, index) =>
+            index !== currentIndex ? subject.subject : null,
+          )
+          .filter((subject) => subject && subject.trim() !== "");
 
         // Return subjects that haven't been selected yet
-        return this.subjectOptions.filter(subject => !selectedSubjects.includes(subject));
+        return this.subjectOptions.filter(
+          (subject) => !selectedSubjects.includes(subject),
+        );
       };
-    }
+    },
+    getAvailableExamTypesFor() {
+      return (currentIndex) => {
+        const firstSittingExamType = this.sittings[0]?.examType;
+
+        if (currentIndex === 0 || !firstSittingExamType) {
+          return this.examTypes;
+        }
+
+        if (firstSittingExamType === "NABTEB") {
+          return ["NABTEB"];
+        }
+
+        return this.examTypes.filter((examType) => examType !== "NABTEB");
+      };
+    },
   },
   watch: {
     // Watch for changes in application data (in case it loads asynchronously)
     application: {
       handler(newApplication, oldApplication) {
         if (newApplication && newApplication !== oldApplication) {
-          logger.info('Application data changed, re-prefilling form data');
+          logger.info("Application data changed, re-prefilling form data");
           this.prefillUserData();
         }
       },
       deep: true,
-      immediate: true
+      immediate: true,
     },
     nationality() {
       this.loadStatesForCountry();
@@ -205,7 +223,7 @@ export default {
     state() {
       this.loadCitiesForState();
       this.lga = "";
-    }
+    },
   },
   created() {
     this.generateYears();
@@ -215,18 +233,21 @@ export default {
   async mounted() {
     // Check if user has already completed the application form
     if (this.application && this.application.currentStage > 3) {
-      logger.info('User has already completed application form, redirecting to dashboard', {
-        currentStage: this.application.currentStage
-      });
+      logger.info(
+        "User has already completed application form, redirecting to dashboard",
+        {
+          currentStage: this.application.currentStage,
+        },
+      );
 
       await Swal.fire({
-        title: 'Application Already Submitted',
-        text: 'You have already completed your application form.',
-        icon: 'info',
-        confirmButtonText: 'Go to Dashboard'
+        title: "Application Already Submitted",
+        text: "You have already completed your application form.",
+        icon: "info",
+        confirmButtonText: "Go to Dashboard",
       });
 
-      this.$router.push('/dashboard');
+      this.$router.push("/dashboard");
       return;
     }
   },
@@ -246,23 +267,27 @@ export default {
         this.years.push(year);
       }
 
-      logger.info('Generated exam years:', {
+      logger.info("Generated exam years:", {
         minYear,
         maxYear: currentYear,
         totalYears: this.years.length,
-        hasDob: !!this.application?.dob
+        hasDob: !!this.application?.dob,
       });
     },
 
     loadCountries() {
       this.countries = Country.getAllCountries();
-      logger.info('Loaded countries:', this.countries.length);
+      logger.info("Loaded countries:", this.countries.length);
     },
 
     loadStatesForCountry() {
       if (this.selectedCountry) {
         this.states = State.getStatesOfCountry(this.selectedCountry.isoCode);
-        logger.info('Loaded states for country:', this.selectedCountry.name, this.states.length);
+        logger.info(
+          "Loaded states for country:",
+          this.selectedCountry.name,
+          this.states.length,
+        );
       } else {
         this.states = [];
       }
@@ -270,8 +295,15 @@ export default {
 
     loadCitiesForState() {
       if (this.selectedState && this.selectedCountry) {
-        this.cities = City.getCitiesOfState(this.selectedCountry.isoCode, this.selectedState.isoCode);
-        logger.info('Loaded cities for state:', this.selectedState.name, this.cities.length);
+        this.cities = City.getCitiesOfState(
+          this.selectedCountry.isoCode,
+          this.selectedState.isoCode,
+        );
+        logger.info(
+          "Loaded cities for state:",
+          this.selectedState.name,
+          this.cities.length,
+        );
       } else {
         this.cities = [];
       }
@@ -281,35 +313,36 @@ export default {
       this.validationErrors = {};
       let isValid = true;
 
-      if (stageIndex === 0) { // Personal Information
+      if (stageIndex === 0) {
+        // Personal Information
         const requiredFields = {
-          firstName: 'First name is required',
-          lastName: 'Last name is required',
-          dateOfBirth: 'Date of birth is required',
-          gender: 'Gender is required',
-          phone: 'Phone number is required',
-          email: 'Email is required',
-          religion: 'Religion is required',
-          maritalStatus: 'Marital status is required',
-          nationality: 'Nationality is required',
-          state: 'State is required',
-          lga: 'Local government area is required',
-          address: 'Contact address is required',
-          nextOfKinName: 'Next of kin name is required',
-          nextOfKinPhone: 'Next of kin phone is required',
-          nextOfKinEmail: 'Next of kin email is required',
-          nextOfKinRelationship: 'Next of kin relationship is required',
-          nextOfKinAddress: 'Next of kin address is required',
-          referee1Name: 'Referee 1 name is required',
-          referee1Phone: 'Referee 1 phone is required',
-          referee1Email: 'Referee 1 email is required',
-          referee2Name: 'Referee 2 name is required',
-          referee2Phone: 'Referee 2 phone is required',
-          referee2Email: 'Referee 2 email is required'
+          firstName: "First name is required",
+          lastName: "Last name is required",
+          dateOfBirth: "Date of birth is required",
+          gender: "Gender is required",
+          phone: "Phone number is required",
+          email: "Email is required",
+          religion: "Religion is required",
+          maritalStatus: "Marital status is required",
+          nationality: "Nationality is required",
+          state: "State is required",
+          lga: "Local government area is required",
+          address: "Contact address is required",
+          nextOfKinName: "Next of kin name is required",
+          nextOfKinPhone: "Next of kin phone is required",
+          nextOfKinEmail: "Next of kin email is required",
+          nextOfKinRelationship: "Next of kin relationship is required",
+          nextOfKinAddress: "Next of kin address is required",
+          referee1Name: "Referee 1 name is required",
+          referee1Phone: "Referee 1 phone is required",
+          referee1Email: "Referee 1 email is required",
+          referee2Name: "Referee 2 name is required",
+          referee2Phone: "Referee 2 phone is required",
+          referee2Email: "Referee 2 email is required",
         };
 
         for (const [field, message] of Object.entries(requiredFields)) {
-          if (!this[field] || this[field].trim() === '') {
+          if (!this[field] || this[field].trim() === "") {
             this.validationErrors[field] = message;
             isValid = false;
           }
@@ -317,91 +350,141 @@ export default {
 
         // Email validation
         if (this.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email)) {
-          this.validationErrors.email = 'Please enter a valid email address';
+          this.validationErrors.email = "Please enter a valid email address";
           isValid = false;
         }
 
         // Next of Kin email validation
-        if (this.nextOfKinEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.nextOfKinEmail)) {
-          this.validationErrors.nextOfKinEmail = 'Please enter a valid email address for next of kin';
+        if (
+          this.nextOfKinEmail &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.nextOfKinEmail)
+        ) {
+          this.validationErrors.nextOfKinEmail =
+            "Please enter a valid email address for next of kin";
           isValid = false;
         }
 
         // Referee emails validation
-        if (this.referee1Email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.referee1Email)) {
-          this.validationErrors.referee1Email = 'Please enter a valid email address for referee 1';
+        if (
+          this.referee1Email &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.referee1Email)
+        ) {
+          this.validationErrors.referee1Email =
+            "Please enter a valid email address for referee 1";
           isValid = false;
         }
 
-        if (this.referee2Email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.referee2Email)) {
-          this.validationErrors.referee2Email = 'Please enter a valid email address for referee 2';
+        if (
+          this.referee2Email &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.referee2Email)
+        ) {
+          this.validationErrors.referee2Email =
+            "Please enter a valid email address for referee 2";
           isValid = false;
         }
 
         // Phone validation (basic)
         if (this.phone && !/^\+?[\d\s-()]{10,}$/.test(this.phone)) {
-          this.validationErrors.phone = 'Please enter a valid phone number';
+          this.validationErrors.phone = "Please enter a valid phone number";
           isValid = false;
         }
 
         // Next of Kin phone validation
-        if (this.nextOfKinPhone && !/^\+?[\d\s-()]{10,}$/.test(this.nextOfKinPhone)) {
-          this.validationErrors.nextOfKinPhone = 'Please enter a valid phone number for next of kin';
+        if (
+          this.nextOfKinPhone &&
+          !/^\+?[\d\s-()]{10,}$/.test(this.nextOfKinPhone)
+        ) {
+          this.validationErrors.nextOfKinPhone =
+            "Please enter a valid phone number for next of kin";
           isValid = false;
         }
 
         // Referee phone validation
-        if (this.referee1Phone && !/^\+?[\d\s-()]{10,}$/.test(this.referee1Phone)) {
-          this.validationErrors.referee1Phone = 'Please enter a valid phone number for referee 1';
+        if (
+          this.referee1Phone &&
+          !/^\+?[\d\s-()]{10,}$/.test(this.referee1Phone)
+        ) {
+          this.validationErrors.referee1Phone =
+            "Please enter a valid phone number for referee 1";
           isValid = false;
         }
 
-        if (this.referee2Phone && !/^\+?[\d\s-()]{10,}$/.test(this.referee2Phone)) {
-          this.validationErrors.referee2Phone = 'Please enter a valid phone number for referee 2';
+        if (
+          this.referee2Phone &&
+          !/^\+?[\d\s-()]{10,}$/.test(this.referee2Phone)
+        ) {
+          this.validationErrors.referee2Phone =
+            "Please enter a valid phone number for referee 2";
           isValid = false;
         }
       }
 
-      if (stageIndex === 1) { // Academic Information
+      if (stageIndex === 1) {
+        // Academic Information
         // Validate primary school fields
-        if (!this.primarySchool || this.primarySchool.trim() === '') {
-          this.validationErrors.primarySchool = 'Primary school name is required';
+        if (!this.primarySchool || this.primarySchool.trim() === "") {
+          this.validationErrors.primarySchool =
+            "Primary school name is required";
           isValid = false;
         }
 
-        if (!this.primarySchoolStart || this.primarySchoolStart.trim() === '') {
-          this.validationErrors.primarySchoolStart = 'Primary school start date is required';
+        if (!this.primarySchoolStart || this.primarySchoolStart.trim() === "") {
+          this.validationErrors.primarySchoolStart =
+            "Primary school start date is required";
           isValid = false;
         }
 
-        if (!this.primarySchoolEnd || this.primarySchoolEnd.trim() === '') {
-          this.validationErrors.primarySchoolEnd = 'Primary school end date is required';
+        if (!this.primarySchoolEnd || this.primarySchoolEnd.trim() === "") {
+          this.validationErrors.primarySchoolEnd =
+            "Primary school end date is required";
           isValid = false;
         }
 
         // Comprehensive date validation for primary school
-        if (!this.validateDateRange(this.primarySchoolStart, this.primarySchoolEnd, 'primarySchoolStart', 'primarySchoolEnd', 'Primary school')) {
+        if (
+          !this.validateDateRange(
+            this.primarySchoolStart,
+            this.primarySchoolEnd,
+            "primarySchoolStart",
+            "primarySchoolEnd",
+            "Primary school",
+          )
+        ) {
           isValid = false;
         }
 
         // Validate secondary school fields
-        if (!this.secondarySchool || this.secondarySchool.trim() === '') {
-          this.validationErrors.secondarySchool = 'Secondary school name is required';
+        if (!this.secondarySchool || this.secondarySchool.trim() === "") {
+          this.validationErrors.secondarySchool =
+            "Secondary school name is required";
           isValid = false;
         }
 
-        if (!this.secondarySchoolStart || this.secondarySchoolStart.trim() === '') {
-          this.validationErrors.secondarySchoolStart = 'Secondary school start date is required';
+        if (
+          !this.secondarySchoolStart ||
+          this.secondarySchoolStart.trim() === ""
+        ) {
+          this.validationErrors.secondarySchoolStart =
+            "Secondary school start date is required";
           isValid = false;
         }
 
-        if (!this.secondarySchoolEnd || this.secondarySchoolEnd.trim() === '') {
-          this.validationErrors.secondarySchoolEnd = 'Secondary school end date is required';
+        if (!this.secondarySchoolEnd || this.secondarySchoolEnd.trim() === "") {
+          this.validationErrors.secondarySchoolEnd =
+            "Secondary school end date is required";
           isValid = false;
         }
 
         // Comprehensive date validation for secondary school
-        if (!this.validateDateRange(this.secondarySchoolStart, this.secondarySchoolEnd, 'secondarySchoolStart', 'secondarySchoolEnd', 'Secondary school')) {
+        if (
+          !this.validateDateRange(
+            this.secondarySchoolStart,
+            this.secondarySchoolEnd,
+            "secondarySchoolStart",
+            "secondarySchoolEnd",
+            "Secondary school",
+          )
+        ) {
           isValid = false;
         }
 
@@ -412,77 +495,167 @@ export default {
 
         // Validate sittings
         this.sittings.forEach((sitting, index) => {
-          if (!sitting.examType || sitting.examType.trim() === '') {
-            this.validationErrors[`sitting_${index}_examType`] = `Sitting ${index + 1}: Exam type is required`;
+          if (!sitting.examType || sitting.examType.trim() === "") {
+            this.validationErrors[`sitting_${index}_examType`] =
+              `Sitting ${index + 1}: Exam type is required`;
             isValid = false;
           }
-          if (!sitting.examYear || sitting.examYear.toString().trim() === '') {
-            this.validationErrors[`sitting_${index}_examYear`] = `Sitting ${index + 1}: Exam year is required`;
+          if (!sitting.examYear || sitting.examYear.toString().trim() === "") {
+            this.validationErrors[`sitting_${index}_examYear`] =
+              `Sitting ${index + 1}: Exam year is required`;
             isValid = false;
           }
-          if (!sitting.examNumber || sitting.examNumber.trim() === '') {
-            this.validationErrors[`sitting_${index}_examNumber`] = `Sitting ${index + 1}: Exam number is required`;
+          if (!sitting.examNumber || sitting.examNumber.trim() === "") {
+            this.validationErrors[`sitting_${index}_examNumber`] =
+              `Sitting ${index + 1}: Exam number is required`;
             isValid = false;
           }
         });
 
+        const firstSittingExamType = this.sittings[0]?.examType;
+        const secondSittingExamType = this.sittings[1]?.examType;
+
+        if (firstSittingExamType && secondSittingExamType) {
+          const isInvalidNabtebCombination =
+            (firstSittingExamType === "NABTEB" &&
+              secondSittingExamType !== "NABTEB") ||
+            (firstSittingExamType !== "NABTEB" &&
+              secondSittingExamType === "NABTEB");
+
+          if (isInvalidNabtebCombination) {
+            this.validationErrors.sittingsCombination =
+              "NABTEB cannot be combined with another exam type. If one sitting is NABTEB, the other sitting must also be NABTEB.";
+            isValid = false;
+          }
+        }
+
         // Validate subjects
-        const filledSubjects = this.subjects.filter(s => s.subject && s.grade && s.sitting);
+        const filledSubjects = this.subjects.filter(
+          (s) => s.subject && s.grade && s.sitting,
+        );
         if (filledSubjects.length < 5) {
-          this.validationErrors.subjects = 'At least 5 subjects are required (including English and Mathematics)';
+          this.validationErrors.subjects =
+            "At least 5 subjects are required (including English and Mathematics)";
           isValid = false;
         }
 
         // Validate each subject individually
         this.subjects.forEach((subject, index) => {
-          if (subject.subject && subject.subject.trim() !== '') {
-            if (!subject.grade || subject.grade.trim() === '') {
-              this.validationErrors[`subject_${index}_grade`] = `Grade is required for ${subject.subject}`;
+          if (subject.subject && subject.subject.trim() !== "") {
+            if (!subject.grade || subject.grade.trim() === "") {
+              this.validationErrors[`subject_${index}_grade`] =
+                `Grade is required for ${subject.subject}`;
               isValid = false;
             }
-            if (!subject.sitting || subject.sitting.trim() === '') {
-              this.validationErrors[`subject_${index}_sitting`] = `Sitting is required for ${subject.subject}`;
+            if (!subject.sitting || subject.sitting.trim() === "") {
+              this.validationErrors[`subject_${index}_sitting`] =
+                `Sitting is required for ${subject.subject}`;
               isValid = false;
             }
           }
         });
 
         // Check English and Math grades
-        const englishSubject = this.subjects.find(s => s.subject === 'English Language');
-        const mathSubject = this.subjects.find(s => s.subject === 'Mathematics');
-        const biologySubject = this.subjects.find(s => s.subject === 'Biology');
-        const physicsSubject = this.subjects.find(s => s.subject === 'Physics');
-        const chemistrySubject = this.subjects.find(s => s.subject === 'Chemistry');
+        const englishSubject = this.subjects.find(
+          (s) => s.subject === "English Language",
+        );
+        const mathSubject = this.subjects.find(
+          (s) => s.subject === "Mathematics",
+        );
+        const biologySubject = this.subjects.find(
+          (s) => s.subject === "Biology",
+        );
+        const physicsSubject = this.subjects.find(
+          (s) => s.subject === "Physics",
+        );
+        const chemistrySubject = this.subjects.find(
+          (s) => s.subject === "Chemistry",
+        );
 
-        if (!englishSubject?.grade || !mathSubject?.grade || !biologySubject?.grade || !physicsSubject?.grade || !chemistrySubject?.grade) {
-          this.validationErrors.coreSubjects = 'English Language, Mathematics, Biology, Physics, and Chemistry grades are required';
+        if (
+          !englishSubject?.grade ||
+          !mathSubject?.grade ||
+          !biologySubject?.grade ||
+          !physicsSubject?.grade ||
+          !chemistrySubject?.grade
+        ) {
+          this.validationErrors.coreSubjects =
+            "English Language, Mathematics, Biology, Physics, and Chemistry grades are required";
           isValid = false;
+        }
+
+        if (!this.isJambExempt) {
+          if (
+            !this.jambRegistrationNumber ||
+            this.jambRegistrationNumber.trim() === ""
+          ) {
+            this.validationErrors.jambRegistrationNumber =
+              "JAMB registration number is required";
+            isValid = false;
+          }
+
+          if (
+            this.jambRegistrationNumber &&
+            this.jambRegistrationNumber.trim()
+          ) {
+            const normalizedJambRegistrationNumber =
+              this.jambRegistrationNumber.trim();
+
+            if (normalizedJambRegistrationNumber.length < 8) {
+              this.validationErrors.jambRegistrationNumber =
+                "Please enter a valid JAMB registration number";
+              isValid = false;
+            }
+          }
+
+          if (
+            this.jambScore === "" ||
+            this.jambScore === null ||
+            this.jambScore === undefined
+          ) {
+            this.validationErrors.jambScore = "JAMB score is required";
+            isValid = false;
+          } else {
+            const normalizedJambScore = Number(this.jambScore);
+
+            if (
+              Number.isNaN(normalizedJambScore) ||
+              normalizedJambScore < 0 ||
+              normalizedJambScore > 400
+            ) {
+              this.validationErrors.jambScore =
+                "JAMB score must be between 0 and 400";
+              isValid = false;
+            }
+          }
         }
       }
 
-      if (stageIndex === 2) { // Upload Stage
+      if (stageIndex === 2) {
+        // Upload Stage
         // Validate profile picture upload
         if (!this.uploadedDocuments.profile) {
-          this.validationErrors.profilePicture = 'Profile picture is required';
+          this.validationErrors.profilePicture = "Profile picture is required";
           isValid = false;
         }
 
         // Validate O'Level result uploads for each sitting
         this.sittings.forEach((sitting, index) => {
           if (!this.uploadedDocuments.olevels[index]) {
-            this.validationErrors[`olevel_${index}`] = `O'Level result upload is required for Sitting ${index + 1}`;
+            this.validationErrors[`olevel_${index}`] =
+              `O'Level result upload is required for Sitting ${index + 1}`;
             isValid = false;
           }
         });
 
         // Validate reference letter uploads
         if (!this.uploadedDocuments.references[0]) {
-          this.validationErrors.reference1 = 'Reference letter 1 is required';
+          this.validationErrors.reference1 = "Reference letter 1 is required";
           isValid = false;
         }
 
         if (!this.uploadedDocuments.references[1]) {
-          this.validationErrors.reference2 = 'Reference letter 2 is required';
+          this.validationErrors.reference2 = "Reference letter 2 is required";
           isValid = false;
         }
       }
@@ -497,10 +670,10 @@ export default {
         }
       } else {
         await Swal.fire({
-          title: 'Validation Error',
-          text: 'Please fill in all required fields correctly before proceeding.',
-          icon: 'error',
-          confirmButtonText: 'OK'
+          title: "Validation Error",
+          text: "Please fill in all required fields correctly before proceeding.",
+          icon: "error",
+          confirmButtonText: "OK",
         });
       }
     },
@@ -513,31 +686,33 @@ export default {
         this.email = this.user.email || "";
         // phone is now stored in application collection, not user
 
-        logger.info('Prefilled user data:', {
+        logger.info("Prefilled user data:", {
           firstName: this.firstName,
           lastName: this.lastName,
-          email: this.email
+          email: this.email,
         });
       }
 
       if (this.application) {
-        logger.info('Application data available for prefilling:', {
+        logger.info("Application data available for prefilling:", {
           applicationData: this.application,
           hasDob: !!this.application.dob,
           hasGender: !!this.application.gender,
           hasPhone: !!this.application.phone,
           dobValue: this.application.dob,
           genderValue: this.application.gender,
-          phoneValue: this.application.phone
+          phoneValue: this.application.phone,
         });
 
         // Prefill application-specific data if it exists
-        this.middleName = this.application.middleName || this.user?.otherName || "";
+        this.middleName =
+          this.application.middleName || this.user?.otherName || "";
         this.phone = this.application.phone || ""; // Phone from application collection
-        this.dateOfBirth = this.application.dob ?
-          new Date(this.application.dob).toISOString().split('T')[0] : "";
+        this.dateOfBirth = this.application.dob
+          ? new Date(this.application.dob).toISOString().split("T")[0]
+          : "";
         this.gender = this.application.gender || "";
-        
+
         // Only prefill if current form field is empty (don't overwrite user input)
         if (!this.religion) {
           this.religion = this.application.religion || "";
@@ -549,14 +724,14 @@ export default {
           this.address = this.application.address || "";
         }
 
-        logger.info('After prefilling application data:', {
+        logger.info("After prefilling application data:", {
           middleName: this.middleName,
           phone: this.phone,
           dateOfBirth: this.dateOfBirth,
           gender: this.gender,
           religion: this.religion,
           maritalStatus: this.maritalStatus,
-          address: this.address
+          address: this.address,
         });
 
         // Regenerate years now that we have the application data with birth year
@@ -577,12 +752,22 @@ export default {
           }
         }
 
+        this.isJambExempt = this.application.isJambExempt === true;
+        this.jambRegistrationNumber =
+          this.application.jambRegistrationNumber || "";
+        this.jambScore =
+          this.application.jambScore !== undefined &&
+          this.application.jambScore !== null
+            ? String(this.application.jambScore)
+            : "";
+
         // Prefill next of kin
         if (this.application.nextOfKin) {
           this.nextOfKinName = this.application.nextOfKin.name || "";
           this.nextOfKinPhone = this.application.nextOfKin.phone || "";
           this.nextOfKinEmail = this.application.nextOfKin.email || "";
-          this.nextOfKinRelationship = this.application.nextOfKin.relationship || "";
+          this.nextOfKinRelationship =
+            this.application.nextOfKin.relationship || "";
           this.nextOfKinAddress = this.application.nextOfKin.address || "";
         }
 
@@ -600,11 +785,14 @@ export default {
         }
 
         // Prefill examinations if they exist
-        if (this.application.examinations && this.application.examinations.length > 0) {
-          this.sittings = this.application.examinations.map(exam => ({
+        if (
+          this.application.examinations &&
+          this.application.examinations.length > 0
+        ) {
+          this.sittings = this.application.examinations.map((exam) => ({
             examType: exam.examType || "",
             examYear: exam.examYear || "",
-            examNumber: exam.examNumber || ""
+            examNumber: exam.examNumber || "",
           }));
 
           // Prefill subjects from the first examination
@@ -613,14 +801,23 @@ export default {
             // Keep the mandatory subjects and add others
             this.subjects = [
               ...this.subjects, // Keep English, Maths, Biology, Physics and Chemistry locked
-              ...existingSubjects.filter(subj =>
-                !["English Language", "Mathematics", "Biology", "Physics", "Chemistry"].includes(subj.subject)  
-              ).map(subj => ({
-                subject: subj.subject,
-                grade: subj.grade,
-                sitting: "Sitting 1", // Default to first sitting
-                locked: false
-              }))
+              ...existingSubjects
+                .filter(
+                  (subj) =>
+                    ![
+                      "English Language",
+                      "Mathematics",
+                      "Biology",
+                      "Physics",
+                      "Chemistry",
+                    ].includes(subj.subject),
+                )
+                .map((subj) => ({
+                  subject: subj.subject,
+                  grade: subj.grade,
+                  sitting: "Sitting 1", // Default to first sitting
+                  locked: false,
+                })),
             ];
           }
         }
@@ -630,15 +827,15 @@ export default {
           this.profilePreview = this.application.profileImageUrl;
           this.uploadedDocuments.profile = {
             url: this.application.profileImageUrl,
-            type: 'profile_picture'
+            type: "profile_picture",
           };
         }
 
-        logger.info('Prefilled application data:', {
+        logger.info("Prefilled application data:", {
           hasApplication: !!this.application,
           applicationNumber: this.application.applicationNumber,
           dob: this.application.dob,
-          currentStage: this.application.currentStage
+          currentStage: this.application.currentStage,
         });
       }
     },
@@ -652,12 +849,54 @@ export default {
     addSitting() {
       if (this.sittings.length < this.maxSittings) {
         this.sittings.push({ examType: "", examYear: "", examNumber: "" });
+        this.normalizeSittingExamTypeRules();
       }
     },
 
     removeSitting(index) {
       if (this.sittings.length > 1) {
         this.sittings.splice(index, 1);
+        this.normalizeSittingExamTypeRules();
+      }
+    },
+
+    onExamTypeChange(index) {
+      this.normalizeSittingExamTypeRules(index);
+    },
+
+    onJambExemptChange() {
+      if (this.isJambExempt) {
+        this.jambRegistrationNumber = "";
+        this.jambScore = "";
+        delete this.validationErrors.jambRegistrationNumber;
+        delete this.validationErrors.jambScore;
+      }
+    },
+
+    normalizeSittingExamTypeRules(changedIndex = 0) {
+      if (this.sittings.length < 2) {
+        return;
+      }
+
+      const firstSittingExamType = this.sittings[0]?.examType;
+      const secondSitting = this.sittings[1];
+
+      if (!secondSitting || !firstSittingExamType) {
+        return;
+      }
+
+      const allowedSecondSittingExamTypes = this.getAvailableExamTypesFor(1);
+
+      if (
+        secondSitting.examType &&
+        !allowedSecondSittingExamTypes.includes(secondSitting.examType)
+      ) {
+        secondSitting.examType = "";
+
+        if (changedIndex === 0) {
+          secondSitting.examYear = "";
+          secondSitting.examNumber = "";
+        }
       }
     },
 
@@ -683,20 +922,21 @@ export default {
 
       // Check if date is valid
       if (isNaN(date.getTime())) {
-        this.validationErrors[fieldName] = 'Please enter a valid date';
+        this.validationErrors[fieldName] = "Please enter a valid date";
         return false;
       }
 
       // Check if date is not in the future
       if (date > today) {
-        this.validationErrors[fieldName] = 'Date cannot be in the future';
+        this.validationErrors[fieldName] = "Date cannot be in the future";
         return false;
       }
 
       // Check reasonable date ranges for education
       const year = date.getFullYear();
       if (year < 1950 || year > currentYear) {
-        this.validationErrors[fieldName] = `Year must be between 1950 and ${currentYear}`;
+        this.validationErrors[fieldName] =
+          `Year must be between 1950 and ${currentYear}`;
         return false;
       }
 
@@ -705,32 +945,43 @@ export default {
       return true;
     },
 
-    validateDateRange(startDate, endDate, startFieldName, endFieldName, schoolType) {
+    validateDateRange(
+      startDate,
+      endDate,
+      startFieldName,
+      endFieldName,
+      schoolType,
+    ) {
       if (!startDate || !endDate) return true;
 
       const start = new Date(startDate);
       const end = new Date(endDate);
 
       // Validate individual dates first
-      if (!this.validateDateInput(startDate, startFieldName) ||
-        !this.validateDateInput(endDate, endFieldName)) {
+      if (
+        !this.validateDateInput(startDate, startFieldName) ||
+        !this.validateDateInput(endDate, endFieldName)
+      ) {
         return false;
       }
 
       // Check if end date is after start date
       if (start >= end) {
-        this.validationErrors[endFieldName] = `${schoolType} end date must be after start date`;
+        this.validationErrors[endFieldName] =
+          `${schoolType} end date must be after start date`;
         return false;
       }
 
       // Check reasonable duration (minimum 1 year, maximum 15 years)
       const yearsDiff = (end - start) / (1000 * 60 * 60 * 24 * 365.25);
       if (yearsDiff < 1) {
-        this.validationErrors[endFieldName] = `${schoolType} duration must be at least 1 year`;
+        this.validationErrors[endFieldName] =
+          `${schoolType} duration must be at least 1 year`;
         return false;
       }
       if (yearsDiff > 15) {
-        this.validationErrors[endFieldName] = `${schoolType} duration cannot exceed 15 years`;
+        this.validationErrors[endFieldName] =
+          `${schoolType} duration cannot exceed 15 years`;
         return false;
       }
 
@@ -748,14 +999,17 @@ export default {
 
       // Secondary school should start after primary school ends (allow same year)
       if (secondaryStart < primaryEnd) {
-        this.validationErrors.secondarySchoolStart = 'Secondary school start date should be after primary school end date';
+        this.validationErrors.secondarySchoolStart =
+          "Secondary school start date should be after primary school end date";
         return false;
       }
 
       // Check for reasonable gap (not more than 5 years gap)
-      const yearsDiff = (secondaryStart - primaryEnd) / (1000 * 60 * 60 * 24 * 365.25);
+      const yearsDiff =
+        (secondaryStart - primaryEnd) / (1000 * 60 * 60 * 24 * 365.25);
       if (yearsDiff > 5) {
-        this.validationErrors.secondarySchoolStart = 'Gap between primary and secondary school cannot exceed 5 years';
+        this.validationErrors.secondarySchoolStart =
+          "Gap between primary and secondary school cannot exceed 5 years";
         return false;
       }
 
@@ -765,52 +1019,76 @@ export default {
 
     // Real-time validation handlers
     onPrimaryStartDateChange() {
-      this.validateDateInput(this.primarySchoolStart, 'primarySchoolStart');
+      this.validateDateInput(this.primarySchoolStart, "primarySchoolStart");
       if (this.primarySchoolEnd) {
-        this.validateDateRange(this.primarySchoolStart, this.primarySchoolEnd, 'primarySchoolStart', 'primarySchoolEnd', 'Primary school');
+        this.validateDateRange(
+          this.primarySchoolStart,
+          this.primarySchoolEnd,
+          "primarySchoolStart",
+          "primarySchoolEnd",
+          "Primary school",
+        );
       }
       this.validateEducationProgression();
     },
 
     onPrimaryEndDateChange() {
-      this.validateDateInput(this.primarySchoolEnd, 'primarySchoolEnd');
+      this.validateDateInput(this.primarySchoolEnd, "primarySchoolEnd");
       if (this.primarySchoolStart) {
-        this.validateDateRange(this.primarySchoolStart, this.primarySchoolEnd, 'primarySchoolStart', 'primarySchoolEnd', 'Primary school');
+        this.validateDateRange(
+          this.primarySchoolStart,
+          this.primarySchoolEnd,
+          "primarySchoolStart",
+          "primarySchoolEnd",
+          "Primary school",
+        );
       }
       this.validateEducationProgression();
     },
 
     onSecondaryStartDateChange() {
-      this.validateDateInput(this.secondarySchoolStart, 'secondarySchoolStart');
+      this.validateDateInput(this.secondarySchoolStart, "secondarySchoolStart");
       if (this.secondarySchoolEnd) {
-        this.validateDateRange(this.secondarySchoolStart, this.secondarySchoolEnd, 'secondarySchoolStart', 'secondarySchoolEnd', 'Secondary school');
+        this.validateDateRange(
+          this.secondarySchoolStart,
+          this.secondarySchoolEnd,
+          "secondarySchoolStart",
+          "secondarySchoolEnd",
+          "Secondary school",
+        );
       }
       this.validateEducationProgression();
     },
 
     onSecondaryEndDateChange() {
-      this.validateDateInput(this.secondarySchoolEnd, 'secondarySchoolEnd');
+      this.validateDateInput(this.secondarySchoolEnd, "secondarySchoolEnd");
       if (this.secondarySchoolStart) {
-        this.validateDateRange(this.secondarySchoolStart, this.secondarySchoolEnd, 'secondarySchoolStart', 'secondarySchoolEnd', 'Secondary school');
+        this.validateDateRange(
+          this.secondarySchoolStart,
+          this.secondarySchoolEnd,
+          "secondarySchoolStart",
+          "secondarySchoolEnd",
+          "Secondary school",
+        );
       }
     },
 
     // Location selection handlers
     onNationalityChange(selectedCountry) {
-      this.nationality = selectedCountry ? selectedCountry.name : '';
-      this.state = '';
-      this.lga = '';
+      this.nationality = selectedCountry ? selectedCountry.name : "";
+      this.state = "";
+      this.lga = "";
       this.loadStatesForCountry();
     },
 
     onStateChange(selectedState) {
-      this.state = selectedState ? selectedState.name : '';
-      this.lga = '';
+      this.state = selectedState ? selectedState.name : "";
+      this.lga = "";
       this.loadCitiesForState();
     },
 
     onLgaChange(selectedCity) {
-      this.lga = selectedCity ? selectedCity.name : '';
+      this.lga = selectedCity ? selectedCity.name : "";
     },
 
     // Helper method to clear file input
@@ -819,10 +1097,10 @@ export default {
         // Use getElementById which is more reliable for dynamic elements
         const fileInput = document.getElementById(inputId);
 
-        if (fileInput && fileInput.type === 'file') {
-          fileInput.value = '';
+        if (fileInput && fileInput.type === "file") {
+          fileInput.value = "";
           // Trigger change event to ensure any bound data is updated
-          fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+          fileInput.dispatchEvent(new Event("input", { bubbles: true }));
           logger.info(`Successfully cleared file input: ${inputId}`);
         } else {
           logger.warn(`File input not found or invalid: ${inputId}`);
@@ -837,30 +1115,30 @@ export default {
       const file = event.target.files[0];
       if (!file) return;
 
-      await this.uploadFile(file, 'profile_picture');
+      await this.uploadFile(file, "profile_picture");
     },
 
     async handleOLevelUpload(event, sittingIndex) {
       const file = event.target.files[0];
       if (!file) return;
 
-      await this.uploadFile(file, 'olevel_result', { sittingIndex });
+      await this.uploadFile(file, "olevel_result", { sittingIndex });
     },
 
     async handleReferenceUpload(event, referenceIndex) {
       const file = event.target.files[0];
       if (!file) return;
 
-      await this.uploadFile(file, 'reference_letter', { referenceIndex });
+      await this.uploadFile(file, "reference_letter", { referenceIndex });
     },
 
     async uploadFile(file, fileType, options = {}) {
       if (!file) {
         await Swal.fire({
-          title: 'No File Selected',
-          text: 'Please select a file to upload.',
-          icon: 'warning',
-          confirmButtonText: 'OK'
+          title: "No File Selected",
+          text: "Please select a file to upload.",
+          icon: "warning",
+          confirmButtonText: "OK",
         });
         return;
       }
@@ -868,18 +1146,18 @@ export default {
       try {
         this.isUploading = true;
 
-        logger.info('Starting file upload:', {
+        logger.info("Starting file upload:", {
           fileName: file.name,
           fileSize: `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
           fileType,
-          options
+          options,
         });
 
         // Validate file size based on type
         const fileSizeLimits = {
-          'profile_picture': 2 * 1024 * 1024, // 2MB for profile pictures
-          'olevel_result': 3 * 1024 * 1024,   // 3MB for documents
-          'reference_letter': 3 * 1024 * 1024 // 3MB for documents
+          profile_picture: 2 * 1024 * 1024, // 2MB for profile pictures
+          olevel_result: 3 * 1024 * 1024, // 3MB for documents
+          reference_letter: 3 * 1024 * 1024, // 3MB for documents
         };
 
         const maxSize = fileSizeLimits[fileType];
@@ -887,65 +1165,69 @@ export default {
 
         if (file.size > maxSize) {
           await Swal.fire({
-            title: 'File Too Large',
-            text: `File size exceeds ${maxSizeMB}MB limit for ${fileType.replace('_', ' ')}. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`,
-            icon: 'error',
-            confirmButtonText: 'OK'
+            title: "File Too Large",
+            text: `File size exceeds ${maxSizeMB}MB limit for ${fileType.replace("_", " ")}. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+            icon: "error",
+            confirmButtonText: "OK",
           });
           return;
         }
 
         // Validate file type
         const allowedTypes = {
-          'profile_picture': ['image/jpeg', 'image/jpg'],
-          'olevel_result': ['application/pdf'],
-          'reference_letter': ['application/pdf']
+          profile_picture: ["image/jpeg", "image/jpg"],
+          olevel_result: ["application/pdf"],
+          reference_letter: ["application/pdf"],
         };
 
         if (!allowedTypes[fileType]?.includes(file.type)) {
           await Swal.fire({
-            title: 'Invalid File Type',
-            text: `Invalid file type. Expected: ${allowedTypes[fileType]?.join(', ')}`,
-            icon: 'error',
-            confirmButtonText: 'OK'
+            title: "Invalid File Type",
+            text: `Invalid file type. Expected: ${allowedTypes[fileType]?.join(", ")}`,
+            icon: "error",
+            confirmButtonText: "OK",
           });
           return;
         }
 
         // Create FormData
         const formData = new FormData();
-        formData.append('file', file);
-        formData.append('fileType', fileType);
+        formData.append("file", file);
+        formData.append("fileType", fileType);
 
         if (options.sittingIndex !== undefined) {
-          formData.append('sittingIndex', options.sittingIndex.toString());
+          formData.append("sittingIndex", options.sittingIndex.toString());
         }
         if (options.referenceIndex !== undefined) {
-          formData.append('referenceIndex', options.referenceIndex.toString());
+          formData.append("referenceIndex", options.referenceIndex.toString());
         }
 
         // Upload file
-        const response = await apiService.post('/applications/upload', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
+        const response = await apiService.post(
+          "/applications/upload",
+          formData,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
           },
-        });
+        );
 
         if (response.success) {
-          logger.info('File uploaded to temporary storage:', {
+          logger.info("File uploaded to temporary storage:", {
             fileType,
             url: response.data.url,
-            key: response.data.key
+            key: response.data.key,
           });
 
           // Store uploaded file metadata for later submission
           // Note: Files are uploaded to DigitalOcean but not saved to database yet
           switch (fileType) {
-            case 'profile_picture':
+            case "profile_picture":
               this.profilePreview = response.data.url;
               this.profileFileInfo = {
                 name: file.name,
-                size: this.formatFileSize(file.size)
+                size: this.formatFileSize(file.size),
               };
               this.uploadedDocuments.profile = {
                 url: response.data.url,
@@ -953,10 +1235,10 @@ export default {
                 type: fileType,
                 originalName: file.name,
                 size: file.size,
-                uploadedAt: response.data.uploadedAt
+                uploadedAt: response.data.uploadedAt,
               };
               break;
-            case 'olevel_result':
+            case "olevel_result":
               this.uploadedDocuments.olevels[options.sittingIndex] = {
                 url: response.data.url,
                 key: response.data.key,
@@ -965,10 +1247,10 @@ export default {
                 originalName: file.name,
                 size: file.size,
                 uploadedAt: response.data.uploadedAt,
-                sittingIndex: options.sittingIndex
+                sittingIndex: options.sittingIndex,
               };
               break;
-            case 'reference_letter':
+            case "reference_letter":
               this.uploadedDocuments.references[options.referenceIndex] = {
                 url: response.data.url,
                 key: response.data.key,
@@ -977,55 +1259,52 @@ export default {
                 originalName: file.name,
                 size: file.size,
                 uploadedAt: response.data.uploadedAt,
-                referenceIndex: options.referenceIndex
+                referenceIndex: options.referenceIndex,
               };
               break;
           }
 
           // Show success message
           await Swal.fire({
-            title: 'File Ready',
+            title: "File Ready",
             text: `${file.name} uploaded successfully. Complete and submit the form to finalize your application.`,
-            icon: 'success',
+            icon: "success",
             timer: 3000,
             timerProgressBar: true,
-            showConfirmButton: false
+            showConfirmButton: false,
           });
-
         } else {
-          throw new Error(response.error || 'Upload failed');
+          throw new Error(response.error || "Upload failed");
         }
-
       } catch (error) {
-        logger.error('File upload failed:', {
+        logger.error("File upload failed:", {
           fileName: file.name,
           fileType,
-          error: error.message
+          error: error.message,
         });
 
         // Show error message
         await Swal.fire({
-          title: 'Upload Failed',
-          text: error.message || 'File upload failed',
-          icon: 'error',
-          confirmButtonText: 'Try Again'
+          title: "Upload Failed",
+          text: error.message || "File upload failed",
+          icon: "error",
+          confirmButtonText: "Try Again",
         });
-
       } finally {
         this.isUploading = false;
         // Clear the input so same file can be selected again if needed
         if (event && event.target) {
-          event.target.value = '';
+          event.target.value = "";
         }
       }
     },
 
     formatFileSize(bytes) {
-      if (bytes === 0) return '0 Bytes';
+      if (bytes === 0) return "0 Bytes";
       const k = 1024;
-      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const sizes = ["Bytes", "KB", "MB", "GB"];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
     },
 
     async removeDocument(documentType, documentUrl) {
@@ -1040,29 +1319,36 @@ export default {
         }
 
         if (!applicationId) {
-          throw new Error('No application found. Please save your application first before removing documents.');
+          throw new Error(
+            "No application found. Please save your application first before removing documents.",
+          );
         }
 
-        const response = await apiService.post('/applications/remove-document', {
-          applicationId,
-          documentType,
-          documentUrl
-        });
+        const response = await apiService.post(
+          "/applications/remove-document",
+          {
+            applicationId,
+            documentType,
+            documentUrl,
+          },
+        );
 
         if (response.success) {
           // Update local state
           switch (documentType) {
-            case 'profile_picture':
+            case "profile_picture":
               this.profilePreview = null;
               this.uploadedDocuments.profile = null;
               this.profileFileInfo = null;
               // Clear the file input
-              this.clearFileInput('profileFileInput');
+              this.clearFileInput("profileFileInput");
               break;
-            case 'olevel_result':
+            case "olevel_result":
               // Find which sitting this document belongs to
               for (let index in this.uploadedDocuments.olevels) {
-                if (this.uploadedDocuments.olevels[index]?.url === documentUrl) {
+                if (
+                  this.uploadedDocuments.olevels[index]?.url === documentUrl
+                ) {
                   this.uploadedDocuments.olevels[index] = null;
                   // Clear the corresponding file input
                   this.clearFileInput(`olevelFileInput_${index}`);
@@ -1070,10 +1356,12 @@ export default {
                 }
               }
               break;
-            case 'reference_letter':
+            case "reference_letter":
               // Find which reference this document belongs to
               for (let index in this.uploadedDocuments.references) {
-                if (this.uploadedDocuments.references[index]?.url === documentUrl) {
+                if (
+                  this.uploadedDocuments.references[index]?.url === documentUrl
+                ) {
                   this.uploadedDocuments.references[index] = null;
                   // Clear the corresponding file input
                   this.clearFileInput(`referenceFileInput_${index}`);
@@ -1083,13 +1371,13 @@ export default {
               break;
           }
 
-          this.$toast?.success('Document removed successfully');
+          this.$toast?.success("Document removed successfully");
         } else {
-          throw new Error(response.error || 'Failed to remove document');
+          throw new Error(response.error || "Failed to remove document");
         }
       } catch (error) {
-        logger.error('Document removal failed:', error);
-        this.$toast?.error(error.message || 'Failed to remove document');
+        logger.error("Document removal failed:", error);
+        this.$toast?.error(error.message || "Failed to remove document");
       }
     },
 
@@ -1097,10 +1385,10 @@ export default {
       // Check if declaration is checked before proceeding
       if (!this.declaration) {
         await Swal.fire({
-          title: 'Declaration Required',
-          text: 'Please check the declaration box to confirm that all information provided is true and correct.',
-          icon: 'warning',
-          confirmButtonText: 'OK'
+          title: "Declaration Required",
+          text: "Please check the declaration box to confirm that all information provided is true and correct.",
+          icon: "warning",
+          confirmButtonText: "OK",
         });
         return;
       }
@@ -1108,13 +1396,13 @@ export default {
       try {
         this.isSubmitting = true;
 
-        logger.info('Starting application submission...');
+        logger.info("Starting application submission...");
 
         // Debug: Check program selections
-        logger.info('Program selections:', {
+        logger.info("Program selections:", {
           selectedProgram: this.selectedProgram,
           selectedProgramType: this.selectedProgramType,
-          selectedProgramMode: this.selectedProgramMode
+          selectedProgramMode: this.selectedProgramMode,
         });
 
         // If no program is selected, use default program data from API
@@ -1123,14 +1411,17 @@ export default {
         let programModeId = this.selectedProgramMode?._id;
 
         if (!programId || !programTypeId || !programModeId) {
-          logger.info('No program selected, fetching default programs from API...');
+          logger.info(
+            "No program selected, fetching default programs from API...",
+          );
 
           try {
-            const [programsResponse, typesResponse, modesResponse] = await Promise.all([
-              apiService.get('/programs'),
-              apiService.get('/programs/types'),
-              apiService.get('/programs/modes')
-            ]);
+            const [programsResponse, typesResponse, modesResponse] =
+              await Promise.all([
+                apiService.get("/programs"),
+                apiService.get("/programs/types"),
+                apiService.get("/programs/modes"),
+              ]);
 
             if (programsResponse.success && programsResponse.data.length > 0) {
               programId = programId || programsResponse.data[0].id;
@@ -1142,10 +1433,16 @@ export default {
               programModeId = programModeId || modesResponse.data[0].id;
             }
 
-            logger.info('Using default programs:', { programId, programTypeId, programModeId });
+            logger.info("Using default programs:", {
+              programId,
+              programTypeId,
+              programModeId,
+            });
           } catch (error) {
-            logger.error('Failed to fetch default programs:', error);
-            throw new Error('Failed to get program information. Please try again.');
+            logger.error("Failed to fetch default programs:", error);
+            throw new Error(
+              "Failed to get program information. Please try again.",
+            );
           }
         }
 
@@ -1158,12 +1455,12 @@ export default {
         }
 
         // Add O'Level results
-        Object.values(this.uploadedDocuments.olevels).forEach(doc => {
+        Object.values(this.uploadedDocuments.olevels).forEach((doc) => {
           if (doc) uploadedFiles.push(doc);
         });
 
         // Add reference letters
-        Object.values(this.uploadedDocuments.references).forEach(doc => {
+        Object.values(this.uploadedDocuments.references).forEach((doc) => {
           if (doc) uploadedFiles.push(doc);
         });
 
@@ -1185,54 +1482,60 @@ export default {
             address: this.address,
             lga: this.lga,
             stateOfOrigin: this.state,
-            nationality: this.nationality
+            nationality: this.nationality,
           },
           academicInfo: {
             primarySchool: {
               name: this.primarySchool,
               startDate: this.primarySchoolStart,
-              endDate: this.primarySchoolEnd
+              endDate: this.primarySchoolEnd,
             },
             secondarySchool: {
               name: this.secondarySchool,
               startDate: this.secondarySchoolStart,
-              endDate: this.secondarySchoolEnd
+              endDate: this.secondarySchoolEnd,
             },
             examinations: this.sittings.map((sitting, sittingIndex) => ({
               examType: sitting.examType,
               examYear: sitting.examYear,
               examNumber: sitting.examNumber,
-              subjects: this.subjects.filter(s => {
+              subjects: this.subjects.filter((s) => {
                 // Match subjects to sitting by sitting type or index
-                const sittingMatch = s.sitting === sitting.examType ||
+                const sittingMatch =
+                  s.sitting === sitting.examType ||
                   s.sitting === `Sitting ${sittingIndex + 1}`;
                 return s.subject && s.grade && sittingMatch;
-              })
+              }),
             })),
             nextOfKin: {
               name: this.nextOfKinName,
               phone: this.nextOfKinPhone,
               email: this.nextOfKinEmail,
               relationship: this.nextOfKinRelationship,
-              address: this.nextOfKinAddress
+              address: this.nextOfKinAddress,
             },
             referees: [
               {
                 name: this.referee1Name,
                 phone: this.referee1Phone,
-                email: this.referee1Email
+                email: this.referee1Email,
               },
               {
                 name: this.referee2Name,
                 phone: this.referee2Phone,
-                email: this.referee2Email
-              }
-            ]
+                email: this.referee2Email,
+              },
+            ],
+            isJambExempt: this.isJambExempt,
+            jambRegistrationNumber: this.isJambExempt
+              ? undefined
+              : this.jambRegistrationNumber.trim(),
+            jambScore: this.isJambExempt ? undefined : Number(this.jambScore),
           },
-          uploadedFiles: uploadedFiles
+          uploadedFiles: uploadedFiles,
         };
 
-        logger.info('Submitting application:', {
+        logger.info("Submitting application:", {
           programId: applicationData.programId,
           uploadedFilesCount: uploadedFiles.length,
           personalInfo: !!applicationData.personalInfo,
@@ -1240,14 +1543,20 @@ export default {
           dob: applicationData.personalInfo.dob,
           stateOfOrigin: applicationData.personalInfo.stateOfOrigin,
           examinationsCount: applicationData.academicInfo.examinations.length,
-          totalSubjects: applicationData.academicInfo.examinations.reduce((total, exam) => total + exam.subjects.length, 0)
+          totalSubjects: applicationData.academicInfo.examinations.reduce(
+            (total, exam) => total + exam.subjects.length,
+            0,
+          ),
         });
 
         // Submit application
-        const response = await apiService.post('/applications/submit-application', applicationData);
+        const response = await apiService.post(
+          "/applications/submit-application",
+          applicationData,
+        );
 
         if (response.success) {
-          logger.info('Application submitted successfully:', response.data);
+          logger.info("Application submitted successfully:", response.data);
 
           // Update auth store with new application data
           await this.authStore.updateApplication(response.data);
@@ -1257,55 +1566,53 @@ export default {
 
           // Show success message
           await Swal.fire({
-            title: 'Application Submitted!',
+            title: "Application Submitted!",
             text: `Your application has been submitted successfully. Application ID: ${response.data.applicationNumber}`,
-            icon: 'success',
-            confirmButtonText: 'Continue to Dashboard'
+            icon: "success",
+            confirmButtonText: "Continue to Dashboard",
           });
 
           // Clear uploaded documents from local state
           this.uploadedDocuments = {
             profile: null,
             olevels: {},
-            references: {}
+            references: {},
           };
           this.profilePreview = null;
           this.profileFileInfo = null;
 
           // Redirect to dashboard
-          this.$router.push('/dashboard');
-
+          this.$router.push("/dashboard");
         } else {
-          throw new Error(response.error || 'Application submission failed');
+          throw new Error(response.error || "Application submission failed");
         }
-
       } catch (error) {
-        logger.error('Application submission failed:', error);
+        logger.error("Application submission failed:", error);
 
         // Show error message
         await Swal.fire({
-          title: 'Submission Failed',
-          text: error.message || 'Failed to submit application. Please try again.',
-          icon: 'error',
-          confirmButtonText: 'Try Again'
+          title: "Submission Failed",
+          text:
+            error.message || "Failed to submit application. Please try again.",
+          icon: "error",
+          confirmButtonText: "Try Again",
         });
 
         // If submission failed and files were uploaded, offer to clean them up
-        if (error.message && error.message.includes('cleaned up')) {
+        if (error.message && error.message.includes("cleaned up")) {
           // Files were already cleaned up by the server
           this.uploadedDocuments = {
             profile: null,
             olevels: {},
-            references: {}
+            references: {},
           };
           this.profilePreview = null;
           this.profileFileInfo = null;
         }
-
       } finally {
         this.isSubmitting = false;
       }
-    }
+    },
   },
 };
 </script>
@@ -2061,7 +2368,7 @@ export default {
           </h6>
 
           <button
-            class="btn btn-acon-dark btn-sm"
+            class="btn btn-acon-secondary btn-sm"
             @click="addSitting"
             :disabled="sittings.length >= maxSittings"
           >
@@ -2100,9 +2407,14 @@ export default {
                   'is-invalid': validationErrors[`sitting_${index}_examType`],
                 }"
                 id="examType"
+                @change="onExamTypeChange(index)"
               >
                 <option disabled value="">--Select Exam Type--</option>
-                <option v-for="(type, i) in examTypes" :key="i" :value="type">
+                <option
+                  v-for="(type, i) in getAvailableExamTypesFor(index)"
+                  :key="i"
+                  :value="type"
+                >
                   {{ type }}
                 </option>
               </select>
@@ -2162,16 +2474,23 @@ export default {
           </div>
         </div>
 
+        <div v-if="validationErrors.sittingsCombination" class="mt-3">
+          <div class="alert alert-danger mb-0">
+            <i class="bi bi-exclamation-triangle"></i>
+            {{ validationErrors.sittingsCombination }}
+          </div>
+        </div>
+
         <div class="d-flex justify-content-between mt-5 mb-1">
           <h6 class="fw-semibold">
             O'Level Result
             <span class="fw-light small"
-              >(5 Credits not more than two sittings)</span
+              > (5 Credits not more than two sittings) </span
             >
           </h6>
 
           <button
-            class="btn btn-acon-dark btn-sm"
+            class="btn btn-acon-secondary btn-sm"
             @click="addSubject"
             :disabled="subjects.length >= maxSubjects"
           >
@@ -2277,6 +2596,70 @@ export default {
           </div>
         </div>
 
+        <div class="d-flex justify-content-between mt-5 mb-1">
+          <h6 class="fw-semibold">
+            JAMB Details  <span class="fw-light small"
+              > (Check if JAMB details do not apply to your admission route.) </span
+            >
+          </h6>
+        </div>
+
+        <div class="card border-0 acon-bg-light p-3">
+          <div class="form-check mb-3">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="isJambExempt"
+              v-model="isJambExempt"
+              @change="onJambExemptChange"
+            />
+            <label class="form-check-label small" for="isJambExempt">
+              I am not a direct JAMB applicant (for example, eligible community nursing applicants).
+            </label>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label for="jambRegNum" class="form-label small">
+                Jamb Registration Number
+                <span v-if="!isJambExempt" class="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                class="form-control"
+                id="jambRegNum"
+                v-model="jambRegistrationNumber"
+                :disabled="isJambExempt"
+                :class="{ 'is-invalid': validationErrors.jambRegistrationNumber }"
+              />
+              <div
+                v-if="validationErrors.jambRegistrationNumber"
+                class="invalid-feedback"
+              >
+                {{ validationErrors.jambRegistrationNumber }}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label for="jambScore" class="form-label small">
+                Jamb Score
+                <span v-if="!isJambExempt" class="text-danger">*</span>
+              </label>
+              <input
+                type="number"
+                class="form-control"
+                id="jambScore"
+                v-model="jambScore"
+                min="0"
+                max="400"
+                :disabled="isJambExempt"
+                :class="{ 'is-invalid': validationErrors.jambScore }"
+              />
+              <div v-if="validationErrors.jambScore" class="invalid-feedback">
+                {{ validationErrors.jambScore }}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- General validation errors for Stage 2 -->
         <div
           v-if="validationErrors.subjects || validationErrors.coreSubjects"
@@ -2331,7 +2714,7 @@ export default {
                   @click="
                     removeDocument(
                       'profile_picture',
-                      uploadedDocuments.profile?.url
+                      uploadedDocuments.profile?.url,
                     )
                   "
                   class="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle"
@@ -2407,7 +2790,7 @@ export default {
                 @click="
                   removeDocument(
                     'olevel_result',
-                    uploadedDocuments.olevels[index].url
+                    uploadedDocuments.olevels[index].url,
                   )
                 "
                 class="btn btn-sm btn-outline-danger"
@@ -2469,7 +2852,7 @@ export default {
                 @click="
                   removeDocument(
                     'reference_letter',
-                    uploadedDocuments.references[index].url
+                    uploadedDocuments.references[index].url,
                   )
                 "
                 class="btn btn-sm btn-outline-danger"
@@ -2629,6 +3012,20 @@ export default {
                 <p class="small text-muted mb-1">
                   Period: {{ secondarySchoolStart }} - {{ secondarySchoolEnd }}
                 </p>
+              </div>
+              <div class="col-md-6">
+                <p class="small text-muted mb-1">JAMB Requirement</p>
+                <p class="mb-0">
+                  {{ isJambExempt ? 'Not a direct JAMB applicant' : 'Direct JAMB applicant' }}
+                </p>
+              </div>
+              <div class="col-md-6">
+                <p class="small text-muted mb-1">JAMB Registration Number</p>
+                <p class="mb-0">{{ isJambExempt ? 'Not applicable' : jambRegistrationNumber || 'N/A' }}</p>
+              </div>
+              <div class="col-md-6">
+                <p class="small text-muted mb-1">JAMB Score</p>
+                <p class="mb-0">{{ isJambExempt ? 'Not applicable' : jambScore || 'N/A' }}</p>
               </div>
             </div>
           </div>
@@ -2861,7 +3258,7 @@ export default {
 }
 
 .dot.completed {
-  background-color: #2d7d7d;
+  background-color: #c62828;
   /* primary */
   color: #fff;
   /* white text */

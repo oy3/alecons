@@ -158,7 +158,7 @@ export class AdmissionLetterPdfService {
         .letterhead {
             text-align: center;
             padding: 30px 0 20px 0;
-            border-bottom: 3px solid #2d7d7d;
+            border-bottom: 3px solid #C62828;
             margin-bottom: 30px;
         }
         .logo {
@@ -179,7 +179,7 @@ export class AdmissionLetterPdfService {
         .school-name {
             font-size: 15pt;
             font-weight: bold;
-            color: #136574;
+            color: #C62828;
             margin: 10px 0 5px 0;
             text-transform: uppercase;
         }
@@ -287,7 +287,7 @@ export class AdmissionLetterPdfService {
             ${logoSrc ? `<img src="${logoSrc}" alt="ALECONS Logo" />` : `
             <!-- SVG fallback if no logo available -->
             <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="50" cy="50" r="45" fill="#2d7d7d"/>
+                <circle cx="50" cy="50" r="45" fill="#C62828"/>
                 <text x="50" y="65" font-size="20" fill="white" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold">ALC</text>
             </svg>
             `}

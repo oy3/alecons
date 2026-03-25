@@ -29,6 +29,7 @@ import { EmailService } from "./email.service";
 import { QueueService } from "./queue.service";
 import { GradingService } from "./grading.service";
 import { ContentSanitizationService } from "./content-sanitization.service";
+import { SessionControlsService } from "./session-controls.service";
 import * as bcrypt from "bcrypt";
 import * as mammoth from "mammoth";
 import * as XLSX from "xlsx";
@@ -55,8 +56,16 @@ export class ExamService {
         @Inject(forwardRef(() => QueueService)) private queueService: QueueService,
         @Inject(forwardRef(() => GradingService))
         private gradingService: GradingService,
-        private contentSanitizationService: ContentSanitizationService
+        private contentSanitizationService: ContentSanitizationService,
+        private sessionControlsService: SessionControlsService,
     ) { }
+
+    private async getUserApplication(userId: string) {
+        return this.applicationModel
+            .findOne({ userId: new Types.ObjectId(userId) })
+            .select('programId entryAcademicSession currentStage')
+            .exec();
+    }
 
     async getExamQuestionsForManagement(
         examId: string
@@ -888,16 +897,26 @@ export class ExamService {
                 !userProgramId
             ) {
                 try {
-                    const application = await this.applicationModel
-                        .findOne({ userId: new Types.ObjectId(userId) })
-                        .select("programId")
-                        .exec();
+                    const application = await this.getUserApplication(userId);
 
                     if (application && application.programId) {
                         userProgramId = application.programId.toString();
                         this.logger.log(
                             `Found user's programId from application: ${userProgramId}`
                         );
+
+                        if (userRole === 'applicant') {
+                            const flowConfig = await this.sessionControlsService.getAdmissionFlowConfig(
+                                application.entryAcademicSession,
+                            );
+
+                            if (!flowConfig.entranceExamEnabled) {
+                                this.logger.log(
+                                    `Entrance exam disabled for applicant ${userId}; returning no available exams`,
+                                );
+                                return [];
+                            }
+                        }
                     }
                 } catch (appError) {
                     this.logger.warn(
@@ -1184,6 +1203,17 @@ export class ExamService {
             this.logger.log(`Starting exam ${examId} for user ${userId}`);
 
             const now = new Date();
+            const application = await this.getUserApplication(userId);
+
+            if (application) {
+                const flowConfig = await this.sessionControlsService.getAdmissionFlowConfig(
+                    application.entryAcademicSession,
+                );
+
+                if (!flowConfig.entranceExamEnabled) {
+                    throw new BadRequestException('Entrance examination is disabled for this academic session');
+                }
+            }
 
             // Verify exam exists and is available - atomic operation
             const exam = await this.examModel.findById(examId);

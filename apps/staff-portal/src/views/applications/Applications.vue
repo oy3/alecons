@@ -3,6 +3,29 @@ import { useAuthStore } from '../../stores/auth.js'
 import { apiService } from '../../services/api.js'
 import { logger } from '@shared/utils/logger'
 
+const createEmptyPaymentHistory = () => ({
+  payments: [],
+  totalCount: 0,
+  totalPaid: 0,
+  successfulCount: 0,
+  pendingCount: 0,
+  failedCount: 0,
+  cancelledCount: 0
+})
+
+const stageLabels = {
+  1: 'Registration',
+  2: 'Form Fee',
+  3: 'Application Form',
+  4: 'Entrance Exam',
+  5: 'Admission Decision',
+  6: 'Screening',
+  7: 'Acceptance Fee',
+  8: 'Sundry Fee',
+  9: 'School Fees',
+  10: 'Completed'
+}
+
 export default {
   name: 'ApplicationsManagement',
   setup() {
@@ -23,6 +46,10 @@ export default {
       perPage: 10,
       totalApplications: 0,
       apiTotalPages: 0,
+      showDetailsModal: false,
+      isLoadingDetails: false,
+      selectedApplication: null,
+      selectedPaymentHistory: createEmptyPaymentHistory(),
 
       statusOptions: [
         { value: 'all', label: 'All Statuses' },
@@ -33,14 +60,12 @@ export default {
         { value: 'rejected', label: 'Rejected' }
       ],
 
-      programs: ['All Programs'] // Will be populated from API
+      programs: ['All Programs']
     }
   },
   async mounted() {
-    // Initialize auth store first
     await this.authStore.initialize()
 
-    // Check permissions before loading
     if (!this.authStore.hasAnyPermission(['applications:view', 'view'])) {
       this.$swal.fire({
         icon: 'error',
@@ -51,7 +76,6 @@ export default {
       return
     }
 
-    // Load programs and applications
     await Promise.all([
       this.loadPrograms(),
       this.loadApplications()
@@ -61,7 +85,6 @@ export default {
     filteredApplications() {
       let filtered = this.applications
 
-      // Search filter
       if (this.searchQuery) {
         filtered = filtered.filter(app =>
           app.applicantName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
@@ -70,12 +93,10 @@ export default {
         )
       }
 
-      // Status filter
       if (this.statusFilter !== 'all') {
         filtered = filtered.filter(app => app.status === this.statusFilter)
       }
 
-      // Program filter
       if (this.programFilter !== 'all') {
         filtered = filtered.filter(app => app.program === this.programFilter)
       }
@@ -90,13 +111,15 @@ export default {
     },
 
     totalPages() {
-      // Use totalPages from API response if available, otherwise calculate
       const calculated = Math.ceil(this.filteredApplications.length / this.perPage)
       return this.apiTotalPages || Math.max(1, calculated)
+    },
+
+    documentSections() {
+      return this.getDocumentSections(this.selectedApplication)
     }
   },
   watch: {
-    // Reload applications when filters change
     statusFilter() {
       this.currentPage = 1
       this.loadApplications()
@@ -106,7 +129,6 @@ export default {
       this.loadApplications()
     },
     searchQuery() {
-      // Debounce search to avoid too many requests
       clearTimeout(this.searchTimeout)
       this.searchTimeout = setTimeout(() => {
         this.currentPage = 1
@@ -122,7 +144,6 @@ export default {
       try {
         this.isLoading = true
 
-        // Debug authentication state
         logger.info('Authentication state:', {
           isAuthenticated: this.authStore.isAuthenticated,
           hasUser: !!this.authStore.user,
@@ -140,7 +161,6 @@ export default {
           }
         })
 
-        // Prepare query parameters
         const params = {
           page: this.currentPage,
           limit: this.perPage,
@@ -160,7 +180,6 @@ export default {
           params.search = this.searchQuery.trim()
         }
 
-        // Make API call to get applications
         const response = await apiService.getApplications(params)
 
         if (response.success) {
@@ -214,24 +233,160 @@ export default {
       return statusClasses[status] || 'bg-secondary text-white'
     },
 
+    getDecisionBadgeClass(decision) {
+      const decisionClasses = {
+        pending: 'bg-warning-subtle text-warning-emphasis',
+        admitted: 'bg-success-subtle text-success-emphasis',
+        rejected: 'bg-danger-subtle text-danger-emphasis'
+      }
+      return decisionClasses[decision] || 'bg-secondary-subtle text-secondary-emphasis'
+    },
+
+    getPaymentStatusBadgeClass(status) {
+      const statusClasses = {
+        successful: 'bg-success-subtle text-success-emphasis',
+        pending: 'bg-warning-subtle text-warning-emphasis',
+        failed: 'bg-danger-subtle text-danger-emphasis',
+        cancelled: 'bg-secondary-subtle text-secondary-emphasis'
+      }
+      return statusClasses[status] || 'bg-light text-dark'
+    },
+
     formatDate(dateString) {
-      return new Date(dateString).toLocaleDateString()
+      if (!dateString) return 'N/A'
+      const date = new Date(dateString)
+      if (Number.isNaN(date.getTime())) return 'N/A'
+      return date.toLocaleDateString()
+    },
+
+    formatDateTime(dateString) {
+      if (!dateString) return 'N/A'
+      const date = new Date(dateString)
+      if (Number.isNaN(date.getTime())) return 'N/A'
+      return date.toLocaleString()
+    },
+
+    formatCurrency(amount) {
+      const normalizedAmount = Number(amount || 0)
+      return new Intl.NumberFormat('en-NG', {
+        style: 'currency',
+        currency: 'NGN',
+        minimumFractionDigits: 2
+      }).format(normalizedAmount)
+    },
+
+    formatLabel(value) {
+      if (!value) return 'N/A'
+      return String(value)
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase())
     },
 
     calculateAge(dateOfBirth) {
       if (!dateOfBirth) return 'N/A'
-      
+
       const today = new Date()
       const birthDate = new Date(dateOfBirth)
-      
+
+      if (Number.isNaN(birthDate.getTime())) {
+        return 'N/A'
+      }
+
       let age = today.getFullYear() - birthDate.getFullYear()
       const monthDiff = today.getMonth() - birthDate.getMonth()
-      
+
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--
+        age -= 1
       }
-      
+
       return age
+    },
+
+    getApplicantFullName(application) {
+      const user = application?.userId || {}
+      const fullName = [user.firstName, user.otherName, user.lastName].filter(Boolean).join(' ')
+      return fullName || application?.applicantName || 'N/A'
+    },
+
+    getProgramName(application) {
+      return application?.programId?.name || application?.program || 'N/A'
+    },
+
+    getAcademicSessionLabel(application) {
+      const session = application?.entryAcademicSession
+      if (!session) return 'N/A'
+      if (typeof session === 'string') return session
+      return session.sessionYear || 'N/A'
+    },
+
+    getStageLabel(stage) {
+      return stageLabels[stage] || `Stage ${stage || 'N/A'}`
+    },
+
+    getProfileImage(application) {
+      return application?.profileImageUrl || application?.documents?.profilePicture?.url || 'https://placehold.co/160x160?text=Applicant'
+    },
+
+    getDocumentSections(application) {
+      if (!application?.documents) {
+        return []
+      }
+
+      const sections = []
+      const profilePicture = application.documents.profilePicture
+      const olevelResults = Array.isArray(application.documents.olevelResults)
+        ? application.documents.olevelResults
+        : []
+      const referenceLetters = Array.isArray(application.documents.referenceLetters)
+        ? application.documents.referenceLetters
+        : []
+
+      if (profilePicture?.url) {
+        sections.push({
+          title: 'Profile Picture',
+          documents: [{
+            label: this.formatLabel(profilePicture.type || 'Profile Picture'),
+            url: profilePicture.url,
+            uploadedAt: profilePicture.uploadedAt
+          }]
+        })
+      }
+
+      if (olevelResults.length) {
+        sections.push({
+          title: 'O-Level Results',
+          documents: olevelResults.map((document, index) => ({
+            label: document.type ? this.formatLabel(document.type) : `Result ${index + 1}`,
+            url: document.url,
+            uploadedAt: document.uploadedAt
+          }))
+        })
+      }
+
+      if (referenceLetters.length) {
+        sections.push({
+          title: 'Reference Letters',
+          documents: referenceLetters.map((document, index) => ({
+            label: document.type ? this.formatLabel(document.type) : `Reference ${index + 1}`,
+            url: document.url,
+            uploadedAt: document.uploadedAt
+          }))
+        })
+      }
+
+      return sections
+    },
+
+    getDocumentCount(application) {
+      return this.getDocumentSections(application).reduce((count, section) => count + section.documents.length, 0)
+    },
+
+    closeDetailsModal() {
+      this.showDetailsModal = false
+      this.isLoadingDetails = false
+      this.selectedApplication = null
+      this.selectedPaymentHistory = createEmptyPaymentHistory()
     },
 
     async viewApplication(application) {
@@ -241,118 +396,22 @@ export default {
           applicationNumber: application.applicationNumber
         })
 
-        // Show loading state
-        this.$swal.fire({
-          title: 'Loading Application Details...',
-          allowOutsideClick: false,
-          didOpen: () => {
-            this.$swal.showLoading()
-          }
-        })
+        this.showDetailsModal = true
+        this.isLoadingDetails = true
+        this.selectedApplication = null
+        this.selectedPaymentHistory = createEmptyPaymentHistory()
 
-        // Fetch detailed application data
         const response = await apiService.getApplication(application.id)
 
         if (response.success && response.data?.application) {
-          const app = response.data.application
-          const user = app.userId
-          const program = app.programId
-
-          this.$swal.fire({
-            title: 'Application Details',
-            html: `
-
-            <div class="clearfix text-start">
-  <img src="${app.profileImageUrl || 'https://placehold.co/400'}" class="col-md-2 float-md-start mb-3 ms-md-3 rounded-circle border border-staff-primary border-2 me-3" alt="Student's profile picture" />
-
-  <div class="">
-  <strong>${user?.firstName || ''} ${user?.otherName || ''} ${user?.lastName || ''}</strong>
- <span class="badge ${this.getStatusBadgeClass(app.status)}"
-      > ${app.status.toUpperCase()} </span
-    >
-    </div>
-
-    <div class="fs-6 d-flex align-items-center mb-1">
-          <span>Age ${this.calculateAge(app.dob)}</span>
-          <i class="bi bi-dot fs-4"></i>
-                <span> ${user?.role}</span>
-                      <i class="bi bi-dot fs-4"></i>
-                       <span> ${app.nationality || 'N/A'}</span>
-      </div>
-
-
-
-    <div class="fs-6 d-flex align-items-center mb-3">
-        <span class="me-4"> Submitted ${this.formatDate(app.createdAt)} </span>
-        <span class="">Last Updated ${this.formatDate(app.updatedAt)}</span>
-      </div>
-
-<div class="mb-3">
-<button class="btn btn-sm btn-outline-dark me-2"> <i class="bi bi-envelope-at"></i> ${user?.email}</button>
-<button class="btn btn-sm btn-outline-dark"> <i class="bi bi-telephone"></i> ${app.phone}</button>
-</div>
-
-</div>
-
-<div>
-
-  <ul class="nav nav-underline">
-  <li class="nav-item">
-    <a class="nav-link active" aria-current="page" href="#">Active</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link" href="#">Link</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link" href="#">Link</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link disabled" aria-disabled="true">Disabled</a>
-  </li>
-</ul>
-  
-</div>
-
-
-              <div class="text-start">
-                <div class="row">
-                  <div class="col-12 mb-3">
-                    <h6 class="text-staff-primary fw-bold mb-2">Basic Information</h6>
-                    <p class="mb-1"><strong>Application #:</strong> ${app.applicationNumber}</p>
-                    <p class="mb-1"><strong>Applicant:</strong> ${user?.firstName || ''} ${user?.lastName || ''}</p>
-                    <p class="mb-1"><strong>Email:</strong> ${user?.email || 'N/A'}</p>
-                    <p class="mb-1"><strong>Phone:</strong> ${app.phone || 'N/A'}</p>
-                    <p class="mb-1"><strong>Program:</strong> ${program?.name || 'N/A'}</p>
-                    <p class="mb-1"><strong>Status:</strong> <span class="badge ${this.getStatusBadgeClass(app.status)}">${app.status.toUpperCase()}</span></p>
-                  </div>
-                  ${app.address ? `
-                    <div class="col-12 mb-3">
-                      <h6 class="text-staff-primary fw-bold mb-2">Address Information</h6>
-                      <p class="mb-1"><strong>Address:</strong> ${app.address}</p>
-                      <p class="mb-1"><strong>State of Origin:</strong> ${app.stateOfOrigin || 'N/A'}</p>
-                      <p class="mb-1"><strong>LGA:</strong> ${app.lga || 'N/A'}</p>
-                      <p class="mb-1"><strong>Nationality:</strong> ${app.nationality || 'N/A'}</p>
-                    </div>
-                  ` : ''}
-                  <div class="col-12">
-                    <h6 class="text-staff-primary fw-bold mb-2">Application Timeline</h6>
-
-          
-                    ${app.documents?.length ? `<p class="mb-1"><strong>Documents:</strong> ${app.documents.length} uploaded</p>` : ''}
-                  </div>
-                </div>
-              </div>
-            `,
-            confirmButtonText: 'Close',
-            confirmButtonColor: '#1a5f5f',
-            width: '600px'
-          })
-
+          this.selectedApplication = response.data.application
+          this.selectedPaymentHistory = response.data.paymentHistory || createEmptyPaymentHistory()
           logger.info('Application details displayed successfully')
         } else {
           throw new Error(response.message || 'Failed to load application details')
         }
       } catch (error) {
+        this.closeDetailsModal()
         logger.error('Failed to view application details:', error)
         this.$swal.fire({
           icon: 'error',
@@ -360,6 +419,8 @@ export default {
           text: error.message || 'Failed to load application details',
           confirmButtonColor: '#1a5f5f'
         })
+      } finally {
+        this.isLoadingDetails = false
       }
     },
 
@@ -985,6 +1046,512 @@ export default {
         </div>
       </div>
     </div>
+
+    <div
+      class="modal fade"
+      :class="{ show: showDetailsModal }"
+      :style="{ display: showDetailsModal ? 'block' : 'none' }"
+      tabindex="-1"
+    >
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content application-details-modal">
+          <div class="modal-header border-0 pb-0">
+            <div>
+              <h5 class="modal-title fw-bold text-staff-primary">Application Details</h5>
+              <p v-if="selectedApplication" class="text-muted mb-0">
+                {{ selectedApplication.applicationNumber }} · {{ getApplicantFullName(selectedApplication) }}
+              </p>
+            </div>
+            <button type="button" class="btn-close" @click="closeDetailsModal"></button>
+          </div>
+
+          <div class="modal-body px-4 pb-4">
+            <div v-if="isLoadingDetails" class="text-center py-5">
+              <div class="spinner-border text-staff-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              <p class="text-muted mt-3 mb-0">Loading complete application details...</p>
+            </div>
+
+            <div v-else-if="selectedApplication">
+              <div class="application-hero card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                  <div class="row g-4 align-items-start">
+                    <div class="col-lg-8">
+                      <div class="d-flex flex-column flex-md-row align-items-md-start gap-3">
+                        <img
+                          :src="getProfileImage(selectedApplication)"
+                          alt="Applicant profile"
+                          class="application-avatar"
+                        />
+                        <div class="flex-grow-1">
+                          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                            <h4 class="fw-bold mb-0">{{ getApplicantFullName(selectedApplication) }}</h4>
+                            <span class="badge rounded-pill" :class="getStatusBadgeClass(selectedApplication.status)">
+                              {{ formatLabel(selectedApplication.status) }}
+                            </span>
+                            <span
+                              class="badge rounded-pill"
+                              :class="getDecisionBadgeClass(selectedApplication.admissionDecision)"
+                            >
+                              {{ formatLabel(selectedApplication.admissionDecision) }}
+                            </span>
+                          </div>
+
+                          <p class="text-muted mb-3">
+                            {{ getProgramName(selectedApplication) }}
+                            <span v-if="selectedApplication.programId?.code">({{ selectedApplication.programId.code }})</span>
+                          </p>
+
+                          <div class="d-flex flex-wrap gap-2 mb-3">
+                            <span class="detail-chip">
+                              <i class="bi bi-envelope-at me-1"></i>{{ selectedApplication.userId?.email || 'N/A' }}
+                            </span>
+                            <span class="detail-chip">
+                              <i class="bi bi-telephone me-1"></i>{{ selectedApplication.phone || 'N/A' }}
+                            </span>
+                            <span class="detail-chip">
+                              <i class="bi bi-mortarboard me-1"></i>{{ getAcademicSessionLabel(selectedApplication) }}
+                            </span>
+                          </div>
+
+                          <div class="details-grid compact-grid">
+                            <div>
+                              <span class="details-label">Current Stage</span>
+                              <span class="details-value">{{ getStageLabel(selectedApplication.currentStage) }}</span>
+                            </div>
+                            <div>
+                              <span class="details-label">Age</span>
+                              <span class="details-value">{{ calculateAge(selectedApplication.dob) }}</span>
+                            </div>
+                            <div>
+                              <span class="details-label">Submitted</span>
+                              <span class="details-value">{{ formatDateTime(selectedApplication.createdAt) }}</span>
+                            </div>
+                            <div>
+                              <span class="details-label">Last Updated</span>
+                              <span class="details-value">{{ formatDateTime(selectedApplication.updatedAt) }}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="col-lg-4">
+                      <div class="summary-panel h-100">
+                        <div class="summary-stat">
+                          <span class="summary-value">{{ getDocumentCount(selectedApplication) }}</span>
+                          <span class="summary-label">Documents</span>
+                        </div>
+                        <div class="summary-stat">
+                          <span class="summary-value">{{ selectedPaymentHistory.totalCount }}</span>
+                          <span class="summary-label">Payments</span>
+                        </div>
+                        <div class="summary-stat">
+                          <span class="summary-value">{{ formatCurrency(selectedPaymentHistory.totalPaid) }}</span>
+                          <span class="summary-label">Successful Payments</span>
+                        </div>
+                        <div class="summary-stat">
+                          <span class="summary-value">{{ selectedApplication.matriculationNumber || 'Pending' }}</span>
+                          <span class="summary-label">Matriculation</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row g-4">
+                <div class="col-lg-8">
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <h6 class="section-title">Application Overview</h6>
+                      <div class="details-grid">
+                        <div>
+                          <span class="details-label">Application Number</span>
+                          <span class="details-value">{{ selectedApplication.applicationNumber }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Applicant Role</span>
+                          <span class="details-value">{{ formatLabel(selectedApplication.userId?.role) }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Program Type</span>
+                          <span class="details-value">{{ selectedApplication.programTypeId?.name || 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Study Mode</span>
+                          <span class="details-value">{{ selectedApplication.programModeId?.name || 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">State of Origin</span>
+                          <span class="details-value">{{ selectedApplication.stateOfOrigin || 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Local Government</span>
+                          <span class="details-value">{{ selectedApplication.lga || 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Nationality</span>
+                          <span class="details-value">{{ selectedApplication.nationality || 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Gender</span>
+                          <span class="details-value">{{ selectedApplication.gender || 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Marital Status</span>
+                          <span class="details-value">{{ selectedApplication.maritalStatus || 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Religion</span>
+                          <span class="details-value">{{ selectedApplication.religion || 'N/A' }}</span>
+                        </div>
+                      </div>
+
+                      <div class="mt-3">
+                        <span class="details-label">Home Address</span>
+                        <p class="details-value mb-0">{{ selectedApplication.address || 'N/A' }}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <h6 class="section-title">Guardian & Next of Kin</h6>
+                      <div class="row g-4">
+                        <div class="col-md-6">
+                          <div class="info-block h-100">
+                            <h6 class="info-block-title">Guardian</h6>
+                            <p class="mb-1"><strong>Name:</strong> {{ selectedApplication.guardian?.name || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Phone:</strong> {{ selectedApplication.guardian?.phone || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Email:</strong> {{ selectedApplication.guardian?.email || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Relationship:</strong> {{ selectedApplication.guardian?.relationship || 'N/A' }}</p>
+                            <p class="mb-0"><strong>Address:</strong> {{ selectedApplication.guardian?.address || 'N/A' }}</p>
+                          </div>
+                        </div>
+                        <div class="col-md-6">
+                          <div class="info-block h-100">
+                            <h6 class="info-block-title">Next of Kin</h6>
+                            <p class="mb-1"><strong>Name:</strong> {{ selectedApplication.nextOfKin?.name || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Phone:</strong> {{ selectedApplication.nextOfKin?.phone || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Email:</strong> {{ selectedApplication.nextOfKin?.email || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Relationship:</strong> {{ selectedApplication.nextOfKin?.relationship || 'N/A' }}</p>
+                            <p class="mb-0"><strong>Address:</strong> {{ selectedApplication.nextOfKin?.address || 'N/A' }}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <h6 class="section-title">Academic Background</h6>
+                      <div class="row g-4">
+                        <div class="col-md-6">
+                          <div class="info-block h-100">
+                            <h6 class="info-block-title">Primary Education</h6>
+                            <p class="mb-1"><strong>School:</strong> {{ selectedApplication.academicBackground?.primary?.name || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Start:</strong> {{ selectedApplication.academicBackground?.primary?.startDate || 'N/A' }}</p>
+                            <p class="mb-0"><strong>End:</strong> {{ selectedApplication.academicBackground?.primary?.endDate || 'N/A' }}</p>
+                          </div>
+                        </div>
+                        <div class="col-md-6">
+                          <div class="info-block h-100">
+                            <h6 class="info-block-title">Secondary Education</h6>
+                            <p class="mb-1"><strong>School:</strong> {{ selectedApplication.academicBackground?.secondary?.name || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Start:</strong> {{ selectedApplication.academicBackground?.secondary?.startDate || 'N/A' }}</p>
+                            <p class="mb-0"><strong>End:</strong> {{ selectedApplication.academicBackground?.secondary?.endDate || 'N/A' }}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <h6 class="section-title mb-0">Examination Records</h6>
+                        <span class="badge bg-light text-dark">{{ selectedApplication.examinations?.length || 0 }} records</span>
+                      </div>
+
+                      <div v-if="selectedApplication.examinations?.length" class="d-flex flex-column gap-3">
+                        <div v-for="(exam, examIndex) in selectedApplication.examinations" :key="`${exam.examType}-${examIndex}`" class="info-block">
+                          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                            <h6 class="info-block-title mb-0">{{ exam.examType || 'Exam Record' }}</h6>
+                            <span class="text-muted small">{{ exam.examYear || 'N/A' }} · {{ exam.examNumber || 'No Number' }}</span>
+                          </div>
+                          <div v-if="exam.subjects?.length" class="d-flex flex-wrap gap-2">
+                            <span v-for="(subject, subjectIndex) in exam.subjects" :key="`${subject.subject}-${subjectIndex}`" class="detail-chip soft-chip">
+                              {{ subject.subject || 'Subject' }}: {{ subject.grade || 'N/A' }}
+                            </span>
+                          </div>
+                          <p v-else class="text-muted mb-0">No subject breakdown submitted.</p>
+                        </div>
+                      </div>
+                      <p v-else class="text-muted mb-0">No examination records submitted.</p>
+                    </div>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <h6 class="section-title mb-0">Referees</h6>
+                        <span class="badge bg-light text-dark">{{ selectedApplication.referees?.length || 0 }} listed</span>
+                      </div>
+                      <div v-if="selectedApplication.referees?.length" class="row g-3">
+                        <div v-for="(referee, refereeIndex) in selectedApplication.referees" :key="`${referee.email}-${refereeIndex}`" class="col-md-6">
+                          <div class="info-block h-100">
+                            <h6 class="info-block-title">{{ referee.name || `Referee ${refereeIndex + 1}` }}</h6>
+                            <p class="mb-1"><strong>Email:</strong> {{ referee.email || 'N/A' }}</p>
+                            <p class="mb-0"><strong>Phone:</strong> {{ referee.phone || 'N/A' }}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <p v-else class="text-muted mb-0">No referees submitted.</p>
+                    </div>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <h6 class="section-title mb-0">Documents</h6>
+                        <span class="badge bg-light text-dark">{{ getDocumentCount(selectedApplication) }} uploaded</span>
+                      </div>
+
+                      <div v-if="documentSections.length" class="row g-3">
+                        <div v-for="section in documentSections" :key="section.title" class="col-md-6">
+                          <div class="info-block h-100">
+                            <h6 class="info-block-title">{{ section.title }}</h6>
+                            <div class="d-flex flex-column gap-2">
+                              <a
+                                v-for="document in section.documents"
+                                :key="`${section.title}-${document.url}`"
+                                :href="document.url"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="document-link"
+                              >
+                                <span>
+                                  <i class="bi bi-box-arrow-up-right me-2"></i>{{ document.label }}
+                                </span>
+                                <small class="text-muted">{{ formatDate(document.uploadedAt) }}</small>
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <p v-else class="text-muted mb-0">No uploaded documents available.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-lg-4">
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <h6 class="section-title">Admission Flow</h6>
+                      <div class="details-grid single-column-grid">
+                        <div>
+                          <span class="details-label">Current Stage</span>
+                          <span class="details-value">{{ getStageLabel(selectedApplication.currentStage) }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Entrance Exam</span>
+                          <span class="details-value">
+                            {{ selectedApplication.admissionFlow?.entranceExamEnabled === false ? 'Skipped for session' : 'Required' }}
+                          </span>
+                        </div>
+                        <div>
+                          <span class="details-label">Screening</span>
+                          <span class="details-value">
+                            {{ selectedApplication.admissionFlow?.screeningEnabled === false ? 'Skipped for session' : 'Required' }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <h6 class="section-title">Entrance Exam</h6>
+                      <div class="details-grid single-column-grid">
+                        <div>
+                          <span class="details-label">Date</span>
+                          <span class="details-value">{{ formatDate(selectedApplication.entranceExam?.date) }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Time</span>
+                          <span class="details-value">{{ selectedApplication.entranceExam?.time || 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Score</span>
+                          <span class="details-value">{{ selectedApplication.entranceExam?.score ?? 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Link</span>
+                          <a
+                            v-if="selectedApplication.entranceExam?.link"
+                            :href="selectedApplication.entranceExam.link"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="document-link compact-link"
+                          >
+                            Open exam link
+                          </a>
+                          <span v-else class="details-value">N/A</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <h6 class="section-title">Screening</h6>
+                      <div class="details-grid single-column-grid">
+                        <div>
+                          <span class="details-label">Date</span>
+                          <span class="details-value">{{ formatDate(selectedApplication.screening?.date) }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Time</span>
+                          <span class="details-value">{{ selectedApplication.screening?.time || 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Venue</span>
+                          <span class="details-value">{{ selectedApplication.screening?.venue || 'N/A' }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Completed</span>
+                          <span class="details-value">{{ selectedApplication.screening?.completed ? 'Yes' : 'No' }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <h6 class="section-title">Admission Decision</h6>
+                      <div class="details-grid single-column-grid">
+                        <div>
+                          <span class="details-label">Decision</span>
+                          <span class="details-value">{{ formatLabel(selectedApplication.admissionDecision) }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Admission Date</span>
+                          <span class="details-value">{{ formatDate(selectedApplication.admissionDate) }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Provisional Offer</span>
+                          <a
+                            v-if="selectedApplication.admissionLetter"
+                            :href="selectedApplication.admissionLetter"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="document-link compact-link"
+                          >
+                            Open document
+                          </a>
+                          <span v-else class="details-value">Not generated</span>
+                        </div>
+                        <div v-if="selectedApplication.rejectionReason">
+                          <span class="details-label">Rejection Reason</span>
+                          <p class="details-value mb-0">{{ selectedApplication.rejectionReason }}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                      <h6 class="section-title">Payments Summary</h6>
+                      <div class="payment-summary-grid">
+                        <div class="summary-tile success-tile">
+                          <span class="summary-value">{{ selectedPaymentHistory.successfulCount }}</span>
+                          <span class="summary-label">Successful</span>
+                        </div>
+                        <div class="summary-tile warning-tile">
+                          <span class="summary-value">{{ selectedPaymentHistory.pendingCount }}</span>
+                          <span class="summary-label">Pending</span>
+                        </div>
+                        <div class="summary-tile danger-tile">
+                          <span class="summary-value">{{ selectedPaymentHistory.failedCount }}</span>
+                          <span class="summary-label">Failed</span>
+                        </div>
+                        <div class="summary-tile secondary-tile">
+                          <span class="summary-value">{{ selectedPaymentHistory.cancelledCount }}</span>
+                          <span class="summary-label">Cancelled</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                    <h6 class="section-title mb-0">Linked Payment History</h6>
+                    <span class="badge bg-light text-dark">{{ selectedPaymentHistory.totalCount }} records</span>
+                  </div>
+
+                  <div v-if="selectedPaymentHistory.payments.length" class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>Payment</th>
+                          <th>Reference</th>
+                          <th>Status</th>
+                          <th>Amount</th>
+                          <th>Session</th>
+                          <th>Paid At</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="payment in selectedPaymentHistory.payments" :key="payment.id">
+                          <td>
+                            <div class="fw-semibold">{{ payment.payment?.name || 'Unknown Payment' }}</div>
+                            <div class="small text-muted">{{ payment.payment?.paymentCode || 'No code' }}</div>
+                            <div class="mt-1 d-flex flex-wrap gap-1">
+                              <span v-if="payment.isApplicationLinked" class="badge bg-primary-subtle text-primary-emphasis">This application</span>
+                              <span v-if="payment.isAcademicSessionLinked" class="badge bg-info-subtle text-info-emphasis">Same session</span>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="small fw-semibold">{{ payment.reference }}</div>
+                            <div class="small text-muted">{{ payment.channel || 'N/A' }}</div>
+                          </td>
+                          <td>
+                            <span class="badge rounded-pill" :class="getPaymentStatusBadgeClass(payment.status)">
+                              {{ formatLabel(payment.status) }}
+                            </span>
+                          </td>
+                          <td>
+                            <div class="fw-semibold">{{ formatCurrency(payment.amount) }}</div>
+                            <div class="small text-muted" v-if="payment.fee">Fee: {{ formatCurrency(payment.fee) }}</div>
+                          </td>
+                          <td>{{ payment.academicSession?.sessionYear || 'N/A' }}</td>
+                          <td>
+                            <div>{{ formatDateTime(payment.paidAt || payment.createdAt) }}</div>
+                            <div class="small text-muted" v-if="payment.remarks">{{ payment.remarks }}</div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p v-else class="text-muted mb-0">No payment records linked to this applicant yet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-outline-secondary" @click="closeDetailsModal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop fade" :class="{ show: showDetailsModal }" v-if="showDetailsModal"></div>
   </div>
 </template>
 
@@ -1027,5 +1594,166 @@ code {
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   background-color: var(--staff-light);
+}
+
+.application-details-modal {
+  border: none;
+  border-radius: 20px;
+}
+
+.application-hero {
+  background: linear-gradient(135deg, rgba(26, 95, 95, 0.08), rgba(13, 110, 253, 0.05));
+}
+
+.application-avatar {
+  width: 112px;
+  height: 112px;
+  object-fit: cover;
+  border-radius: 24px;
+  border: 3px solid rgba(26, 95, 95, 0.15);
+  background: #fff;
+}
+
+.detail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.45rem 0.85rem;
+  background: rgba(26, 95, 95, 0.08);
+  color: var(--staff-primary);
+  border-radius: 999px;
+  font-size: 0.875rem;
+}
+
+.soft-chip {
+  background: rgba(13, 110, 253, 0.08);
+  color: #0d6efd;
+}
+
+.summary-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.summary-stat,
+.summary-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(26, 95, 95, 0.08);
+}
+
+.summary-value {
+  font-weight: 700;
+  color: var(--staff-primary);
+  line-height: 1.2;
+}
+
+.summary-label {
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.payment-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.success-tile {
+  background: rgba(25, 135, 84, 0.08);
+}
+
+.warning-tile {
+  background: rgba(255, 193, 7, 0.12);
+}
+
+.danger-tile {
+  background: rgba(220, 53, 69, 0.08);
+}
+
+.secondary-tile {
+  background: rgba(108, 117, 125, 0.08);
+}
+
+.section-title {
+  font-weight: 700;
+  color: var(--staff-primary);
+  margin-bottom: 1rem;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.compact-grid {
+  gap: 0.75rem;
+}
+
+.single-column-grid {
+  grid-template-columns: 1fr;
+}
+
+.details-label {
+  display: block;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6c757d;
+  margin-bottom: 0.25rem;
+}
+
+.details-value {
+  display: block;
+  font-weight: 600;
+  color: #212529;
+}
+
+.info-block {
+  padding: 1rem;
+  border-radius: 16px;
+  background: rgba(248, 249, 250, 0.8);
+}
+
+.info-block-title {
+  color: var(--staff-primary);
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.document-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  background: rgba(26, 95, 95, 0.05);
+  color: var(--staff-primary);
+  text-decoration: none;
+}
+
+.document-link:hover {
+  background: rgba(26, 95, 95, 0.1);
+  color: var(--staff-primary);
+}
+
+.compact-link {
+  padding: 0.5rem 0.75rem;
+  justify-content: flex-start;
+}
+
+@media (max-width: 991.98px) {
+  .details-grid,
+  .summary-panel,
+  .payment-summary-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -36,7 +36,7 @@ export default {
     <div class="container-fluid acon-bg-primary-dark small">
       <div>
         <span class="navbar-text text-white me-3">
-          <i class="bi bi-telephone me-1"></i> +234 708 460 1610
+          <i class="bi bi-telephone me-1"></i> +234 916 000 8679
         </span>
         <span class="navbar-text text-white">
           <i class="bi bi-envelope-at me-1"></i> admissions@alecons.edu.ng

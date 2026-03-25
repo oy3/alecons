@@ -28,10 +28,10 @@ export class CreateProgramDto {
     @IsNotEmpty()
     programModeId: string;
 
-    @ApiProperty({ description: 'Duration in semesters', minimum: 1 })
+    @ApiProperty({ description: 'Duration in years', minimum: 1 })
     @IsNumber()
     @Min(1)
-    durationSemesters: number;
+    durationYears: number;
 
     @ApiPropertyOptional({ description: 'Program active status', default: true })
     @IsBoolean()
@@ -65,11 +65,11 @@ export class UpdateProgramDto {
     @IsOptional()
     programModeId?: string;
 
-    @ApiPropertyOptional({ description: 'Duration in semesters', minimum: 1 })
+    @ApiPropertyOptional({ description: 'Duration in years', minimum: 1 })
     @IsNumber()
     @Min(1)
     @IsOptional()
-    durationSemesters?: number;
+    durationYears?: number;
 
     @ApiPropertyOptional({ description: 'Program active status' })
     @IsBoolean()

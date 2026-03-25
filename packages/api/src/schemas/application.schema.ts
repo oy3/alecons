@@ -71,6 +71,11 @@ export interface Examination {
     subjects: ExamSubject[];
 }
 
+export interface JambDetails {
+    registrationNumber?: string;
+    score?: number;
+}
+
 export interface ApplicationDoc {
     type: string;
     url: string;
@@ -216,6 +221,15 @@ export class Application {
         }]
     })
     examinations: Examination[];
+
+    @Prop({ trim: true })
+    jambRegistrationNumber?: string;
+
+    @Prop({ min: 0, max: 400 })
+    jambScore?: number;
+
+    @Prop({ default: false })
+    isJambExempt?: boolean;
 
     // Enhanced Document Structure
     @Prop({

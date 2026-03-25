@@ -8,11 +8,13 @@ import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { Program, ProgramSchema } from '../schemas/program.schema';
 import { ProgramType, ProgramTypeSchema } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeSchema } from '../schemas/program-mode.schema';
+import { AcademicSessionsModule } from './academic-sessions.module';
 import * as multer from 'multer';
 
 @Module({
     imports: [
         ConfigModule,
+        AcademicSessionsModule,
         MongooseModule.forFeature([
             { name: Application.name, schema: ApplicationSchema },
             { name: Program.name, schema: ProgramSchema },

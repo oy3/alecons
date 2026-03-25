@@ -76,7 +76,7 @@ export default {
             name: dept.name,
             description: dept.description || '',
             isActive: dept.active,
-            programsCount: 0, // TODO: Get actual programs count
+            programsCount: dept.programsCount || 0,
             createdAt: dept.createdAt,
             updatedAt: dept.updatedAt
           }))

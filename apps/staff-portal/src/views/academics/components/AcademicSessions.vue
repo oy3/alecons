@@ -518,6 +518,10 @@ export default {
 
       return `
         <div class="p-4">
+          <div class="alert alert-info mb-4">
+            <i class="bi bi-info-circle me-2"></i>
+            Disable <strong>Entrance Exam</strong> or <strong>Screening</strong> to automatically skip that step in the admission flow for this session.
+          </div>
           <div class="row">
             <!-- Session Controls -->
             <div class="col-md-6">
@@ -586,6 +590,8 @@ export default {
       const names = {
         application: 'Application',
         admissionProcessing: 'Admission Processing',
+        entranceExam: 'Entrance Exam',
+        screening: 'Screening & Interview',
         courseRegistration: 'Course Registration',
         resultUpload: 'Result Upload',
         resultRelease: 'Result Release'

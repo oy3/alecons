@@ -41,6 +41,17 @@ export default {
     };
   },
   computed: {
+    maximumDateOfBirth() {
+      const today = new Date();
+      const minimumEligibleDate = new Date(
+        today.getFullYear() - 16,
+        today.getMonth(),
+        today.getDate()
+      );
+
+      return minimumEligibleDate.toISOString().split('T')[0];
+    },
+
     // Filter programs based on selected type and mode
     availablePrograms() {
       if (!this.formData.programTypeId || !this.formData.programModeId) {
@@ -657,6 +668,7 @@ export default {
                       type="date"
                       id="dateOfBirth"
                       v-model="formData.dateOfBirth"
+                      :max="maximumDateOfBirth"
                       class="form-control"
                       required
                     />
@@ -676,10 +688,6 @@ export default {
                       <option value="" disabled>-- Select --</option>
                       <option value="male">Male</option>
                       <option value="female">Female</option>
-                      <option value="other">Other</option>
-                      <option value="prefer_not_to_say">
-                        Prefer not to say
-                      </option>
                     </select>
                   </div>
 

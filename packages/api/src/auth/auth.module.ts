@@ -22,9 +22,11 @@ import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-sess
 import { SessionControl, SessionControlSchema } from '../schemas/session-control.schema';
 import { Student, StudentSchema } from '../schemas/student.schema';
 import { StudentService } from '../services/student.service';
+import { AcademicSessionsModule } from '../modules/academic-sessions.module';
 
 @Module({
     imports: [
+        AcademicSessionsModule,
         MongooseModule.forFeature([
             { name: User.name, schema: UserSchema },
             { name: Application.name, schema: ApplicationSchema },

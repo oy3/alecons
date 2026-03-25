@@ -20,6 +20,7 @@ import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/
 import { Program, ProgramDocument } from '../schemas/program.schema';
 import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
+import { SessionControlsService } from '../services/session-controls.service';
 
 interface UploadFileDto {
     fileType: 'profile_picture' | 'olevel_result' | 'reference_letter';
@@ -34,6 +35,7 @@ export class ApplicationUploadController {
 
     constructor(
         private readonly uploadService: UploadService,
+        private readonly sessionControlsService: SessionControlsService,
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
         @InjectModel(Program.name) private programModel: Model<ProgramDocument>,
         @InjectModel(ProgramType.name) private programTypeModel: Model<ProgramTypeDocument>,
@@ -209,6 +211,9 @@ export class ApplicationUploadController {
                     phone: string;
                     email: string;
                 }>;
+                jambRegistrationNumber?: string;
+                jambScore?: number | string;
+                isJambExempt?: boolean;
             };
             // Uploaded files data
             uploadedFiles: Array<{
@@ -384,6 +389,24 @@ export class ApplicationUploadController {
                 // Referees and examinations
                 application.referees = referees;
                 application.examinations = examinations;
+                application.isJambExempt = applicationData.academicInfo.isJambExempt === true;
+
+                if (application.isJambExempt) {
+                    application.jambRegistrationNumber = undefined;
+                    application.jambScore = undefined;
+                } else {
+                    application.jambRegistrationNumber = applicationData.academicInfo.jambRegistrationNumber?.trim() || undefined;
+
+                    if (
+                        applicationData.academicInfo.jambScore !== undefined &&
+                        applicationData.academicInfo.jambScore !== null &&
+                        applicationData.academicInfo.jambScore !== ''
+                    ) {
+                        application.jambScore = Number(applicationData.academicInfo.jambScore);
+                    } else {
+                        application.jambScore = undefined;
+                    }
+                }
 
                 // Documents using new grouped structure
                 const groupedDocuments: any = {
@@ -421,7 +444,9 @@ export class ApplicationUploadController {
 
                 // Application status
                 application.status = ApplicationStatus.PENDING;
-                application.currentStage = 4;
+                application.currentStage = await this.sessionControlsService.getNextStageAfterApplicationForm(
+                    application.entryAcademicSession,
+                );
 
                 // Debug: Log the application object just before saving
                 this.logger.log('Application object just before save:', {
@@ -458,6 +483,8 @@ export class ApplicationUploadController {
                     documentsCount: documents.length,
                     examinationsCount: examinations.length,
                     refereesCount: referees.length,
+                    isJambExempt: application.isJambExempt === true,
+                    hasJambDetails: !!application.jambRegistrationNumber || application.jambScore !== undefined,
                     hasNextOfKin: !!application.nextOfKin,
                     hasAcademicBackground: !!application.academicBackground
                 });

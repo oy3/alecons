@@ -31,6 +31,42 @@ export interface StudentPaymentsSummary {
     totalUnpaid: number;
 }
 
+export interface StaffLinkedPaymentRecord {
+    id: string;
+    amount: number;
+    reference: string;
+    paidAt?: Date;
+    channel?: string;
+    fee?: number;
+    status: PaymentStatus;
+    remarks?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
+    isApplicationLinked: boolean;
+    isAcademicSessionLinked: boolean;
+    payment: {
+        id?: string;
+        name: string;
+        description?: string;
+        amount?: number;
+        paymentCode?: string;
+    };
+    academicSession?: {
+        id?: string;
+        sessionYear?: string;
+    };
+}
+
+export interface StaffLinkedPaymentsSummary {
+    payments: StaffLinkedPaymentRecord[];
+    totalCount: number;
+    totalPaid: number;
+    successfulCount: number;
+    pendingCount: number;
+    failedCount: number;
+    cancelledCount: number;
+}
+
 export interface PaystackInitializeResponse {
     authorization_url: string;
     access_code: string;
@@ -1133,6 +1169,76 @@ export class PaymentsService {
                 totalCount,
                 totalPages: Math.ceil(totalCount / limit)
             }
+        };
+    }
+
+    async getLinkedPaymentsForStaffReview(
+        userId: string,
+        options: { applicationId?: string; academicSessionId?: string } = {}
+    ): Promise<StaffLinkedPaymentsSummary> {
+        const userObjectId = new Types.ObjectId(userId);
+        const applicationObjectId = options.applicationId && Types.ObjectId.isValid(options.applicationId)
+            ? new Types.ObjectId(options.applicationId)
+            : null;
+        const academicSessionObjectId = options.academicSessionId && Types.ObjectId.isValid(options.academicSessionId)
+            ? new Types.ObjectId(options.academicSessionId)
+            : null;
+
+        const payments = await this.studentPaymentModel
+            .find({ userId: userObjectId })
+            .populate('paymentId', 'name description amount paymentCode')
+            .populate('academicSessionId', 'sessionYear')
+            .sort({ createdAt: -1, paidAt: -1 })
+            .lean();
+
+        const mappedPayments = payments.map(payment => {
+            const linkedApplicationId = payment.applicationId?.toString();
+            const linkedAcademicSessionId = payment.academicSessionId && typeof payment.academicSessionId === 'object' && '_id' in payment.academicSessionId
+                ? payment.academicSessionId._id?.toString()
+                : payment.academicSessionId?.toString();
+            const linkedPayment = payment.paymentId && typeof payment.paymentId === 'object' && '_id' in payment.paymentId
+                ? payment.paymentId as any
+                : null;
+
+            return {
+                id: payment._id.toString(),
+                amount: payment.amount,
+                reference: payment.reference,
+                paidAt: payment.paidAt,
+                channel: payment.channel,
+                fee: payment.fee,
+                status: payment.status,
+                remarks: payment.remarks,
+                createdAt: payment.createdAt,
+                updatedAt: payment.updatedAt,
+                isApplicationLinked: !!applicationObjectId && linkedApplicationId === applicationObjectId.toString(),
+                isAcademicSessionLinked: !!academicSessionObjectId && linkedAcademicSessionId === academicSessionObjectId.toString(),
+                payment: {
+                    id: linkedPayment?._id?.toString(),
+                    name: linkedPayment?.name || 'Unknown Payment',
+                    description: linkedPayment?.description,
+                    amount: linkedPayment?.amount,
+                    paymentCode: linkedPayment?.paymentCode,
+                },
+                academicSession: payment.academicSessionId && typeof payment.academicSessionId === 'object'
+                    ? {
+                        id: (payment.academicSessionId as any)._id?.toString(),
+                        sessionYear: (payment.academicSessionId as any).sessionYear,
+                    }
+                    : undefined,
+            };
+        });
+
+        return {
+            payments: mappedPayments,
+            totalCount: mappedPayments.length,
+            totalPaid: mappedPayments
+                .filter(payment => payment.status === PaymentStatus.SUCCESSFUL)
+                .reduce((sum, payment) => sum + payment.amount, 0),
+            successfulCount: mappedPayments.filter(payment => payment.status === PaymentStatus.SUCCESSFUL).length,
+            pendingCount: mappedPayments.filter(payment => payment.status === PaymentStatus.PENDING).length,
+            failedCount: mappedPayments.filter(payment => payment.status === PaymentStatus.FAILED).length,
+            cancelledCount: mappedPayments.filter(payment => payment.status === PaymentStatus.CANCELLED).length,
         };
     }
 

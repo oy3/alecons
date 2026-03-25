@@ -125,6 +125,9 @@ export class StudentService {
                         referees: (student.applicationId as any).referees,
                         academicBackground: (student.applicationId as any).academicBackground,
                         examinations: (student.applicationId as any).examinations,
+                        isJambExempt: (student.applicationId as any).isJambExempt,
+                        jambRegistrationNumber: (student.applicationId as any).jambRegistrationNumber,
+                        jambScore: (student.applicationId as any).jambScore,
                         documents: (student.applicationId as any).documents,
                         // Program references from application
                         program: (student.applicationId as any).programId,

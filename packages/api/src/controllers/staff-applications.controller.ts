@@ -25,6 +25,8 @@ import { EmailService } from '../services/email.service';
 import { MatriculationService } from '../services/matriculation.service';
 import { AdmissionLetterPdfService } from '../services/admission-letter-pdf.service';
 import { UploadService } from '../services/upload.service';
+import { SessionControlsService } from '../services/session-controls.service';
+import { PaymentsService } from '../payments/payments.service';
 
 @ApiTags('Staff Applications')
 @Controller('staff/applications')
@@ -45,7 +47,38 @@ export class StaffApplicationsController {
         private matriculationService: MatriculationService,
         private admissionLetterPdfService: AdmissionLetterPdfService,
         private uploadService: UploadService,
+        private sessionControlsService: SessionControlsService,
+        private paymentsService: PaymentsService,
     ) { }
+
+    private extractEntityId(value: unknown): string | undefined {
+        if (!value) {
+            return undefined;
+        }
+
+        if (typeof value === 'string') {
+            return value;
+        }
+
+        if (value instanceof Types.ObjectId) {
+            return value.toString();
+        }
+
+        if (typeof value === 'object' && value !== null && '_id' in value && (value as any)._id) {
+            return (value as any)._id.toString();
+        }
+
+        return undefined;
+    }
+
+    private async getApplicationAdmissionFlow(application: {
+        entryAcademicSession?: Types.ObjectId | { _id?: Types.ObjectId | string } | string;
+        currentStage: number;
+        save?: () => Promise<unknown>;
+        markModified?: (path: string) => void;
+    }) {
+        return this.sessionControlsService.syncApplicationStageWithControls(application);
+    }
 
     @Get()
     @ApiOperation({ summary: 'Get all applications with filters and pagination' })
@@ -86,8 +119,7 @@ export class StaffApplicationsController {
 
             // Calculate pagination
             const skip = (page - 1) * limit;
-            const sortObject: any = {};
-            sortObject[sortBy] = sortOrder === 'desc' ? -1 : 1;
+            const normalizedSortOrder = sortOrder === 'asc' ? 1 : -1;
 
             // Build aggregation pipeline
             const pipeline = [
@@ -120,7 +152,10 @@ export class StaffApplicationsController {
                             $concat: ['$user.firstName', ' ', '$user.lastName']
                         },
                         email: '$user.email',
-                        programName: '$program.name'
+                        programName: '$program.name',
+                        hasJambScore: {
+                            $cond: [{ $ne: ['$jambScore', null] }, 1, 0]
+                        }
                     }
                 }
             ];
@@ -144,8 +179,22 @@ export class StaffApplicationsController {
             const total = totalResult.length > 0 ? totalResult[0].total : 0;
 
             // Add sorting and pagination
+            const sortStage = sortBy === 'jambScore'
+                ? {
+                    $sort: {
+                        hasJambScore: -1,
+                        jambScore: normalizedSortOrder,
+                        createdAt: -1,
+                    }
+                }
+                : {
+                    $sort: {
+                        [sortBy]: normalizedSortOrder,
+                    }
+                };
+
             pipeline.push(
-                { $sort: sortObject } as any,
+                sortStage as any,
                 { $skip: skip } as any,
                 { $limit: parseInt(limit.toString()) } as any
             );
@@ -162,6 +211,9 @@ export class StaffApplicationsController {
                     status: 1,
                     admissionDecision: 1,
                     currentStage: 1,
+                    isJambExempt: 1,
+                    jambRegistrationNumber: 1,
+                    jambScore: 1,
                     entranceExam: 1,
                     screening: 1,
                     entryAcademicSession: 1,
@@ -173,6 +225,18 @@ export class StaffApplicationsController {
             } as any);
 
             const applications = await this.applicationModel.aggregate(pipeline);
+
+            const enrichedApplications = await Promise.all(
+                applications.map(async application => {
+                    const { currentStage, admissionFlow } = await this.getApplicationAdmissionFlow(application);
+
+                    return {
+                        ...application,
+                        currentStage,
+                        admissionFlow,
+                    };
+                }),
+            );
 
             const totalPages = Math.ceil(total / limit);
 
@@ -186,7 +250,7 @@ export class StaffApplicationsController {
             return {
                 success: true,
                 data: {
-                    applications,
+                    applications: enrichedApplications,
                     pagination: {
                         currentPage: parseInt(page.toString()),
                         totalPages,
@@ -229,10 +293,11 @@ export class StaffApplicationsController {
 
             const application = await this.applicationModel
                 .findById(id)
-                .populate('userId', 'firstName lastName email')
+                .populate('userId', 'firstName lastName otherName email role')
                 .populate('programId', 'name code')
                 .populate('programTypeId', 'name')
                 .populate('programModeId', 'name')
+                .populate('entryAcademicSession', 'sessionYear')
                 .exec();
 
             if (!application) {
@@ -245,11 +310,37 @@ export class StaffApplicationsController {
                 );
             }
 
+            const { currentStage, admissionFlow } = await this.getApplicationAdmissionFlow(application);
+            const userId = this.extractEntityId(application.userId);
+            const applicationId = this.extractEntityId(application._id);
+            const academicSessionId = this.extractEntityId(application.entryAcademicSession);
+            const paymentHistory = userId
+                ? await this.paymentsService.getLinkedPaymentsForStaffReview(userId, {
+                    applicationId,
+                    academicSessionId,
+                })
+                : {
+                    payments: [],
+                    totalCount: 0,
+                    totalPaid: 0,
+                    successfulCount: 0,
+                    pendingCount: 0,
+                    failedCount: 0,
+                    cancelledCount: 0,
+                };
+
             this.logger.log('Application details retrieved successfully:', application._id);
 
             return {
                 success: true,
-                data: { application }
+                data: {
+                    application: {
+                        ...application.toObject(),
+                        currentStage,
+                        admissionFlow,
+                    },
+                    paymentHistory,
+                }
             };
 
         } catch (error) {
@@ -429,6 +520,17 @@ export class StaffApplicationsController {
                 );
             }
 
+            const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
+                application.entryAcademicSession,
+            );
+
+            if (!admissionFlow.entranceExamEnabled) {
+                throw new HttpException(
+                    { success: false, message: 'Entrance exam is disabled for this academic session' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
             // Update application with exam details using grouped structure
             application.entranceExam = {
                 date: new Date(examData.examDate),
@@ -494,6 +596,24 @@ export class StaffApplicationsController {
                 );
             }
 
+            const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
+                application.entryAcademicSession,
+            );
+
+            if (!admissionFlow.screeningEnabled) {
+                throw new HttpException(
+                    { success: false, message: 'Screening is disabled for this academic session' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            if (application.admissionDecision !== AdmissionDecision.GRANTED) {
+                throw new HttpException(
+                    { success: false, message: 'Admission must be granted before screening can be scheduled' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
             // Update application with screening details using grouped structure
             application.screening = {
                 date: new Date(screeningData.screeningDate),
@@ -501,7 +621,7 @@ export class StaffApplicationsController {
                 venue: screeningData.venue,
                 completed: false
             };
-            application.currentStage = 5; // Move to screening stage
+            application.currentStage = 6; // Move to screening stage
 
             await application.save();
 
@@ -542,6 +662,7 @@ export class StaffApplicationsController {
         @Param('id') id: string,
         @Body() decisionData: {
             decision: 'admitted' | 'rejected';
+            sendProvisionalOffer?: boolean;
             reason?: string;
         }
     ) {
@@ -562,6 +683,10 @@ export class StaffApplicationsController {
                 );
             }
 
+            const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
+                application.entryAcademicSession,
+            );
+
             // Update application with admission decision using correct enum
             const decisionMapping = {
                 'admitted': AdmissionDecision.GRANTED,
@@ -572,13 +697,18 @@ export class StaffApplicationsController {
             if (decisionData.reason) {
                 application.rejectionReason = decisionData.reason;
             }
+            if (decisionData.decision !== 'rejected') {
+                application.rejectionReason = undefined;
+            }
 
             if (decisionData.decision === 'admitted') {
-                application.status = ApplicationStatus.ADMITTED;
-                application.currentStage = 7; // Move to acceptance fee stage
+                application.status = admissionFlow.screeningEnabled
+                    ? ApplicationStatus.PENDING
+                    : ApplicationStatus.ADMITTED;
+                application.currentStage = admissionFlow.screeningEnabled ? 6 : 7;
                 application.admissionDate = new Date();
+                const shouldSendProvisionalOffer = decisionData.sendProvisionalOffer === true;
 
-                // Generate admission letter PDF
                 const user = application.userId as any;
                 const program = application.programId as any;
                 const programType = application.programTypeId as any;
@@ -608,11 +738,12 @@ export class StaffApplicationsController {
                 const programTypeCode = programType?.type || programType?.code || programType?.name || '';
                 const programName = program?.name || '';
 
-                this.logger.log('Generating admission letter PDF for:', {
+                this.logger.log('Preparing admission decision email for:', {
                     student: user.firstName,
                     program: programName,
                     programType: programTypeCode,
                     session: academicSessionName,
+                    sendProvisionalOffer: shouldSendProvisionalOffer,
                     rawSessionData: JSON.stringify(academicSession),
                     programTypeObject: JSON.stringify(programType),
                     programObject: JSON.stringify(program)
@@ -634,102 +765,104 @@ export class StaffApplicationsController {
                     );
                 }
 
-                // Fetch acceptance fee from database
-                let acceptanceFeeInWords = '';
-                let acceptanceFeeAmount = '';
+                if (shouldSendProvisionalOffer) {
+                    let acceptanceFeeInWords = '';
+                    let acceptanceFeeAmount = '';
 
-                try {
-                    const acceptanceFeePayment = await this.paymentModel.findOne({
-                        paymentCode: 'acceptanceFee',
-                        active: true
+                    try {
+                        const acceptanceFeePayment = await this.paymentModel.findOne({
+                            paymentCode: 'acceptanceFee',
+                            active: true
+                        });
+
+                        if (acceptanceFeePayment) {
+                            acceptanceFeeAmount = acceptanceFeePayment.amount.toLocaleString('en-NG', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                            });
+                            acceptanceFeeInWords = this.numberToWords(acceptanceFeePayment.amount);
+
+                            this.logger.log('Acceptance fee fetched from database:', {
+                                amount: acceptanceFeePayment.amount,
+                                formatted: acceptanceFeeAmount,
+                                inWords: acceptanceFeeInWords
+                            });
+                        } else {
+                            this.logger.warn('Acceptance fee not found in database, using default values');
+                        }
+                    } catch (feeError) {
+                        this.logger.error('Error fetching acceptance fee:', feeError.message);
+                    }
+
+                    const folderIdentifier = application.applicationNumber || application._id.toString();
+
+                    const pdfBuffer = await this.admissionLetterPdfService.generateAdmissionLetter({
+                        studentFirstName: user.firstName || '',
+                        studentFullName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+                        programName: programName,
+                        programType: programTypeCode,
+                        academicSession: academicSessionName,
+                        acceptanceFee: acceptanceFeeInWords,
+                        acceptanceFeeAmount: acceptanceFeeAmount,
+                        admissionDate: new Date()
                     });
 
-                    if (acceptanceFeePayment) {
-                        acceptanceFeeAmount = acceptanceFeePayment.amount.toLocaleString('en-NG', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                        });
-                        // Convert number to words (simplified - you may want a proper library)
-                        acceptanceFeeInWords = this.numberToWords(acceptanceFeePayment.amount);
+                    this.logger.log('Provisional offer PDF generated successfully');
 
-                        this.logger.log('Acceptance fee fetched from database:', {
-                            amount: acceptanceFeePayment.amount,
-                            formatted: acceptanceFeeAmount,
-                            inWords: acceptanceFeeInWords
+                    const timestamp = Date.now();
+                    const pdfFileName = `provisional_offer_${timestamp}.pdf`;
+
+                    try {
+                        const mockFile = {
+                            buffer: pdfBuffer,
+                            originalname: pdfFileName,
+                            mimetype: 'application/pdf',
+                            size: pdfBuffer.length
+                        } as Express.Multer.File;
+
+                        const uploadResult = await this.uploadService.uploadToSpaces(
+                            mockFile,
+                            folderIdentifier,
+                            'admission_letter',
+                            false
+                        );
+
+                        this.logger.log('Provisional offer PDF uploaded to Spaces:', {
+                            url: uploadResult.url,
+                            key: uploadResult.key,
+                            folder: folderIdentifier
                         });
-                    } else {
-                        this.logger.warn('Acceptance fee not found in database, using default values');
+
+                        application.admissionLetter = uploadResult.url;
+
+                    } catch (uploadError) {
+                        this.logger.error('Failed to upload provisional offer PDF to Spaces:', uploadError.message);
                     }
-                } catch (feeError) {
-                    this.logger.error('Error fetching acceptance fee:', feeError.message);
-                    // Continue with default values
-                }
 
-                // Always use application number for folder structure (not matric number which has slashes)
-                const folderIdentifier = application.applicationNumber || application._id.toString();
-
-                const pdfBuffer = await this.admissionLetterPdfService.generateAdmissionLetter({
-                    studentFirstName: user.firstName || '',
-                    studentFullName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-                    programName: programName,
-                    programType: programTypeCode,
-                    academicSession: academicSessionName,
-                    acceptanceFee: acceptanceFeeInWords,
-                    acceptanceFeeAmount: acceptanceFeeAmount,
-                    admissionDate: new Date()
-                });
-
-                this.logger.log('Admission letter PDF generated successfully');
-
-                // Upload PDF to DigitalOcean Spaces
-                const timestamp = Date.now();
-                const pdfFileName = `admission_letter_${timestamp}.pdf`;
-
-                try {
-                    // Create a mock file object for the upload service
-                    const mockFile = {
-                        buffer: pdfBuffer,
-                        originalname: pdfFileName,
-                        mimetype: 'application/pdf',
-                        size: pdfBuffer.length
-                    } as Express.Multer.File;
-
-                    // Upload to Spaces in the student's application folder
-                    // Path will be: applications/{applicationNumber}/admission_letter_{timestamp}.pdf
-                    const uploadResult = await this.uploadService.uploadToSpaces(
-                        mockFile,
-                        folderIdentifier,
-                        'admission_letter',
-                        false // Not temp, save to final location
+                    await this.emailService.sendAdmissionLetterEmail(
+                        user.email,
+                        user.firstName,
+                        pdfBuffer,
+                        programName,
+                        academicSessionName
                     );
 
-                    this.logger.log('Admission letter PDF uploaded to Spaces:', {
-                        url: uploadResult.url,
-                        key: uploadResult.key,
-                        folder: folderIdentifier
-                    });
+                    this.logger.log('Admission email with provisional offer sent successfully');
+                } else {
+                    application.admissionLetter = undefined;
 
-                    // Store the PDF URL in the application
-                    application.admissionLetter = uploadResult.url;
+                    await this.emailService.sendAdmissionOfferEmail(
+                        user.email,
+                        user.firstName,
+                        programName,
+                        academicSessionName
+                    );
 
-                } catch (uploadError) {
-                    this.logger.error('Failed to upload PDF to Spaces:', uploadError.message);
-                    // Continue anyway - email will still have the PDF attached
+                    this.logger.log('Admission email sent successfully without provisional offer');
                 }
-
-                // Send admission email with PDF attachment
-                await this.emailService.sendAdmissionLetterEmail(
-                    user.email,
-                    user.firstName,
-                    pdfBuffer,
-                    programName,
-                    academicSessionName
-                );
-
-                this.logger.log('Admission email with PDF sent successfully');
             } else {
                 application.status = ApplicationStatus.REJECTED;
-                application.currentStage = 6; // Stay at admission decision stage but mark as rejected
+                application.currentStage = 5; // Stay at admission decision stage but mark as rejected
 
                 // Send rejection email
                 await this.emailService.sendRejectionEmail(
@@ -786,6 +919,17 @@ export class StaffApplicationsController {
                 );
             }
 
+            const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
+                application.entryAcademicSession,
+            );
+
+            if (!admissionFlow.entranceExamEnabled) {
+                throw new HttpException(
+                    { success: false, message: 'Entrance exam is disabled for this academic session' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
             // Update exam score using grouped structure
             if (!application.entranceExam) {
                 throw new HttpException(
@@ -797,7 +941,9 @@ export class StaffApplicationsController {
             application.entranceExam.score = scoreData.score;
 
             if (scoreData.passed) {
-                application.currentStage = 5; // Move to screening stage if passed
+                application.currentStage = await this.sessionControlsService.getNextStageAfterExam(
+                    application.entryAcademicSession,
+                );
             } else {
                 application.status = ApplicationStatus.REJECTED;
                 application.admissionDecision = AdmissionDecision.DENIED;
@@ -843,13 +989,32 @@ export class StaffApplicationsController {
                 );
             }
 
+            const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
+                application.entryAcademicSession,
+            );
+
+            if (!admissionFlow.screeningEnabled) {
+                throw new HttpException(
+                    { success: false, message: 'Screening is disabled for this academic session' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            if (application.admissionDecision !== AdmissionDecision.GRANTED) {
+                throw new HttpException(
+                    { success: false, message: 'Admission must be granted before screening can be completed' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
             // Update screening completion status using grouped structure
             if (!application.screening) {
                 application.screening = { completed: true };
             } else {
                 application.screening.completed = true;
             }
-            application.currentStage = 6; // Move to admission decision stage
+            application.status = ApplicationStatus.ADMITTED;
+            application.currentStage = 7; // Move to acceptance fee stage
             await application.save();
 
             this.logger.log('Screening marked as completed for application:', id);

@@ -4,6 +4,7 @@ import { logger } from '@shared/utils/logger'
 import AcademicSessions from './components/AcademicSessions.vue'
 import Departments from './components/Departments.vue'
 import Programs from './components/Programs.vue'
+import Courses from './components/Courses.vue'
 import Payments from './components/Payments.vue'
 
 export default {
@@ -12,6 +13,7 @@ export default {
     AcademicSessions,
     Departments,
     Programs,
+    Courses,
     Payments
   },
   setup() {
@@ -116,9 +118,10 @@ export default {
           </li>
           <li class="nav-item" role="presentation">
             <button
-              class="nav-link disabled"
+              class="nav-link"
+              :class="{ active: activeTab === 'courses' }"
+              @click="setActiveTab('courses')"
               type="button"
-              disabled
             >
               <i class="bi bi-journal-text me-2"></i>Courses
             </button>
@@ -164,6 +167,14 @@ export default {
         :class="{ 'show active': activeTab === 'programs' }"
       >
         <Programs @refresh="refreshCurrentTab" />
+      </div>
+
+      <div
+        v-show="activeTab === 'courses'"
+        class="tab-pane fade"
+        :class="{ 'show active': activeTab === 'courses' }"
+      >
+        <Courses @refresh="refreshCurrentTab" />
       </div>
 
       <!-- Payments Tab -->

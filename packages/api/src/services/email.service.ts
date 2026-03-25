@@ -95,8 +95,7 @@ export class EmailService {
         for (const attachment of mailOptions.attachments) {
           messageParts.push(`--${boundary}`);
           messageParts.push(
-            `Content-Type: ${
-              attachment.contentType || "application/octet-stream"
+            `Content-Type: ${attachment.contentType || "application/octet-stream"
             }; name="${attachment.filename}"`
           );
           messageParts.push("Content-Transfer-Encoding: base64");
@@ -532,10 +531,10 @@ export class EmailService {
     const mailOptions = {
       from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: "Congratulations! Admission Offer - Alebiosu College of Nursing",
+      subject: "Congratulations! Provisional Offer of Admission - Alebiosu College of Nursing",
       attachments: [
         {
-          filename: `Admission_Letter_${firstName.replace(/\s+/g, "_")}.pdf`,
+          filename: `Provisional_Offer_of_Admission_${firstName.replace(/\s+/g, "_")}.pdf`,
           content: pdfBuffer,
           contentType: "application/pdf",
         },
@@ -546,7 +545,7 @@ export class EmailService {
                 <head>
                     <meta charset="utf-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Admission Offer</title>
+                    <title>Provisional Offer of Admission</title>
                     <style>
                         body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
                         .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
@@ -565,20 +564,20 @@ export class EmailService {
                         
                         <div class="celebration">
                             <h2>Dear ${firstName},</h2>
-                            <p><strong>We are delighted to offer you admission to Alebiosu College of Nursing for the ${academicSession} Academic Session!</strong></p>
+                            <p><strong>We are delighted to offer you provisional admission to Alebiosu College of Nursing for the ${academicSession} Academic Session!</strong></p>
                         </div>
                         
                         <p>After careful review of your application and your performance in our entrance examination, we are pleased to inform you that you have been selected to join our prestigious <strong>${programName}</strong> programme.</p>
                         
                         <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                            <p style="margin: 0;"><strong>📎 Your Official Admission Letter is attached to this email.</strong></p>
-                            <p style="margin: 5px 0 0 0; font-size: 14px; color: #856404;">Please download, print, and keep it safe. You will need to present it during registration.</p>
+                            <p style="margin: 0;"><strong>📎 Your Provisional Offer of Admission is attached to this email.</strong></p>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; color: #856404;">Please download and keep it safe for your records. JAMB will communicate the official admission letter directly to admitted candidates.</p>
                         </div>
                         
                         <div class="next-steps">
                             <h3>📋 Next Steps:</h3>
                             <ol>
-                                <li><strong>Download and Print your admission letter</strong> (attached to this email)</li>
+                              <li><strong>Download and keep your provisional offer</strong> (attached to this email)</li>
                                 <li><strong>Pay Acceptance Fee</strong> - Confirm your acceptance within 4 days</li>
                                 <li><strong>Pay Sundry Fees</strong> - Administrative charges</li>
                                 <li><strong>Pay School Fees</strong> - Tuition and accommodation</li>
@@ -610,6 +609,86 @@ export class EmailService {
         `Failed to send admission letter email to ${email}:`,
         error
       );
+      throw error;
+    }
+  }
+
+  async sendAdmissionOfferEmail(
+    email: string,
+    firstName: string,
+    programName: string,
+    academicSession: string
+  ): Promise<void> {
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Congratulations! Admission Offer - Alebiosu College of Nursing",
+      html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Admission Offer</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
+                        .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
+                        .header { background-color: #28a745; color: white; text-align: center; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }
+                        .celebration { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: center; }
+                        .next-steps { background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0; }
+                        .notice { background-color: #e2f0ff; border: 1px solid #b6d4fe; color: #084298; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>🎉 CONGRATULATIONS! 🎉</h1>
+                            <h2>You've been admitted!</h2>
+                        </div>
+
+                        <div class="celebration">
+                            <h2>Dear ${firstName},</h2>
+                            <p><strong>We are delighted to offer you admission to Alebiosu College of Nursing for the ${academicSession} Academic Session!</strong></p>
+                        </div>
+
+                        <p>After careful review of your application, we are pleased to inform you that you have been selected to join our prestigious <strong>${programName}</strong> programme.</p>
+
+                        <div class="notice">
+                            <p style="margin: 0;"><strong>JAMB will communicate the official admission letter directly to admitted candidates.</strong></p>
+                            <p style="margin: 8px 0 0 0;">Please monitor your JAMB CAPS/admission channels for the official admission letter update.</p>
+                        </div>
+
+                        <div class="next-steps">
+                            <h3>📋 Next Steps:</h3>
+                            <ol>
+                                <li><strong>Pay Acceptance Fee</strong> - Confirm your acceptance within 4 days</li>
+                                <li><strong>Pay Sundry Fees</strong> - Administrative charges</li>
+                                <li><strong>Pay School Fees</strong> - Tuition and accommodation</li>
+                                <li><strong>Complete Registration</strong> - Finalize your enrollment</li>
+                            </ol>
+                        </div>
+
+                        <p><strong>Important:</strong> You have 14 days to accept this offer by paying the acceptance fee. Failure to do so may result in the offer being withdrawn.</p>
+
+                        <p>Welcome to the ALECONS family! We look forward to supporting you on your journey to becoming a professional nurse.</p>
+
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
+                            <p><strong>Alebiosu College of Nursing Services</strong><br>
+                            Omuo Oke, Ekiti State, Nigeria<br>
+                            Email: admissions@alecons.edu.ng<br>
+                            Phone: +234 708 460 1610</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `,
+    };
+
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Admission offer email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send admission offer email to ${email}:`, error);
       throw error;
     }
   }
@@ -652,11 +731,10 @@ export class EmailService {
                             <p>After careful consideration of all applications, we regret to inform you that we are unable to offer you admission at this time.</p>
                         </div>
                         
-                        ${
-                          reason
-                            ? `<p><strong>Feedback:</strong> ${reason}</p>`
-                            : ""
-                        }
+                        ${reason
+          ? `<p><strong>Feedback:</strong> ${reason}</p>`
+          : ""
+        }
                         
                         <div class="encouragement">
                             <h4>We encourage you to:</h4>
@@ -838,10 +916,9 @@ export class EmailService {
                             <h3><strong>${examTitle}</strong></h3>
                             <p><strong>📅 Date & Time:</strong> ${examDateTime}</p>
                             <p><strong>⏱️ Duration:</strong> ${examDuration} minutes</p>
-                            <p><strong>👥 Target Audience:</strong> ${
-                              targetType.charAt(0).toUpperCase() +
-                              targetType.slice(1)
-                            }</p>
+                            <p><strong>👥 Target Audience:</strong> ${targetType.charAt(0).toUpperCase() +
+        targetType.slice(1)
+        }</p>
                         </div>
 
                         <div class="alert">
@@ -855,9 +932,8 @@ export class EmailService {
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${
-                              process.env.FRONTEND_URL
-                            }/dashboard" class="btn">Access Portal</a>
+                            <a href="${process.env.FRONTEND_URL
+        }/dashboard" class="btn">Access Portal</a>
                         </div>
                         
                         <p>If you have any questions about this exam, please contact the administration office.</p>
@@ -969,18 +1045,16 @@ export class EmailService {
                                 <li><strong>Keep this password confidential</strong> - do not share with anyone</li>
                                 <li>You will need this password to start your exam</li>
                                 <li>Copy this password or write it down safely</li>
-                                <li>${
-                                  isRegenerated
-                                    ? "Any previous passwords are now invalid"
-                                    : "This password is only valid for this exam"
-                                }</li>
+                                <li>${isRegenerated
+          ? "Any previous passwords are now invalid"
+          : "This password is only valid for this exam"
+        }</li>
                             </ul>
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${
-                              process.env.FRONTEND_URL
-                            }/dashboard" class="btn">Access Portal</a>
+                            <a href="${process.env.FRONTEND_URL
+        }/dashboard" class="btn">Access Portal</a>
                         </div>
                         
                         <p>If you have any issues accessing your exam, please contact the administration office immediately.</p>
@@ -1169,41 +1243,35 @@ export class EmailService {
                 <body>
                     <div class="container">
                         <div class="header">
-                            <h1>✅ Exam ${
-                              isAutoSubmitted
-                                ? "Auto-Submitted"
-                                : "Successfully Completed"
-                            }!</h1>
+                            <h1>✅ Exam ${isAutoSubmitted
+          ? "Auto-Submitted"
+          : "Successfully Completed"
+        }!</h1>
                         </div>
                         
                         <div class="success">
-                            <h2>🎉 ${
-                              isAutoSubmitted ? "Time's Up!" : "Congratulations"
-                            } ${firstName}!</h2>
-                            <p>${
-                              isAutoSubmitted
-                                ? "Your exam time has expired and has been automatically submitted for grading."
-                                : "You have successfully completed your exam."
-                            }</p>
+                            <h2>🎉 ${isAutoSubmitted ? "Time's Up!" : "Congratulations"
+        } ${firstName}!</h2>
+                            <p>${isAutoSubmitted
+          ? "Your exam time has expired and has been automatically submitted for grading."
+          : "You have successfully completed your exam."
+        }</p>
                         </div>
                         
                         <div class="exam-details">
                             <h3><strong>${examTitle}</strong></h3>
-                            <p><strong>📅 ${
-                              isAutoSubmitted
-                                ? "Auto-Submitted On:"
-                                : "Submitted On:"
-                            }</strong> ${submissionDateTime}</p>
-                            ${
-                              isAutoSubmitted
-                                ? "<p><strong>⏰ Reason:</strong> Exam time limit reached</p>"
-                                : ""
-                            }
+                            <p><strong>📅 ${isAutoSubmitted
+          ? "Auto-Submitted On:"
+          : "Submitted On:"
+        }</strong> ${submissionDateTime}</p>
+                            ${isAutoSubmitted
+          ? "<p><strong>⏰ Reason:</strong> Exam time limit reached</p>"
+          : ""
+        }
                         </div>
 
-                        ${
-                          showScore
-                            ? `
+                        ${showScore
+          ? `
                         <div class="score-box">
                             <h3>📊 Your Score</h3>
                             <p style="font-size: 20px; font-weight: bold; color: #856404;">
@@ -1211,44 +1279,39 @@ export class EmailService {
                             </p>
                         </div>
                         `
-                            : ""
-                        }
+          : ""
+        }
 
                         <div class="info">
                             <p><strong>📋 What's Next?</strong></p>
                             <ul>
-                                ${
-                                  isAutoSubmitted
-                                    ? "<li>Don't worry - all your answered questions have been saved</li>"
-                                    : ""
-                                }
-                                <li>${
-                                  showScore
-                                    ? "Your results have been automatically graded"
-                                    : "Your exam is being reviewed and graded"
-                                }</li>
+                                ${isAutoSubmitted
+          ? "<li>Don't worry - all your answered questions have been saved</li>"
+          : ""
+        }
+                                <li>${showScore
+          ? "Your results have been automatically graded"
+          : "Your exam is being reviewed and graded"
+        }</li>
                                 <li>You will be notified once final results are published</li>
                                 <li>Check your dashboard regularly for updates</li>
                                 <li>Keep this email as confirmation of your submission</li>
-                                ${
-                                  isAutoSubmitted
-                                    ? "<li>If you have any concerns, please contact our support team</li>"
-                                    : ""
-                                }
+                                ${isAutoSubmitted
+          ? "<li>If you have any concerns, please contact our support team</li>"
+          : ""
+        }
                             </ul>
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${
-                              process.env.FRONTEND_URL
-                            }/dashboard" class="btn">View Dashboard</a>
+                            <a href="${process.env.FRONTEND_URL
+        }/dashboard" class="btn">View Dashboard</a>
                         </div>
                         
-                        <p>${
-                          isAutoSubmitted
-                            ? "Thank you for your participation. Even though time ran out, your answers have been safely submitted for grading."
-                            : "Thank you for taking the exam. We wish you the best of luck with your results!"
-                        }</p>
+                        <p>${isAutoSubmitted
+          ? "Thank you for your participation. Even though time ran out, your answers have been safely submitted for grading."
+          : "Thank you for taking the exam. We wish you the best of luck with your results!"
+        }</p>
                         
                         <div class="footer">
                             <p><strong>Alebiosu College of Nursing Services</strong><br>
@@ -1422,15 +1485,14 @@ export class EmailService {
                         <div style="margin: 30px 0;">
                             <h4 style="color: #333333; margin: 0 0 15px 0; font-size: 18px;">What's Next?</h4>
                             <ul style="color: #666666; line-height: 1.6; padding-left: 20px; margin: 0;">
-                                ${
-                                  status === "pass"
-                                    ? `<li>Continue to the next phase of your academic journey</li>
+                                ${status === "pass"
+          ? `<li>Continue to the next phase of your academic journey</li>
                                        <li>Check your student portal for any additional requirements</li>
                                        <li>Contact the academic office if you have any questions</li>`
-                                    : `<li>Review the exam material for areas of improvement</li>
+          : `<li>Review the exam material for areas of improvement</li>
                                        <li>Contact your instructor for additional guidance</li>
                                        <li>Check if retake opportunities are available</li>`
-                                }
+        }
                             </ul>
                         </div>
 
@@ -1518,9 +1580,8 @@ export class EmailService {
                                 <h3>Your Login Credentials:</h3>
                                 <p><strong>Email:</strong> ${email}</p>
                                 <p><strong>Password:</strong> ${password}</p>
-                                <p><strong>Portal URL:</strong> ${
-                                  process.env.STAFF_PORTAL_URL
-                                }/staff</p>
+                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL
+          }/staff</p>
                             </div>
                             
                             <div class="warning">
@@ -1607,10 +1668,9 @@ export class EmailService {
                                 <p><strong>Staff ID:</strong> ${staffId}</p>
                                 <p><strong>Email:</strong> ${email}</p>
                                 <p><strong>Password:</strong> ${password}</p>
-                                <p><strong>Portal URL:</strong> ${
-                                  process.env.STAFF_PORTAL_URL ||
-                                  process.env.FRONTEND_URL
-                                }/staff</p>
+                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL ||
+          process.env.FRONTEND_URL
+          }/staff</p>
                             </div>
                             
                             <div class="warning">
@@ -1706,10 +1766,9 @@ export class EmailService {
                             <p>If you did not request this password reset or have any concerns about your account security, please contact the IT department immediately.</p>
                             
                             <p><strong>Portal Access:</strong><br>
-                            ${
-                              process.env.APPLICATION_PORTAL_URL ||
-                              process.env.FRONTEND_URL
-                            }</p>
+                            ${process.env.APPLICATION_PORTAL_URL ||
+          process.env.FRONTEND_URL
+          }</p>
                             
                             <div class="footer">
                                 <p><strong>Important:</strong> Delete this email after changing your password.</p>
@@ -1771,17 +1830,17 @@ export class EmailService {
                             
                             <div class="timestamp">
                                 <strong>Change Date & Time:</strong> ${new Date().toLocaleString(
-                                  "en-GB",
-                                  {
-                                    timeZone: "Africa/Lagos",
-                                    year: "numeric",
-                                    month: "long",
-                                    day: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    second: "2-digit",
-                                  }
-                                )} (WAT)
+          "en-GB",
+          {
+            timeZone: "Africa/Lagos",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }
+        )} (WAT)
                             </div>
                             
                             <div class="security-info">
@@ -1807,12 +1866,10 @@ export class EmailService {
                             </div>
                             
                             <p><strong>Portal Access:</strong><br>
-                            <a href="${
-                              process.env.STUDENT_PORTAL_URL ||
-                              process.env.FRONTEND_URL
-                            }">${
-          process.env.STUDENT_PORTAL_URL || process.env.FRONTEND_URL
-        }</a></p>
+                            <a href="${process.env.STUDENT_PORTAL_URL ||
+          process.env.FRONTEND_URL
+          }">${process.env.STUDENT_PORTAL_URL || process.env.FRONTEND_URL
+          }</a></p>
                             
                             <div class="footer">
                                 <p><strong>Security Tip:</strong> Keep your password secure and never share it with anyone.</p>

@@ -16,20 +16,7 @@ export default {
     };
   },
   data() {
-    return {
-      stages: [
-        "Registration",
-        "Form Fee",
-        "Application Form",
-        "Entrance Exam",
-        "Screening",
-        "Admission Decision",
-        "Acceptance Fee",
-        "Sundry Fee",
-        "School Fees",
-        "Completed",
-      ],
-    };
+    return {};
   },
   mounted() {
     // Log dashboard access
@@ -63,6 +50,102 @@ export default {
     }
   },
   computed: {
+    admissionFlow() {
+      return this.application?.admissionFlow || {
+        entranceExamEnabled: true,
+        screeningEnabled: true,
+      };
+    },
+    allStageDefinitions() {
+      return [
+        {
+          stage: 1,
+          label: "Registration",
+          title: "Verify Email Address",
+          description: "Check your email and click the verification link",
+          paymentStage: false,
+        },
+        {
+          stage: 2,
+          label: "Form Fee",
+          title: "Pay Form Fee",
+          description: "Pay the application form fee to proceed",
+          paymentStage: true,
+        },
+        {
+          stage: 3,
+          label: "Application Form",
+          title: "Complete Application Form",
+          description: "Fill out your application details and upload documents",
+          paymentStage: false,
+        },
+        {
+          stage: 4,
+          label: "Entrance Exam",
+          title: "Await Entrance Exam Scheduling",
+          description: "Wait for admin to schedule your online entrance exam",
+          paymentStage: false,
+        },
+        {
+          stage: 5,
+          label: "Admission Decision",
+          title: "Await Admission Decision",
+          description: "Your application is under review for admission",
+          paymentStage: false,
+        },
+        {
+          stage: 6,
+          label: "Screening",
+          title: "Await Screening & Interview",
+          description: "Wait for physical screening and interview scheduling",
+          paymentStage: false,
+        },
+        {
+          stage: 7,
+          label: "Acceptance Fee",
+          title: "Pay Acceptance Fee",
+          description: "Pay acceptance fee to confirm your admission",
+          paymentStage: true,
+        },
+        {
+          stage: 8,
+          label: "Sundry Fee",
+          title: "Pay Sundry Fees",
+          description: "Pay administrative and sundry charges",
+          paymentStage: true,
+        },
+        {
+          stage: 9,
+          label: "School Fees",
+          title: "Pay School Fees",
+          description: "Pay tuition and other school fees",
+          paymentStage: true,
+        },
+        {
+          stage: 10,
+          label: "Completed",
+          title: "Application Complete",
+          description: "Welcome! Check your email for matriculation number and portal access details",
+          paymentStage: false,
+        },
+      ];
+    },
+    visibleStageDefinitions() {
+      return this.allStageDefinitions.filter((definition) => {
+        if (definition.stage === 4) {
+          return this.admissionFlow.entranceExamEnabled;
+        }
+
+        if (definition.stage === 6) {
+          return this.admissionFlow.screeningEnabled;
+        }
+
+        return true;
+      });
+    },
+    stages() {
+      return this.visibleStageDefinitions.map((definition) => definition.label);
+    },
     user() {
       return this.authStore.user;
     },
@@ -72,12 +155,26 @@ export default {
     isAuthenticated() {
       return this.authStore.isAuthenticated;
     },
-    progressPercent() {
-      return ((this.application?.currentStage) / (this.stages.length - 1)) * 100;
-    },
-
     currentStage() {
       return this.application?.currentStage;
+    },
+
+    currentVisibleStage() {
+      const currentStageIndex = this.visibleStageDefinitions.findIndex(
+        (definition) => definition.stage === this.currentStage,
+      );
+
+      if (currentStageIndex !== -1) {
+        return currentStageIndex + 1;
+      }
+
+      if (!this.currentStage) {
+        return 0;
+      }
+
+      return this.visibleStageDefinitions.filter(
+        (definition) => definition.stage < this.currentStage,
+      ).length + 1;
     },
 
     // Computed properties for BiodataCard data
@@ -118,70 +215,7 @@ export default {
 
     todos() {
       const currentStage = this.currentStage;
-      const stageDefinitions = [
-        {
-          stage: 1,
-          title: "Verify Email Address", 
-          description: "Check your email and click the verification link",
-          paymentStage: false
-        },
-        {
-          stage: 2,
-          title: "Pay Form Fee",
-          description: "Pay the application form fee to proceed",
-          paymentStage: true
-        },
-        {
-          stage: 3,
-          title: "Complete Application Form",
-          description: "Fill out your application details and upload documents",
-          paymentStage: false
-        },
-        {
-          stage: 4,
-          title: "Await Entrance Exam Scheduling",
-          description: "Wait for admin to schedule your online entrance exam",
-          paymentStage: false
-        },
-        {
-          stage: 5,
-          title: "Await Screening & Interview",
-          description: "Wait for physical screening and interview scheduling",
-          paymentStage: false
-        },
-        {
-          stage: 6,
-          title: "Await Admission Decision",
-          description: "Your application is under review for admission",
-          paymentStage: false
-        },
-        {
-          stage: 7,
-          title: "Pay Acceptance Fee",
-          description: "Pay acceptance fee to confirm your admission",
-          paymentStage: true
-        },
-        {
-          stage: 8,
-          title: "Pay Sundry Fees",
-          description: "Pay administrative and sundry charges",
-          paymentStage: true
-        },
-        {
-          stage: 9,
-          title: "Pay School Fees",
-          description: "Pay tuition and other school fees",
-          paymentStage: true
-        },
-        {
-          stage: 10,
-          title: "Application Complete",
-          description: "Welcome! Check your email for matriculation number and portal access details",
-          paymentStage: false
-        },
-      ];
-
-      return stageDefinitions.map(def => ({
+      return this.visibleStageDefinitions.map(def => ({
         stage: def.stage,
         title: def.title,
         description: def.description,
@@ -215,12 +249,12 @@ export default {
       }
 
       // Stages with exam/screening info available
-      if ([4, 5].includes(stage) && this.hasExamOrScreeningInfo) {
+      if ([4, 6].includes(stage) && this.hasExamOrScreeningInfo) {
         return {
           text: 'View Details',
           route: null,
           disabled: false,
-          variant: 'btn-info',
+          variant: 'btn-acon-primary',
           showModal: true
         };
       }
@@ -230,8 +264,8 @@ export default {
         const waitingMessages = {
           1: 'Check Your Email',
           4: 'Awaiting Exam Scheduling',
-          5: 'Awaiting Screening Schedule',
-          6: 'Awaiting Admission Decision'
+          5: 'Awaiting Admission Decision',
+          6: 'Awaiting Screening Schedule'
         };
 
         return {
@@ -362,7 +396,7 @@ export default {
         <ProgressCard
           class="mb-4"
           :stages="stages"
-          :currentStage="application?.currentStage || 0"
+          :currentStage="currentVisibleStage"
           :userName="user?.firstName || ''"
           :resumeConfig="resumeButtonConfig"
           @show-modal="showExamScreeningModal"

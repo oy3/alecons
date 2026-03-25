@@ -24,7 +24,7 @@ export class Program {
     programModeId: Types.ObjectId;
 
     @Prop({ required: true })
-    durationSemesters: number;
+    durationYears: number;
 
     @Prop({ default: true })
     active: boolean;

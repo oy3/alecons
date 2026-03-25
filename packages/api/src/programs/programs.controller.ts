@@ -29,7 +29,14 @@ export class ProgramsController {
         return this.programsService.createProgram(createProgramDto);
     }
 
-        @Get()
+    @Get('management')
+    @ApiOperation({ summary: 'Get programs for staff management' })
+    @ApiResponse({ status: 200, description: 'Programs retrieved successfully for management' })
+    async findProgramsForManagement(@Query() queryDto: QueryProgramsDto) {
+        return this.programsService.findProgramsForManagement(queryDto);
+    }
+
+    @Get()
     @Public()  // Make this public for registration access
     @ApiOperation({ summary: 'Get all programs' })
     @ApiResponse({ status: 200, description: 'Programs retrieved successfully' })

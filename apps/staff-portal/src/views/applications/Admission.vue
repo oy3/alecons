@@ -25,8 +25,8 @@ export default {
         2: "Form Fee Payment",
         3: "Application Form",
         4: "Entrance Exam",
-        5: "Screening & Interview",
-        6: "Admission Decision",
+        5: "Admission Decision",
+        6: "Screening & Interview",
         7: "Acceptance Fee Payment",
         8: "Sundry Fees Payment",
         9: "School Fees Payment",
@@ -269,7 +269,7 @@ export default {
         const params = {
           page: this.currentPage,
           limit: this.perPage,
-          sortBy: "createdAt",
+          sortBy: "jambScore",
           sortOrder: "desc",
           status: "pending", // Always filter for pending applications only
         };
@@ -295,8 +295,15 @@ export default {
             status: app.status,
             admissionDecision: app.admissionDecision,
             currentStage: app.currentStage,
+            isJambExempt: app.isJambExempt === true,
+            jambRegistrationNumber: app.jambRegistrationNumber,
+            jambScore: app.jambScore,
             entranceExam: app.entranceExam,
             screening: app.screening,
+            admissionFlow: app.admissionFlow || {
+              entranceExamEnabled: true,
+              screeningEnabled: true,
+            },
             entryAcademicSession: app.entryAcademicSession,
             profileImageUrl: app.profileImageUrl,
             submittedAt: app.createdAt,
@@ -345,6 +352,88 @@ export default {
 
     getStageName(stageNumber) {
       return this.stageNames[stageNumber] || "Unknown Stage";
+    },
+
+    isEntranceExamEnabled(application) {
+      return application?.admissionFlow?.entranceExamEnabled !== false;
+    },
+
+    isScreeningEnabled(application) {
+      return application?.admissionFlow?.screeningEnabled !== false;
+    },
+
+    canScheduleExam(application) {
+      return (
+        this.isEntranceExamEnabled(application) &&
+        application.currentStage === 4 &&
+        !application.entranceExam
+      );
+    },
+
+    canInputExamScore(application) {
+      return (
+        this.isEntranceExamEnabled(application) &&
+        application.currentStage === 4 &&
+        application.entranceExam &&
+        application.entranceExam.score === undefined
+      );
+    },
+
+    canScheduleScreening(application) {
+      return (
+        this.isScreeningEnabled(application) &&
+        application.currentStage === 6 &&
+        !application.screening
+      );
+    },
+
+    canCompleteScreening(application) {
+      return (
+        this.isScreeningEnabled(application) &&
+        application.currentStage === 6 &&
+        application.screening &&
+        !application.screening.completed
+      );
+    },
+
+    canMakeAdmissionDecision(application) {
+      return (
+        application.currentStage === 5 &&
+        application.admissionDecision === "pending"
+      );
+    },
+
+    getApplicantFullName(applicationDetails) {
+      const firstName = applicationDetails?.userId?.firstName || "";
+      const lastName = applicationDetails?.userId?.lastName || "";
+      const fullName = `${firstName} ${lastName}`.trim();
+      return fullName || "N/A";
+    },
+
+    getAcademicSessionLabel(applicationDetails) {
+      const session = applicationDetails?.entryAcademicSession;
+
+      if (!session) {
+        return "N/A";
+      }
+
+      if (typeof session === "string") {
+        return session;
+      }
+
+      return session.sessionYear || session.name || "N/A";
+    },
+
+    getDocumentUrl(document) {
+      if (!document) {
+        return null;
+      }
+
+      if (typeof document === "string") {
+        return document;
+      }
+
+      return document.url || null;
     },
 
     async viewApplication(application) {
@@ -552,7 +641,7 @@ export default {
       this.selectedApplication = application;
       this.decisionForm = {
         decision: "",
-        admissionLetterUrl: "",
+        sendProvisionalOffer: false,
         reason: "",
       };
       this.admissionDecisionModal.show();
@@ -566,7 +655,7 @@ export default {
           this.selectedApplication.id,
           {
             decision: this.decisionForm.decision,
-            admissionLetterUrl: this.decisionForm.admissionLetterUrl,
+            sendProvisionalOffer: this.decisionForm.sendProvisionalOffer,
             reason: this.decisionForm.reason,
           }
         );
@@ -575,7 +664,12 @@ export default {
           this.$swal.fire({
             icon: "success",
             title: "Decision Made",
-            text: `Student has been ${this.decisionForm.decision}. Email notification will be sent.`,
+            text:
+              this.decisionForm.decision === "admitted"
+                ? this.decisionForm.sendProvisionalOffer
+                  ? "Student admitted. Admission email and provisional offer have been sent."
+                  : "Student admitted. Admission email has been sent without provisional offer attachment."
+                : "Student rejected. Email notification has been sent.",
             confirmButtonColor: "#1a5f5f",
           });
 
@@ -767,6 +861,10 @@ export default {
                         Score: {{ application.entranceExam.score }}
                       </div>
                     </div>
+                    <small
+                      v-else-if="!isEntranceExamEnabled(application)"
+                      class="text-muted"
+                    >Skipped (Disabled)</small>
                     <small v-else class="text-muted">Not Scheduled</small>
                   </td>
                   <td>
@@ -782,6 +880,10 @@ export default {
                         Completed
                       </div>
                     </div>
+                    <small
+                      v-else-if="!isScreeningEnabled(application)"
+                      class="text-muted"
+                    >Skipped (Disabled)</small>
                     <small v-else class="text-muted">Not Scheduled</small>
                   </td>
                   <td>
@@ -810,7 +912,7 @@ export default {
                             <i class="bi bi-eye me-2"></i>View Details
                           </a>
                         </li>
-                        <li v-if="!application.entranceExam">
+                        <li v-if="canScheduleExam(application)">
                           <a
                             class="dropdown-item"
                             href="#"
@@ -820,12 +922,7 @@ export default {
                             Exam
                           </a>
                         </li>
-                        <li
-                          v-if="
-                            application.entranceExam &&
-                            application.entranceExam.score === undefined
-                          "
-                        >
+                        <li v-if="canInputExamScore(application)">
                           <a
                             class="dropdown-item"
                             href="#"
@@ -835,13 +932,7 @@ export default {
                             Score
                           </a>
                         </li>
-                        <li
-                          v-if="
-                            application.entranceExam &&
-                            application.entranceExam.score !== undefined &&
-                            !application.screening
-                          "
-                        >
+                        <li v-if="canScheduleScreening(application)">
                           <a
                             class="dropdown-item"
                             href="#"
@@ -851,12 +942,7 @@ export default {
                             Screening
                           </a>
                         </li>
-                        <li
-                          v-if="
-                            application.screening &&
-                            !application.screening.completed
-                          "
-                        >
+                        <li v-if="canCompleteScreening(application)">
                           <a
                             class="dropdown-item"
                             href="#"
@@ -866,13 +952,7 @@ export default {
                             Screening Complete
                           </a>
                         </li>
-                        <li
-                          v-if="
-                            application.screening &&
-                            application.screening.completed &&
-                            application.admissionDecision == 'pending'
-                          "
-                        >
+                        <li v-if="canMakeAdmissionDecision(application)">
                           <a
                             class="dropdown-item"
                             href="#"
@@ -1254,16 +1334,20 @@ export default {
               </div>
             </div>
             <div v-if="decisionForm.decision === 'admitted'" class="mb-3">
-              <label for="admissionLetterUrl" class="form-label"
-                >Admission Letter URL</label
-              >
-              <input
-                id="admissionLetterUrl"
-                v-model="decisionForm.admissionLetterUrl"
-                type="url"
-                class="form-control"
-                placeholder="https://portal.acon.edu.ng/admission-letters/..."
-              />
+              <div class="form-check">
+                <input
+                  id="sendProvisionalOffer"
+                  v-model="decisionForm.sendProvisionalOffer"
+                  class="form-check-input"
+                  type="checkbox"
+                />
+                <label class="form-check-label" for="sendProvisionalOffer">
+                  Generate and send <strong>PROVISIONAL OFFER OF ADMISSION</strong>
+                </label>
+              </div>
+              <small class="text-muted d-block mt-2">
+                If unchecked, the student will still receive the admission email, but without the provisional offer PDF attachment. JAMB will send the official admission letter directly.
+              </small>
             </div>
             <div v-if="decisionForm.decision === 'rejected'" class="mb-3">
               <label for="rejectionReason" class="form-label"
@@ -1383,17 +1467,13 @@ export default {
                     <div class="col-12">
                       <label class="form-label fw-semibold">Full Name</label>
                       <p class="form-control-plaintext">
-                        {{
-                          selectedApplicationDetails.userId?.firstName +
-                            " " +
-                            selectedApplicationDetails.userId?.lastName || "N/A"
-                        }}
+                        {{ getApplicantFullName(selectedApplicationDetails) }}
                       </p>
                     </div>
                     <div class="col-12">
                       <label class="form-label fw-semibold">Email</label>
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.userId.email || "N/A" }}
+                        {{ selectedApplicationDetails.userId?.email || "N/A" }}
                       </p>
                     </div>
                     <div class="col-12">
@@ -1451,7 +1531,7 @@ export default {
                         >Program Applied For</label
                       >
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.programId.name || "N/A" }}
+                        {{ selectedApplicationDetails.programId?.name || "N/A" }}
                       </p>
                     </div>
                     <div class="col-12">
@@ -1497,9 +1577,41 @@ export default {
                         >Academic Session</label
                       >
                       <p class="form-control-plaintext">
+                        {{ getAcademicSessionLabel(selectedApplicationDetails) }}
+                      </p>
+                    </div>
+                    <!-- <div class="col-6">
+                      <label class="form-label fw-semibold"
+                        >JAMB Requirement</label
+                      >
+                      <p class="form-control-plaintext">
                         {{
-                          selectedApplicationDetails.entryAcademicSession ||
-                          "N/A"
+                          selectedApplicationDetails.isJambExempt
+                            ? "Not a direct JAMB applicant"
+                            : "Direct JAMB applicant"
+                        }}
+                      </p>
+                    </div> -->
+                    <div class="col-6">
+                      <label class="form-label fw-semibold"
+                        >JAMB Registration Number</label
+                      >
+                      <p class="form-control-plaintext">
+                        {{
+                          selectedApplicationDetails.isJambExempt
+                            ? "Not applicable"
+                            : selectedApplicationDetails.jambRegistrationNumber ||
+                              "N/A"
+                        }}
+                      </p>
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label fw-semibold">JAMB Score</label>
+                      <p class="form-control-plaintext">
+                        {{
+                          selectedApplicationDetails.isJambExempt
+                            ? "Not applicable"
+                            : selectedApplicationDetails.jambScore ?? "N/A"
                         }}
                       </p>
                     </div>
@@ -1567,7 +1679,7 @@ export default {
                         >Emergency Contact Name</label
                       >
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.nextOfKin.name || "N/A" }}
+                        {{ selectedApplicationDetails.nextOfKin?.name || "N/A" }}
                       </p>
                     </div>
                     <div class="col-12">
@@ -1575,9 +1687,7 @@ export default {
                         >Emergency Contact Phone</label
                       >
                       <p class="form-control-plaintext">
-                        {{
-                          selectedApplicationDetails.nextOfKin.phone || "N/A"
-                        }}
+                        {{ selectedApplicationDetails.nextOfKin?.phone || "N/A" }}
                       </p>
                     </div>
                     <div class="col-12">
@@ -1586,7 +1696,7 @@ export default {
                       >
                       <p class="form-control-plaintext">
                         {{
-                          selectedApplicationDetails.nextOfKin.relationship ||
+                          selectedApplicationDetails.nextOfKin?.relationship ||
                           "N/A"
                         }}
                       </p>
@@ -1674,6 +1784,10 @@ export default {
                         </div>
                       </div>
                     </div>
+                    <p
+                      v-else-if="!isEntranceExamEnabled(selectedApplicationDetails)"
+                      class="text-muted"
+                    >Skipped for this session</p>
                     <p v-else class="text-muted">Not scheduled</p>
                   </div>
 
@@ -1733,6 +1847,10 @@ export default {
                         </div>
                       </div>
                     </div>
+                    <p
+                      v-else-if="!isScreeningEnabled(selectedApplicationDetails)"
+                      class="text-muted"
+                    >Skipped for this session</p>
                     <p v-else class="text-muted">Not scheduled</p>
                   </div>
                 </div>
@@ -1769,7 +1887,7 @@ export default {
                           >
                           <p class="mb-1">
                             <a
-                              :href="result"
+                              :href="getDocumentUrl(result)"
                               target="_blank"
                               class="text-decoration-none"
                             >
@@ -1806,7 +1924,7 @@ export default {
                           >
                           <p class="mb-1">
                             <a
-                              :href="letter"
+                              :href="getDocumentUrl(letter)"
                               target="_blank"
                               class="text-decoration-none"
                             >

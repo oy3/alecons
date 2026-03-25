@@ -381,7 +381,7 @@ class StaffApiService {
     // Program API methods
     async getPrograms(params = {}) {
         const queryString = new URLSearchParams(params).toString()
-        return this.makeRequest(`/programs${queryString ? `?${queryString}` : ''}`)
+        return this.makeRequest(`/programs/management${queryString ? `?${queryString}` : ''}`)
     }
 
     async getProgram(id) {
@@ -473,6 +473,61 @@ class StaffApiService {
     async toggleProgramModeStatus(id) {
         return this.makeRequest(`/programs/modes/${id}/toggle-status`, {
             method: 'PUT',
+        })
+    }
+
+    // Course Catalog API methods
+    async getCourseCatalog(params = {}) {
+        const queryString = new URLSearchParams(params).toString()
+        return this.makeRequest(`/courses/catalog${queryString ? `?${queryString}` : ''}`)
+    }
+
+    async getCourseCatalogOptions() {
+        return this.makeRequest('/courses/catalog/options')
+    }
+
+    async createCourse(courseData) {
+        return this.makeRequest('/courses/catalog', {
+            method: 'POST',
+            body: JSON.stringify(courseData),
+        })
+    }
+
+    async updateCourse(id, courseData) {
+        return this.makeRequest(`/courses/catalog/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(courseData),
+        })
+    }
+
+    async deleteCourse(id) {
+        return this.makeRequest(`/courses/catalog/${id}`, {
+            method: 'DELETE',
+        })
+    }
+
+    async getProgramCourses(params = {}) {
+        const queryString = new URLSearchParams(params).toString()
+        return this.makeRequest(`/courses/program-mappings${queryString ? `?${queryString}` : ''}`)
+    }
+
+    async createProgramCourse(programCourseData) {
+        return this.makeRequest('/courses/program-mappings', {
+            method: 'POST',
+            body: JSON.stringify(programCourseData),
+        })
+    }
+
+    async updateProgramCourse(id, programCourseData) {
+        return this.makeRequest(`/courses/program-mappings/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(programCourseData),
+        })
+    }
+
+    async deleteProgramCourse(id) {
+        return this.makeRequest(`/courses/program-mappings/${id}`, {
+            method: 'DELETE',
         })
     }
 

@@ -47,7 +47,7 @@ export default {
           programMode: program.programMode,
           programTypeId: program.programTypeId,
           programModeId: program.programModeId,
-          durationSemesters: program.durationSemesters,
+          durationYears: program.durationYears,
           active: program.active
         });
         
@@ -283,8 +283,8 @@ export default {
                     </select>
                   </div>
                   <div class="col-3">
-                    <label class="form-label small">Duration (Semesters)</label>
-                    <input type="number" class="form-control form-control-sm variant-duration" min="1" max="12" required>
+                    <label class="form-label small">Duration (Years)</label>
+                    <input type="number" class="form-control form-control-sm variant-duration" min="1" max="10" required>
                   </div>
                   <div class="col-2">
                     <label class="form-label small">Active</label>
@@ -330,7 +330,7 @@ export default {
                 </select>
               </div>
               <div class="col-3">
-                <input type="number" class="form-control form-control-sm variant-duration" min="1" max="12" required>
+                <input type="number" class="form-control form-control-sm variant-duration" min="1" max="10" required>
               </div>
               <div class="col-2">
                 <div class="form-check">
@@ -380,10 +380,10 @@ export default {
           for (let row of variantRows) {
             const programTypeId = row.querySelector('.variant-type').value;
             const programModeId = row.querySelector('.variant-mode').value;
-            const durationSemesters = parseInt(row.querySelector('.variant-duration').value);
+            const durationYears = parseInt(row.querySelector('.variant-duration').value);
             const active = row.querySelector('.variant-active').checked;
 
-            if (!programTypeId || !programModeId || !durationSemesters) {
+            if (!programTypeId || !programModeId || !durationYears) {
               this.$swal.showValidationMessage("Please fill in all variant fields");
               return false;
             }
@@ -391,7 +391,7 @@ export default {
             variants.push({
               programTypeId,
               programModeId,
-              durationSemesters,
+              durationYears,
               active
             });
           }
@@ -429,7 +429,7 @@ export default {
             description: programData.description,
             programTypeId: variant.programTypeId,
             programModeId: variant.programModeId,
-            durationSemesters: variant.durationSemesters,
+            durationYears: variant.durationYears,
             active: variant.active
           };
           
@@ -542,18 +542,18 @@ export default {
           <div class="row g-3 text-start">
             <div class="col-12">
               <label class="form-label">Department</label>
-              <select id="department" class="form-select" required>
+              <select id="department" class="form-select" required disabled>
                 <option value="">Select Department</option>
                 ${departmentOptions}
               </select>
             </div>
             <div class="col-12">
               <label class="form-label">Program Name</label>
-              <input id="programName" class="form-control" value="${programGroup.name}" required>
+              <input id="programName" class="form-control" value="${programGroup.name}" required disabled>
             </div>
             <div class="col-12">
               <label class="form-label">Description (Optional)</label>
-              <textarea id="description" class="form-control" rows="3">${programGroup.description || ""}</textarea>
+              <textarea id="description" class="form-control" rows="3" disabled>${programGroup.description || ""}</textarea>
             </div>
 
             <div class="col-12 d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
@@ -595,8 +595,8 @@ export default {
                       </select>
                     </div>
                     <div class="col-3">
-                      <label class="form-label small">Duration (Semesters)</label>
-                      <input type="number" class="form-control form-control-sm variant-duration" min="1" max="12" value="${variant.durationSemesters}" required>
+                      <label class="form-label small">Duration (Years)</label>
+                      <input type="number" class="form-control form-control-sm variant-duration" min="1" max="10" value="${variant.durationYears || ''}" required>
                     </div>
                     <div class="col-2">
                       <label class="form-label small">Active</label>
@@ -644,7 +644,7 @@ export default {
                 </select>
               </div>
               <div class="col-3">
-                <input type="number" class="form-control form-control-sm variant-duration" min="1" max="12" required>
+                <input type="number" class="form-control form-control-sm variant-duration" min="1" max="10" required>
               </div>
               <div class="col-2">
                 <div class="form-check">
@@ -694,11 +694,11 @@ export default {
           for (let row of variantRows) {
             const programTypeId = row.querySelector('.variant-type').value;
             const programModeId = row.querySelector('.variant-mode').value;
-            const durationSemesters = parseInt(row.querySelector('.variant-duration').value);
+            const durationYears = parseInt(row.querySelector('.variant-duration').value);
             const active = row.querySelector('.variant-active').checked;
             const variantId = row.getAttribute('data-variant-id'); // For existing variants
 
-            if (!programTypeId || !programModeId || !durationSemesters) {
+            if (!programTypeId || !programModeId || !durationYears) {
               this.$swal.showValidationMessage("Please fill in all variant fields");
               return false;
             }
@@ -707,7 +707,7 @@ export default {
               id: variantId, // Will be null for new variants
               programTypeId,
               programModeId,
-              durationSemesters,
+              durationYears,
               active
             });
           }
@@ -756,7 +756,7 @@ export default {
               description: programData.description,
               programTypeId: variant.programTypeId,
               programModeId: variant.programModeId,
-              durationSemesters: variant.durationSemesters,
+              durationYears: variant.durationYears,
               active: variant.active
             })
           );
@@ -771,7 +771,7 @@ export default {
               description: programData.description,
               programTypeId: variant.programTypeId,
               programModeId: variant.programModeId,
-              durationSemesters: variant.durationSemesters,
+              durationYears: variant.durationYears,
               active: variant.active
             })
           );
@@ -1317,10 +1317,10 @@ export default {
                           :key="variant.id"
                           class="badge text-white small d-inline-flex align-items-center gap-1"
                           :class="variant.active ? 'bg-info' : 'bg-secondary'"
-                          :title="`${variant.programType} ${variant.programMode} - ${variant.durationSemesters} semesters - ${variant.active ? 'Active' : 'Inactive'}`"
+                          :title="`${variant.programType || 'Unknown type'} ${variant.programMode || 'Unknown mode'} - ${variant.durationYears || 'N/A'} year(s) - ${variant.active ? 'Active' : 'Inactive'}`"
                         >
-                          <span>{{ variant.programType }}</span>
-                          <span>{{ variant.programMode }}</span>
+                          <span>{{ variant.programType || 'Type N/A' }}</span>
+                          <span>{{ variant.programMode || 'Mode N/A' }}</span>
                           <small v-if="!variant.active" class="opacity-75">(Inactive)</small>
                         </span>
                       </div>

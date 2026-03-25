@@ -98,7 +98,7 @@ export class ProgramsService {
     async findAllPrograms(queryDto: QueryProgramsDto) {
         try {
             const { search, departmentId, programTypeId, programModeId, active, page = 1, limit = 10 } = queryDto;
-            
+
             // Build filter object
             const filter: any = {};
 
@@ -127,9 +127,9 @@ export class ProgramsService {
                 filter.active = true;
             }
 
-            // If no query parameters are provided (registration use case), return all active programs without pagination
-            const isPublicAccess = !search && !departmentId && !programTypeId && !programModeId && active === undefined && page === 1 && limit === 10;
-            
+            // If no filters are provided (registration use case), return a lightweight public payload
+            const isPublicAccess = !search && !departmentId && !programTypeId && !programModeId && active === undefined;
+
             if (isPublicAccess) {
                 const programs = await this.programModel
                     .find(filter)
@@ -146,6 +146,7 @@ export class ProgramsService {
                         departmentId: program.departmentId.toString(),
                         programTypeId: program.programTypeId.toString(),
                         programModeId: program.programModeId.toString(),
+                        durationYears: program.durationYears,
                         active: program.active
                     }))
                 };
@@ -177,6 +178,62 @@ export class ProgramsService {
             };
         } catch (error) {
             throw new BadRequestException('Failed to fetch programs: ' + error.message);
+        }
+    }
+
+    async findProgramsForManagement(queryDto: QueryProgramsDto) {
+        try {
+            const { search, departmentId, programTypeId, programModeId, active, page = 1, limit = 10 } = queryDto;
+            const filter: any = {};
+
+            if (search) {
+                filter.$or = [
+                    { name: { $regex: search, $options: 'i' } },
+                    { description: { $regex: search, $options: 'i' } }
+                ];
+            }
+
+            if (departmentId) {
+                filter.departmentId = new Types.ObjectId(departmentId);
+            }
+
+            if (programTypeId) {
+                filter.programTypeId = new Types.ObjectId(programTypeId);
+            }
+
+            if (programModeId) {
+                filter.programModeId = new Types.ObjectId(programModeId);
+            }
+
+            if (active !== undefined) {
+                filter.active = active;
+            }
+
+            const skip = (page - 1) * limit;
+            const programs = await this.programModel
+                .find(filter)
+                .populate('departmentId', 'name code')
+                .populate('programTypeId', 'type description')
+                .populate('programModeId', 'mode description')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .exec();
+
+            const total = await this.programModel.countDocuments(filter);
+
+            return {
+                success: true,
+                data: programs.map(program => this.formatProgramResponse(program)),
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    pages: Math.ceil(total / limit)
+                }
+            };
+        } catch (error) {
+            throw new BadRequestException('Failed to fetch programs for management: ' + error.message);
         }
     }
 
@@ -625,20 +682,40 @@ export class ProgramsService {
     }
 
     // Helper methods for formatting responses
+    private extractReferenceId(value: any) {
+        if (!value) {
+            return null;
+        }
+
+        if (typeof value === 'string') {
+            return value;
+        }
+
+        if (value instanceof Types.ObjectId) {
+            return value.toString();
+        }
+
+        if (value._id) {
+            return value._id.toString();
+        }
+
+        return value.toString?.() || null;
+    }
+
     private formatProgramResponse(program: any) {
         return {
             id: program._id.toString(),
-            departmentId: program.departmentId?.toString() || program.departmentId,
+            departmentId: this.extractReferenceId(program.departmentId),
             department: program.departmentId?.name || null,
             departmentCode: program.departmentId?.code || null,
             name: program.name,
             code: program.code,
             description: program.description,
-            programTypeId: program.programTypeId?.toString() || program.programTypeId,
+            programTypeId: this.extractReferenceId(program.programTypeId),
             programType: program.programTypeId?.type || null,
-            programModeId: program.programModeId?.toString() || program.programModeId,
+            programModeId: this.extractReferenceId(program.programModeId),
             programMode: program.programModeId?.mode || null,
-            durationSemesters: program.durationSemesters,
+            durationYears: program.durationYears,
             active: program.active,
             createdAt: program.createdAt,
             updatedAt: program.updatedAt

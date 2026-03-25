@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Department, DepartmentDocument } from '../schemas/department.schema';
+import { Program, ProgramDocument } from '../schemas/program.schema';
 import { CreateDepartmentDto, UpdateDepartmentDto, QueryDepartmentsDto } from '../dto/department.dto';
 
 @Injectable()
@@ -9,6 +10,8 @@ export class DepartmentsService {
     constructor(
         @InjectModel(Department.name)
         private departmentModel: Model<DepartmentDocument>,
+        @InjectModel(Program.name)
+        private programModel: Model<ProgramDocument>,
     ) { }
 
     async create(createDepartmentDto: CreateDepartmentDto): Promise<Department> {
@@ -31,7 +34,7 @@ export class DepartmentsService {
     }
 
     async findAll(query: QueryDepartmentsDto): Promise<{
-        departments: Department[];
+        departments: Array<Department & { programsCount: number }>;
         pagination: {
             currentPage: number;
             totalPages: number;
@@ -71,12 +74,48 @@ export class DepartmentsService {
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
+                .lean()
                 .exec(),
             this.departmentModel.countDocuments(filter),
         ]);
 
+        const departmentIds = departments.map((department) => department._id);
+        const programCounts = departmentIds.length > 0
+            ? await this.programModel.aggregate([
+                {
+                    $match: {
+                        departmentId: { $in: departmentIds.map((id) => new Types.ObjectId(id.toString())) }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            departmentId: '$departmentId',
+                            normalizedName: {
+                                $toLower: {
+                                    $trim: { input: '$name' }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$_id.departmentId',
+                        count: { $sum: 1 }
+                    }
+                }
+            ])
+            : [];
+
+        const countsMap = new Map(programCounts.map((item) => [item._id.toString(), item.count]));
+        const departmentsWithCounts = departments.map((department) => ({
+            ...department,
+            programsCount: countsMap.get(department._id.toString()) || 0,
+        }));
+
         return {
-            departments,
+            departments: departmentsWithCounts,
             pagination: {
                 currentPage: page,
                 totalPages: Math.ceil(totalItems / limit),
@@ -133,8 +172,44 @@ export class DepartmentsService {
         await this.departmentModel.findByIdAndDelete(id);
     }
 
-    async findAllActive(): Promise<Department[]> {
-        return this.departmentModel.find({ active: true }).sort({ name: 1 }).exec();
+    async findAllActive(): Promise<Array<Department & { programsCount: number }>> {
+        const departments = await this.departmentModel.find({ active: true }).sort({ name: 1 }).lean().exec();
+        const departmentIds = departments.map((department) => department._id);
+
+        const programCounts = departmentIds.length > 0
+            ? await this.programModel.aggregate([
+                {
+                    $match: {
+                        departmentId: { $in: departmentIds.map((id) => new Types.ObjectId(id.toString())) }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            departmentId: '$departmentId',
+                            normalizedName: {
+                                $toLower: {
+                                    $trim: { input: '$name' }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$_id.departmentId',
+                        count: { $sum: 1 }
+                    }
+                }
+            ])
+            : [];
+
+        const countsMap = new Map(programCounts.map((item) => [item._id.toString(), item.count]));
+
+        return departments.map((department) => ({
+            ...department,
+            programsCount: countsMap.get(department._id.toString()) || 0,
+        }));
     }
 
     async toggleStatus(id: string): Promise<DepartmentDocument> {

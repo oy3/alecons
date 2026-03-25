@@ -18,6 +18,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { StudentService } from '../services/student.service';
+import { SessionControlsService } from '../services/session-controls.service';
 
 @Injectable()
 export class AuthService {
@@ -36,7 +37,50 @@ export class AuthService {
         private applicationNumberService: ApplicationNumberService,
         private applicationEligibilityService: ApplicationEligibilityService,
         private studentService: StudentService,
+        private sessionControlsService: SessionControlsService,
     ) { }
+
+    private async mapApplicationResponse(application: ApplicationDocument) {
+        const { currentStage, admissionFlow } = await this.sessionControlsService.syncApplicationStageWithControls(application);
+        const applicationTimestamps = application as ApplicationDocument & {
+            createdAt?: Date;
+            updatedAt?: Date;
+        };
+
+        return {
+            id: application._id,
+            applicationNumber: application.applicationNumber,
+            currentStage,
+            status: application.status,
+            admissionDecision: application.admissionDecision,
+            program: application.programId,
+            programType: application.programTypeId,
+            programMode: application.programModeId,
+            dob: application.dob,
+            gender: application.gender,
+            phone: application.phone,
+            religion: application.religion,
+            maritalStatus: application.maritalStatus,
+            address: application.address,
+            nationality: application.nationality,
+            stateOfOrigin: application.stateOfOrigin,
+            lga: application.lga,
+            profileImageUrl: application.profileImageUrl,
+            nextOfKin: application.nextOfKin,
+            referees: application.referees,
+            academicBackground: application.academicBackground,
+            examinations: application.examinations,
+            isJambExempt: application.isJambExempt,
+            jambRegistrationNumber: application.jambRegistrationNumber,
+            jambScore: application.jambScore,
+            documents: application.documents,
+            entranceExam: application.entranceExam,
+            screening: application.screening,
+            admissionFlow,
+            createdAt: applicationTimestamps.createdAt,
+            updatedAt: applicationTimestamps.updatedAt,
+        };
+    }
 
     async register(registerDto: RegisterDto) {
         const {
@@ -242,32 +286,7 @@ export class AuthService {
                 .exec();
 
             if (application) {
-                applicationData = {
-                    id: application._id,
-                    applicationNumber: application.applicationNumber,
-                    currentStage: application.currentStage,
-                    status: application.status,
-                    program: application.programId,
-                    programType: application.programTypeId,
-                    programMode: application.programModeId,
-                    // Include personal data for form prefilling
-                    dob: application.dob,
-                    gender: application.gender,
-                    phone: application.phone,
-                    religion: application.religion,
-                    maritalStatus: application.maritalStatus,
-                    address: application.address,
-                    nationality: application.nationality,
-                    stateOfOrigin: application.stateOfOrigin,
-                    lga: application.lga,
-                    profileImageUrl: application.profileImageUrl,
-                    // Include nested data structures
-                    nextOfKin: application.nextOfKin,
-                    referees: application.referees,
-                    academicBackground: application.academicBackground,
-                    examinations: application.examinations,
-                    documents: application.documents
-                };
+                applicationData = await this.mapApplicationResponse(application);
             }
         }
 
@@ -314,15 +333,7 @@ export class AuthService {
 
             return {
                 success: true,
-                data: {
-                    id: application._id,
-                    applicationNumber: application.applicationNumber,
-                    currentStage: application.currentStage,
-                    status: application.status,
-                    program: application.programId,
-                    programType: application.programTypeId,
-                    programMode: application.programModeId,
-                }
+                data: await this.mapApplicationResponse(application)
             };
         } catch (error) {
             throw new BadRequestException('Failed to fetch application details');
@@ -459,34 +470,7 @@ export class AuthService {
                         isEmailVerified: user.isEmailVerified,
                         fullName: user.fullName
                     },
-                    application: application ? {
-                        id: application._id,
-                        applicationNumber: application.applicationNumber,
-                        currentStage: application.currentStage,
-                        status: application.status,
-                        program: application.programId,
-                        programType: application.programTypeId,
-                        programMode: application.programModeId,
-                        // Include personal data for form prefilling
-                        dob: application.dob,
-                        gender: application.gender,
-                        phone: application.phone,
-                        religion: application.religion,
-                        maritalStatus: application.maritalStatus,
-                        address: application.address,
-                        nationality: application.nationality,
-                        stateOfOrigin: application.stateOfOrigin,
-                        lga: application.lga,
-                        profileImageUrl: application.profileImageUrl,
-                        // Include nested data structures
-                        nextOfKin: application.nextOfKin,
-                        referees: application.referees,
-                        academicBackground: application.academicBackground,
-                        examinations: application.examinations,
-                        documents: application.documents,
-                        createdAt: application.createdAt,
-                        updatedAt: application.updatedAt
-                    } : null
+                    application: application ? await this.mapApplicationResponse(application) : null
                 }
             };
 

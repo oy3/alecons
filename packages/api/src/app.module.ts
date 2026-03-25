@@ -15,6 +15,7 @@ import { DepartmentsModule } from './modules/departments.module';
 import { ExamModule } from './modules/exam.module';
 import { UserManagementModule } from './modules/user-management.module';
 import { StudentModule } from './modules/student.module';
+import { CoursesModule } from './courses/courses.module';
 import { StaffApplicationsController } from './controllers/staff-applications.controller';
 import { ExamResultsController } from './controllers/exam-results.controller';
 import { Application, ApplicationSchema } from './schemas/application.schema';
@@ -65,6 +66,7 @@ import { AdmissionLetterPdfService } from './services/admission-letter-pdf.servi
         UploadModule,
         AcademicSessionsModule,
         DepartmentsModule,
+        CoursesModule,
         ExamModule,
         UserManagementModule,
         StudentModule,

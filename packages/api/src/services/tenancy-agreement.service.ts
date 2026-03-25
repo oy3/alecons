@@ -437,7 +437,7 @@ export class TenancyAgreementService {
             font-size: 14pt;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             font-weight: bold;
-            color: #0C6677;
+            color: #C62828;
             margin: 0;
             text-transform: uppercase;
         }

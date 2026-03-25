@@ -16,9 +16,11 @@ import { User, UserSchema } from '../schemas/user.schema';
 import { EmailService } from '../services/email.service';
 import { SchedulerService } from '../services/scheduler.service';
 import { ContentSanitizationService } from '../services/content-sanitization.service';
+import { AcademicSessionsModule } from './academic-sessions.module';
 
 @Module({
     imports: [
+        AcademicSessionsModule,
         MongooseModule.forFeature([
             { name: Exam.name, schema: ExamSchema },
             { name: Question.name, schema: QuestionSchema },

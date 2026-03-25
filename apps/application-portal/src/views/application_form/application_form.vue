@@ -752,14 +752,21 @@ export default {
           }
         }
 
-        this.isJambExempt = this.application.isJambExempt === true;
-        this.jambRegistrationNumber =
-          this.application.jambRegistrationNumber || "";
-        this.jambScore =
-          this.application.jambScore !== undefined &&
-          this.application.jambScore !== null
-            ? String(this.application.jambScore)
-            : "";
+        const shouldPrefillJambDetails =
+          this.isJambExempt !== true &&
+          this.jambRegistrationNumber === "" &&
+          this.jambScore === "";
+
+        if (shouldPrefillJambDetails) {
+          this.isJambExempt = this.application.isJambExempt === true;
+          this.jambRegistrationNumber =
+            this.application.jambRegistrationNumber || "";
+          this.jambScore =
+            this.application.jambScore !== undefined &&
+            this.application.jambScore !== null
+              ? String(this.application.jambScore)
+              : "";
+        }
 
         // Prefill next of kin
         if (this.application.nextOfKin) {

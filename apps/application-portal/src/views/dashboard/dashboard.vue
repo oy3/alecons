@@ -254,7 +254,7 @@ export default {
           text: 'View Details',
           route: null,
           disabled: false,
-          variant: 'btn-acon-primary',
+          variant: 'btn-acon-secondary',
           showModal: true
         };
       }

@@ -123,7 +123,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf release-artifacts
+          rm -rf release-artifacts/frontend \
+                 release-artifacts/frontend-dist.tar.gz \
+                 release-artifacts/api-release.tar.gz
           mkdir -p release-artifacts/frontend
 
           cp -R apps/website/dist release-artifacts/frontend/website-dist
@@ -133,6 +135,7 @@ jobs:
           cp -R apps/cbt/dist release-artifacts/frontend/cbt-dist
 
           tar -C release-artifacts/frontend -czf release-artifacts/frontend-dist.tar.gz .
+          test -d release-artifacts/api-runtime
           tar -C release-artifacts/api-runtime -czf release-artifacts/api-release.tar.gz .
 
       - name: Start SSH agent

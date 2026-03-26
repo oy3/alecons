@@ -17,6 +17,7 @@ API_ENV_FILE="${API_ENV_FILE:-/etc/alecons/api.env}"
 PM2_APP_NAME="${PM2_APP_NAME:-alecons-api}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
 PORT="${PORT:-8000}"
+API_BUILD_NODE_OPTIONS="${API_BUILD_NODE_OPTIONS:---max-old-space-size=2048}"
 
 REMOTE_PAYLOAD_DIR="$TMP_ROOT/$RELEASE_ID"
 FRONTEND_TARBALL="$REMOTE_PAYLOAD_DIR/frontend-dist.tar.gz"
@@ -107,6 +108,7 @@ if [[ -f package-lock.json ]]; then
 else
     npm install
 fi
+export NODE_OPTIONS="$API_BUILD_NODE_OPTIONS"
 npm run build
 popd >/dev/null
 

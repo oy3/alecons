@@ -138,6 +138,8 @@ When the workflow runs:
 11. reloads PM2 using `packages/api/ecosystem.config.cjs`
 12. verifies the API health endpoint
 
+The remote deploy script sets `NODE_OPTIONS=--max-old-space-size=2048` during the API build by default. If your droplet has more RAM and you need a larger heap, set `API_BUILD_NODE_OPTIONS` before invoking the remote deploy script.
+
 ## Phase 5: First Deployment Run
 
 1. Commit and push this CI/CD scaffolding.
@@ -185,6 +187,13 @@ curl https://api.alecons.edu.ng/api/v1/health
 pm2 status
 pm2 logs alecons-api --lines 100
 ```
+
+### If API build fails with JavaScript heap out of memory
+
+- This happens on the droplet, not on the GitHub runner.
+- The deploy script already raises the Node heap for the API build to `2048MB`.
+- If the droplet is still too small, add swap or upgrade the droplet RAM.
+- As a temporary override, run the remote deploy with a larger heap, for example `API_BUILD_NODE_OPTIONS=--max-old-space-size=3072`.
 
 ### Clean up old releases manually
 

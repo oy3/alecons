@@ -1,0 +1,170 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - production
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and deploy production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      RELEASE_ID: ${{ github.sha }}
+      DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+      DROPLET_USER: ${{ secrets.DROPLET_USER }}
+      DROPLET_PORT: ${{ secrets.DROPLET_PORT }}
+      VITE_APP_FULL_NAME: ${{ vars.VITE_APP_FULL_NAME }}
+      VITE_APP_SITE_URL: ${{ vars.VITE_APP_SITE_URL }}
+      VITE_APP_PHONE: ${{ vars.VITE_APP_PHONE }}
+      VITE_APP_APPLICATION_PORTAL_URL: ${{ vars.VITE_APP_APPLICATION_PORTAL_URL }}
+      VITE_APP_STUDENT_PORTAL_URL: ${{ vars.VITE_APP_STUDENT_PORTAL_URL }}
+      VITE_APP_STAFF_PORTAL_URL: ${{ vars.VITE_APP_STAFF_PORTAL_URL }}
+      VITE_APP_API_URL: ${{ vars.VITE_APP_API_URL }}
+      VITE_PAYSTACK_PUBLIC_KEY: ${{ vars.VITE_PAYSTACK_PUBLIC_KEY }}
+      VITE_APP_ENV: ${{ vars.VITE_APP_ENV }}
+      VITE_APP_DEBUG: ${{ vars.VITE_APP_DEBUG }}
+      VITE_CBT_APP_NAME: ${{ vars.VITE_CBT_APP_NAME }}
+      VITE_APP_VERSION: ${{ vars.VITE_APP_VERSION }}
+      VITE_LOG_LEVEL: ${{ vars.VITE_LOG_LEVEL }}
+      VITE_ENABLE_DEV_TOOLS: ${{ vars.VITE_ENABLE_DEV_TOOLS }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_secrets=(DROPLET_HOST DROPLET_USER)
+          for secret_name in "${required_secrets[@]}"; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "Missing required GitHub secret: ${secret_name}" >&2
+              exit 1
+            fi
+          done
+
+          required_vars=(
+            VITE_APP_FULL_NAME
+            VITE_APP_SITE_URL
+            VITE_APP_PHONE
+            VITE_APP_APPLICATION_PORTAL_URL
+            VITE_APP_STUDENT_PORTAL_URL
+            VITE_APP_STAFF_PORTAL_URL
+            VITE_APP_API_URL
+            VITE_PAYSTACK_PUBLIC_KEY
+          )
+
+          for var_name in "${required_vars[@]}"; do
+            if [[ -z "${!var_name:-}" ]]; then
+              echo "Missing required GitHub variable: ${var_name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Install workspace dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f package-lock.json ]]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Render frontend production env files
+        shell: bash
+        run: bash scripts/deploy/render-frontend-envs.sh "$GITHUB_WORKSPACE"
+
+      - name: Build frontend applications
+        shell: bash
+        run: npm run build:frontend
+
+      - name: Validate API build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build --workspace=packages/api
+
+      - name: Package deployment artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release-artifacts
+          mkdir -p release-artifacts/frontend
+
+          cp -R apps/website/dist release-artifacts/frontend/website-dist
+          cp -R apps/application-portal/dist release-artifacts/frontend/application-portal-dist
+          cp -R apps/student-portal/dist release-artifacts/frontend/student-portal-dist
+          cp -R apps/staff-portal/dist release-artifacts/frontend/staff-portal-dist
+          cp -R apps/cbt/dist release-artifacts/frontend/cbt-dist
+
+          tar -C release-artifacts/frontend -czf release-artifacts/frontend-dist.tar.gz .
+          tar \
+            --exclude='node_modules' \
+            --exclude='dist' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            -C packages/api \
+            -czf release-artifacts/api-release.tar.gz \
+            .
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DROPLET_SSH_KEY }}
+
+      - name: Trust droplet host key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${DROPLET_PORT:-22}" -H "$DROPLET_HOST" >> ~/.ssh/known_hosts
+
+      - name: Create remote staging directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "${DROPLET_PORT:-22}" "$DROPLET_USER@$DROPLET_HOST" "mkdir -p ~/tmp/alecons/$RELEASE_ID"
+
+      - name: Upload deployment artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -P "${DROPLET_PORT:-22}" release-artifacts/frontend-dist.tar.gz "$DROPLET_USER@$DROPLET_HOST:tmp/alecons/$RELEASE_ID/frontend-dist.tar.gz"
+          scp -P "${DROPLET_PORT:-22}" release-artifacts/api-release.tar.gz "$DROPLET_USER@$DROPLET_HOST:tmp/alecons/$RELEASE_ID/api-release.tar.gz"
+
+      - name: Deploy on droplet
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "${DROPLET_PORT:-22}" "$DROPLET_USER@$DROPLET_HOST" "RELEASE_ID='$RELEASE_ID' bash -s" < scripts/deploy/remote-deploy.sh
+
+      - name: Verify production endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS https://api.alecons.edu.ng/api/v1/health >/dev/null
+          curl -fsSI https://alecons.edu.ng >/dev/null
+          curl -fsSI https://apply.alecons.edu.ng >/dev/null
+          curl -fsSI https://portal.alecons.edu.ng >/dev/null
+          curl -fsSI https://staff.alecons.edu.ng >/dev/null
+          curl -fsSI https://cbt.alecons.edu.ng >/dev/null

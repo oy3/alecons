@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ALECONS Production Deployment Script
-echo "🚀 Deploying ALECONS to Production..."
+echo "🚀 Running ALECONS local production build helper..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -28,9 +28,13 @@ if [ "$NODE_ENV" != "production" ]; then
     export NODE_ENV=production
 fi
 
-# Install production dependencies
-print_info "Installing production dependencies..."
-npm ci --only=production --workspaces
+# Install dependencies
+print_info "Installing workspace dependencies..."
+if [ -f package-lock.json ]; then
+    npm ci
+else
+    npm install
+fi
 
 # Build all applications
 print_info "Building all applications..."
@@ -63,7 +67,7 @@ EOF
 
 chmod +x start-production.sh
 
-print_status "Production deployment ready!"
+print_status "Local production build ready!"
 echo ""
 echo -e "${BLUE}Production files:${NC}"
 echo -e "  API build:     ${YELLOW}packages/api/dist/${NC}"
@@ -71,5 +75,7 @@ echo -e "  CBT build:     ${YELLOW}apps/cbt/dist/${NC}"
 echo -e "  App build:     ${YELLOW}apps/application-portal/dist/${NC}"
 echo -e "  Staff build:   ${YELLOW}apps/staff-portal/dist/${NC}"
 echo -e "  Student build: ${YELLOW}apps/student-portal/dist/${NC}"
+echo -e "  Website build: ${YELLOW}apps/website/dist/${NC}"
 echo ""
-echo -e "${GREEN}To start production:${NC} ${YELLOW}./start-production.sh${NC}"
+echo -e "${BLUE}GitHub Actions deploys the production branch automatically.${NC}"
+echo -e "${GREEN}To smoke-test locally:${NC} ${YELLOW}./start-production.sh${NC}"

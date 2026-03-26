@@ -21,9 +21,9 @@ acons/
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ 
+- Node.js 20+
 - MongoDB (for API)
-- npm or yarn
+- npm
 
 ### Installation & Setup
 
@@ -36,11 +36,17 @@ acons/
 
 2. **Configure environment**:
    ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
+   cp packages/api/.env.example packages/api/.env
+   cp apps/website/.env.example apps/website/.env.local
+   cp apps/application-portal/.env.example apps/application-portal/.env.local
+   cp apps/student-portal/.env.example apps/student-portal/.env.local
+   cp apps/staff-portal/.env.example apps/staff-portal/.env.local
+   cp apps/cbt/.env.example apps/cbt/.env.local
    ```
 
-3. **Start development**:
+3. **Edit the copied env files** for your local setup.
+
+4. **Start development**:
    ```bash
    npm run dev:all
    ```
@@ -97,11 +103,8 @@ npm run build:website
 
 ### Production
 ```bash
-# Deploy to production
+# Local production-style build check
 ./deploy-production.sh
-
-# Start in production mode
-npm run start:all
 ```
 
 ### Testing
@@ -179,24 +182,23 @@ When running `npm run dev:all`, access applications at:
 ## 🔧 Configuration
 
 ### Environment Variables
-Key environment variables (see `.env.example`):
+Use the per-app env templates that now live in the repo:
 
 ```bash
-# API Configuration
-API_PORT=8000
-MONGODB_URI=mongodb://localhost:27017/alecons
-JWT_SECRET=your-secret-key
+# API runtime template
+packages/api/.env.example
 
-# Frontend Ports
-CBT_PORT=3004
-APPLICATION_PORT=3000
-STAFF_PORT=3001
-STUDENT_PORT=3002
-
-# Production URLs
-API_BASE_URL=https://api.yourdomain.com
-CBT_URL=https://cbt.yourdomain.com
+# Frontend templates
+apps/website/.env.example
+apps/application-portal/.env.example
+apps/student-portal/.env.example
+apps/staff-portal/.env.example
+apps/cbt/.env.example
 ```
+
+Notes:
+- Frontend `VITE_*` values are public build-time values and may live in GitHub Actions environment variables.
+- Backend production secrets should not be committed; keep them on the droplet in `/etc/alecons/api.env`.
 
 ### Workspace Configuration
 This project uses npm workspaces for monorepo management. Each app and package has its own `package.json` with specific dependencies and scripts.
@@ -209,10 +211,9 @@ npm run dev:all
 ```
 
 ### Production Deployment
-```bash
-./deploy-production.sh
-./start-production.sh
-```
+- Production deploys are handled by [`.github/workflows/deploy-production.yml`](.github/workflows/deploy-production.yml).
+- A push or merge to the `production` branch builds the frontends in GitHub Actions, uploads the artifacts to the droplet, deploys the API release, and reloads PM2.
+- The local [`deploy-production.sh`](deploy-production.sh) script is now just a local production-style build helper, not the primary deployment path.
 
 ### Docker Deployment (Optional)
 ```bash
@@ -226,10 +227,10 @@ docker-compose up -d
 ## 📖 Documentation
 
 Additional documentation available in:
-- [Environment Setup](ENVIRONMENT_SETUP.md)
-- [API Documentation](packages/api/README.md) 
-- [Frontend Guidelines](docs/FRONTEND.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
+- [Automated Deployment Guide](DEPLOYMENT_AUTOMATION.md)
+- [Production Deployment Guide](PRODUCTION_DEPLOYMENT_GUIDE.md)
+- [API Documentation](packages/api/README.md)
+- [Environment Setup Notes](zmd/ENVIRONMENT_SETUP.md)
 
 ## 🤝 Contributing
 

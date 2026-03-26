@@ -17,7 +17,7 @@ export const Environment = {
     // Get environment-specific values
     getApiBaseUrl: () => import.meta.env.VITE_API_BASE_URL,
     getSocketUrl: () => import.meta.env.VITE_SOCKET_URL,
-    getAppName: () => import.meta.env.VITE_APP_NAME,
+    getAppName: () => import.meta.env.VITE_CBT_APP_NAME || import.meta.env.VITE_APP_NAME,
     getAppVersion: () => import.meta.env.VITE_APP_VERSION,
     getLogLevel: () => import.meta.env.VITE_LOG_LEVEL || 'info',
 
@@ -29,7 +29,7 @@ export const Environment = {
         environment: import.meta.env.VITE_APP_ENV || 'development',
         debug: import.meta.env.VITE_APP_DEBUG === 'true',
         apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
-        appName: import.meta.env.VITE_APP_NAME,
+        appName: import.meta.env.VITE_CBT_APP_NAME || import.meta.env.VITE_APP_NAME,
         appVersion: import.meta.env.VITE_APP_VERSION,
         logLevel: import.meta.env.VITE_LOG_LEVEL,
         devTools: import.meta.env.VITE_ENABLE_DEV_TOOLS === 'true'

@@ -215,6 +215,29 @@ npm run dev:all
 - A push or merge to the `production` branch builds the frontends in GitHub Actions, uploads the artifacts to the droplet, deploys the API release, and reloads PM2.
 - The local [`deploy-production.sh`](deploy-production.sh) script is now just a local production-style build helper, not the primary deployment path.
 
+### Production Runtime Notes
+- The live ALECONS API should be managed by the `deploy` user via PM2, not by `root`.
+- After migrating from an older manual deployment, do a one-time PM2 cutover so port `8000` is owned by `deploy` and points to `/home/api/current`.
+- Keep production API secrets only in `/etc/alecons/api.env` and ensure that file can be sourced safely by bash.
+
+### Post-Deploy Sanity Checks
+```bash
+# Port 8000 should be owned by deploy
+sudo lsof -i :8000 -P -n
+
+# deploy user's PM2 should own the live API
+sudo -u deploy pm2 list
+
+# CORS preflight should allow the frontend origins
+curl -i -X OPTIONS 'https://api.alecons.edu.ng/api/v1/auth/check-eligibility' \
+   -H 'Origin: https://apply.alecons.edu.ng' \
+   -H 'Access-Control-Request-Method: GET'
+
+curl -i -X OPTIONS 'https://api.alecons.edu.ng/api/v1/auth/staff/login' \
+   -H 'Origin: https://staff.alecons.edu.ng' \
+   -H 'Access-Control-Request-Method: POST'
+```
+
 ### Docker Deployment (Optional)
 ```bash
 # Build Docker images

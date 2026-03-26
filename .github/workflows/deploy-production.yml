@@ -104,6 +104,21 @@ jobs:
           set -euo pipefail
           npm run build --workspace=packages/api
 
+      - name: Prepare API runtime artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release-artifacts/api-runtime
+          mkdir -p release-artifacts/api-runtime
+
+          cp packages/api/package.json release-artifacts/api-runtime/
+          cp packages/api/ecosystem.config.cjs release-artifacts/api-runtime/
+          cp -R packages/api/dist release-artifacts/api-runtime/dist
+
+          pushd release-artifacts/api-runtime >/dev/null
+          npm install --omit=dev
+          popd >/dev/null
+
       - name: Package deployment artifacts
         shell: bash
         run: |
@@ -118,14 +133,7 @@ jobs:
           cp -R apps/cbt/dist release-artifacts/frontend/cbt-dist
 
           tar -C release-artifacts/frontend -czf release-artifacts/frontend-dist.tar.gz .
-          tar \
-            --exclude='node_modules' \
-            --exclude='dist' \
-            --exclude='.env' \
-            --exclude='.env.*' \
-            -C packages/api \
-            -czf release-artifacts/api-release.tar.gz \
-            .
+          tar -C release-artifacts/api-runtime -czf release-artifacts/api-release.tar.gz .
 
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0

@@ -67,10 +67,6 @@ command -v pm2 >/dev/null 2>&1 || {
     echo "pm2 is required on the droplet" >&2
     exit 1
 }
-command -v npm >/dev/null 2>&1 || {
-    echo "npm is required on the droplet" >&2
-    exit 1
-}
 command -v curl >/dev/null 2>&1 || {
     echo "curl is required on the droplet" >&2
     exit 1
@@ -102,15 +98,16 @@ done
 
 tar -xzf "$API_TARBALL" -C "$API_RELEASE_DIR"
 
-pushd "$API_RELEASE_DIR" >/dev/null
-if [[ -f package-lock.json ]]; then
-    npm ci
-else
-    npm install
+require_file "$API_RELEASE_DIR/package.json"
+require_file "$API_RELEASE_DIR/ecosystem.config.cjs"
+if [[ ! -d "$API_RELEASE_DIR/dist" ]]; then
+    echo "Built API dist directory not found in release artifact" >&2
+    exit 1
 fi
-export NODE_OPTIONS="$API_BUILD_NODE_OPTIONS"
-npm run build
-popd >/dev/null
+if [[ ! -d "$API_RELEASE_DIR/node_modules" ]]; then
+    echo "API runtime node_modules not found in release artifact" >&2
+    exit 1
+fi
 
 ln -sfn "$API_RELEASE_DIR" "$API_CURRENT_LINK"
 

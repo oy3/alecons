@@ -9,7 +9,7 @@ Production deployments are triggered when code is pushed or merged into the `pro
 The deployment flow is intentionally split into two parts:
 
 1. **Frontends are built in GitHub Actions** and only the generated `dist` artifacts are uploaded to the droplet.
-2. **The API source is uploaded to the droplet** and built there with runtime secrets loaded from the server.
+2. **The API is built in GitHub Actions** and uploaded to the droplet as a ready-to-run runtime bundle.
 
 This keeps production secrets off Git, removes manual FileZilla uploads, and makes deployments repeatable.
 
@@ -128,17 +128,17 @@ When the workflow runs:
 1. installs workspace dependencies
 2. generates `.env.production` for the frontend apps from GitHub variables
 3. builds the frontend apps in CI
-4. validates the API build in CI
-5. uploads `frontend-dist.tar.gz` and `api-release.tar.gz` to the droplet
-6. runs `scripts/deploy/remote-deploy.sh` on the droplet
-7. copies fresh frontend builds into `/home/apps/*`
-8. extracts the API release into `/home/api/releases/<commit-sha>`
-9. installs API dependencies and builds the API on the droplet
+4. builds the API in CI
+5. creates an API runtime bundle containing `dist`, `package.json`, `ecosystem.config.cjs`, and production `node_modules`
+6. uploads `frontend-dist.tar.gz` and `api-release.tar.gz` to the droplet
+7. runs `scripts/deploy/remote-deploy.sh` on the droplet
+8. copies fresh frontend builds into `/home/apps/*`
+9. extracts the API runtime release into `/home/api/releases/<commit-sha>`
 10. updates `/home/api/current` to the new release
 11. reloads PM2 using `packages/api/ecosystem.config.cjs`
 12. verifies the API health endpoint
 
-The remote deploy script sets `NODE_OPTIONS=--max-old-space-size=2048` during the API build by default. If your droplet has more RAM and you need a larger heap, set `API_BUILD_NODE_OPTIONS` before invoking the remote deploy script.
+This removes the heavy API install/build work from the droplet and significantly reduces memory pressure during deployment.
 
 ## Phase 5: First Deployment Run
 
@@ -188,12 +188,11 @@ pm2 status
 pm2 logs alecons-api --lines 100
 ```
 
-### If API build fails with JavaScript heap out of memory
+### If API deployment fails after switching to CI-built artifacts
 
-- This happens on the droplet, not on the GitHub runner.
-- The deploy script already raises the Node heap for the API build to `2048MB`.
-- If the droplet is still too small, add swap or upgrade the droplet RAM.
-- As a temporary override, run the remote deploy with a larger heap, for example `API_BUILD_NODE_OPTIONS=--max-old-space-size=3072`.
+- The droplet no longer compiles the API during deploy.
+- Most remaining failures will be permission issues, missing `/etc/alecons/api.env`, or PM2/runtime issues.
+- If the GitHub runner fails while building the API, inspect the `Validate API build` or `Prepare API runtime artifact` steps instead.
 
 ### Clean up old releases manually
 

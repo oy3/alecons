@@ -529,12 +529,12 @@ export class UserManagementService {
         // Delete staff record if exists (convert string id to ObjectId for matching)
         if (user.role === UserRole.STAFF || user.role === UserRole.ADMIN) {
             const deleteResult = await this.staffModel.deleteOne({ userId: new Types.ObjectId(id) });
-            console.log(`Deleted ${deleteResult.deletedCount} staff record(s) for user ${id}`);
+            this.logger.log(`Deleted ${deleteResult.deletedCount} staff record(s) for user ${id}`);
         }
 
         // Delete user
         await this.userModel.findByIdAndDelete(id);
 
-        console.log(`User ${id} deleted successfully`);
+        this.logger.log(`User ${id} deleted successfully`);
     }
 }

@@ -1,5 +1,6 @@
 <script>
 import RichTextEditor from '../../../components/RichTextEditor.vue'
+import { logger } from '@shared/utils/logger'
 
 export default {
   name: 'QuestionFormModal',
@@ -214,7 +215,7 @@ export default {
         this.resetForm()
         this.close()
       } catch (err) {
-        console.error('Error saving question:', err)
+        logger.error('Error saving question:', err)
         // Handle API error
       } finally {
         this.isLoading = false

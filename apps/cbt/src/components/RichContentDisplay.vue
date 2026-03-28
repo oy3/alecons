@@ -9,6 +9,7 @@
 <script>
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import { logger } from '@shared/utils/logger'
 
 export default {
   name: 'RichContentDisplay',
@@ -58,7 +59,7 @@ export default {
           this.processFormulasInDOM()
         })
       } catch (error) {
-        console.error('Error rendering rich content:', error)
+        logger.error('Error rendering rich content:', error)
         // Fallback to plain content
         this.renderedContent = this.content
       }
@@ -78,7 +79,7 @@ export default {
           })
           return `<span class="katex-inline">${rendered}</span>`
         } catch (error) {
-          console.warn('Failed to render formula:', formula, error)
+          logger.warn('Failed to render formula:', formula, error)
           return `<code class="formula-error">${formula}</code>`
         }
       })
@@ -108,7 +109,7 @@ export default {
               displayMode: false
             })
           } catch (error) {
-            console.warn('Failed to render formula in DOM:', formula, error)
+            logger.warn('Failed to render formula in DOM:', formula, error)
             element.textContent = formula
             element.className = 'formula-error'
           }

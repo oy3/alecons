@@ -1,6 +1,7 @@
 <script>
 import DOMPurify from 'dompurify'
 import 'katex/dist/katex.min.css'
+import { logger } from '@shared/utils/logger'
 
 export default {
   name: 'RichContentDisplay',
@@ -81,7 +82,7 @@ export default {
           return sanitized && sanitized.trim() ? sanitized : displayContent
         }
       } catch (error) {
-        console.error('DOMPurify error:', error)
+        logger.error('DOMPurify error:', error)
         return displayContent
       }
     }
@@ -112,7 +113,7 @@ export default {
                 displayMode: false
               })
             } catch (error) {
-              console.warn('KaTeX rendering error:', error)
+              logger.warn('KaTeX rendering error:', error)
               element.textContent = formula // Fallback to plain text
             }
           }

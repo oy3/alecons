@@ -1,5 +1,6 @@
 <script>
 import { apiService } from '../../../services/api.js'
+import { logger } from '@shared/utils/logger'
 import Swal from 'sweetalert2'
 
 export default {
@@ -160,7 +161,7 @@ export default {
 
         if (sessionsRes.success) {
           this.academicSessions = sessionsRes.data.sessions || []
-          console.log("Sessions: ", sessionsRes.data.sessions);
+          logger.debug('Academic sessions loaded for exam form:', sessionsRes.data.sessions)
         }
 
         if (programsRes.success) {
@@ -172,7 +173,7 @@ export default {
         }
 
       } catch (error) {
-        console.error('Error loading form data:', error)
+        logger.error('Error loading form data:', error)
         Swal.fire('Error', 'Failed to load form data', 'error')
       } finally {
         this.loadingData = false
@@ -311,7 +312,7 @@ export default {
       this.isLoading = true
 
       try {
-        console.log('Form data before conversion:', {
+        logger.debug('Form data before conversion:', {
           duration: this.form.duration,
           totalQuestions: this.form.totalQuestions,
           attemptLimit: this.form.attemptLimit,
@@ -339,7 +340,7 @@ export default {
           security: this.form.security
         }
         
-        console.log('Exam data after conversion:', examData)
+        logger.debug('Exam data after conversion:', examData)
 
         if (this.showProgramFilter && this.form.target.filter.programs.length > 0) {
           examData.target.filter.programs = this.form.target.filter.programs
@@ -360,7 +361,7 @@ export default {
         this.$emit('save', examData)
         this.close()
       } catch (error) {
-        console.error('Error saving exam:', error)
+        logger.error('Error saving exam:', error)
         Swal.fire('Error', 'Failed to save exam', 'error')
       } finally {
         this.isLoading = false
@@ -406,10 +407,10 @@ export default {
 
     // Utility method to clear field errors
     clearFieldError(fieldName) {
-      console.log('Clearing error for field:', fieldName, 'Current errors:', this.errors)
+      logger.debug('Clearing error for field:', fieldName, this.errors)
       if (this.errors[fieldName]) {
         delete this.errors[fieldName]
-        console.log('Error cleared. Remaining errors:', this.errors)
+        logger.debug('Error cleared. Remaining errors:', this.errors)
       }
     }
   }

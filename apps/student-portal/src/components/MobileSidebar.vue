@@ -3,6 +3,7 @@ import BrandLogo from "./BrandLogo.vue";
 import { useAuthStore } from "../stores/auth.js";
 import { useRouter } from 'vue-router';
 import { onMounted } from 'vue';
+import { logger } from '@shared/utils/logger';
 import Swal from "sweetalert2";
 
 export default {
@@ -64,7 +65,7 @@ export default {
             }
           }
         } catch (error) {
-          console.error('Error closing mobile sidebar:', error);
+          logger.error('Error closing mobile sidebar:', error);
           // Fallback: try to close via CSS class manipulation
           const offcanvasElement = document.getElementById('mobileSidebar');
           if (offcanvasElement) {

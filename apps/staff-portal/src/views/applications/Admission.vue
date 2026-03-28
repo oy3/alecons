@@ -231,7 +231,7 @@ export default {
         event.stopPropagation();
 
         const dropdownToggle = event.currentTarget;
-        console.log("Dropdown toggle clicked:", dropdownToggle);
+        logger.info("Dropdown toggle clicked:", dropdownToggle);
 
         // Try using Bootstrap's Dropdown class
         if (typeof Dropdown !== "undefined") {

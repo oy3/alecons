@@ -477,7 +477,7 @@ export default {
     },
 
     async editProgramGroup(programGroup) {
-      console.log('Edit modal data:', {
+     logger.info('Edit modal data:', {
         programGroup,
         departments: this.departments,
         programTypes: this.programTypes,
@@ -506,7 +506,7 @@ export default {
       // Extract actual department ID
       const actualDepartmentId = extractId(programGroup.departmentId);
       
-      console.log('Extracted IDs:', {
+      logger.info('Extracted IDs:', {
         originalDepartmentId: programGroup.departmentId,
         actualDepartmentId,
         variants: programGroup.variants.map(v => ({

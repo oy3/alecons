@@ -294,7 +294,7 @@ export class PaymentsService {
             linkedApplication.academicSessionId,
         );
 
-        console.log('Payment audience logic:', {
+        this.logger.log('Payment audience logic:', {
             userId,
             userRole: user.role,
             context,

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { apiService } from "../services/api.js";
+import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
 
 export default {
@@ -42,7 +43,7 @@ export default {
         isLoading.value = true;
 
         const response = await apiService.getExamResults(route.params.examId);
-        console.log("ExamResults - API response:", response);
+        logger.debug("ExamResults - API response:", response);
 
         if (response.success && response.data) {
           const {
@@ -58,7 +59,7 @@ export default {
           // Check if results are released and available
           if (hasResult && released && resultData) {
             result.value = resultData;
-            console.log("ExamResults - Results are released:", {
+            logger.info("ExamResults - Results are released:", {
               hasResult,
               released,
               status: resultData.status,
@@ -79,12 +80,12 @@ export default {
               isPending: true,
               released: false,
             };
-            console.log(
+            logger.info(
               "ExamResults - Showing pending status for unreleased results"
             );
           } else {
             // No result or attempt found
-            console.log("ExamResults - No results or attempts found");
+            logger.warn("ExamResults - No results or attempts found");
             throw new Error("No exam results found");
           }
 
@@ -95,7 +96,7 @@ export default {
           throw new Error(response.message || "Failed to load results");
         }
       } catch (error) {
-        console.error("Error loading results:", error);
+        logger.error("Error loading results:", error);
         Swal.fire({
           icon: "error",
           title: "Loading Failed",

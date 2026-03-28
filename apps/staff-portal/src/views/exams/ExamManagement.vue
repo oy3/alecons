@@ -98,7 +98,7 @@ export default {
           Swal.fire('Error', result.message || 'Failed to save exam', 'error')
         }
       } catch (error) {
-        console.error('Error saving exam:', error)
+        logger.error('Error saving exam:', error)
         Swal.fire('Error', 'Failed to save exam', 'error')
       }
     }

@@ -1,6 +1,7 @@
 <script>
 import { useAuthStore } from "../stores/auth.js";
 import { apiService } from "../services/api.js";
+import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
 
 export default {
@@ -144,7 +145,7 @@ export default {
           );
         }
       } catch (error) {
-        console.error("Change password error:", error);
+        logger.error("Change password error:", error);
         this.passwordErrors.push(error.message || "Failed to change password");
       } finally {
         this.isChangingPassword = false;

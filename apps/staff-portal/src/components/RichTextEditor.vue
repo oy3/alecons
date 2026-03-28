@@ -4,6 +4,7 @@
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import 'katex/dist/katex.min.css'
+import { logger } from '@shared/utils/logger'
 
 // Import KaTeX for formula support
 import katex from 'katex'
@@ -250,7 +251,7 @@ export default {
           quill.setSelection(range.index + 1)
         })
         .catch(error => {
-          console.error('Image compression failed:', error)
+          logger.error('Image compression failed:', error)
           // Remove loading text
           quill.deleteText(range.index, loadingText.length)
           const errorMsg = this.compact 
@@ -334,7 +335,7 @@ export default {
             dataUrl = canvas.toDataURL('image/jpeg', finalQuality)
           }
           
-          console.log(`Image compressed (${mode}): ${file.size} bytes → ${dataUrl.length} chars`)
+          logger.debug(`Image compressed (${mode}): ${file.size} bytes → ${dataUrl.length} chars`)
           resolve(dataUrl)
         }
         

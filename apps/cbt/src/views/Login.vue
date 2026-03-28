@@ -135,6 +135,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authStore } from '../stores/auth.js'
+import { logger } from '@shared/utils/logger'
 import Swal from 'sweetalert2'
 
 export default {
@@ -210,7 +211,7 @@ export default {
           })
         }
       } catch (error) {
-        console.error('Login error:', error)
+        logger.error('Login error:', error)
         await Swal.fire({
           title: 'Login Error',
           text: 'An unexpected error occurred. Please try again.',

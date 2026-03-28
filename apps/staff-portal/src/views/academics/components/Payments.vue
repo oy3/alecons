@@ -90,7 +90,7 @@ export default {
         }
       } catch (error) {
         logger.error('Error loading payments:', error)
-        console.error('Full error details:', error)
+        logger.error('Full error details:', error)
         
         // Show more detailed error information
         let errorMessage = 'Failed to load payments. Please try again.'

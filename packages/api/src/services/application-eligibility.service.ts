@@ -19,41 +19,86 @@ export class ApplicationEligibilityService {
         @InjectModel(SessionControl.name) private sessionControlModel: Model<SessionControlDocument>,
     ) { }
 
+    private async findOpenApplicationSession(): Promise<AcademicSessionDocument | null> {
+        return this.sessionModel
+            .findOne({ status: SessionStatus.OPEN })
+            .sort({ active: -1, startDate: -1, createdAt: -1 });
+    }
+
+    private async findCurrentReferenceSession(): Promise<AcademicSessionDocument | null> {
+        const activeSession = await this.sessionModel
+            .findOne({ active: true })
+            .sort({ startDate: -1, createdAt: -1 });
+
+        if (activeSession) {
+            return activeSession;
+        }
+
+        return this.sessionModel
+            .findOne({})
+            .sort({ active: -1, startDate: -1, createdAt: -1 });
+    }
+
+    private buildNotOpenReason(session: AcademicSessionDocument | null): string {
+        if (!session) {
+            return 'Applications are temporarily disabled. Please check back later.';
+        }
+
+        if (session.status === SessionStatus.CLOSED) {
+            return `Registration for ${session.sessionYear} academic session is currently closed.`;
+        }
+
+        if (session.status === SessionStatus.ONGOING) {
+            return 'Registration for new academic session is not open. Please check back later.';
+        }
+
+        if (session.status === SessionStatus.DRAFT) {
+            return 'Registration for new academic session is not open. Please check back later.';
+        }
+
+        return 'Applications are temporarily disabled. Please check back later.';
+    }
+
     /**
      * Check if a user is eligible to register for applications
      */
     async checkRegistrationEligibility(): Promise<EligibilityResult> {
         try {
-            // Find the active session (applications controlled via session controls)
-            const activeSession = await this.sessionModel.findOne({
-                active: true,
-                status: { $in: [SessionStatus.OPEN, SessionStatus.ONGOING] }
-            });
+            const openSession = await this.findOpenApplicationSession();
 
-            if (!activeSession) {
-                this.logger.log('No active session found');
+            if (!openSession) {
+                const currentSession = await this.findCurrentReferenceSession();
+
+                this.logger.log('No open academic session found for registration', {
+                    currentSessionId: currentSession?._id,
+                    currentSessionYear: currentSession?.sessionYear,
+                    currentSessionStatus: currentSession?.status,
+                });
+
                 return {
                     eligible: false,
-                    reason: 'No active academic session available. Please contact administration.'
+                    reason: this.buildNotOpenReason(currentSession)
                 };
             }
 
-            this.logger.log('Found active session:', {
-                sessionId: activeSession._id,
-                sessionYear: activeSession.sessionYear,
-                status: activeSession.status
+            this.logger.log('Found open academic session for registration:', {
+                sessionId: openSession._id,
+                sessionYear: openSession.sessionYear,
+                status: openSession.status,
+                active: openSession.active,
             });
 
             // Check session controls (this is the primary check for applications)
             const sessionControls = await this.sessionControlModel.findOne({
-                academicSessionId: activeSession._id
+                academicSessionId: openSession._id
             });
 
             if (!sessionControls) {
-                this.logger.log('No session controls found for active session');
+                this.logger.log('No session controls found for open registration session');
                 return {
                     eligible: false,
-                    reason: 'Application controls not configured for current session.'
+                    reason: `Applications for ${openSession.sessionYear} are temporarily disabled. Please check back later.`,
+                    activeSession: openSession,
                 };
             }
 
@@ -66,18 +111,19 @@ export class ApplicationEligibilityService {
                 this.logger.log('Application control is not active');
                 return {
                     eligible: false,
-                    reason: 'Applications are temporarily disabled. Please check back later.'
+                    reason: `Applications for ${openSession.sessionYear} are temporarily disabled. Please check back later.`,
+                    activeSession: openSession,
                 };
             }
 
             this.logger.log('Registration eligibility check passed', {
-                sessionId: activeSession._id,
-                sessionYear: activeSession.sessionYear
+                sessionId: openSession._id,
+                sessionYear: openSession.sessionYear,
             });
 
             return {
                 eligible: true,
-                activeSession
+                activeSession: openSession,
             };
 
         } catch (error) {
@@ -94,19 +140,15 @@ export class ApplicationEligibilityService {
      */
     async getActiveApplicationSession(): Promise<AcademicSession | null> {
         try {
-            // Find active session and check if applications are enabled via controls
-            const activeSession = await this.sessionModel.findOne({
-                active: true,
-                status: { $in: [SessionStatus.OPEN, SessionStatus.ONGOING] }
-            });
+            const openSession = await this.findOpenApplicationSession();
 
-            if (!activeSession) {
+            if (!openSession) {
                 return null;
             }
 
             // Check if application control is active
             const sessionControls = await this.sessionControlModel.findOne({
-                academicSessionId: activeSession._id
+                academicSessionId: openSession._id
             });
 
             if (!sessionControls) {
@@ -117,7 +159,7 @@ export class ApplicationEligibilityService {
                 control => control.name === 'application' && control.active === true
             );
 
-            return applicationControl ? activeSession : null;
+            return applicationControl ? openSession : null;
         } catch (error) {
             this.logger.error('Error getting active application session:', error);
             return null;

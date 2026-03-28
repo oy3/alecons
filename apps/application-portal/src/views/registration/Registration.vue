@@ -103,7 +103,9 @@ export default {
         if (response.success) {
           this.registrationAllowed = response.data.eligible;
           this.eligibilityMessage = response.data.reason || '';
-          this.currentAcademicSession = response.data.academicSession;
+          this.currentAcademicSession = response.data.academicSession?.status === 'open'
+            ? response.data.academicSession
+            : null;
 
           logger.info('Registration eligibility check result:', {
             eligible: this.registrationAllowed,
@@ -464,20 +466,21 @@ export default {
 
               <!-- Academic Session Info -->
               <!-- <div v-if="currentAcademicSession" class="alert alert-info mb-4">
-            <div class="d-flex align-items-center">
-              <i class="bi bi-calendar-event me-2"></i>
-              <small>
-                <strong>Current Academic Session:</strong> {{ currentAcademicSession.sessionYear }}
-                <span class="badge bg-primary ms-2">{{ currentAcademicSession.status?.toUpperCase() }}</span>
-              </small>
-            </div>
-          </div> -->
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-calendar-event me-2"></i>
+                  <small>
+                    <strong>Open Registration Session:</strong>
+                    {{ currentAcademicSession.sessionYear }}
+                    <span class="badge bg-primary ms-2">{{ currentAcademicSession.status?.toUpperCase() }}</span>
+                  </small>
+                </div>
+              </div> -->
 
               <!-- Registration Status Alert -->
               <div v-if="!registrationAllowed" class="alert alert-warning mb-4">
                 <div class="d-flex align-items-center">
                   <i class="bi bi-exclamation-triangle me-2"></i>
-                  <small>{{ eligibilityMessage }}</small>
+                  <small><strong>Registration Status:</strong> {{ eligibilityMessage }}</small>
                 </div>
               </div>
 

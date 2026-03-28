@@ -106,10 +106,10 @@ export default {
 
             <div class="bg-light">
               <img
-                src="https://placehold.co/400?text=IMG"
+                src="../assets/img/campus2.jpg"
                 alt="College Logo"
-                class="img-fluid rounded-3"
-                style="max-width: 400px"
+                class="img-fluid rounded-3 object-fit-cover"
+                style="max-width: 400px; height: 400px;"
               />
             </div>
           </div>

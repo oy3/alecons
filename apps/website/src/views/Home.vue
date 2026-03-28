@@ -296,7 +296,7 @@ export default {
         <div class="col-12 col-md-6 col-lg-3">
           <div class="card border-0 shadow p-1 h-100">
             <div class="card-body">
-              <h2 class="fw-bolder acon-text-primary">15+</h2>
+              <h2 class="fw-bolder acon-text-primary">11+</h2>
               <h6 class="fw-bold acon-text-secondary">Expert Faculty</h6>
               <p class="text-secondary">Experienced professionals</p>
             </div>

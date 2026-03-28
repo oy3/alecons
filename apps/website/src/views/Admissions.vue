@@ -392,61 +392,86 @@ export default {
 
         <!-- TODO: Add Post-Basic Nursing details when available -->
         <!-- Post-Basic Nursing -->
-        <!-- <div class="col-md-4">
-          <div class="card border-0 shadow text-center h-100">
+        <div class="col-md-4">
+          <div class="card border-0 shadow text-center h-100 position-relative overflow-hidden">
+            <div class="program-coming-soon">Coming Soon</div>
             <div class="card-body">
               <h5 class="fw-bold acon-text-primary">Post-Basic Nursing</h5>
               <p class="acon-text-secondary mb-4">18 Months</p>
 
               <div class="d-flex justify-content-between">
-                <span class="text-muted">Tuition:</span>
-                <span class="fw-medium">₦200,000</span>
+                <span class="text-muted fw-light">Application fee:</span>
+                <span class="fw-medium">-</span>
               </div>
+
               <div class="d-flex justify-content-between">
-                <span class="text-muted">Other Fees:</span>
-                <span class="fw-medium">₦40,000</span>
+                <span class="text-muted fw-light">Acceptance fee:</span>
+                <span class="fw-medium">-</span>
+              </div>
+
+              <div class="d-flex justify-content-between">
+                <span class="text-muted fw-light">Sundry Fees:</span>
+                <span class="fw-medium">-</span>
+              </div>
+
+              <div class="d-flex justify-content-between">
+                <span class="text-muted fw-light">Tuition fee:</span>
+                <span class="fw-medium">-</span>
               </div>
 
               <hr />
 
               <div class="d-flex justify-content-between acon-text-primary">
                 <span class="fw-medium">Total:</span>
-                <span class="fw-bold">₦240,000</span>
+                <span class="fw-bold">-</span>
               </div>
 
               <p class="mt-2 text-muted fw-light small">per session</p>
             </div>
           </div>
-        </div> -->
+        </div>
 
         <!-- TODO: Add Midwifery Program details when available -->
         <!-- Midwifery Program -->
-        <!-- <div class="col-md-4">
-          <div class="card border-0 shadow text-center h-100">
+        <div class="col-md-4">
+          <div class="card border-0 shadow text-center h-100 position-relative overflow-hidden">
+            <div class="program-coming-soon">Coming Soon</div>
             <div class="card-body">
               <h5 class="fw-bold acon-text-primary">Midwifery Program</h5>
               <p class="acon-text-secondary mb-4">2 Years</p>
 
-              <div class="d-flex justify-content-between">
-                <span class="text-muted">Tuition:</span>
-                <span class="fw-medium">₦180,000</span>
+                 <div class="d-flex justify-content-between">
+                <span class="text-muted fw-light">Application fee:</span>
+                <span class="fw-medium">-</span>
               </div>
+
               <div class="d-flex justify-content-between">
-                <span class="text-muted">Other Fees:</span>
-                <span class="fw-medium">₦45,000</span>
+                <span class="text-muted fw-light">Acceptance fee:</span>
+                <span class="fw-medium">-</span>
+              </div>
+
+              <div class="d-flex justify-content-between">
+                <span class="text-muted fw-light">Sundry Fees:</span>
+                <span class="fw-medium">-</span>
+              </div>
+
+              <div class="d-flex justify-content-between">
+                <span class="text-muted fw-light">Tuition fee:</span>
+                <span class="fw-medium">-</span>
               </div>
 
               <hr />
 
               <div class="d-flex justify-content-between acon-text-primary">
                 <span class="fw-medium">Total:</span>
-                <span class="fw-bold">₦225,000</span>
+                <span class="fw-bold">-</span>
               </div>
 
               <p class="mt-2 text-muted fw-light small">per session</p>
             </div>
           </div>
-        </div> -->
+        </div> 
+    
       </div>
     </div>
 
@@ -588,4 +613,19 @@ export default {
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.program-coming-soon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(227, 227, 227, 0.82);
+  color: #a81e1e;
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  z-index: 1;
+}
+</style>

@@ -311,7 +311,7 @@ export default {
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">Email</h6>
                 <p class="mb-0 fw-light text-secondary">-
-               §
+               
                 </p>
               </div>
 

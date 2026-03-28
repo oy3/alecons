@@ -1,22 +1,295 @@
 <script lang="js">
-
 export default {
   metaInfo: {
-  title: 'Our Faculty - Alecons College of Nursing Sciences',
-  meta: [
-    {
-      name: 'description',
-      content: 'Meet our experienced and dedicated faculty members who are committed to providing high-quality nursing education and mentorship.'
-    },
-    {
-      name: 'keywords',
-      content: 'nursing faculty Nigeria, Alecons College of Nursing Sciences teachers, nursing lecturers, healthcare educators, alecons'
-    }
-  ]
-},
-
+    title: "Our Faculty - Alecons College of Nursing Sciences",
+    meta: [
+      {
+        name: "description",
+        content:
+          "Meet our experienced and dedicated faculty members who are committed to providing high-quality nursing education and mentorship.",
+      },
+      {
+        name: "keywords",
+        content:
+          "nursing faculty Nigeria, Alecons College of Nursing Sciences teachers, nursing lecturers, healthcare educators, alecons",
+      },
+    ],
+  },
   name: "Faculty",
-  components: {} ,
+  data() {
+    return {
+      currentPage: 1,
+      facultyPerPage: 6,
+      publishedPapersLabel: "10+",
+      stats: [
+        {
+          icon: "bi bi-people",
+          label: "Expert Faculty",
+          valueKey: "totalFaculty",
+        },
+        {
+          icon: "bi bi-mortarboard",
+          label: "PhD Holders",
+          valueKey: "phdFaculty",
+        },
+        {
+          icon: "bi bi-book",
+          label: "Average Years Experience",
+          valueKey: "averageExperience",
+        },
+        {
+          icon: "bi bi-award",
+          label: "Published Papers",
+          valueKey: "publishedPapers",
+        },
+      ],
+      departments: [
+        {
+          name: "Nursing Sciences",
+          head: "Dr. Olaopa",
+          facultyMembers: 8,
+          description:
+            "Core nursing education covering medical-surgical, pediatric, maternal, and psychiatric nursing.",
+        },
+        {
+          name: "Midwifery",
+          head: "-",
+          facultyMembers: 0,
+          description:
+            "Specialized training in maternal and child health, reproductive health, and family planning.",
+        },
+        {
+          name: "Community Health",
+          head: "-",
+          facultyMembers: 0,
+          description:
+            "Public health nursing, health promotion, and community-based healthcare interventions.",
+        },
+        {
+          name: "Nursing Research",
+          head: "-",
+          facultyMembers: 0,
+          description:
+            "Research methodology, evidence-based practice, and quality improvement in healthcare.",
+        },
+      ],
+      facultyMembers: [
+        {
+          name: "Mrs. Yewande Akute",
+          role: "Provost",
+          qualifications: "",
+          department: "Administration",
+          specialization: "Nursing Leadership & Mgt.",
+          experience: "10+ years",
+          experienceYears: 10,
+          bio: "Mrs. Akute provides strategic leadership for the college and supports a strong academic culture grounded in student development and institutional growth.",
+          email: "provost@alecons.edu.ng",
+          phone: "+234 916 000 8679",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+        {
+          name: "Dr. Olaopa",
+          role: "HOD Nursing",
+          qualifications: "",
+          department: "Nursing Sciences",
+          specialization: "Anatomy",
+          experience: "12+ years",
+          experienceYears: 12,
+          bio: "Dr. Olaopa leads the nursing unit with a strong focus on foundational training, helping students build confident clinical and academic skills from the start.",
+          email: "hod.nursing@alecons.edu.ng",
+          phone: "",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+        {
+          name: "Mr. Tunji Kehinde",
+          role: "Registrar",
+          qualifications: "",
+          department: "Administration",
+          specialization: "",
+          experience: "11+ years",
+          experienceYears: 11,
+          bio: "Mr. Kehinde oversees key administrative processes and supports smooth academic operations across admissions, records, and institutional coordination.",
+          email: "registrar@alecons.edu.ng",
+          phone: "",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+        {
+          name: "Mr. Donatus Okoroji",
+          role: "Bursar",
+          qualifications: "",
+          department: "Finance & Administration",
+          specialization: "Use of Computer",
+          experience: "15+ years",
+          experienceYears: 15,
+          bio: "Mr. Okoroji manages the college’s financial administration and brings practical digital literacy support to institutional and academic processes.",
+          email: "bursar@alecons.edu.ng",
+          phone: "",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+        {
+          name: "Dr. Wura Oyolabi",
+          role: "Lecturer",
+          qualifications: "",
+          department: "Basic Medical Sciences",
+          specialization: "Medical Microbiology / Physiology",
+          experience: "9+ years",
+          experienceYears: 9,
+          bio: "Dr. Oyolabi teaches core biomedical subjects and helps students connect scientific principles with practical nursing and patient care applications.",
+          email: "wuraoyolabi@alecons.edu.ng",
+          phone: "",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+        {
+          name: "Mr. Olooba",
+          role: "Lecturer",
+          qualifications: "",
+          department: "Basic Medical Sciences",
+          specialization: "Applied Chemistry",
+          experience: "8+ years",
+          experienceYears: 8,
+          bio: "Mr. Olooba delivers chemistry-based instruction that strengthens students’ understanding of scientific concepts essential to healthcare training.",
+          email: "olooba@alecons.edu.ng",
+          phone: "",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+        {
+          name: "Mrs. Adeola Johnson",
+          role: "Lecturer",
+          qualifications: "",
+          department: "Nursing Sciences",
+          specialization: "Emergency Nursing",
+          experience: "13+ years",
+          experienceYears: 13,
+          bio: "Mrs. Johnson supports students with practical instruction in emergency care while reinforcing responsible citizenship and professional conduct in training.",
+          email: "adeolajohnson@alecons.edu.ng",
+          phone: "",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+        {
+          name: "Mr. Taofeek",
+          role: "Lecturer",
+          qualifications: "",
+          department: "Basic Medical Sciences",
+          specialization: "Physics",
+          experience: "4+ years",
+          experienceYears: 4,
+          bio: "Mr. Taofeek teaches physics with an applied approach that helps students understand measurement, energy, and core scientific reasoning in healthcare contexts.",
+          email: "taofeek@alecons.edu.ng",
+          phone: "",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+        {
+          name: "Mr. Akilo",
+          role: "Lecturer",
+          qualifications: "",
+          department: "General Studies",
+          specialization: "English",
+          experience: "3+ years",
+          experienceYears: 3,
+          bio: "Mr. Akilo helps students strengthen communication, writing, and comprehension skills that support academic success and professional practice.",
+          email: "akilo@alecons.edu.ng",
+          phone: "",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+
+        {
+          name: "Mrs. Oso",
+          role: "Hostel Matron",
+          qualifications: "",
+          department: "Student Affairs",
+          specialization: "Clinical Instructor",
+          experience: "5+ years",
+          experienceYears: 5,
+          bio: "Mrs. Oso supports student welfare in the hostel and guides learners through hands-on clinical expectations with a practical, student-focused approach.",
+          email: "hostel.matron@alecons.edu.ng",
+          phone: "",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+        {
+          name: "Mr. Oluwaseun",
+          role: "Clinical Officer",
+          qualifications: "",
+          department: "Clinical Services",
+          specialization: "",
+          experience: "4+ years",
+          experienceYears: 4,
+          bio: "Mr. Oluwaseun contributes to clinical support services and helps maintain a practical learning environment for students during supervised training.",
+          email: "oluwaseun@alecons.edu.ng",
+          phone: "",
+          image: "https://placehold.co/100x100?text=IMG",
+        },
+      ],
+    };
+  },
+  computed: {
+    totalFaculty() {
+      return `${this.facultyMembers.length}+`;
+    },
+    phdFaculty() {
+      return this.facultyMembers.filter(
+        (member) =>
+          member.qualifications.includes("PhD") ||
+          member.name.startsWith("Dr."),
+      ).length;
+    },
+    averageExperience() {
+      const totalYears = this.facultyMembers.reduce(
+        (sum, member) => sum + member.experienceYears,
+        0,
+      );
+      const averageYears = Math.round(totalYears / this.facultyMembers.length);
+
+      return `${averageYears}+`;
+    },
+    publishedPapers() {
+      return this.publishedPapersLabel;
+    },
+    totalPages() {
+      return Math.ceil(this.facultyMembers.length / this.facultyPerPage);
+    },
+    paginatedFacultyMembers() {
+      const startIndex = (this.currentPage - 1) * this.facultyPerPage;
+      const endIndex = startIndex + this.facultyPerPage;
+
+      return this.facultyMembers.slice(startIndex, endIndex);
+    },
+    visiblePages() {
+      return Array.from({ length: this.totalPages }, (_, index) => index + 1);
+    },
+  },
+  methods: {
+    scrollToStaffs() {
+      const staffsSection = document.getElementById("staffs");
+
+      if (!staffsSection) {
+        return;
+      }
+
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}#staffs`,
+      );
+
+      staffsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    goToPage(page) {
+      if (page < 1 || page > this.totalPages || page === this.currentPage) {
+        return;
+      }
+
+      this.currentPage = page;
+      this.$nextTick(() => {
+        this.scrollToStaffs();
+      });
+    },
+    goToPreviousPage() {
+      this.goToPage(this.currentPage - 1);
+    },
+    goToNextPage() {
+      this.goToPage(this.currentPage + 1);
+    },
+  },
 };
 </script>
 
@@ -33,28 +306,12 @@ export default {
 
     <div class="acon-bg-light p-5 text-center">
       <div class="row g-4">
-        <div class="col-md-3">
-          <i class="bi bi-people display-4 acon-text-secondary"></i>
-          <h3 class="fw-semibold acon-text-secondary">15+</h3>
-          <p class="fw-light">Expert Faculty</p>
-        </div>
-
-        <div class="col-md-3">
-          <i class="bi bi-mortarboard display-4 acon-text-secondary"></i>
-          <h3 class="fw-semibold acon-text-secondary">2</h3>
-          <p class="fw-light">PhD Holders</p>
-        </div>
-
-        <div class="col-md-3">
-          <i class="bi bi-book display-4 acon-text-secondary"></i>
-          <h3 class="fw-semibold acon-text-secondary">1</h3>
-          <p class="fw-light">Average Years Experience</p>
-        </div>
-
-        <div class="col-md-3">
-          <i class="bi bi-award display-4 acon-text-secondary"></i>
-          <h3 class="fw-semibold acon-text-secondary">10+</h3>
-          <p class="fw-light">Published Papers</p>
+        <div v-for="stat in stats" :key="stat.label" class="col-md-3">
+          <i :class="`${stat.icon} display-4 acon-text-secondary`"></i>
+          <h3 class="fw-semibold acon-text-secondary">
+            {{ this[stat.valueKey] }}
+          </h3>
+          <p class="fw-light">{{ stat.label }}</p>
         </div>
       </div>
     </div>
@@ -67,89 +324,28 @@ export default {
       </p>
 
       <div class="row g-4">
-        <div class="col-md-6">
+        <div
+          v-for="department in departments"
+          :key="department.name"
+          class="col-md-6"
+        >
           <div class="card border-0 shadow p-2">
             <div class="card-body">
               <h5 class="card-title text-start acon-text-primary fw-bold fs-4">
-                Nursing Sciences
+                {{ department.name }}
               </h5>
               <div class="d-flex">
                 <div class="me-auto text-dark-emphasis">Department Head:</div>
-                <div class="acon-text-secondary">Mrs. Funmilayo Adeyemi</div>
+                <div class="acon-text-secondary">{{ department.head }}</div>
               </div>
               <div class="d-flex mb-2">
                 <div class="me-auto text-dark-emphasis">Faculty Members:</div>
-                <div class="acon-text-secondary">12</div>
+                <div class="acon-text-secondary">
+                  {{ department.facultyMembers }}
+                </div>
               </div>
               <p class="card-text text-start text-dark-emphasis">
-                Core nursing education covering medical-surgical, pediatric,
-                maternal, and psychiatric nursing.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="card border-0 shadow p-2">
-            <div class="card-body">
-              <h5 class="card-title text-start acon-text-primary fw-bold fs-4">
-                Midwifery
-              </h5>
-              <div class="d-flex">
-                <div class="me-auto text-dark-emphasis">Department Head:</div>
-                <div class="acon-text-secondary">Dr. Blessing Ogunmola</div>
-              </div>
-              <div class="d-flex mb-2">
-                <div class="me-auto text-dark-emphasis">Faculty Members:</div>
-                <div class="acon-text-secondary">6</div>
-              </div>
-              <p class="card-text text-start text-dark-emphasis">
-                Specialized training in maternal and child health, reproductive
-                health, and family planning.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="card border-0 shadow p-2">
-            <div class="card-body">
-              <h5 class="card-title text-start acon-text-primary fw-bold fs-4">
-                Community Health
-              </h5>
-              <div class="d-flex">
-                <div class="me-auto text-dark-emphasis">Department Head:</div>
-                <div class="acon-text-secondary">Prof. Emmanuel Ogundipe</div>
-              </div>
-              <div class="d-flex mb-2">
-                <div class="me-auto text-dark-emphasis">Faculty Members:</div>
-                <div class="acon-text-secondary">4</div>
-              </div>
-              <p class="card-text text-start text-dark-emphasis">
-                Public health nursing, health promotion, and community-based
-                healthcare interventions.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="card border-0 shadow p-2">
-            <div class="card-body">
-              <h5 class="card-title text-start acon-text-primary fw-bold fs-4">
-                Nursing Research
-              </h5>
-              <div class="d-flex">
-                <div class="me-auto text-dark-emphasis">Department Head:</div>
-                <div class="acon-text-secondary">Prof. Emmanuel Ogundipe</div>
-              </div>
-              <div class="d-flex mb-2">
-                <div class="me-auto text-dark-emphasis">Faculty Members:</div>
-                <div class="acon-text-secondary">3</div>
-              </div>
-              <p class="card-text text-start text-dark-emphasis">
-                Research methodology, evidence-based practice, and quality
-                improvement in healthcare.
+                {{ department.description }}
               </p>
             </div>
           </div>
@@ -157,7 +353,7 @@ export default {
       </div>
     </div>
 
-    <div class="acon-bg-light p-5 text-center">
+    <div id="staffs" class="acon-bg-light p-5 text-center">
       <h2 class="fw-bold acon-text-primary">Faculty Members</h2>
       <p class="lead mb-5 text-secondary">
         Our faculty combines extensive clinical experience with advanced
@@ -165,416 +361,105 @@ export default {
       </p>
 
       <div class="row g-4">
-        <div class="col-md-4">
+        <div
+          v-for="member in paginatedFacultyMembers"
+          :key="member.email"
+          class="col-md-4"
+        >
           <div class="card border-0 shadow p-2 h-100">
             <div class="card-body text-dark-emphasis">
               <img
-                src="../assets/img/nurse1.png"
+                :src="member.image"
                 class="rounded-circle mb-3"
                 height="100"
                 width="100"
-                alt="Team-1 Img"
+                :alt="`${member.name} portrait`"
               />
               <h5 class="card-title acon-text-primary fw-bold">
-                Dr. Adebayo Oluwaseun
+                {{ member.name }}
               </h5>
               <p class="acon-text-secondary mb-0">
-                Provost & Professor of Nursing
+                {{ member.role }}
               </p>
-              <span class="badge rounded-pill text-bg-light text-muted mb-3"
-                >PhD, RN, FWACN</span
+              <span
+                v-if="member.qualifications"
+                class="badge rounded-pill text-bg-light text-muted mb-3"
               >
-              <div class="d-flex">
-                <div class="me-auto">Department:</div>
-                <div class="acon-text-primary">Administration</div>
-              </div>
-              <div class="d-flex">
-                <div class="me-auto">Specialization:</div>
-                <div class="acon-text-primary">Nursing Leadership & Mgt.</div>
-              </div>
-              <div class="d-flex mb-3">
-                <div class="me-auto">Experience:</div>
-                <div class="acon-text-primary">20+ years</div>
-              </div>
-
-              <p class="card-text text-start mb-3">
-                Dr. Adebayo brings over two decades of experience in nursing
-                education and healthcare management. He has published
-                extensively on nursing leadership and quality improvement in
-                healthcare delivery.
-              </p>
-
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-envelope acon-text-primary me-2"></i>
-                provost@alecons.edu.ng
-              </p>
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-telephone acon-text-primary me-2"></i> +234 XXX
-                XXX XXXX
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-4">
-          <div class="card border-0 shadow p-2 h-100">
-            <div class="card-body text-dark-emphasis">
-              <img
-                src="../assets/img/nurse2.jpg"
-                class="rounded-circle mb-3"
-                height="100"
-                width="100"
-                alt="Team-2 Img"
-              />
-              <h5 class="card-title acon-text-primary fw-bold">
-                Mrs. Funmilayo Adeyemi
-              </h5>
-              <p class="acon-text-secondary mb-0">
-                Deputy Provost & Senior Lecturer
-              </p>
-              <span class="badge rounded-pill text-bg-light text-muted mb-3">
-                MSN, RN, CNE
+                {{ member.qualifications }}
               </span>
               <div class="d-flex">
                 <div class="me-auto">Department:</div>
-                <div class="acon-text-primary">Nursing Sciences</div>
+                <div class="acon-text-primary">{{ member.department }}</div>
               </div>
-              <div class="d-flex">
+              <div v-if="member.specialization" class="d-flex">
                 <div class="me-auto">Specialization:</div>
-                <div class="acon-text-primary">
-                  Nursing Sciences Medical-Surgical Nursing
-                </div>
+                <div class="acon-text-primary">{{ member.specialization }}</div>
               </div>
               <div class="d-flex mb-3">
                 <div class="me-auto">Experience:</div>
-                <div class="acon-text-primary">15+ years</div>
+                <div class="acon-text-primary">{{ member.experience }}</div>
               </div>
 
               <p class="card-text text-start mb-3">
-                Mrs. Adeyemi specializes in medical-surgical nursing with
-                extensive experience in clinical practice and education. She has
-                mentored hundreds of nursing students throughout her career.
+                {{ member.bio }}
               </p>
 
-              <p class="d-flex align-items-center mb-0">
+              <p v-if="member.email" class="d-flex align-items-center mb-0">
                 <i class="bi bi-envelope acon-text-primary me-2"></i>
-                deputy.provost@alecons.edu.ng
+                {{ member.email }}
               </p>
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-telephone acon-text-primary me-2"></i> +234 XXX
-                XXX XXXX
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-4">
-          <div class="card border-0 shadow p-2 h-100">
-            <div class="card-body text-dark-emphasis">
-              <img
-                src="../assets/img/nurse3.jpg"
-                class="rounded-circle mb-3"
-                height="100"
-                width="100"
-                alt="Team-1 Img"
-              />
-              <h5 class="card-title acon-text-primary fw-bold">
-                Prof. Emmanuel Ogundipe
-              </h5>
-              <p class="acon-text-secondary mb-0">Dean of Academic Affairs</p>
-              <span class="badge rounded-pill text-bg-light text-muted mb-3"
-                >PhD, RN, FWACN</span
-              >
-              <div class="d-flex">
-                <div class="me-auto">Department:</div>
-                <div class="acon-text-primary">Nursing Research</div>
-              </div>
-              <div class="d-flex">
-                <div class="me-auto">Specialization:</div>
-                <div class="acon-text-primary">Community Health Nursing</div>
-              </div>
-              <div class="d-flex mb-3">
-                <div class="me-auto">Experience:</div>
-                <div class="acon-text-primary">18+ years</div>
-              </div>
-
-              <p class="card-text text-start mb-3">
-                Prof. Ogundipe is a renowned expert in community health nursing
-                with numerous publications on public health interventions and
-                community-based care models.
-              </p>
-
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-envelope acon-text-primary me-2"></i>
-                dean.academic@alecons.edu.ng
-              </p>
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-telephone acon-text-primary me-2"></i> +234 XXX
-                XXX XXXX
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-4">
-          <div class="card border-0 shadow p-2 h-100">
-            <div class="card-body text-dark-emphasis">
-              <img
-                src="../assets/img/nurse4.png"
-                class="rounded-circle mb-3"
-                height="100"
-                width="100"
-                alt="Team-1 Img"
-              />
-              <h5 class="card-title acon-text-primary fw-bold">
-                Dr. Blessing Ogunmola
-              </h5>
-              <p class="acon-text-secondary mb-0">
-                Head of Midwifery Department
-              </p>
-              <span class="badge rounded-pill text-bg-light text-muted mb-3">
-                PhD, RM, RN
-              </span>
-              <div class="d-flex">
-                <div class="me-auto">Department:</div>
-                <div class="acon-text-primary">Midwifery</div>
-              </div>
-              <div class="d-flex">
-                <div class="me-auto">Specialization:</div>
-                <div class="acon-text-primary">Maternal & Child Health</div>
-              </div>
-              <div class="d-flex mb-3">
-                <div class="me-auto">Experience:</div>
-                <div class="acon-text-primary">12+ years</div>
-              </div>
-
-              <p class="card-text text-start mb-3">
-                Dr. Ogunmola is a certified midwife with extensive experience in
-                maternal and child health. She has led numerous initiatives to
-                improve maternal outcomes in rural communities.
-              </p>
-
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-envelope acon-text-primary me-2"></i>
-                midwifery.head@alecons.edu.ng
-              </p>
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-telephone acon-text-primary me-2"></i> +234 XXX
-                XXX XXXX
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-4">
-          <div class="card border-0 shadow p-2 h-100">
-            <div class="card-body text-dark-emphasis">
-              <img
-                src="../assets/img/nurse1.png"
-                class="rounded-circle mb-3"
-                height="100"
-                width="100"
-                alt="Team-1 Img"
-              />
-              <h5 class="card-title acon-text-primary fw-bold">
-                Mr. Taiwo Adebola
-              </h5>
-              <p class="acon-text-secondary mb-0">Senior Lecturer</p>
-              <span class="badge rounded-pill text-bg-light text-muted mb-3">
-                MSN, RN, CCRN
-              </span>
-              <div class="d-flex">
-                <div class="me-auto">Department:</div>
-                <div class="acon-text-primary">Nursing Sciences</div>
-              </div>
-              <div class="d-flex">
-                <div class="me-auto">Specialization:</div>
-                <div class="acon-text-primary">Critical Care Nursing</div>
-              </div>
-              <div class="d-flex mb-3">
-                <div class="me-auto">Experience:</div>
-                <div class="acon-text-primary">10+ years</div>
-              </div>
-
-              <p class="card-text text-start mb-3">
-                Mr. Adebola is a critical care specialist with expertise in
-                intensive care unit management and emergency nursing. He
-                regularly conducts advanced life support training.
-              </p>
-
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-envelope acon-text-primary me-2"></i>
-                t.adebola@alecons.edu.ng
-              </p>
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-telephone acon-text-primary me-2"></i> +234 XXX
-                XXX XXXX
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-4">
-          <div class="card border-0 shadow p-2 h-100">
-            <div class="card-body text-dark-emphasis">
-              <img
-                src="../assets/img/nurse4.png"
-                class="rounded-circle mb-3"
-                height="100"
-                width="100"
-                alt="Team-1 Img"
-              />
-              <h5 class="card-title acon-text-primary fw-bold">
-                Mrs. Olayinka Bamidele
-              </h5>
-              <p class="acon-text-secondary mb-0">Lecturer</p>
-              <span class="badge rounded-pill text-bg-light text-muted mb-3">
-                MSN, RN, CPN
-              </span>
-              <div class="d-flex">
-                <div class="me-auto">Department:</div>
-                <div class="acon-text-primary">Nursing Sciences</div>
-              </div>
-              <div class="d-flex">
-                <div class="me-auto">Specialization:</div>
-                <div class="acon-text-primary">Pediatric Nursing</div>
-              </div>
-              <div class="d-flex mb-3">
-                <div class="me-auto">Experience:</div>
-                <div class="acon-text-primary">8+ years</div>
-              </div>
-
-              <p class="card-text text-start mb-3">
-                Mrs. Bamidele specializes in pediatric nursing with a focus on
-                child development and family-centered care. She has trained
-                numerous nurses in pediatric emergency care.
-              </p>
-
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-envelope acon-text-primary me-2"></i>
-                o.bamidele@alecons.edu.ng
-              </p>
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-telephone acon-text-primary me-2"></i> +234 XXX
-                XXX XXXX
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-4">
-          <div class="card border-0 shadow p-2 h-100">
-            <div class="card-body text-dark-emphasis">
-              <img
-                src="../assets/img/nurse2.jpg"
-                class="rounded-circle mb-3"
-                height="100"
-                width="100"
-                alt="Team-1 Img"
-              />
-              <h5 class="card-title acon-text-primary fw-bold">
-                Dr. Ajibola Adedayo
-              </h5>
-              <p class="acon-text-secondary mb-0">Lecturer</p>
-              <span class="badge rounded-pill text-bg-light text-muted mb-3">
-                PhD, RN, PMHNP
-              </span>
-              <div class="d-flex">
-                <div class="me-auto">Department:</div>
-                <div class="acon-text-primary">Nursing Sciences</div>
-              </div>
-              <div class="d-flex">
-                <div class="me-auto">Specialization:</div>
-                <div class="acon-text-primary">Psychiatric Mental Health</div>
-              </div>
-              <div class="d-flex mb-3">
-                <div class="me-auto">Experience:</div>
-                <div class="acon-text-primary">9+ years</div>
-              </div>
-
-              <p class="card-text text-start mb-3">
-                Dr. Adedayo is a psychiatric mental health nurse practitioner
-                with expertise in mental health assessment and therapeutic
-                interventions. She leads community mental health programs.
-              </p>
-
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-envelope acon-text-primary me-2"></i>
-                a.adedayo@alecons.edu.ng
-              </p>
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-telephone acon-text-primary me-2"></i> +234 XXX
-                XXX XXXX
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-4">
-          <div class="card border-0 shadow p-2 h-100">
-            <div class="card-body text-dark-emphasis">
-              <img
-                src="../assets/img/nurse4.png"
-                class="rounded-circle mb-3"
-                height="100"
-                width="100"
-                alt="Team-1 Img"
-              />
-              <h5 class="card-title acon-text-primary fw-bold">
-                Mrs. Kehinde Olatunji
-              </h5>
-              <p class="acon-text-secondary mb-0">Assistant Lecturer</p>
-              <span class="badge rounded-pill text-bg-light text-muted mb-3">
-                MSN, RN, FNP
-              </span>
-              <div class="d-flex">
-                <div class="me-auto">Department:</div>
-                <div class="acon-text-primary">Nursing Sciences</div>
-              </div>
-              <div class="d-flex">
-                <div class="me-auto">Specialization:</div>
-                <div class="acon-text-primary">Gerontological Nursing</div>
-              </div>
-              <div class="d-flex mb-3">
-                <div class="me-auto">Experience:</div>
-                <div class="acon-text-primary">6+ years</div>
-              </div>
-
-              <p class="card-text text-start mb-3">
-                Mrs. Olatunji specializes in gerontological nursing with focus
-                on elderly care and age-related health conditions. She
-                coordinates our geriatric nursing clinical rotations.
-              </p>
-
-              <p class="d-flex align-items-center mb-0">
-                <i class="bi bi-envelope acon-text-primary me-2"></i>
-                k.olatunji@alecons.edu.ng
-              </p>
-              <p class="d-flex align-items-cente mb-0">
-                <i class="bi bi-telephone acon-text-primary me-2"></i> +234 XXX
-                XXX XXXX
+              <p v-if="member.phone" class="d-flex align-items-center mb-0">
+                <i class="bi bi-telephone acon-text-primary me-2"></i>
+                {{ member.phone }}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      <nav class="mt-5" aria-label="Page navigation example">
+      <nav class="mt-5" aria-label="Faculty pagination">
         <ul class="pagination justify-content-center">
-          <li class="page-item disabled">
-            <a class="page-link">Previous</a>
+          <li class="page-item" :class="{ disabled: currentPage === 1 }">
+            <button
+              class="page-link acon-link acon-text-primary"
+              type="button"
+              :disabled="currentPage === 1"
+              @click="goToPreviousPage"
+            >
+              Previous
+            </button>
           </li>
-          <li class="page-item">
-            <a class="page-link acon-link acon-text-primary" href="#">1</a>
+          <li
+            v-for="page in visiblePages"
+            :key="page"
+            class="page-item"
+            :class="{ active: page === currentPage }"
+          >
+            <button
+              class="page-link acon-link"
+              :class="
+                page === currentPage
+                  ? 'btn-acon-primary text-white border-0'
+                  : 'acon-text-primary'
+              "
+              type="button"
+              @click="goToPage(page)"
+            >
+              {{ page }}
+            </button>
           </li>
-          <li class="page-item">
-            <a class="page-link acon-link acon-text-primary" href="#">2</a>
-          </li>
-          <li class="page-item">
-            <a class="page-link acon-link acon-text-primary" href="#">3</a>
-          </li>
-          <li class="page-item">
-            <a class="page-link acon-link acon-text-primary" href="#">Next</a>
+          <li
+            class="page-item"
+            :class="{ disabled: currentPage === totalPages }"
+          >
+            <button
+              class="page-link acon-link acon-text-primary"
+              type="button"
+              :disabled="currentPage === totalPages"
+              @click="goToNextPage"
+            >
+              Next
+            </button>
           </li>
         </ul>
       </nav>
@@ -588,11 +473,18 @@ export default {
         skilled nurses. Be part of a forward-thinking institution committed to
         academic excellence and community impact.
       </p>
-      <button class="btn btn-acon-dark btn-lg px-5" type="button">
+      <a
+        class="btn btn-acon-dark btn-lg px-5"
+        href="mailto:careers@alecons.edu.ng"
+      >
         Join the Team
-      </button>
+      </a>
     </div>
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+#staffs {
+  scroll-margin-top: 130px;
+}
+</style>

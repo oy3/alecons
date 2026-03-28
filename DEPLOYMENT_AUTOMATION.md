@@ -112,6 +112,12 @@ Add these as **Environment Variables**:
 - `VITE_APP_STAFF_PORTAL_URL` = `https://staff.alecons.edu.ng`
 - `VITE_APP_API_URL` = `https://api.alecons.edu.ng/api/v1`
 - `VITE_PAYSTACK_PUBLIC_KEY` = your live public Paystack key
+- `VITE_PAYMENT_PAYSTACK_ENABLED` = `true`
+- `VITE_PAYMENT_MANUAL_TRANSFER_ENABLED` = `true`
+- `VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NAME` = your manual transfer account name
+- `VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NUMBER` = your manual transfer account number
+- `VITE_PAYMENT_MANUAL_TRANSFER_BANK_NAME` = your manual transfer bank name
+- `VITE_PAYMENT_MANUAL_TRANSFER_NOTE` = your manual transfer receipt instruction note
 - `VITE_APP_ENV` = `production`
 - `VITE_APP_DEBUG` = `false`
 - `VITE_CBT_APP_NAME` = `ALECONS CBT`
@@ -120,6 +126,8 @@ Add these as **Environment Variables**:
 - `VITE_ENABLE_DEV_TOOLS` = `false`
 
 The workflow derives `VITE_API_URL`, `VITE_API_BASE_URL`, and `VITE_SOCKET_URL` automatically from `VITE_APP_API_URL`, so you do not need to enter those separately in GitHub.
+
+For applicant and student payments, the workflow now also renders the frontend fallback payment settings into the production builds. If these variables are missing in GitHub, the renderer falls back to sensible defaults, but you should still set the real manual transfer account values in the `production` environment for consistency.
 
 ## Phase 4: How The Workflow Runs
 
@@ -186,6 +194,57 @@ curl https://api.alecons.edu.ng/api/v1/health
 ```bash
 pm2 status
 pm2 logs alecons-api --lines 100
+```
+
+If you are logged in as `root`, switch to the deploy user before managing the live API process:
+
+```bash
+sudo -iu deploy
+pm2 status
+pm2 logs alecons-api --lines 100
+```
+
+The production API should be managed by the deploy user's PM2 daemon, not root's PM2 daemon.
+
+### Reload API env after editing `/etc/alecons/api.env`
+
+If you update production API secrets or runtime configuration in `/etc/alecons/api.env`, reload PM2 as the deploy user so the running process picks up the new values:
+
+```bash
+sudo -iu deploy
+set -a
+source /etc/alecons/api.env
+set +a
+export ALECONS_API_CWD=/home/api/current
+pm2 delete alecons-api || true
+pm2 kill
+pm2 start /home/api/current/ecosystem.config.cjs --update-env
+pm2 save
+pm2 env 0 | grep -E 'SMTP_USER|EMAIL_FROM|GOOGLE_CLIENT_ID|GOOGLE_REFRESH_TOKEN'
+```
+
+This hard-resets the deploy user's PM2 daemon and avoids stale environment values being reused by an older process.
+
+### Troubleshooting PM2 ownership
+
+If `curl http://127.0.0.1:8000/api/v1/health` works but `pm2 status` does not show `alecons-api`, you are probably checking the wrong PM2 home.
+
+- `root` and `deploy` each have separate PM2 process lists.
+- The GitHub deployment automation starts and reloads the API as the deploy user.
+- Running `pm2` as `root` can create a second competing API process and cause `EADDRINUSE` on port `8000`.
+
+To verify the live process owner:
+
+```bash
+sudo lsof -i :8000 -P -n
+sudo -u deploy pm2 list
+```
+
+To inspect the exact env currently loaded by the live PM2 app:
+
+```bash
+sudo -iu deploy
+pm2 env 0 | grep -E 'SMTP_USER|EMAIL_FROM|GOOGLE_CLIENT_ID|GOOGLE_REFRESH_TOKEN'
 ```
 
 ### If API deployment fails after switching to CI-built artifacts

@@ -231,6 +231,7 @@ Notes:
 - If a method is disabled in session controls, the portal hides or blocks it even when the frontend env flag is `true`.
 - Manual transfer receipt uploads depend on the API Spaces configuration being valid in production.
 - Pending manual transfer payments show separately from unpaid fees until staff verification is completed.
+- In automated production deploys, these `VITE_PAYMENT_*` values should be set in the GitHub `production` environment so the generated frontend `.env.production` files include the same payment fallback settings as local development.
 
 ### Workspace Configuration
 This project uses npm workspaces for monorepo management. Each app and package has its own `package.json` with specific dependencies and scripts.

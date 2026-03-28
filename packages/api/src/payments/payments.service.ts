@@ -2,13 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Payment, PaymentDocument, PaymentAudience } from '../schemas/payment.schema';
-import { StudentPayment, StudentPaymentDocument, PaymentStatus } from '../schemas/student-payment.schema';
+import { StudentPayment, StudentPaymentDocument, PaymentMethod, PaymentStatus, PaymentChannel } from '../schemas/student-payment.schema';
 import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
 import { TenancyAgreement, TenancyAgreementDocument } from '../schemas/tenancy-agreement.schema';
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
+import { UploadService } from '../services/upload.service';
 
 export interface PaymentSummary {
     id: string;
@@ -22,13 +23,26 @@ export interface PaymentSummary {
     status?: PaymentStatus;
     channel?: string;
     fee?: number;
+    method?: PaymentMethod;
+    remarks?: string;
+    receiptUrl?: string;
+    receiptOriginalName?: string;
+    receiptUploadedAt?: Date;
 }
 
 export interface StudentPaymentsSummary {
     paidFees: PaymentSummary[];
+    pendingFees?: PaymentSummary[];
     unpaidFees: PaymentSummary[];
     totalPaid: number;
+    totalPending?: number;
     totalUnpaid: number;
+    availableMethods?: PaymentMethodAvailability;
+}
+
+export interface PaymentMethodAvailability {
+    paystackEnabled: boolean;
+    manualTransferEnabled: boolean;
 }
 
 export interface StaffLinkedPaymentRecord {
@@ -42,6 +56,13 @@ export interface StaffLinkedPaymentRecord {
     remarks?: string;
     createdAt?: Date;
     updatedAt?: Date;
+    method?: PaymentMethod;
+    receiptUrl?: string;
+    receiptOriginalName?: string;
+    receiptUploadedAt?: Date;
+    verifiedAt?: Date;
+    rejectedAt?: Date;
+    verificationRemarks?: string;
     isApplicationLinked: boolean;
     isAcademicSessionLinked: boolean;
     payment: {
@@ -88,7 +109,174 @@ export class PaymentsService {
         @InjectModel(TenancyAgreement.name) private tenancyAgreementModel: Model<TenancyAgreementDocument>,
         private matriculationService: MatriculationService,
         private emailService: EmailService,
+        private uploadService: UploadService,
     ) { }
+
+    private getUserAudiencesForContext(
+        userRole: UserRole,
+        context: 'application-portal' | 'student-portal' = 'application-portal',
+    ): PaymentAudience[] {
+        switch (userRole) {
+            case UserRole.APPLICANT:
+                return [PaymentAudience.APPLICANT];
+            case UserRole.STUDENT:
+                return context === 'application-portal'
+                    ? [PaymentAudience.APPLICANT]
+                    : [PaymentAudience.STUDENT];
+            case UserRole.STAFF:
+                return [PaymentAudience.ACADEMIC_STAFF];
+            case UserRole.ADMIN:
+                return [PaymentAudience.ADMIN_STAFF];
+            default:
+                return [PaymentAudience.APPLICANT];
+        }
+    }
+
+    private isManualTransferPending(payment: Partial<StudentPayment>): boolean {
+        return payment.status === PaymentStatus.PENDING
+            && payment.method === PaymentMethod.MANUAL_TRANSFER
+            && !!payment.receiptUrl;
+    }
+
+    private buildManualTransferReference(): string {
+        return `MAN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    }
+
+    private getPaymentMethodControlNames(context: 'application-portal' | 'student-portal') {
+        if (context === 'student-portal') {
+            return {
+                paystack: 'studentPaystackPayments',
+                manualTransfer: 'studentManualTransferPayments',
+            };
+        }
+
+        return {
+            paystack: 'applicantPaystackPayments',
+            manualTransfer: 'applicantManualTransferPayments',
+        };
+    }
+
+    private async getPaymentMethodAvailability(
+        context: 'application-portal' | 'student-portal',
+        academicSessionId?: string | Types.ObjectId,
+    ): Promise<PaymentMethodAvailability> {
+        const defaultAvailability: PaymentMethodAvailability = {
+            paystackEnabled: true,
+            manualTransferEnabled: true,
+        };
+
+        if (!academicSessionId) {
+            return defaultAvailability;
+        }
+
+        const sessionId = typeof academicSessionId === 'string'
+            ? academicSessionId
+            : academicSessionId.toString();
+
+        if (!Types.ObjectId.isValid(sessionId)) {
+            return defaultAvailability;
+        }
+
+        const sessionControl = await this.paymentModel.db.collection('sessioncontrols')
+            .findOne({ academicSessionId: new Types.ObjectId(sessionId) });
+
+        if (!sessionControl?.controls?.length) {
+            return defaultAvailability;
+        }
+
+        const controlNames = this.getPaymentMethodControlNames(context);
+        const controlMap = new Map(
+            (sessionControl.controls || []).map((control: any) => [control.name, Boolean(control.active)]),
+        );
+
+        return {
+            paystackEnabled: controlMap.has(controlNames.paystack)
+                ? Boolean(controlMap.get(controlNames.paystack))
+                : defaultAvailability.paystackEnabled,
+            manualTransferEnabled: controlMap.has(controlNames.manualTransfer)
+                ? Boolean(controlMap.get(controlNames.manualTransfer))
+                : defaultAvailability.manualTransferEnabled,
+        };
+    }
+
+    private async assertPaymentMethodEnabled(
+        method: PaymentMethod,
+        context: 'application-portal' | 'student-portal',
+        academicSessionId?: string | Types.ObjectId,
+    ) {
+        const availability = await this.getPaymentMethodAvailability(context, academicSessionId);
+
+        if (method === PaymentMethod.PAYSTACK && !availability.paystackEnabled) {
+            throw new Error('Paystack payments are currently disabled for this session');
+        }
+
+        if (method === PaymentMethod.MANUAL_TRANSFER && !availability.manualTransferEnabled) {
+            throw new Error('Manual transfer payments are currently disabled for this session');
+        }
+
+        return availability;
+    }
+
+    private async resolveLinkedApplication(userId: string | Types.ObjectId) {
+        const userObjectId = typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
+
+        const directApplication = await this.applicationModel
+            .findOne({ userId: userObjectId })
+            .select('_id applicationNumber entryAcademicSession currentStage')
+            .lean();
+
+        if (directApplication) {
+            return {
+                applicationId: directApplication._id as Types.ObjectId,
+                applicationNumber: directApplication.applicationNumber,
+                academicSessionId: directApplication.entryAcademicSession as Types.ObjectId,
+            };
+        }
+
+        const student = await this.studentModel
+            .findOne({ userId: userObjectId })
+            .populate('applicationId', '_id applicationNumber entryAcademicSession currentStage')
+            .lean();
+
+        const application = student?.applicationId as any;
+        if (application?._id) {
+            return {
+                applicationId: application._id as Types.ObjectId,
+                applicationNumber: application.applicationNumber as string,
+                academicSessionId: application.entryAcademicSession as Types.ObjectId | undefined,
+            };
+        }
+
+        return {
+            applicationId: undefined,
+            applicationNumber: undefined,
+            academicSessionId: undefined,
+        };
+    }
+
+    private async assertAccommodationPaymentEligibility(userId: string, payment: PaymentDocument | Payment) {
+        if (payment.paymentCode !== 'accommodationFee') {
+            return;
+        }
+
+        const student = await this.studentModel.findOne({
+            userId: new Types.ObjectId(userId),
+        });
+
+        if (!student) {
+            throw new Error('Student record not found');
+        }
+
+        const tenancyAgreement = await this.tenancyAgreementModel.findOne({
+            studentId: student._id,
+        });
+
+        if (!tenancyAgreement) {
+            throw new Error('You must sign the tenancy agreement before making accommodation fee payments. Please go to the Tenancy Agreement section first.');
+        }
+
+        this.logger.log(`Accommodation payment authorized for user ${userId} - tenancy agreement signed`);
+    }
 
     async getStudentPaymentsSummary(userId: string, context: 'application-portal' | 'student-portal' = 'application-portal'): Promise<StudentPaymentsSummary> {
         const userObjectId = new Types.ObjectId(userId);
@@ -99,31 +287,12 @@ export class PaymentsService {
             throw new Error('User not found');
         }
 
-        // Map UserRole to PaymentAudience based on context
-        let userAudiences: PaymentAudience[];
-        switch (user.role) {
-            case UserRole.APPLICANT:
-                // Applicants always see applicant payments
-                userAudiences = [PaymentAudience.APPLICANT];
-                break;
-            case UserRole.STUDENT:
-                if (context === 'application-portal') {
-                    // In application portal, students see only their historical applicant payments
-                    userAudiences = [PaymentAudience.APPLICANT];
-                } else {
-                    // In student portal, students see student payments
-                    userAudiences = [PaymentAudience.STUDENT];
-                }
-                break;
-            case UserRole.STAFF:
-                userAudiences = [PaymentAudience.ACADEMIC_STAFF];
-                break;
-            case UserRole.ADMIN:
-                userAudiences = [PaymentAudience.ADMIN_STAFF];
-                break;
-            default:
-                userAudiences = [PaymentAudience.APPLICANT];
-        }
+        const userAudiences = this.getUserAudiencesForContext(user.role, context);
+        const linkedApplication = await this.resolveLinkedApplication(userId);
+        const availableMethods = await this.getPaymentMethodAvailability(
+            context,
+            linkedApplication.academicSessionId,
+        );
 
         console.log('Payment audience logic:', {
             userId,
@@ -138,31 +307,48 @@ export class PaymentsService {
             targetAudience: { $in: userAudiences }
         }).lean();
 
-        // Get student's successful payments
+        // Get student's successful payments and pending manual transfers
         const studentPayments = await this.studentPaymentModel
             .find({
                 userId: userObjectId,
-                status: PaymentStatus.SUCCESSFUL
+                status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING] }
             })
             .populate('paymentId')
             .lean();
 
-        // Create a map of paid payment IDs for quick lookup
-        const paidPaymentIds = new Set(
-            studentPayments.map(sp => sp.paymentId._id.toString())
-        );
-
         // Separate paid and unpaid fees
         const paidFees: PaymentSummary[] = [];
+        const pendingFees: PaymentSummary[] = [];
         const unpaidFees: PaymentSummary[] = [];
+
+        const successfulPaymentsById = new Map<string, any>();
+        const pendingManualPaymentsById = new Map<string, any>();
+
+        studentPayments.forEach((studentPayment: any) => {
+            const linkedPaymentId = studentPayment.paymentId?._id?.toString();
+            if (!linkedPaymentId) {
+                return;
+            }
+
+            if (studentPayment.status === PaymentStatus.SUCCESSFUL) {
+                successfulPaymentsById.set(linkedPaymentId, studentPayment);
+                return;
+            }
+
+            if (this.isManualTransferPending(studentPayment)) {
+                const existingPending = pendingManualPaymentsById.get(linkedPaymentId);
+                if (!existingPending || new Date(studentPayment.createdAt || 0).getTime() > new Date(existingPending.createdAt || 0).getTime()) {
+                    pendingManualPaymentsById.set(linkedPaymentId, studentPayment);
+                }
+            }
+        });
 
         allPayments.forEach(payment => {
             const paymentId = payment._id.toString();
-            const studentPayment = studentPayments.find(sp =>
-                sp.paymentId._id.toString() === paymentId
-            );
+            const successfulPayment = successfulPaymentsById.get(paymentId);
+            const pendingManualPayment = pendingManualPaymentsById.get(paymentId);
 
-            if (paidPaymentIds.has(paymentId) && studentPayment) {
+            if (successfulPayment) {
                 paidFees.push({
                     id: paymentId,
                     name: payment.name,
@@ -170,11 +356,34 @@ export class PaymentsService {
                     amount: payment.amount,
                     isPaid: true,
                     paymentCode: payment.paymentCode,
-                    paidAt: studentPayment.paidAt,
-                    reference: studentPayment.reference,
-                    status: studentPayment.status,
-                    channel: studentPayment.channel,
-                    fee: studentPayment.fee
+                    paidAt: successfulPayment.paidAt,
+                    reference: successfulPayment.reference,
+                    status: successfulPayment.status,
+                    channel: successfulPayment.channel,
+                    fee: successfulPayment.fee,
+                    method: successfulPayment.method,
+                    remarks: successfulPayment.remarks,
+                    receiptUrl: successfulPayment.receiptUrl,
+                    receiptOriginalName: successfulPayment.receiptOriginalName,
+                    receiptUploadedAt: successfulPayment.receiptUploadedAt,
+                });
+            } else if (pendingManualPayment) {
+                pendingFees.push({
+                    id: paymentId,
+                    name: payment.name,
+                    description: payment.description,
+                    amount: pendingManualPayment.amount,
+                    isPaid: false,
+                    paymentCode: payment.paymentCode,
+                    paidAt: pendingManualPayment.paidAt,
+                    reference: pendingManualPayment.reference,
+                    status: pendingManualPayment.status,
+                    channel: pendingManualPayment.channel,
+                    method: pendingManualPayment.method,
+                    remarks: pendingManualPayment.remarks,
+                    receiptUrl: pendingManualPayment.receiptUrl,
+                    receiptOriginalName: pendingManualPayment.receiptOriginalName,
+                    receiptUploadedAt: pendingManualPayment.receiptUploadedAt,
                 });
             } else {
                 unpaidFees.push({
@@ -189,13 +398,17 @@ export class PaymentsService {
         });
 
         const totalPaid = paidFees.reduce((sum, fee) => sum + fee.amount, 0);
+        const totalPending = pendingFees.reduce((sum, fee) => sum + fee.amount, 0);
         const totalUnpaid = unpaidFees.reduce((sum, fee) => sum + fee.amount, 0);
 
         return {
             paidFees,
+            pendingFees,
             unpaidFees,
             totalPaid,
-            totalUnpaid
+            totalPending,
+            totalUnpaid,
+            availableMethods,
         };
     }
 
@@ -229,11 +442,22 @@ export class PaymentsService {
                 throw new Error('Payment has already been completed successfully for this charge');
             }
 
+            const linkedApplication = await this.resolveLinkedApplication(userId);
+            await this.assertPaymentMethodEnabled(
+                PaymentMethod.PAYSTACK,
+                'application-portal',
+                linkedApplication.academicSessionId,
+            );
+
             // Look for any existing payment attempt (pending or failed) - reuse it
             let existingAttempt = await this.studentPaymentModel.findOne({
                 userId: new Types.ObjectId(userId),
                 paymentId: new Types.ObjectId(paymentId),
-                status: { $in: [PaymentStatus.PENDING, PaymentStatus.FAILED] }
+                status: { $in: [PaymentStatus.PENDING, PaymentStatus.FAILED] },
+                $or: [
+                    { method: PaymentMethod.PAYSTACK },
+                    { method: { $exists: false } },
+                ],
             }).sort({ createdAt: -1 }); // Get the most recent attempt
 
             let reference: string;
@@ -263,6 +487,7 @@ export class PaymentsService {
                             existingAttempt.status = PaymentStatus.SUCCESSFUL;
                             existingAttempt.remarks = 'Payment successful and verified';
                             existingAttempt.paidAt = new Date();
+                            existingAttempt.method = PaymentMethod.PAYSTACK;
                             existingAttempt.channel = verifyData.data.channel;
                             existingAttempt.gatewayId = verifyData.data.id;
                             existingAttempt.authorizationCode = verifyData.data.authorization?.authorization_code;
@@ -324,10 +549,13 @@ export class PaymentsService {
                 // Create new payment attempt record
                 await this.studentPaymentModel.create({
                     userId: new Types.ObjectId(userId),
+                    applicationId: linkedApplication.applicationId,
+                    academicSessionId: linkedApplication.academicSessionId,
                     paymentId: new Types.ObjectId(paymentId),
                     amount: payment.amount,
                     reference,
                     status: PaymentStatus.PENDING,
+                    method: PaymentMethod.PAYSTACK,
                     remarks: 'Payment initialized - awaiting user action',
                     retryCount: 0
                 });
@@ -387,6 +615,7 @@ export class PaymentsService {
         studentPayment.status = PaymentStatus.SUCCESSFUL;
         studentPayment.remarks = 'Payment successful and verified';
         studentPayment.paidAt = new Date();
+        studentPayment.method = studentPayment.method || PaymentMethod.PAYSTACK;
         studentPayment.channel = transactionData.channel;
         studentPayment.gatewayId = transactionData.id;
         studentPayment.authorizationCode = transactionData.authorization?.authorization_code;
@@ -418,6 +647,7 @@ export class PaymentsService {
             studentPayment.status = PaymentStatus.SUCCESSFUL;
             studentPayment.remarks = 'Payment successful and verified';
             studentPayment.paidAt = new Date();
+            studentPayment.method = studentPayment.method || PaymentMethod.PAYSTACK;
             studentPayment.channel = transaction.channel;
             studentPayment.fee = transaction.fees ? (transaction.fees / 100) : 0; // Convert from kobo to naira
             studentPayment.gatewayId = transaction.id;
@@ -503,6 +733,10 @@ export class PaymentsService {
         const result = await this.studentPaymentModel.updateMany(
             {
                 status: PaymentStatus.PENDING,
+                $or: [
+                    { method: PaymentMethod.PAYSTACK },
+                    { method: { $exists: false } },
+                ],
                 createdAt: { $lt: thirtyMinutesAgo }
             },
             {
@@ -1026,10 +1260,12 @@ export class PaymentsService {
             throw new Error('User not found');
         }
 
+        const availableMethods = await this.getPaymentMethodAvailability('student-portal', academicSessionId);
+
         // Get student's successful payments for this session
         let studentPaymentQuery: any = {
             userId: userObjectId,
-            status: PaymentStatus.SUCCESSFUL
+            status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING] }
         };
 
         if (academicSessionId) {
@@ -1059,18 +1295,36 @@ export class PaymentsService {
 
         const activePaymentsForUnpaid = unpaidPaymentsQuery ? await this.paymentModel.find(unpaidPaymentsQuery).lean() : [];
 
-        // Create a map of paid payment IDs for quick lookup
-        const paidPaymentIds = new Set(
-            studentPayments.map(sp => sp.paymentId._id.toString())
-        );
-
         // Separate paid and unpaid fees
         const paidFees: PaymentSummary[] = [];
+        const pendingFees: PaymentSummary[] = [];
         const unpaidFees: PaymentSummary[] = [];
+
+        const successfulPaymentsById = new Map<string, any>();
+        const pendingManualPaymentsById = new Map<string, any>();
+
+        studentPayments.forEach((studentPayment: any) => {
+            const linkedPaymentId = studentPayment.paymentId?._id?.toString();
+            if (!linkedPaymentId) {
+                return;
+            }
+
+            if (studentPayment.status === PaymentStatus.SUCCESSFUL) {
+                successfulPaymentsById.set(linkedPaymentId, studentPayment);
+                return;
+            }
+
+            if (this.isManualTransferPending(studentPayment)) {
+                const existingPending = pendingManualPaymentsById.get(linkedPaymentId);
+                if (!existingPending || new Date(studentPayment.createdAt || 0).getTime() > new Date(existingPending.createdAt || 0).getTime()) {
+                    pendingManualPaymentsById.set(linkedPaymentId, studentPayment);
+                }
+            }
+        });
 
         // First, add all paid fees from student payments (even if payment is no longer active)
         studentPayments.forEach(studentPayment => {
-            if (studentPayment.paymentId && typeof studentPayment.paymentId === 'object') {
+            if (studentPayment.status === PaymentStatus.SUCCESSFUL && studentPayment.paymentId && typeof studentPayment.paymentId === 'object') {
                 const payment = studentPayment.paymentId as any; // Type assertion since it's populated
                 paidFees.push({
                     id: payment._id.toString(),
@@ -1083,7 +1337,35 @@ export class PaymentsService {
                     reference: studentPayment.reference,
                     status: studentPayment.status,
                     channel: studentPayment.channel,
-                    fee: studentPayment.fee
+                    fee: studentPayment.fee,
+                    method: studentPayment.method,
+                    remarks: studentPayment.remarks,
+                    receiptUrl: studentPayment.receiptUrl,
+                    receiptOriginalName: studentPayment.receiptOriginalName,
+                    receiptUploadedAt: studentPayment.receiptUploadedAt,
+                });
+            }
+        });
+
+        Array.from(pendingManualPaymentsById.values()).forEach((studentPayment: any) => {
+            if (studentPayment.paymentId && typeof studentPayment.paymentId === 'object') {
+                const payment = studentPayment.paymentId as any;
+                pendingFees.push({
+                    id: payment._id.toString(),
+                    name: payment.name,
+                    description: payment.description,
+                    amount: studentPayment.amount,
+                    isPaid: false,
+                    paymentCode: payment.paymentCode,
+                    paidAt: studentPayment.paidAt,
+                    reference: studentPayment.reference,
+                    status: studentPayment.status,
+                    channel: studentPayment.channel,
+                    method: studentPayment.method,
+                    remarks: studentPayment.remarks,
+                    receiptUrl: studentPayment.receiptUrl,
+                    receiptOriginalName: studentPayment.receiptOriginalName,
+                    receiptUploadedAt: studentPayment.receiptUploadedAt,
                 });
             }
         });
@@ -1092,8 +1374,8 @@ export class PaymentsService {
         activePaymentsForUnpaid.forEach(payment => {
             const paymentId = payment._id.toString();
 
-            // Only add to unpaid if not already paid
-            if (!paidPaymentIds.has(paymentId)) {
+            // Only add to unpaid if not already paid or awaiting manual verification
+            if (!successfulPaymentsById.has(paymentId) && !pendingManualPaymentsById.has(paymentId)) {
                 unpaidFees.push({
                     id: paymentId,
                     name: payment.name,
@@ -1106,13 +1388,17 @@ export class PaymentsService {
         });
 
         const totalPaid = paidFees.reduce((sum, fee) => sum + fee.amount, 0);
+        const totalPending = pendingFees.reduce((sum, fee) => sum + fee.amount, 0);
         const totalUnpaid = unpaidFees.reduce((sum, fee) => sum + fee.amount, 0);
 
         return {
             paidFees,
+            pendingFees,
             unpaidFees,
             totalPaid,
-            totalUnpaid
+            totalPending,
+            totalUnpaid,
+            availableMethods,
         };
     }
 
@@ -1127,7 +1413,10 @@ export class PaymentsService {
         // Build query
         let query: any = {
             userId: userObjectId,
-            status: PaymentStatus.SUCCESSFUL
+            $or: [
+                { status: PaymentStatus.SUCCESSFUL },
+                { status: PaymentStatus.PENDING, method: PaymentMethod.MANUAL_TRANSFER },
+            ],
         };
 
         if (academicSessionId) {
@@ -1160,9 +1449,16 @@ export class PaymentsService {
                 channel: payment.channel,
                 fee: payment.fee,
                 status: payment.status,
+                method: payment.method,
+                remarks: payment.remarks,
+                receiptUrl: payment.receiptUrl,
+                receiptOriginalName: payment.receiptOriginalName,
+                receiptUploadedAt: payment.receiptUploadedAt,
                 academicSession: payment.academicSessionId
             })),
-            totalPaid,
+            totalPaid: payments
+                .filter(payment => payment.status === PaymentStatus.SUCCESSFUL)
+                .reduce((sum, payment) => sum + payment.amount, 0),
             pagination: {
                 page,
                 limit,
@@ -1188,6 +1484,8 @@ export class PaymentsService {
             .find({ userId: userObjectId })
             .populate('paymentId', 'name description amount paymentCode')
             .populate('academicSessionId', 'sessionYear')
+            .populate('verifiedBy', 'firstName lastName')
+            .populate('rejectedBy', 'firstName lastName')
             .sort({ createdAt: -1, paidAt: -1 })
             .lean();
 
@@ -1211,6 +1509,13 @@ export class PaymentsService {
                 remarks: payment.remarks,
                 createdAt: payment.createdAt,
                 updatedAt: payment.updatedAt,
+                method: payment.method,
+                receiptUrl: payment.receiptUrl,
+                receiptOriginalName: payment.receiptOriginalName,
+                receiptUploadedAt: payment.receiptUploadedAt,
+                verifiedAt: payment.verifiedAt,
+                rejectedAt: payment.rejectedAt,
+                verificationRemarks: payment.verificationRemarks,
                 isApplicationLinked: !!applicationObjectId && linkedApplicationId === applicationObjectId.toString(),
                 isAcademicSessionLinked: !!academicSessionObjectId && linkedAcademicSessionId === academicSessionObjectId.toString(),
                 payment: {
@@ -1272,29 +1577,15 @@ export class PaymentsService {
             throw new Error('Payment not available for students');
         }
 
-        // Check if this is an accommodation payment and if tenancy agreement is required
-        if (payment.paymentCode === 'accommodationFee') {
-            // Import TenancyAgreementService and check if agreement exists
-            // For now, we'll implement a direct check to avoid circular dependency
-            const student = await this.studentModel.findOne({
-                userId: new Types.ObjectId(userId)
-            });
+        await this.assertPaymentMethodEnabled(
+            PaymentMethod.PAYSTACK,
+            'student-portal',
+            academicSessionId,
+        );
 
-            if (!student) {
-                throw new Error('Student record not found');
-            }
+        await this.assertAccommodationPaymentEligibility(userId, payment);
 
-            // Check if tenancy agreement exists for this student
-            const tenancyAgreement = await this.tenancyAgreementModel.findOne({
-                studentId: student._id
-            });
-
-            if (!tenancyAgreement) {
-                throw new Error('You must sign the tenancy agreement before making accommodation fee payments. Please go to the Tenancy Agreement section first.');
-            }
-
-            this.logger.log(`Accommodation payment authorized for user ${userId} - tenancy agreement signed`);
-        }
+        const linkedApplication = await this.resolveLinkedApplication(userId);
 
         // Generate unique reference
         const reference = `PAY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -1302,11 +1593,14 @@ export class PaymentsService {
         // Create student payment record
         const studentPayment = new this.studentPaymentModel({
             userId: new Types.ObjectId(userId),
+            applicationId: linkedApplication.applicationId,
             paymentId: new Types.ObjectId(paymentId),
             academicSessionId: academicSessionId ? new Types.ObjectId(academicSessionId) : undefined,
             amount: payment.amount,
             reference: reference,
-            status: PaymentStatus.PENDING
+            status: PaymentStatus.PENDING,
+            method: PaymentMethod.PAYSTACK,
+            remarks: 'Payment initialized - awaiting user action',
         });
 
         await studentPayment.save();
@@ -1318,6 +1612,227 @@ export class PaymentsService {
             authorization_url: paystackResponse.authorization_url,
             access_code: paystackResponse.access_code,
             reference: reference
+        };
+    }
+
+    async submitManualTransferPayment(
+        userId: string,
+        paymentId: string,
+        file: Express.Multer.File,
+        options: {
+            context: 'application-portal' | 'student-portal';
+            academicSessionId?: string;
+        },
+    ) {
+        if (!file) {
+            throw new Error('Payment receipt file is required');
+        }
+
+        if (!Types.ObjectId.isValid(paymentId)) {
+            throw new Error('Invalid payment ID format');
+        }
+
+        const payment = await this.paymentModel.findById(new Types.ObjectId(paymentId));
+        if (!payment) {
+            throw new Error('Payment not found');
+        }
+
+        const user = await this.userModel.findById(new Types.ObjectId(userId)).lean();
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        const allowedAudiences = this.getUserAudiencesForContext(user.role, options.context);
+        const canAccessPayment = payment.targetAudience.some((audience) => allowedAudiences.includes(audience));
+
+        if (!canAccessPayment) {
+            throw new Error('Payment not available for this user');
+        }
+
+        if (options.context === 'student-portal') {
+            if (!options.academicSessionId) {
+                throw new Error('Academic session is required for student payments');
+            }
+
+            const isAvailable = await this.isPaymentAvailableForSession(paymentId, options.academicSessionId);
+            if (!isAvailable) {
+                throw new Error('Payment is not available for the selected academic session');
+            }
+
+            await this.assertAccommodationPaymentEligibility(userId, payment);
+        }
+
+        const linkedApplication = await this.resolveLinkedApplication(userId);
+        if (!linkedApplication.applicationNumber) {
+            throw new Error('Application record not found for receipt storage');
+        }
+
+        await this.assertPaymentMethodEnabled(
+            PaymentMethod.MANUAL_TRANSFER,
+            options.context,
+            options.context === 'student-portal'
+                ? options.academicSessionId
+                : linkedApplication.academicSessionId,
+        );
+
+        const successQuery: any = {
+            userId: new Types.ObjectId(userId),
+            paymentId: new Types.ObjectId(paymentId),
+            status: PaymentStatus.SUCCESSFUL,
+        };
+
+        if (options.academicSessionId) {
+            successQuery.academicSessionId = new Types.ObjectId(options.academicSessionId);
+        }
+
+        const existingSuccessfulPayment = await this.studentPaymentModel.findOne(successQuery);
+        if (existingSuccessfulPayment) {
+            throw new Error('Payment has already been completed successfully for this charge');
+        }
+
+        const pendingManualPaymentQuery: any = {
+            userId: new Types.ObjectId(userId),
+            paymentId: new Types.ObjectId(paymentId),
+            method: PaymentMethod.MANUAL_TRANSFER,
+            status: PaymentStatus.PENDING,
+        };
+
+        if (options.academicSessionId) {
+            pendingManualPaymentQuery.academicSessionId = new Types.ObjectId(options.academicSessionId);
+        }
+
+        const pendingManualPayment = await this.studentPaymentModel.findOne(pendingManualPaymentQuery);
+
+        if (pendingManualPayment) {
+            throw new Error('A manual transfer receipt has already been submitted for this payment and is awaiting staff verification');
+        }
+
+        const receiptUpload = await this.uploadService.uploadPaymentReceipt(
+            file,
+            linkedApplication.applicationNumber,
+            payment.name,
+        );
+
+        const studentPayment = await this.studentPaymentModel.create({
+            userId: new Types.ObjectId(userId),
+            applicationId: linkedApplication.applicationId,
+            academicSessionId: options.academicSessionId
+                ? new Types.ObjectId(options.academicSessionId)
+                : linkedApplication.academicSessionId,
+            paymentId: new Types.ObjectId(paymentId),
+            amount: payment.amount,
+            reference: this.buildManualTransferReference(),
+            paidAt: new Date(),
+            method: PaymentMethod.MANUAL_TRANSFER,
+            channel: PaymentChannel.MANUAL_TRANSFER,
+            status: PaymentStatus.PENDING,
+            remarks: 'Payment submitted via manual transfer; awaiting staff verification',
+            receiptUrl: receiptUpload.url,
+            receiptKey: receiptUpload.key,
+            receiptOriginalName: file.originalname,
+            receiptUploadedAt: new Date(),
+            retryCount: 0,
+        });
+
+        return {
+            id: studentPayment._id.toString(),
+            reference: studentPayment.reference,
+            amount: studentPayment.amount,
+            status: studentPayment.status,
+            method: studentPayment.method,
+            remarks: studentPayment.remarks,
+            receiptUrl: studentPayment.receiptUrl,
+            receiptOriginalName: studentPayment.receiptOriginalName,
+            receiptUploadedAt: studentPayment.receiptUploadedAt,
+        };
+    }
+
+    async verifyManualTransferPayment(studentPaymentId: string, staffId: string, remarks?: string) {
+        if (!Types.ObjectId.isValid(studentPaymentId)) {
+            throw new Error('Invalid payment record ID');
+        }
+
+        const studentPayment = await this.studentPaymentModel.findById(studentPaymentId);
+        if (!studentPayment) {
+            throw new Error('Payment record not found');
+        }
+
+        if (studentPayment.method !== PaymentMethod.MANUAL_TRANSFER) {
+            throw new Error('Only manual transfer payments can be verified here');
+        }
+
+        if (studentPayment.status !== PaymentStatus.PENDING) {
+            throw new Error('Only pending manual transfer payments can be verified');
+        }
+
+        const duplicateSuccessQuery: any = {
+            _id: { $ne: studentPayment._id },
+            userId: studentPayment.userId,
+            paymentId: studentPayment.paymentId,
+            status: PaymentStatus.SUCCESSFUL,
+        };
+
+        if (studentPayment.academicSessionId) {
+            duplicateSuccessQuery.academicSessionId = studentPayment.academicSessionId;
+        }
+
+        const existingSuccessfulPayment = await this.studentPaymentModel.findOne(duplicateSuccessQuery);
+        if (existingSuccessfulPayment) {
+            throw new Error('A successful payment already exists for this charge');
+        }
+
+        studentPayment.status = PaymentStatus.SUCCESSFUL;
+        studentPayment.remarks = 'Payment successful and verified by staff';
+        studentPayment.verificationRemarks = remarks || 'Manual transfer verified by staff';
+        studentPayment.verifiedBy = new Types.ObjectId(staffId);
+        studentPayment.verifiedAt = new Date();
+
+        await studentPayment.save();
+        await this.updateApplicationStageAfterPayment(studentPayment.userId, studentPayment.paymentId);
+
+        return {
+            id: studentPayment._id.toString(),
+            reference: studentPayment.reference,
+            status: studentPayment.status,
+            remarks: studentPayment.remarks,
+            verificationRemarks: studentPayment.verificationRemarks,
+            verifiedAt: studentPayment.verifiedAt,
+        };
+    }
+
+    async rejectManualTransferPayment(studentPaymentId: string, staffId: string, remarks?: string) {
+        if (!Types.ObjectId.isValid(studentPaymentId)) {
+            throw new Error('Invalid payment record ID');
+        }
+
+        const studentPayment = await this.studentPaymentModel.findById(studentPaymentId);
+        if (!studentPayment) {
+            throw new Error('Payment record not found');
+        }
+
+        if (studentPayment.method !== PaymentMethod.MANUAL_TRANSFER) {
+            throw new Error('Only manual transfer payments can be rejected here');
+        }
+
+        if (studentPayment.status !== PaymentStatus.PENDING) {
+            throw new Error('Only pending manual transfer payments can be rejected');
+        }
+
+        studentPayment.status = PaymentStatus.FAILED;
+        studentPayment.remarks = 'Manual transfer receipt rejected by staff';
+        studentPayment.verificationRemarks = remarks || 'Manual transfer rejected by staff';
+        studentPayment.rejectedBy = new Types.ObjectId(staffId);
+        studentPayment.rejectedAt = new Date();
+
+        await studentPayment.save();
+
+        return {
+            id: studentPayment._id.toString(),
+            reference: studentPayment.reference,
+            status: studentPayment.status,
+            remarks: studentPayment.remarks,
+            verificationRemarks: studentPayment.verificationRemarks,
+            rejectedAt: studentPayment.rejectedAt,
         };
     }
 

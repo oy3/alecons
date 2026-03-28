@@ -1,10 +1,12 @@
 <script>
 import { studentPaymentService } from "../services/payment.js";
 import { tenancyAgreementService } from "../services/tenancyAgreement.js";
-import { apiService } from "../services/api.js";
 import { logger } from "@shared/utils/logger";
 import { useAuthStore } from "../stores/auth.js";
 import Swal from "sweetalert2";
+
+const ALLOWED_RECEIPT_TYPES = ["image/png", "image/jpeg", "application/pdf"];
+const MAX_RECEIPT_SIZE = 1024 * 1024;
 
 export default {
   name: "Finance",
@@ -17,8 +19,10 @@ export default {
       // Payment data
       paymentSummary: {
         paidFees: [],
+        pendingFees: [],
         unpaidFees: [],
         totalPaid: 0,
+        totalPending: 0,
         totalUnpaid: 0,
       },
       paymentHistory: [],
@@ -40,10 +44,20 @@ export default {
 
       // Modal
       showPaymentModal: false,
+      selectedFee: null,
+      selectedPaymentMethod: "",
+      manualTransferConfirmed: false,
+      manualTransferReceipt: null,
+      manualTransferReceiptName: "",
+      manualTransferSubmitting: false,
     };
   },
 
   computed: {
+    paymentMethods() {
+      return studentPaymentService.getAvailablePaymentMethods();
+    },
+
     accountBalance() {
       return this.paymentSummary?.totalUnpaid || 0;
     },
@@ -53,11 +67,38 @@ export default {
     },
 
     pendingAmount() {
-      return this.paymentSummary?.totalUnpaid || 0;
+      return this.paymentSummary?.totalPending || 0;
     },
 
     hasOutstandingPayments() {
       return (this.paymentSummary?.unpaidFees?.length || 0) > 0;
+    },
+
+    canUsePaystack() {
+      return this.paymentMethods.paystackEnabled;
+    },
+
+    canUseManualTransfer() {
+      const details = this.paymentMethods.manualTransferDetails;
+      return (
+        this.paymentMethods.manualTransferEnabled &&
+        details.accountName &&
+        details.accountNumber &&
+        details.bankName
+      );
+    },
+
+    hasAvailablePaymentMethods() {
+      return this.canUsePaystack || this.canUseManualTransfer;
+    },
+
+    canSubmitManualTransfer() {
+      return (
+        this.selectedPaymentMethod === "manual_transfer" &&
+        this.manualTransferConfirmed &&
+        !!this.manualTransferReceipt &&
+        !this.manualTransferSubmitting
+      );
     },
   },
 
@@ -115,7 +156,7 @@ export default {
           }));
           logger.info(
             "Loaded academic sessions:",
-            this.academicSessions.length
+            this.academicSessions.length,
           );
         } else {
           throw new Error(response.message);
@@ -130,12 +171,12 @@ export default {
       try {
         logger.info(
           "Loading payment data for session:",
-          this.selectedSessionId
+          this.selectedSessionId,
         );
 
         // Load payment summary
         const summaryResponse = await studentPaymentService.getPaymentSummary(
-          this.selectedSessionId
+          this.selectedSessionId,
         );
         if (summaryResponse.success) {
           this.paymentSummary = summaryResponse.data;
@@ -160,7 +201,7 @@ export default {
         const response = await studentPaymentService.getPaymentHistory(
           this.selectedSessionId,
           this.currentPage,
-          this.perPage
+          this.perPage,
         );
 
         if (response.success) {
@@ -178,14 +219,14 @@ export default {
     async loadAvailablePayments() {
       try {
         const response = await studentPaymentService.getAvailablePayments(
-          this.selectedSessionId
+          this.selectedSessionId,
         );
 
         if (response.success) {
           this.availablePayments = response.data;
           logger.info(
             "Loaded available payments:",
-            this.availablePayments.length
+            this.availablePayments.length,
           );
         }
       } catch (error) {
@@ -201,6 +242,12 @@ export default {
 
     async makePayment(paymentId, paymentCode = null) {
       try {
+        if (!this.hasAvailablePaymentMethods) {
+          throw new Error(
+            "No payment methods are currently enabled for this session.",
+          );
+        }
+
         if (!this.user?.email) {
           throw new Error("User email not found");
         }
@@ -210,7 +257,7 @@ export default {
         if (!paymentCode) {
           payment =
             this.paymentSummary?.unpaidFees?.find(
-              (fee) => fee.id === paymentId
+              (fee) => fee.id === paymentId,
             ) ||
             this.availablePayments?.find((payment) => payment.id === paymentId);
           paymentCode = payment?.paymentCode || "";
@@ -252,7 +299,7 @@ export default {
         const response = await studentPaymentService.initializePayment(
           paymentId,
           this.user.email,
-          this.selectedSessionId
+          this.selectedSessionId,
         );
 
         if (response.success) {
@@ -308,16 +355,149 @@ export default {
       }
     },
 
-    async downloadReceipt(payment) {
-      try {
-        logger.info("Downloading receipt for payment:", payment.reference);
-        // TODO: Implement receipt download functionality
+    openPaymentMethodStep(fee) {
+      if (!this.hasAvailablePaymentMethods) {
         Swal.fire({
           icon: "info",
-          title: "Coming Soon",
-          text: "Receipt download functionality will be implemented soon.",
+          title: "Payments unavailable",
+          text: "No payment methods are currently enabled for this session. Please contact support or try again later.",
           confirmButtonText: "OK",
         });
+        return;
+      }
+
+      this.selectedFee = fee;
+      this.selectedPaymentMethod = this.canUsePaystack
+        ? "paystack"
+        : this.canUseManualTransfer
+          ? "manual_transfer"
+          : "";
+      this.manualTransferConfirmed = false;
+      this.manualTransferReceipt = null;
+      this.manualTransferReceiptName = "";
+      this.showPaymentModal = true;
+    },
+
+    resetPaymentMethodStep() {
+      this.selectedFee = null;
+      this.selectedPaymentMethod = "";
+      this.manualTransferConfirmed = false;
+      this.manualTransferReceipt = null;
+      this.manualTransferReceiptName = "";
+    },
+
+    backToOutstandingList() {
+      if (this.manualTransferSubmitting) {
+        return;
+      }
+
+      this.resetPaymentMethodStep();
+    },
+
+    async proceedWithSelectedMethod() {
+      if (!this.selectedFee) {
+        return;
+      }
+
+      if (this.selectedPaymentMethod === "paystack") {
+        await this.makePayment(
+          this.selectedFee.id,
+          this.selectedFee.paymentCode,
+        );
+      } else if (this.selectedPaymentMethod === "manual_transfer") {
+        await this.submitManualTransfer();
+      }
+    },
+
+    onReceiptSelected(event) {
+      const file = event.target.files?.[0];
+      if (!file) {
+        this.manualTransferReceipt = null;
+        this.manualTransferReceiptName = "";
+        return;
+      }
+
+      if (!ALLOWED_RECEIPT_TYPES.includes(file.type)) {
+        Swal.fire({
+          icon: "error",
+          title: "Invalid file type",
+          text: "Receipt must be PNG, JPG, or PDF.",
+        });
+        event.target.value = "";
+        return;
+      }
+
+      if (file.size > MAX_RECEIPT_SIZE) {
+        Swal.fire({
+          icon: "error",
+          title: "File too large",
+          text: "Receipt file must not be more than 1MB.",
+        });
+        event.target.value = "";
+        return;
+      }
+
+      this.manualTransferReceipt = file;
+      this.manualTransferReceiptName = file.name;
+    },
+
+    async submitManualTransfer() {
+      if (!this.selectedFee || !this.manualTransferReceipt) {
+        return;
+      }
+
+      try {
+        this.manualTransferSubmitting = true;
+        this.isPaymentLoading = true;
+
+        const result = await studentPaymentService.submitManualTransferReceipt(
+          this.selectedFee.id,
+          this.manualTransferReceipt,
+          this.selectedSessionId,
+        );
+
+        if (!result.success) {
+          throw new Error(
+            result.message || "Failed to submit manual transfer receipt",
+          );
+        }
+
+        await this.loadPaymentData();
+        this.closePaymentModal();
+
+        Swal.fire({
+          icon: "success",
+          title: "Receipt Submitted",
+          text: "Your payment receipt has been submitted and is awaiting staff verification.",
+          confirmButtonText: "OK",
+        });
+      } catch (error) {
+        logger.error("Error submitting manual transfer receipt:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Submission Failed",
+          text: error.message || "Failed to submit manual transfer receipt.",
+        });
+      } finally {
+        this.manualTransferSubmitting = false;
+        this.isPaymentLoading = false;
+      }
+    },
+
+    async downloadReceipt(payment) {
+      try {
+        if (!payment?.receiptUrl) {
+          Swal.fire({
+            icon: "info",
+            title: "Receipt unavailable",
+            text: "No uploaded receipt is available for this payment.",
+            confirmButtonText: "OK",
+          });
+          return;
+        }
+
+        logger.info("Opening receipt for payment:", payment.reference);
+        studentPaymentService.openReceipt(payment.receiptUrl);
       } catch (error) {
         logger.error("Error downloading receipt:", error);
       }
@@ -370,17 +550,54 @@ export default {
         return;
       }
 
+      if (!this.hasAvailablePaymentMethods) {
+        Swal.fire({
+          icon: "info",
+          title: "Payments unavailable",
+          text: "No payment methods are currently enabled for this session. Please contact support or try again later.",
+          confirmButtonText: "OK",
+        });
+        return;
+      }
+
       // Open the payment modal
       this.showPaymentModal = true;
+      this.resetPaymentMethodStep();
     },
 
     closePaymentModal() {
+      if (this.manualTransferSubmitting) {
+        return;
+      }
+
       this.showPaymentModal = false;
+      this.resetPaymentMethodStep();
     },
 
     async makePaymentFromModal(paymentId, paymentCode) {
-      // Use the same payment method but with modal-specific handling
-      await this.makePayment(paymentId, paymentCode);
+      const fee =
+        this.paymentSummary?.unpaidFees?.find(
+          (item) => item.id === paymentId,
+        ) || this.availablePayments?.find((item) => item.id === paymentId);
+
+      this.openPaymentMethodStep(
+        fee || {
+          id: paymentId,
+          paymentCode,
+        },
+      );
+    },
+
+    getMethodLabel(payment) {
+      if (payment?.method === "manual_transfer") {
+        return "Manual Transfer";
+      }
+
+      if (payment?.channel) {
+        return payment.channel.replace(/_/g, " ");
+      }
+
+      return "Paystack";
     },
 
     handleKeydown(event) {
@@ -422,7 +639,11 @@ export default {
             <button
               class="btn btn-success btn-sm"
               @click="showPaymentOptions"
-              :disabled="isLoading || !hasOutstandingPayments"
+              :disabled="
+                isLoading ||
+                !hasOutstandingPayments ||
+                !hasAvailablePaymentMethods
+              "
               v-if="hasOutstandingPayments"
             >
               <i class="bi bi-credit-card me-1"></i
@@ -447,7 +668,11 @@ export default {
                 >
                   <i
                     class="bi fs-4"
-                    :class="accountBalance > 0 ? 'bi-exclamation-triangle text-danger' : 'bi-check-circle text-success'"
+                    :class="
+                      accountBalance > 0
+                        ? 'bi-exclamation-triangle text-danger'
+                        : 'bi-check-circle text-success'
+                    "
                   ></i>
                 </div>
               </div>
@@ -506,8 +731,8 @@ export default {
                   {{ formatCurrency(pendingAmount) }}
                 </h4>
                 <small class="text-muted"
-                  >{{ paymentSummary?.unpaidFees?.length || 0 }} payment(s)
-                  due</small
+                  >{{ paymentSummary?.pendingFees?.length || 0 }} payment(s)
+                  awaiting verification</small
                 >
               </div>
             </div>
@@ -622,9 +847,15 @@ export default {
                       </div>
                     </td>
                     <td class="py-3 d-none d-md-table-cell">
-                      <span class="fw-bold text-success">{{
-                        formatCurrency(payment.amount)
-                      }}</span>
+                      <span
+                        class="fw-bold"
+                        :class="
+                          payment.status === 'successful'
+                            ? 'text-success'
+                            : 'text-warning'
+                        "
+                        >{{ formatCurrency(payment.amount) }}</span
+                      >
                     </td>
                     <td class="py-3">
                       <span
@@ -641,12 +872,17 @@ export default {
                       <div class="btn-group btn-group-sm">
                         <button
                           class="btn btn-outline-primary"
-                          title="View Receipt"
+                          :title="
+                            payment.receiptUrl
+                              ? 'View Receipt'
+                              : 'Receipt unavailable'
+                          "
                           @click="downloadReceipt(payment)"
                         >
                           <i class="bi bi-receipt"></i>
                         </button>
                         <button
+                          v-if="payment.receiptUrl"
                           class="btn btn-outline-secondary"
                           title="Download"
                           @click="downloadReceipt(payment)"
@@ -692,15 +928,20 @@ export default {
                       <button
                         class="btn btn-sm btn-success px-3 py-2"
                         @click="
-                          makePayment(unpaidFee.id, unpaidFee.paymentCode)
+                          makePaymentFromModal(
+                            unpaidFee.id,
+                            unpaidFee.paymentCode,
+                          )
                         "
-                        :disabled="isPaymentLoading"
+                        :disabled="
+                          isPaymentLoading || !hasAvailablePaymentMethods
+                        "
                       >
                         <span
                           v-if="isPaymentLoading"
                           class="spinner-border spinner-border-sm me-1"
                         ></span>
-                        <i v-else class="bi bi-credit-card me-1"></i>
+                        <i v-else class="bi bi-wallet2 me-1"></i>
                         Pay Now
                       </button>
                     </td>
@@ -753,6 +994,17 @@ export default {
 
             <!-- Unpaid Fees -->
             <div
+              v-for="pendingFee in paymentSummary?.pendingFees || []"
+              :key="`pending-summary-${pendingFee.reference}`"
+              class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
+            >
+              <span class="text-muted">{{ pendingFee.name }}</span>
+              <span class="fw-bold text-warning">{{
+                formatCurrency(pendingFee.amount)
+              }}</span>
+            </div>
+
+            <div
               v-for="unpaidFee in paymentSummary?.unpaidFees || []"
               :key="unpaidFee.id"
               class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
@@ -770,6 +1022,16 @@ export default {
               <span class="fw-bold">Total Paid</span>
               <span class="fw-bold text-success fs-5">{{
                 formatCurrency(paymentSummary?.totalPaid || 0)
+              }}</span>
+            </div>
+
+            <div
+              v-if="(paymentSummary?.totalPending || 0) > 0"
+              class="payment-summary-item d-flex justify-content-between py-2 text-warning"
+            >
+              <span class="fw-bold">Pending Verification</span>
+              <span class="fw-bold">{{
+                formatCurrency(paymentSummary?.totalPending || 0)
               }}</span>
             </div>
 
@@ -881,7 +1143,7 @@ export default {
             ></button>
           </div>
           <div class="modal-body">
-            <div class="mb-3">
+            <div v-if="!selectedFee" class="mb-3">
               <div
                 class="alert alert-warning d-flex align-items-center"
                 role="alert"
@@ -898,7 +1160,7 @@ export default {
               </div>
             </div>
 
-            <div class="table-responsive">
+            <div v-if="!selectedFee" class="table-responsive">
               <table class="table table-hover">
                 <thead class="table-light">
                   <tr>
@@ -933,16 +1195,18 @@ export default {
                         @click="
                           makePaymentFromModal(
                             unpaidFee.id,
-                            unpaidFee.paymentCode
+                            unpaidFee.paymentCode,
                           )
                         "
-                        :disabled="isPaymentLoading"
+                        :disabled="
+                          isPaymentLoading || !hasAvailablePaymentMethods
+                        "
                       >
                         <span
                           v-if="isPaymentLoading"
                           class="spinner-border spinner-border-sm me-2"
                         ></span>
-                        <i v-else class="bi bi-credit-card me-2"></i>
+                        <i v-else class="bi bi-wallet2 me-2"></i>
                         Pay Now
                       </button>
                     </td>
@@ -964,7 +1228,9 @@ export default {
 
             <!-- Empty State -->
             <div
-              v-if="(paymentSummary?.unpaidFees?.length || 0) === 0"
+              v-if="
+                !selectedFee && (paymentSummary?.unpaidFees?.length || 0) === 0
+              "
               class="text-center py-5"
             >
               <i
@@ -976,6 +1242,153 @@ export default {
                 You have no outstanding payments at this time.
               </p>
             </div>
+
+            <div v-else class="payment-method-panel">
+              <button
+                type="button"
+                class="btn btn-link px-0 mb-3 text-decoration-none"
+                @click="backToOutstandingList"
+              >
+                <i class="bi bi-arrow-left me-2"></i>Back to outstanding
+                payments
+              </button>
+
+              <div
+                class="alert alert-light border d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4"
+              >
+                <div>
+                  <div class="fw-bold">{{ selectedFee.name }}</div>
+                  <small class="text-muted">{{
+                    selectedFee.description
+                  }}</small>
+                </div>
+                <div class="fw-bold text-primary">
+                  {{ formatCurrency(selectedFee.amount) }}
+                </div>
+              </div>
+
+              <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                  <button
+                    class="btn w-100 payment-method-card"
+                    :class="
+                      selectedPaymentMethod === 'paystack'
+                        ? 'btn-primary'
+                        : 'btn-outline-primary'
+                    "
+                    :disabled="!canUsePaystack"
+                    @click="selectedPaymentMethod = 'paystack'"
+                  >
+                    <i class="bi bi-credit-card-2-front me-2"></i>
+                    Paystack
+                    <small class="d-block mt-1 opacity-75"
+                      >Pay instantly online</small
+                    >
+                  </button>
+                </div>
+                <div class="col-md-6">
+                  <button
+                    class="btn w-100 payment-method-card"
+                    :class="
+                      selectedPaymentMethod === 'manual_transfer'
+                        ? 'btn-success'
+                        : 'btn-outline-success'
+                    "
+                    :disabled="!canUseManualTransfer"
+                    @click="selectedPaymentMethod = 'manual_transfer'"
+                  >
+                    <i class="bi bi-bank me-2"></i>
+                    Manual Transfer
+                    <small class="d-block mt-1 opacity-75"
+                      >Transfer and upload receipt</small
+                    >
+                  </button>
+                </div>
+              </div>
+
+              <div
+                v-if="!hasAvailablePaymentMethods"
+                class="alert alert-warning mb-0"
+              >
+                <i class="bi bi-exclamation-circle me-2"></i>
+                No payment methods are currently enabled for this session.
+              </div>
+
+              <div
+                v-if="selectedPaymentMethod === 'paystack'"
+                class="alert alert-info mb-0"
+              >
+                <i class="bi bi-info-circle me-2"></i>
+                You will be redirected to the Paystack popup to complete this
+                payment.
+              </div>
+
+              <div
+                v-if="selectedPaymentMethod === 'manual_transfer'"
+                class="manual-transfer-panel border rounded p-3 bg-light"
+              >
+                <h6 class="fw-bold mb-3">Transfer to the account below</h6>
+                <div class="row g-3 mb-3">
+                  <div class="col-md-4">
+                    <small class="text-muted d-block">Account Name</small>
+                    <span class="fw-semibold">{{
+                      paymentMethods.manualTransferDetails.accountName
+                    }}</span>
+                  </div>
+                  <div class="col-md-4">
+                    <small class="text-muted d-block">Account Number</small>
+                    <span class="fw-semibold">{{
+                      paymentMethods.manualTransferDetails.accountNumber
+                    }}</span>
+                  </div>
+                  <div class="col-md-4">
+                    <small class="text-muted d-block">Bank Name</small>
+                    <span class="fw-semibold">{{
+                      paymentMethods.manualTransferDetails.bankName
+                    }}</span>
+                  </div>
+                </div>
+
+                <div class="alert alert-warning small mb-3">
+                  <i class="bi bi-exclamation-circle me-2"></i>
+                  {{ paymentMethods.manualTransferDetails.note }}
+                </div>
+
+                <div class="form-check mb-3">
+                  <input
+                    id="studentManualTransferConfirmed"
+                    v-model="manualTransferConfirmed"
+                    class="form-check-input"
+                    type="checkbox"
+                  />
+                  <label
+                    class="form-check-label"
+                    for="studentManualTransferConfirmed"
+                  >
+                    I have completed the transfer and I want to upload the
+                    payment receipt.
+                  </label>
+                </div>
+
+                <div v-if="manualTransferConfirmed">
+                  <label class="form-label fw-semibold"
+                    >Upload receipt (PNG, JPG, or PDF, max 1MB)</label
+                  >
+                  <input
+                    class="form-control"
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.pdf"
+                    @change="onReceiptSelected"
+                  />
+                  <small
+                    v-if="manualTransferReceiptName"
+                    class="text-muted d-block mt-2"
+                  >
+                    Selected: {{ manualTransferReceiptName }}
+                  </small>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="modal-footer">
             <button
@@ -986,6 +1399,31 @@ export default {
               Close
             </button>
             <button
+              v-if="selectedFee && selectedPaymentMethod === 'paystack'"
+              type="button"
+              class="btn btn-primary"
+              :disabled="isPaymentLoading"
+              @click="proceedWithSelectedMethod"
+            >
+              Continue to Paystack
+            </button>
+            <button
+              v-else-if="
+                selectedFee && selectedPaymentMethod === 'manual_transfer'
+              "
+              type="button"
+              class="btn btn-success"
+              :disabled="!canSubmitManualTransfer"
+              @click="proceedWithSelectedMethod"
+            >
+              <span
+                v-if="manualTransferSubmitting"
+                class="spinner-border spinner-border-sm me-2"
+              ></span>
+              Submit Receipt
+            </button>
+            <button
+              v-else
               type="button"
               class="btn btn-primary"
               @click="closePaymentModal"
@@ -1069,5 +1507,13 @@ code {
 .btn-success:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.payment-method-card {
+  min-height: 96px;
+}
+
+.manual-transfer-panel {
+  border-style: dashed;
 }
 </style>

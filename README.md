@@ -167,6 +167,13 @@ When running `npm run dev:all`, access applications at:
 - **Staff Portal**: Administrative functions and management
 - **Student Portal**: Learning resources and progress tracking
 
+### Payments
+- **Dual payment flow**: Supports both Paystack and manual bank transfer for applicant and student charges
+- **Manual transfer fallback**: Users can upload a receipt after transfer and keep moving while Paystack approval or gateway availability is pending
+- **Receipt validation**: Manual transfer receipts accept PNG, JPG, or PDF files up to 1MB and are stored in DigitalOcean Spaces
+- **Staff verification**: Staff review uploaded receipts from linked payment history and can verify or reject with remarks
+- **Session-aware controls**: Academic session controls can enable or disable Paystack and manual transfer separately for applicants and students
+
 ### Examination System
 - PDF question import and parsing
 - Automatic exam scheduling and password generation
@@ -199,6 +206,31 @@ apps/cbt/.env.example
 Notes:
 - Frontend `VITE_*` values are public build-time values and may live in GitHub Actions environment variables.
 - Backend production secrets should not be committed; keep them on the droplet in `/etc/alecons/api.env`.
+
+### Payment Configuration
+Manual transfer and Paystack visibility are now controlled in two layers:
+
+1. **Frontend build-time defaults** in:
+   - `apps/application-portal/.env.example`
+   - `apps/student-portal/.env.example`
+2. **Backend session controls** managed from the staff portal per academic session
+
+Frontend payment-related env values:
+
+```bash
+VITE_PAYSTACK_PUBLIC_KEY=pk_live_or_test_key
+VITE_PAYMENT_PAYSTACK_ENABLED=true
+VITE_PAYMENT_MANUAL_TRANSFER_ENABLED=true
+VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NAME="Alecons College of Nursing Sciences"
+VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NUMBER="0123456789"
+VITE_PAYMENT_MANUAL_TRANSFER_BANK_NAME="Bank Name"
+VITE_PAYMENT_MANUAL_TRANSFER_NOTE="Upload a clear receipt after making the transfer. Receipts must be PNG, JPG, or PDF and not more than 1MB."
+```
+
+Notes:
+- If a method is disabled in session controls, the portal hides or blocks it even when the frontend env flag is `true`.
+- Manual transfer receipt uploads depend on the API Spaces configuration being valid in production.
+- Pending manual transfer payments show separately from unpaid fees until staff verification is completed.
 
 ### Workspace Configuration
 This project uses npm workspaces for monorepo management. Each app and package has its own `package.json` with specific dependencies and scripts.
@@ -237,6 +269,18 @@ curl -i -X OPTIONS 'https://api.alecons.edu.ng/api/v1/auth/staff/login' \
    -H 'Origin: https://staff.alecons.edu.ng' \
    -H 'Access-Control-Request-Method: POST'
 ```
+
+### Payment Flow Sanity Checks
+- Confirm the application portal and student portal can both load their payment pages successfully.
+- Confirm staff can see the four session controls for payment methods:
+   - Applicant Paystack Payments
+   - Applicant Manual Transfer Payments
+   - Student Paystack Payments
+   - Student Manual Transfer Payments
+- If Paystack is disabled for a session, confirm the portal blocks Paystack checkout for that session.
+- If manual transfer is enabled, confirm account details are visible and receipt uploads accept PNG, JPG, or PDF files up to 1MB.
+- Confirm newly submitted manual transfer payments appear as `Pending Verification` until staff approval.
+- Confirm staff can verify or reject a pending manual transfer from linked payment history.
 
 ### Docker Deployment (Optional)
 ```bash

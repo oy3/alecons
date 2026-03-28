@@ -25,15 +25,18 @@ export const SPACES_CONFIG = {
     ALLOWED_FILE_TYPES: {
         PROFILE_PICTURE: ['.jpg', '.jpeg'],
         DOCUMENT: ['.pdf'],
+        PAYMENT_RECEIPT: ['.jpg', '.jpeg', '.png', '.pdf'],
     },
     // Specific file size limits for different file types
     MAX_FILE_SIZE: {
         PROFILE_PICTURE: 2 * 1024 * 1024, // 2MB for profile pictures
         DOCUMENT: 3 * 1024 * 1024, // 3MB for PDF documents
+        PAYMENT_RECEIPT: 1 * 1024 * 1024, // 1MB for payment receipts
     },
     FILE_PATHS: {
         APPLICATIONS: 'applications',
         TEMP: 'temp',
+        PAYMENT_RECEIPTS: 'payment-receipts',
     },
     // Temporary file cleanup settings
     TEMP_FILE_EXPIRY_HOURS: 24, // Files older than 24 hours in temp will be cleaned up

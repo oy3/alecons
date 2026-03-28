@@ -30,6 +30,10 @@ const DEFAULT_SESSION_CONTROLS: Array<{ name: string; active: boolean }> = [
     { name: "courseRegistration", active: false },
     { name: "resultUpload", active: false },
     { name: "resultRelease", active: false },
+    { name: "applicantPaystackPayments", active: true },
+    { name: "applicantManualTransferPayments", active: true },
+    { name: "studentPaystackPayments", active: true },
+    { name: "studentManualTransferPayments", active: true },
 ];
 
 @Injectable()

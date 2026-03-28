@@ -296,6 +296,20 @@ class StaffApiService {
         return this.makeRequest(`/staff/payments/student-payments/stats${queryParams ? `?${queryParams}` : ''}`)
     }
 
+    async verifyManualTransferPayment(id, data = {}) {
+        return this.makeRequest(`/staff/payments/student-payments/${id}/verify-manual`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        })
+    }
+
+    async rejectManualTransferPayment(id, data = {}) {
+        return this.makeRequest(`/staff/payments/student-payments/${id}/reject-manual`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        })
+    }
+
     // Academic Sessions Management
     async getAcademicSessions(params = {}) {
         const queryParams = new URLSearchParams(params).toString()

@@ -29,7 +29,7 @@ export class UploadService {
     /**
      * Validates file based on type and size constraints
      */
-    validateFile(file: Express.Multer.File, fileType: 'PROFILE_PICTURE' | 'DOCUMENT'): void {
+    validateFile(file: Express.Multer.File, fileType: 'PROFILE_PICTURE' | 'DOCUMENT' | 'PAYMENT_RECEIPT'): void {
         // Get specific size limit for this file type
         const maxFileSize = SPACES_CONFIG.MAX_FILE_SIZE[fileType];
         const maxSizeMB = (maxFileSize / (1024 * 1024)).toFixed(0);
@@ -85,6 +85,47 @@ export class UploadService {
         }
     }
 
+    private slugifyFilePart(value: string): string {
+        return value
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '') || 'payment-receipt';
+    }
+
+    private formatDateStamp(date: Date = new Date()): string {
+        const day = `${date.getDate()}`.padStart(2, '0');
+        const month = `${date.getMonth() + 1}`.padStart(2, '0');
+        const year = `${date.getFullYear()}`;
+        return `${day}${month}${year}`;
+    }
+
+    private async uploadWithKey(
+        file: Express.Multer.File,
+        key: string,
+        metadata: Record<string, string>,
+    ): Promise<UploadResult> {
+        const upload = new Upload({
+            client: this.s3Client,
+            params: {
+                Bucket: this.bucketName,
+                Key: key,
+                Body: file.buffer,
+                ContentType: file.mimetype,
+                ACL: 'public-read',
+                Metadata: metadata,
+            },
+        });
+
+        await upload.done();
+
+        return {
+            url: `${this.spacesUrl}/${key}`,
+            key,
+            type: metadata.fileType || 'document',
+        };
+    }
+
     /**
      * Upload file to DigitalOcean Spaces
      * @param file - The file to upload
@@ -115,43 +156,23 @@ export class UploadService {
                 isTemp
             });
 
-            // Create upload instance for handling large files
-            const upload = new Upload({
-                client: this.s3Client,
-                params: {
-                    Bucket: this.bucketName,
-                    Key: key,
-                    Body: file.buffer,
-                    ContentType: file.mimetype,
-                    ACL: 'public-read', // Make files publicly accessible
-                    Metadata: {
-                        applicationNumber,
-                        fileType,
-                        originalName: file.originalname,
-                        uploadedBy: 'application-portal',
-                        isTemp: isTemp.toString()
-                    }
-                },
+            const result = await this.uploadWithKey(file, key, {
+                applicationNumber,
+                fileType,
+                originalName: file.originalname,
+                uploadedBy: 'application-portal',
+                isTemp: isTemp.toString(),
             });
-
-            // Execute upload
-            const result = await upload.done();
-
-            const fileUrl = `${this.spacesUrl}/${key}`;
 
             this.logger.log('File uploaded successfully to Spaces:', {
                 applicationNumber,
                 fileType,
-                url: fileUrl,
+                url: result.url,
                 key,
                 isTemp
             });
 
-            return {
-                url: fileUrl,
-                key,
-                type: fileType
-            };
+            return result;
         } catch (error) {
             this.logger.error('Failed to upload file to Spaces:', {
                 applicationNumber,
@@ -161,6 +182,47 @@ export class UploadService {
                 stack: error.stack
             });
             throw new BadRequestException(`Failed to upload file: ${error.message}`);
+        }
+    }
+
+    async uploadPaymentReceipt(
+        file: Express.Multer.File,
+        applicationNumber: string,
+        paymentName: string,
+    ): Promise<UploadResult> {
+        try {
+            this.validateFile(file, 'PAYMENT_RECEIPT');
+
+            const extension = path.extname(file.originalname).toLowerCase();
+            const fileName = `${this.slugifyFilePart(paymentName)}-${this.formatDateStamp()}${extension}`;
+            const key = `${SPACES_CONFIG.FILE_PATHS.PAYMENT_RECEIPTS}/${applicationNumber}/${fileName}`;
+
+            this.logger.log('Starting payment receipt upload to Spaces:', {
+                applicationNumber,
+                paymentName,
+                originalName: file.originalname,
+                key,
+                size: `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+            });
+
+            return await this.uploadWithKey(file, key, {
+                applicationNumber,
+                fileType: 'payment_receipt',
+                paymentName,
+                originalName: file.originalname,
+                uploadedBy: 'payments-module',
+                isTemp: 'false',
+            });
+        } catch (error) {
+            this.logger.error('Failed to upload payment receipt to Spaces:', {
+                applicationNumber,
+                paymentName,
+                originalName: file.originalname,
+                error: error.message,
+                stack: error.stack,
+            });
+
+            throw new BadRequestException(`Failed to upload payment receipt: ${error.message}`);
         }
     }
 

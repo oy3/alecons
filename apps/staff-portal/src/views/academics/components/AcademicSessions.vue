@@ -522,6 +522,10 @@ export default {
             <i class="bi bi-info-circle me-2"></i>
             Disable <strong>Entrance Exam</strong> or <strong>Screening</strong> to automatically skip that step in the admission flow for this session.
           </div>
+          <div class="alert alert-warning mb-4">
+            <i class="bi bi-wallet2 me-2"></i>
+            Use the payment method toggles below to control whether <strong>applicants</strong> and <strong>students</strong> can pay with Paystack or Manual Transfer for this session.
+          </div>
           <div class="row">
             <!-- Session Controls -->
             <div class="col-md-6">
@@ -594,7 +598,11 @@ export default {
         screening: 'Screening & Interview',
         courseRegistration: 'Course Registration',
         resultUpload: 'Result Upload',
-        resultRelease: 'Result Release'
+        resultRelease: 'Result Release',
+        applicantPaystackPayments: 'Applicant Paystack Payments',
+        applicantManualTransferPayments: 'Applicant Manual Transfer Payments',
+        studentPaystackPayments: 'Student Paystack Payments',
+        studentManualTransferPayments: 'Student Manual Transfer Payments'
       }
       return names[controlName] || controlName
     },

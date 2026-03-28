@@ -1,10 +1,40 @@
-import { apiService } from './api.js';
-import { logger } from '@shared/utils/logger';
-import PaystackPop from '@paystack/inline-js';
+import { apiService } from "./api.js";
+import { logger } from "@shared/utils/logger";
+import PaystackPop from "@paystack/inline-js";
 
 class PaymentService {
     constructor() {
         this.paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+        this.paystackEnabled =
+            import.meta.env.VITE_PAYMENT_PAYSTACK_ENABLED !== "false" &&
+            !!this.paystackPublicKey;
+        this.manualTransferEnabled =
+            import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ENABLED !== "false";
+        this.serverPaymentMethods = {
+            paystackEnabled: true,
+            manualTransferEnabled: true,
+        };
+        this.manualTransferDetails = {
+            accountName:
+                import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NAME || "",
+            accountNumber:
+                import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NUMBER || "",
+            bankName: import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_BANK_NAME || "",
+            note:
+                import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_NOTE ||
+                "Upload a clear receipt after making the transfer.",
+        };
+    }
+
+    getAvailablePaymentMethods() {
+        return {
+            paystackEnabled:
+                this.paystackEnabled && this.serverPaymentMethods.paystackEnabled,
+            manualTransferEnabled:
+                this.manualTransferEnabled &&
+                this.serverPaymentMethods.manualTransferEnabled,
+            manualTransferDetails: this.manualTransferDetails,
+        };
     }
 
     /**
@@ -12,24 +42,32 @@ class PaymentService {
      */
     async getPaymentsSummary() {
         try {
-            logger.info('Fetching payments summary for application portal');
-            const response = await apiService.get('/payments/summary?context=application-portal');
+            logger.info("Fetching payments summary for application portal");
+            const response = await apiService.get(
+                "/payments/summary?context=application-portal",
+            );
 
             if (response.success) {
-                logger.info('Successfully fetched payments summary');
+                logger.info("Successfully fetched payments summary");
+                this.serverPaymentMethods = {
+                    paystackEnabled:
+                        response.data?.availableMethods?.paystackEnabled !== false,
+                    manualTransferEnabled:
+                        response.data?.availableMethods?.manualTransferEnabled !== false,
+                };
                 return {
                     success: true,
-                    data: response.data
+                    data: response.data,
                 };
             } else {
-                throw new Error(response.message || 'Failed to fetch payments summary');
+                throw new Error(response.message || "Failed to fetch payments summary");
             }
         } catch (error) {
-            logger.error('Error fetching payments summary:', error);
+            logger.error("Error fetching payments summary:", error);
             return {
                 success: false,
-                message: error.message || 'Failed to fetch payments summary',
-                error
+                message: error.message || "Failed to fetch payments summary",
+                error,
             };
         }
     }
@@ -39,27 +77,59 @@ class PaymentService {
      */
     async initializePayment(paymentId, email) {
         try {
-            logger.info('Initializing payment:', { paymentId, email });
-            const response = await apiService.post('/payments/initialize', {
+            logger.info("Initializing payment:", { paymentId, email });
+            const response = await apiService.post("/payments/initialize", {
                 paymentId,
-                email
+                email,
             });
 
             if (response.success) {
-                logger.info('Payment initialized successfully');
+                logger.info("Payment initialized successfully");
                 return {
                     success: true,
-                    data: response.data
+                    data: response.data,
                 };
             } else {
-                throw new Error(response.message || 'Failed to initialize payment');
+                throw new Error(response.message || "Failed to initialize payment");
             }
         } catch (error) {
-            logger.error('Error initializing payment:', error);
+            logger.error("Error initializing payment:", error);
             return {
                 success: false,
-                message: error.message || 'Failed to initialize payment',
-                error
+                message: error.message || "Failed to initialize payment",
+                error,
+            };
+        }
+    }
+
+    async submitManualTransferReceipt(paymentId, file) {
+        try {
+            const formData = new FormData();
+            formData.append("paymentId", paymentId);
+            formData.append("file", file);
+
+            const response = await apiService.post(
+                "/payments/manual-transfer/submit",
+                formData,
+            );
+
+            if (response.success) {
+                return {
+                    success: true,
+                    data: response.data,
+                    message: response.message,
+                };
+            }
+
+            throw new Error(
+                response.message || "Failed to submit manual transfer receipt",
+            );
+        } catch (error) {
+            logger.error("Error submitting manual transfer receipt:", error);
+            return {
+                success: false,
+                message: error.message || "Failed to submit manual transfer receipt",
+                error,
             };
         }
     }
@@ -69,10 +139,15 @@ class PaymentService {
      */
     async launchPaystackPayment(paymentData) {
         try {
-            logger.info('Launching Paystack payment:', paymentData);
+            logger.info("Launching Paystack payment:", paymentData);
 
             // Extract data from the payment object
-            const { email, paymentType: paymentId, amount, description } = paymentData;
+            const {
+                email,
+                paymentType: paymentId,
+                amount,
+                description,
+            } = paymentData;
 
             // Initialize payment first
             const initResult = await this.initializePayment(paymentId, email);
@@ -89,47 +164,48 @@ class PaymentService {
 
                 popup.resumeTransaction(access_code, {
                     onSuccess: (response) => {
-                        logger.info('Payment successful:', response);
-                        this.verifyPayment(response.reference).then(verificationResult => {
-                            resolve({
-                                success: true,
-                                data: {
-                                    reference: response.reference,
-                                    verification: verificationResult
-                                }
+                        logger.info("Payment successful:", response);
+                        this.verifyPayment(response.reference)
+                            .then((verificationResult) => {
+                                resolve({
+                                    success: true,
+                                    data: {
+                                        reference: response.reference,
+                                        verification: verificationResult,
+                                    },
+                                });
+                            })
+                            .catch((error) => {
+                                logger.error("Payment verification failed:", error);
+                                resolve({
+                                    success: false,
+                                    message: "Payment successful but verification failed",
+                                    data: { reference: response.reference },
+                                });
                             });
-                        }).catch(error => {
-                            logger.error('Payment verification failed:', error);
-                            resolve({
-                                success: false,
-                                message: 'Payment successful but verification failed',
-                                data: { reference: response.reference }
-                            });
-                        });
                     },
                     onCancel: () => {
-                        logger.info('Payment cancelled by user');
+                        logger.info("Payment cancelled by user");
                         resolve({
                             success: false,
-                            message: 'Payment cancelled by user'
+                            message: "Payment cancelled by user",
                         });
                     },
                     onClose: () => {
-                        logger.info('Payment popup closed');
+                        logger.info("Payment popup closed");
                         resolve({
                             success: false,
-                            message: 'Payment cancelled by user'
+                            message: "Payment cancelled by user",
                         });
-                    }
+                    },
                 });
             });
-
         } catch (error) {
-            logger.error('Error launching Paystack payment:', error);
+            logger.error("Error launching Paystack payment:", error);
             return {
                 success: false,
-                message: error.message || 'Failed to launch payment',
-                error
+                message: error.message || "Failed to launch payment",
+                error,
             };
         }
     }
@@ -139,36 +215,39 @@ class PaymentService {
      */
     async verifyPayment(reference) {
         try {
-            logger.info('Verifying payment:', { reference });
+            logger.info("Verifying payment:", { reference });
             const response = await apiService.post(`/payments/verify/${reference}`);
 
             if (response.success) {
-                logger.info('Payment verification successful');
+                logger.info("Payment verification successful");
 
                 // Import auth store and refresh user data after successful payment
                 try {
-                    const { useAuthStore } = await import('../stores/auth.js');
+                    const { useAuthStore } = await import("../stores/auth.js");
                     const authStore = useAuthStore();
                     await authStore.refreshUserData();
-                    logger.info('User data refreshed after successful payment');
+                    logger.info("User data refreshed after successful payment");
                 } catch (storeError) {
-                    logger.error('Failed to refresh user data after payment:', storeError);
+                    logger.error(
+                        "Failed to refresh user data after payment:",
+                        storeError,
+                    );
                     // Don't fail the payment verification if store refresh fails
                 }
 
                 return {
                     success: true,
-                    data: response.data
+                    data: response.data,
                 };
             } else {
-                throw new Error(response.message || 'Failed to verify payment');
+                throw new Error(response.message || "Failed to verify payment");
             }
         } catch (error) {
-            logger.error('Error verifying payment:', error);
+            logger.error("Error verifying payment:", error);
             return {
                 success: false,
-                message: error.message || 'Failed to verify payment',
-                error
+                message: error.message || "Failed to verify payment",
+                error,
             };
         }
     }
@@ -177,10 +256,10 @@ class PaymentService {
      * Format currency for display
      */
     formatCurrency(amount) {
-        return new Intl.NumberFormat('en-NG', {
-            style: 'currency',
-            currency: 'NGN',
-            minimumFractionDigits: 2
+        return new Intl.NumberFormat("en-NG", {
+            style: "currency",
+            currency: "NGN",
+            minimumFractionDigits: 2,
         }).format(amount);
     }
 
@@ -188,12 +267,42 @@ class PaymentService {
      * Format date for display
      */
     formatDate(date) {
-        if (!date) return '';
-        return new Date(date).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: '2-digit'
+        if (!date) return "";
+        return new Date(date).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "2-digit",
         });
+    }
+
+    getStatusBadgeClass(status) {
+        const statusClasses = {
+            successful: "bg-success",
+            pending: "bg-warning text-dark",
+            failed: "bg-danger",
+            cancelled: "bg-secondary",
+        };
+
+        return statusClasses[status?.toLowerCase()] || "bg-secondary";
+    }
+
+    getStatusText(status) {
+        const statusTexts = {
+            successful: "Successful",
+            pending: "Pending Verification",
+            failed: "Failed",
+            cancelled: "Cancelled",
+        };
+
+        return statusTexts[status?.toLowerCase()] || "Unknown";
+    }
+
+    openReceipt(url) {
+        if (!url) {
+            return;
+        }
+
+        window.open(url, "_blank", "noopener,noreferrer");
     }
 }
 

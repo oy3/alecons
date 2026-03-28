@@ -134,6 +134,14 @@ class ApiService {
     }
 
     async post(endpoint, data = {}, customOptions = {}) {
+        if (data instanceof FormData) {
+            return this.makeRequest(endpoint, {
+                method: 'POST',
+                body: data,
+                ...customOptions,
+            });
+        }
+
         const options = {
             method: 'POST',
             body: JSON.stringify(data),

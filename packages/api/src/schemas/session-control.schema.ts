@@ -27,9 +27,15 @@ export class SessionControl {
         default: [
             { name: 'application', active: false },
             { name: 'admissionProcessing', active: false },
+            { name: 'entranceExam', active: true },
+            { name: 'screening', active: true },
             { name: 'courseRegistration', active: false },
             { name: 'resultUpload', active: false },
-            { name: 'resultRelease', active: false }
+            { name: 'resultRelease', active: false },
+            { name: 'applicantPaystackPayments', active: true },
+            { name: 'applicantManualTransferPayments', active: true },
+            { name: 'studentPaystackPayments', active: true },
+            { name: 'studentManualTransferPayments', active: true }
         ]
     })
     controls: Control[];

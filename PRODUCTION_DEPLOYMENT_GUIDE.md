@@ -13,6 +13,7 @@
 3. MongoDB Atlas account or DigitalOcean Managed Database
 4. Paystack live API keys
 5. Production email credentials
+6. DigitalOcean Spaces bucket and credentials for document and payment receipt uploads
 
 ## Quick Secret Generation Reference
 
@@ -152,6 +153,9 @@ nano .env.production
 # PAYSTACK_PUBLIC_KEY=pk_live_your_live_key
 # SPACES_KEY=your_production_spaces_key
 # SPACES_SECRET=your_production_spaces_secret
+# SPACES_BUCKET=your-production-bucket
+# SPACES_REGION=nyc3
+# SPACES_ENDPOINT=https://nyc3.digitaloceanspaces.com
 # SMTP_USER=noreply@alecons.com.ng
 # SMTP_PASS=your_production_email_password
 ```
@@ -706,9 +710,45 @@ DATABASE_URL=mongodb+srv://username:password@cluster.mongodb.net/alecons_prod
 JWT_SECRET=your-very-strong-production-jwt-secret-at-least-256-bits
 PAYSTACK_SECRET_KEY=sk_live_your_actual_live_secret_key
 PAYSTACK_PUBLIC_KEY=pk_live_your_actual_live_public_key
+SPACES_KEY=your_actual_spaces_key
+SPACES_SECRET=your_actual_spaces_secret
+SPACES_BUCKET=your_actual_spaces_bucket
+SPACES_REGION=nyc3
+SPACES_ENDPOINT=https://nyc3.digitaloceanspaces.com
 SMTP_USER=noreply@alecons.com.ng
 SMTP_PASS=your_actual_email_password
 ```
+
+### 7.1.1 Update Frontend Payment Environment
+Set these values in the build environment for `apps/application-portal` and `apps/student-portal`:
+
+```bash
+VITE_PAYSTACK_PUBLIC_KEY=pk_live_your_actual_live_public_key
+VITE_PAYMENT_PAYSTACK_ENABLED=true
+VITE_PAYMENT_MANUAL_TRANSFER_ENABLED=true
+VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NAME="Alecons College of Nursing Sciences"
+VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NUMBER="0123456789"
+VITE_PAYMENT_MANUAL_TRANSFER_BANK_NAME="Your Bank Name"
+VITE_PAYMENT_MANUAL_TRANSFER_NOTE="Upload a clear receipt after making the transfer. Receipts must be PNG, JPG, or PDF and not more than 1MB."
+```
+
+Notes:
+- These frontend env values provide default visibility only.
+- Final availability is enforced by backend academic session controls.
+- If Paystack is not yet approved or must be suspended temporarily, leave `VITE_PAYMENT_MANUAL_TRANSFER_ENABLED=true` and disable Paystack at the session-control level for the affected audience.
+
+### 7.1.2 Session Controls for Payments
+After deployment, use the staff portal Academic Sessions screen to control payment availability per audience:
+
+- Applicant Paystack Payments
+- Applicant Manual Transfer Payments
+- Student Paystack Payments
+- Student Manual Transfer Payments
+
+Recommended rollout while waiting for Paystack approval:
+- Enable manual transfer for the required audience
+- Disable Paystack for the same audience/session
+- Verify receipt upload and staff approval flow before announcing payments live
 
 ### 7.2 Restart Services
 ```bash
@@ -746,7 +786,7 @@ pm2 set pm2-logrotate:retain 30
 ```bash
 # Setup automated backups
 # 1. Database: Use MongoDB Atlas automated backups or DigitalOcean backups
-# 2. Files: Setup DigitalOcean Spaces backup
+# 2. Files: Setup DigitalOcean Spaces backup, including payment receipt objects
 # 3. Code: Ensure git repository is up to date
 ```
 
@@ -773,6 +813,14 @@ curl -X POST https://api.alecons.com.ng/api/v1/auth/login \
   -d '{"email":"test@example.com","password":"testpass"}'
 ```
 
+### 9.3 Test Manual Transfer Payment Flow
+- Log in to the application portal and confirm the payment modal shows the expected methods for the active session.
+- Log in to the student portal and confirm the Finance page shows the same session-appropriate methods.
+- If manual transfer is enabled, submit a test receipt under 1MB in PNG, JPG, or PDF format.
+- Confirm the payment moves into `Pending Verification` instead of staying in outstanding fees.
+- Log in to the staff portal, open the linked payment history, and verify or reject the pending manual transfer.
+- Re-check the applicant or student portal and confirm the payment status updates after staff action.
+
 ---
 
 ## STEP 10: Post-Deployment Checklist
@@ -784,6 +832,9 @@ curl -X POST https://api.alecons.com.ng/api/v1/auth/login \
 - [ ] Email sending functional
 - [ ] File uploads to DigitalOcean Spaces working
 - [ ] Payment integration with Paystack working
+- [ ] Manual transfer receipt uploads working
+- [ ] Pending manual transfer verification flow working in staff portal
+- [ ] Session payment toggles behaving correctly for applicant and student portals
 - [ ] Cross-portal navigation working
 - [ ] CBT portal accessible from student portal
 - [ ] PM2 processes running and stable
@@ -800,6 +851,8 @@ curl -X POST https://api.alecons.com.ng/api/v1/auth/login \
 3. **API not responding**: Check PM2 logs with `pm2 logs alecons-api`
 4. **Database connection fails**: Verify connection string and network access
 5. **File uploads fail**: Check DigitalOcean Spaces credentials and CORS settings
+6. **Manual transfer not visible**: Check frontend `VITE_PAYMENT_MANUAL_TRANSFER_*` values and session payment controls in staff portal
+7. **Receipt verification actions missing**: Confirm the payment is `pending`, has method `manual_transfer`, and the staff portal is using the latest build
 
 ### Useful Commands
 ```bash

@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Param, Request, UseGuards, HttpException, HttpStatus, Logger, Put, Delete, Query, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Request, UseGuards, HttpException, HttpStatus, Logger, Put, Delete, Query, Patch, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
@@ -88,6 +89,39 @@ export class PaymentsController {
             );
         }
     }
+
+    @Post('manual-transfer/submit')
+    @UseInterceptors(FileInterceptor('file'))
+    async submitManualTransfer(
+        @Request() req,
+        @UploadedFile() file: Express.Multer.File,
+        @Body() body: { paymentId: string },
+    ) {
+        try {
+            const userId = req.user._id.toString();
+            const result = await this.paymentsService.submitManualTransferPayment(
+                userId,
+                body.paymentId,
+                file,
+                { context: 'application-portal' },
+            );
+
+            return {
+                success: true,
+                data: result,
+                message: 'Manual transfer receipt submitted successfully',
+            };
+        } catch (error) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to submit manual transfer receipt',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
 }
 
 // DTOs for payment management
@@ -107,6 +141,10 @@ export interface UpdatePaymentDto {
     category?: string;
     isActive?: boolean;
     paymentCode?: string;
+}
+
+export interface ManualPaymentReviewDto {
+    remarks?: string;
 }
 
 // Staff Payment Management Controller
@@ -420,6 +458,68 @@ export class StaffPaymentsController {
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Patch('student-payments/:id/verify-manual')
+    @ApiOperation({ summary: 'Verify pending manual transfer payment' })
+    async verifyManualTransferPayment(
+        @Param('id') id: string,
+        @Request() req,
+        @Body() body: ManualPaymentReviewDto,
+    ) {
+        try {
+            const result = await this.paymentsService.verifyManualTransferPayment(
+                id,
+                req.user.userId || req.user._id?.toString(),
+                body?.remarks,
+            );
+
+            return {
+                success: true,
+                data: result,
+                message: 'Manual transfer payment verified successfully',
+            };
+        } catch (error) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to verify manual transfer payment',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Patch('student-payments/:id/reject-manual')
+    @ApiOperation({ summary: 'Reject pending manual transfer payment' })
+    async rejectManualTransferPayment(
+        @Param('id') id: string,
+        @Request() req,
+        @Body() body: ManualPaymentReviewDto,
+    ) {
+        try {
+            const result = await this.paymentsService.rejectManualTransferPayment(
+                id,
+                req.user.userId || req.user._id?.toString(),
+                body?.remarks,
+            );
+
+            return {
+                success: true,
+                data: result,
+                message: 'Manual transfer payment rejected successfully',
+            };
+        } catch (error) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to reject manual transfer payment',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
     }

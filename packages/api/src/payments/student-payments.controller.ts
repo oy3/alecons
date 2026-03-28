@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards, Request, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Request, HttpException, HttpStatus, Logger, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PaymentsService } from './payments.service';
 
@@ -116,6 +117,47 @@ export class StudentPaymentsController {
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Post('manual-transfer/submit')
+    @UseInterceptors(FileInterceptor('file'))
+    @ApiOperation({ summary: 'Submit manual transfer receipt for student payment' })
+    async submitManualTransfer(
+        @Request() req,
+        @UploadedFile() file: Express.Multer.File,
+        @Body() body: {
+            paymentId: string;
+            academicSessionId?: string;
+        },
+    ) {
+        try {
+            const userId = req.user._id.toString();
+            const result = await this.paymentsService.submitManualTransferPayment(
+                userId,
+                body.paymentId,
+                file,
+                {
+                    context: 'student-portal',
+                    academicSessionId: body.academicSessionId,
+                },
+            );
+
+            return {
+                success: true,
+                data: result,
+                message: 'Manual transfer receipt submitted successfully',
+            };
+        } catch (error) {
+            this.logger.error('Error submitting manual transfer payment:', error);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to submit manual transfer receipt',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
     }

@@ -49,7 +49,9 @@ export default {
       showDetailsModal: false,
       isLoadingDetails: false,
       selectedApplication: null,
+      selectedApplicationId: null,
       selectedPaymentHistory: createEmptyPaymentHistory(),
+      processingPaymentId: null,
 
       statusOptions: [
         { value: 'all', label: 'All Statuses' },
@@ -386,7 +388,50 @@ export default {
       this.showDetailsModal = false
       this.isLoadingDetails = false
       this.selectedApplication = null
+      this.selectedApplicationId = null
       this.selectedPaymentHistory = createEmptyPaymentHistory()
+      this.processingPaymentId = null
+    },
+
+    isManualTransferPayment(payment) {
+      return payment?.method === 'manual_transfer'
+    },
+
+    canReviewManualTransfer(payment) {
+      return this.isManualTransferPayment(payment) && payment?.status === 'pending'
+    },
+
+    isProcessingPayment(paymentId) {
+      return this.processingPaymentId === paymentId
+    },
+
+    openPaymentReceipt(payment) {
+      if (!payment?.receiptUrl) {
+        this.$swal.fire({
+          icon: 'info',
+          title: 'Receipt unavailable',
+          text: 'No uploaded receipt is available for this payment record.',
+          confirmButtonColor: '#1a5f5f'
+        })
+        return
+      }
+
+      window.open(payment.receiptUrl, '_blank', 'noopener,noreferrer')
+    },
+
+    async reloadSelectedApplicationDetails() {
+      if (!this.selectedApplicationId) {
+        return
+      }
+
+      const response = await apiService.getApplication(this.selectedApplicationId)
+
+      if (!response.success || !response.data?.application) {
+        throw new Error(response.message || 'Failed to refresh application details')
+      }
+
+      this.selectedApplication = response.data.application
+      this.selectedPaymentHistory = response.data.paymentHistory || createEmptyPaymentHistory()
     },
 
     async viewApplication(application) {
@@ -398,6 +443,7 @@ export default {
 
         this.showDetailsModal = true
         this.isLoadingDetails = true
+  this.selectedApplicationId = application.id
         this.selectedApplication = null
         this.selectedPaymentHistory = createEmptyPaymentHistory()
 
@@ -421,6 +467,130 @@ export default {
         })
       } finally {
         this.isLoadingDetails = false
+      }
+    },
+
+    async verifyManualTransferPayment(payment) {
+      try {
+        if (!this.authStore.hasAnyPermission(['applications:update', 'update'])) {
+          this.$swal.fire({
+            icon: 'error',
+            title: 'Access Denied',
+            text: 'You do not have permission to verify manual transfer payments',
+            confirmButtonColor: '#1a5f5f'
+          })
+          return
+        }
+
+        const result = await this.$swal.fire({
+          title: 'Verify manual transfer?',
+          text: `Confirm ${payment.payment?.name || 'this payment'} as received in the bank account.`,
+          input: 'textarea',
+          inputLabel: 'Verification remarks (optional)',
+          inputPlaceholder: 'e.g. Payment confirmed from bank statement',
+          showCancelButton: true,
+          confirmButtonText: 'Verify payment',
+          confirmButtonColor: '#1a5f5f',
+          cancelButtonColor: '#6c757d'
+        })
+
+        if (!result.isConfirmed) {
+          return
+        }
+
+        this.processingPaymentId = payment.id
+
+        const response = await apiService.verifyManualTransferPayment(payment.id, {
+          remarks: result.value?.trim() || undefined
+        })
+
+        if (!response.success) {
+          throw new Error(response.message || 'Failed to verify payment')
+        }
+
+        await this.reloadSelectedApplicationDetails()
+
+        this.$swal.fire({
+          icon: 'success',
+          title: 'Payment verified',
+          text: response.message || 'Manual transfer payment verified successfully.',
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Failed to verify manual transfer payment:', error)
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Verification failed',
+          text: error.message || 'Failed to verify manual transfer payment',
+          confirmButtonColor: '#1a5f5f'
+        })
+      } finally {
+        this.processingPaymentId = null
+      }
+    },
+
+    async rejectManualTransferPayment(payment) {
+      try {
+        if (!this.authStore.hasAnyPermission(['applications:update', 'update'])) {
+          this.$swal.fire({
+            icon: 'error',
+            title: 'Access Denied',
+            text: 'You do not have permission to reject manual transfer payments',
+            confirmButtonColor: '#1a5f5f'
+          })
+          return
+        }
+
+        const result = await this.$swal.fire({
+          title: 'Reject manual transfer?',
+          text: 'Provide a reason for rejecting this receipt so the applicant or student can correct it.',
+          input: 'textarea',
+          inputLabel: 'Rejection reason',
+          inputPlaceholder: 'e.g. Amount does not match bank statement',
+          inputValidator: (value) => {
+            if (!value || !value.trim()) {
+              return 'A rejection reason is required'
+            }
+            return null
+          },
+          showCancelButton: true,
+          confirmButtonText: 'Reject payment',
+          confirmButtonColor: '#dc3545',
+          cancelButtonColor: '#6c757d'
+        })
+
+        if (!result.isConfirmed) {
+          return
+        }
+
+        this.processingPaymentId = payment.id
+
+        const response = await apiService.rejectManualTransferPayment(payment.id, {
+          remarks: result.value.trim()
+        })
+
+        if (!response.success) {
+          throw new Error(response.message || 'Failed to reject payment')
+        }
+
+        await this.reloadSelectedApplicationDetails()
+
+        this.$swal.fire({
+          icon: 'success',
+          title: 'Payment rejected',
+          text: response.message || 'Manual transfer payment rejected successfully.',
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Failed to reject manual transfer payment:', error)
+        this.$swal.fire({
+          icon: 'error',
+          title: 'Rejection failed',
+          text: error.message || 'Failed to reject manual transfer payment',
+          confirmButtonColor: '#1a5f5f'
+        })
+      } finally {
+        this.processingPaymentId = null
       }
     },
 
@@ -1504,6 +1674,7 @@ export default {
                           <th>Amount</th>
                           <th>Session</th>
                           <th>Paid At</th>
+                          <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1533,6 +1704,53 @@ export default {
                           <td>
                             <div>{{ formatDateTime(payment.paidAt || payment.createdAt) }}</div>
                             <div class="small text-muted" v-if="payment.remarks">{{ payment.remarks }}</div>
+                            <div class="small text-muted" v-if="payment.verificationRemarks">{{ payment.verificationRemarks }}</div>
+                          </td>
+                          <td>
+                            <div class="d-flex flex-wrap gap-2 justify-content-end">
+                              <button
+                                v-if="payment.receiptUrl"
+                                type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                @click="openPaymentReceipt(payment)"
+                              >
+                                <i class="bi bi-receipt me-1"></i>Receipt
+                              </button>
+
+                              <template v-if="canReviewManualTransfer(payment)">
+                                <button
+                                  type="button"
+                                  class="btn btn-sm btn-success"
+                                  :disabled="isProcessingPayment(payment.id)"
+                                  @click="verifyManualTransferPayment(payment)"
+                                >
+                                  <span v-if="isProcessingPayment(payment.id)" class="spinner-border spinner-border-sm me-1"></span>
+                                  <i v-else class="bi bi-check-circle me-1"></i>Verify
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn btn-sm btn-outline-danger"
+                                  :disabled="isProcessingPayment(payment.id)"
+                                  @click="rejectManualTransferPayment(payment)"
+                                >
+                                  <i class="bi bi-x-circle me-1"></i>Reject
+                                </button>
+                              </template>
+
+                              <span
+                                v-else-if="payment.method === 'manual_transfer' && payment.status === 'successful'"
+                                class="badge bg-success-subtle text-success-emphasis align-self-center"
+                              >
+                                Verified
+                              </span>
+
+                              <span
+                                v-else-if="payment.method === 'manual_transfer' && payment.status === 'failed'"
+                                class="badge bg-danger-subtle text-danger-emphasis align-self-center"
+                              >
+                                Rejected
+                              </span>
+                            </div>
                           </td>
                         </tr>
                       </tbody>

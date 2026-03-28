@@ -10,6 +10,26 @@ import PaystackPop from '@paystack/inline-js';
 class StudentPaymentService {
     constructor() {
         this.paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+        this.paystackEnabled = import.meta.env.VITE_PAYMENT_PAYSTACK_ENABLED !== 'false' && !!this.paystackPublicKey;
+        this.manualTransferEnabled = import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ENABLED !== 'false';
+        this.serverPaymentMethods = {
+            paystackEnabled: true,
+            manualTransferEnabled: true,
+        };
+        this.manualTransferDetails = {
+            accountName: import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NAME || '',
+            accountNumber: import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NUMBER || '',
+            bankName: import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_BANK_NAME || '',
+            note: import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_NOTE || 'Upload a clear receipt after making the transfer.',
+        };
+    }
+
+    getAvailablePaymentMethods() {
+        return {
+            paystackEnabled: this.paystackEnabled && this.serverPaymentMethods.paystackEnabled,
+            manualTransferEnabled: this.manualTransferEnabled && this.serverPaymentMethods.manualTransferEnabled,
+            manualTransferDetails: this.manualTransferDetails,
+        };
     }
 
     /**
@@ -22,6 +42,10 @@ class StudentPaymentService {
 
             if (response.success) {
                 logger.info('Successfully fetched payment summary');
+                this.serverPaymentMethods = {
+                    paystackEnabled: response.data?.availableMethods?.paystackEnabled !== false,
+                    manualTransferEnabled: response.data?.availableMethods?.manualTransferEnabled !== false,
+                };
                 return {
                     success: true,
                     data: response.data
@@ -123,6 +147,37 @@ class StudentPaymentService {
                 success: false,
                 message: error.message || 'Failed to initialize payment',
                 error
+            };
+        }
+    }
+
+    async submitManualTransferReceipt(paymentId, file, academicSessionId = null) {
+        try {
+            const formData = new FormData();
+            formData.append('paymentId', paymentId);
+            formData.append('file', file);
+
+            if (academicSessionId) {
+                formData.append('academicSessionId', academicSessionId);
+            }
+
+            const response = await apiService.post('/student/payments/manual-transfer/submit', formData);
+
+            if (response.success) {
+                return {
+                    success: true,
+                    data: response.data,
+                    message: response.message,
+                };
+            }
+
+            throw new Error(response.message || 'Failed to submit manual transfer receipt');
+        } catch (error) {
+            logger.error('Error submitting manual transfer receipt:', error);
+            return {
+                success: false,
+                message: error.message || 'Failed to submit manual transfer receipt',
+                error,
             };
         }
     }
@@ -295,12 +350,20 @@ class StudentPaymentService {
     getStatusText(status) {
         const statusTexts = {
             'successful': 'Paid',
-            'pending': 'Pending',
+            'pending': 'Pending Verification',
             'failed': 'Failed',
             'cancelled': 'Cancelled'
         };
 
         return statusTexts[status?.toLowerCase()] || 'Unknown';
+    }
+
+    openReceipt(url) {
+        if (!url) {
+            return;
+        }
+
+        window.open(url, '_blank', 'noopener,noreferrer');
     }
 }
 

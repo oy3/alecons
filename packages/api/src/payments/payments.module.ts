@@ -13,9 +13,11 @@ import { TenancyAgreement, TenancyAgreementSchema } from '../schemas/tenancy-agr
 import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
+import { UploadModule } from '../modules/upload.module';
 
 @Module({
     imports: [
+        UploadModule,
         MongooseModule.forFeature([
             { name: Payment.name, schema: PaymentSchema },
             { name: StudentPayment.name, schema: StudentPaymentSchema },

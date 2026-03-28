@@ -5,6 +5,9 @@ import Programs from "../views/Programs.vue";
 import Contact from "../views/Contact.vue";
 import Admissions from "../views/Admissions.vue";
 import Faculty from "../views/Faculty.vue";
+import PrivacyPolicy from "../views/PrivacyPolicy.vue";
+import TermsOfService from "../views/TermsOfService.vue";
+import Accessibility from "../views/Accessibility.vue";
 
 const routes = [
   {
@@ -36,6 +39,21 @@ const routes = [
     path: "/contact",
     name: "Contact",
     component: Contact,
+  },
+  {
+    path: "/privacy-policy",
+    name: "PrivacyPolicy",
+    component: PrivacyPolicy,
+  },
+  {
+    path: "/terms-of-service",
+    name: "TermsOfService",
+    component: TermsOfService,
+  },
+  {
+    path: "/accessibility",
+    name: "Accessibility",
+    component: Accessibility,
   },
 ];
 

@@ -28,8 +28,9 @@ export default {
         >
           Apply Now
         </a>
-            <button class="btn btn-outline-light btn-lg px-5" style="--bs-btn-hover-color: #C62828" type="button">Schedule Campus
-                Tour</button>
+        <!-- TODO: Add back "Schedule Campus Tour" button when we have a campus tour scheduling system in place -->
+            <!-- <button class="btn btn-outline-light btn-lg px-5" style="--bs-btn-hover-color: #C62828" type="button">Schedule Campus
+                Tour</button> -->
         </div>
     </div>
 </template>

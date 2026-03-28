@@ -46,7 +46,8 @@ export default {
         </router-link>
       </div>
 
-      <div class="col-md-9">
+      <!-- TODO: Show when updated stats are available -->
+      <!-- <div class="col-md-9">
         <div
           class="stats-container mt-5 p-4 px-md-5 py-md-3 rounded-4 text-white d-flex flex-column flex-md-row justify-content-around align-items-center gap-4">
           <div class="">
@@ -74,7 +75,7 @@ export default {
             <p class="mb-0">Years of Excellence</p>
           </div>
         </div>
-      </div>
+      </div> -->
 
       <div class="d-flex justify-content-center mt-5">
         <i class="bi bi-mouse fs-1"></i>

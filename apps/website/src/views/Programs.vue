@@ -46,7 +46,7 @@ export default {
               <h5 class="card-title fw-bold mb-3">Basic Nursing Program</h5>
               <div class="small mb-2"><i class="bi bi-clock"></i> 3 Years</div>
               <div class="small mb-2">
-                <i class="bi bi-people"></i> 150+ Students
+                <i class="bi bi-people"></i> 0 Students
               </div>
               <div class="small">
                 <i class="bi bi-award"></i> RN Certificate
@@ -82,7 +82,7 @@ export default {
                 <i class="bi bi-clock"></i> 18 Months
               </div>
               <div class="small mb-2">
-                <i class="bi bi-people"></i> 80+ Students
+                <i class="bi bi-people"></i> 0 Students
               </div>
               <div class="small"><i class="bi bi-award"></i> Advanced RN</div>
             </div>
@@ -101,8 +101,8 @@ export default {
               </ul>
             </div>
             <div class="card-footer bg-white border-top-0 mb-3">
-              <button class="btn btn-outline-acon-primary w-100">
-                Learn more
+              <button class="btn btn-outline-acon-primary w-100" disabled>
+                Comming Soon
               </button>
             </div>
           </div>
@@ -113,7 +113,7 @@ export default {
               <h5 class="card-title fw-bold mb-3">Midwifery Program</h5>
               <div class="small mb-2"><i class="bi bi-clock"></i> 2 Years</div>
               <div class="small mb-2">
-                <i class="bi bi-people"></i> 60+ Students
+                <i class="bi bi-people"></i> 0 Students
               </div>
               <div class="small">
                 <i class="bi bi-award"></i> Certified Midwife
@@ -134,8 +134,8 @@ export default {
               </ul>
             </div>
             <div class="card-footer bg-white border-top-0 mb-3">
-              <button class="btn btn-outline-acon-primary w-100">
-                Learn more
+              <button class="btn btn-outline-acon-primary w-100" disabled>
+                Comming Soon
               </button>
             </div>
           </div>
@@ -230,7 +230,8 @@ export default {
       </div>
     </div>
 
-    <div class="acon-bg-light p-5 text-center">
+    <!-- TODO: Add clinical training sites section when we have the content ready. -->
+    <!-- <div class="acon-bg-light p-5 text-center">
       <h2 class="fw-bold acon-text-primary">Clinical Training Sites</h2>
       <p class="lead mb-5 text-secondary">
         Our students gain hands-on experience at leading healthcare facilities
@@ -295,7 +296,7 @@ export default {
           </div>
         </div>
       </div>
-    </div>
+    </div> -->
 
     <div class="p-5 text-center">
       <h2 class="fw-bold acon-text-primary">Learning Facilities</h2>
@@ -308,7 +309,7 @@ export default {
         <div class="col-md-3">
           <div class="card border-0 shadow p-0 h-100">
             <img
-              src="../assets/img/program-img-1.png"
+              src="https://placehold.co/200?text=IMG"
               class="card-img-top"
               style="height: 200px; object-fit: cover"
             />
@@ -327,7 +328,7 @@ export default {
         <div class="col-md-3">
           <div class="card border-0 shadow p-0 h-100">
             <img
-              src="../assets/img/program-img-1.png"
+              src="https://placehold.co/200?text=IMG"
               class="card-img-top"
               style="height: 200px; object-fit: cover"
             />
@@ -344,7 +345,7 @@ export default {
         <div class="col-md-3">
           <div class="card border-0 shadow p-0 h-100">
             <img
-              src="../assets/img/program-img-1.png"
+              src="https://placehold.co/200?text=IMG"
               class="card-img-top"
               style="height: 200px; object-fit: cover"
             />
@@ -363,7 +364,7 @@ export default {
         <div class="col-md-3">
           <div class="card border-0 shadow p-0 h-100">
             <img
-              src="../assets/img/program-img-1.png"
+              src="https://placehold.co/200?text=IMG"
               class="card-img-top"
               style="height: 200px; object-fit: cover"
             />
@@ -396,9 +397,10 @@ export default {
         >
           Apply Now
         </a>
-          <button class="btn btn-outline-acon-primary">
+        <!-- TODO: Add brochure download link when available -->
+          <!-- <button class="btn btn-outline-acon-primary">
             Download Brochure
-          </button>
+          </button> -->
         </div>
       </div>
     </div>

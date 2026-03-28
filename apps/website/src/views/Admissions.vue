@@ -1,29 +1,30 @@
 <script lang="js">
-
 export default {
   metaInfo: {
-    title: 'Admissions - Alecons College of Nursing Sciences',
+    title: "Admissions - Alecons College of Nursing Sciences",
     meta: [
       {
-        name: 'description',
-        content: 'Apply now to Alecons College of Nursing Sciences. Learn about our admissions process, requirements, and deadlines.'
+        name: "description",
+        content:
+          "Apply now to Alecons College of Nursing Sciences. Learn about our admissions process, requirements, and deadlines.",
       },
       {
-        name: 'keywords',
-        content: 'nursing school, admissions, Alecons College of Nursing Sciences, alecons'
-      }
-    ]
+        name: "keywords",
+        content:
+          "nursing school, admissions, Alecons College of Nursing Sciences, alecons",
+      },
+    ],
   },
-    name: "Admissions",
-    components: {},
-      computed: {
+  name: "Admissions",
+  components: {},
+  computed: {
     registrationUrl() {
       return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
     },
     applicationPortalUrl() {
       return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
-    }
-  }
+    },
+  },
 };
 </script>
 
@@ -47,6 +48,7 @@ export default {
         <button
           class="btn btn-outline-light px-4 d-inline-flex align-items-center gap-2"
           style="--bs-btn-hover-color: #2d7d7d"
+          disabled
         >
           Download Brochure <i class="bi bi-download"></i>
         </button>
@@ -56,7 +58,7 @@ export default {
     <div class="p-5 text-center">
       <h3 class="fw-bold acon-text-primary">Important Dates</h3>
       <p class="fw-light fs-5 text-muted mb-5">
-        Mark your calendar with these key dates for the 2025/2026 academic
+        Mark your calendar with these key dates for the 2026/2027 academic
         session.
       </p>
 
@@ -66,7 +68,7 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Application Opens</h6>
-              <p class="acon-text-secondary">March 1, 2025</p>
+              <p class="acon-text-secondary">March 28, 2026</p>
             </div>
           </div>
         </div>
@@ -78,7 +80,7 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">
                 Application Deadline
               </h6>
-              <p class="acon-text-secondary">June 30, 2025</p>
+              <p class="acon-text-secondary">June 30, 2026</p>
             </div>
           </div>
         </div>
@@ -90,7 +92,7 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">
                 Entrance Examination
               </h6>
-              <p class="acon-text-secondary">July 15, 2025</p>
+              <p class="acon-text-secondary">July 15, 2026</p>
             </div>
           </div>
         </div>
@@ -100,7 +102,7 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Interview Period</h6>
-              <p class="acon-text-secondary">August 5-20, 2025</p>
+              <p class="acon-text-secondary">August 5-20, 2026</p>
             </div>
           </div>
         </div>
@@ -110,7 +112,7 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Admission Results</h6>
-              <p class="acon-text-secondary">September 1, 2025</p>
+              <p class="acon-text-secondary">September 1, 2026</p>
             </div>
           </div>
         </div>
@@ -122,7 +124,7 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">
                 Registration Begins
               </h6>
-              <p class="acon-text-secondary">September 15, 2025</p>
+              <p class="acon-text-secondary">September 15, 2026</p>
             </div>
           </div>
         </div>
@@ -132,7 +134,7 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Orientation Week</h6>
-              <p class="acon-text-secondary">October 1-7, 2025</p>
+              <p class="acon-text-secondary">October 1-7, 2026</p>
             </div>
           </div>
         </div>
@@ -142,7 +144,7 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Classes Begin</h6>
-              <p class="acon-text-secondary">October 10, 2025</p>
+              <p class="acon-text-secondary">October 10, 2026</p>
             </div>
           </div>
         </div>
@@ -357,19 +359,30 @@ export default {
               <p class="acon-text-secondary mb-4">3 Years</p>
 
               <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Tuition:</span>
-                <span class="fw-medium">₦150,000</span>
+                <span class="text-muted fw-light">Application fee:</span>
+                <span class="fw-medium">₦20,000</span>
               </div>
+
               <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Other Fees:</span>
+                <span class="text-muted fw-light">Acceptance fee:</span>
                 <span class="fw-medium">₦50,000</span>
+              </div>
+
+              <div class="d-flex justify-content-between">
+                <span class="text-muted fw-light">Sundry Fees:</span>
+                <span class="fw-medium">₦280,000</span>
+              </div>
+
+              <div class="d-flex justify-content-between">
+                <span class="text-muted fw-light">Tuition fee:</span>
+                <span class="fw-medium">₦350,000</span>
               </div>
 
               <hr />
 
               <div class="d-flex justify-content-between acon-text-primary">
                 <span class="fw-medium">Total:</span>
-                <span class="fw-bold">₦200,000</span>
+                <span class="fw-bold">₦700,000</span>
               </div>
 
               <p class="mt-2 text-muted fw-light small">per session</p>
@@ -377,8 +390,9 @@ export default {
           </div>
         </div>
 
+        <!-- TODO: Add Post-Basic Nursing details when available -->
         <!-- Post-Basic Nursing -->
-        <div class="col-md-4">
+        <!-- <div class="col-md-4">
           <div class="card border-0 shadow text-center h-100">
             <div class="card-body">
               <h5 class="fw-bold acon-text-primary">Post-Basic Nursing</h5>
@@ -403,10 +417,11 @@ export default {
               <p class="mt-2 text-muted fw-light small">per session</p>
             </div>
           </div>
-        </div>
+        </div> -->
 
+        <!-- TODO: Add Midwifery Program details when available -->
         <!-- Midwifery Program -->
-        <div class="col-md-4">
+        <!-- <div class="col-md-4">
           <div class="card border-0 shadow text-center h-100">
             <div class="card-body">
               <h5 class="fw-bold acon-text-primary">Midwifery Program</h5>
@@ -431,7 +446,7 @@ export default {
               <p class="mt-2 text-muted fw-light small">per session</p>
             </div>
           </div>
-        </div>
+        </div> -->
       </div>
     </div>
 
@@ -445,17 +460,18 @@ export default {
         <button class="btn btn-acon-secondary px-5" type="button">
           Learn About Payment Plans
         </button>
-        <button
-          class="btn btn-outline-light px-5"
-          style="--bs-btn-hover-color: #2d7d7d"
-          type="button"
+        <router-link
+          to="/contact"
+          class="btn btn-outline-light px-5 d-inline-flex align-items-center justify-content-center"
+          style="--bs-btn-hover-color: #a81e1e"
         >
           Contact Financial Services
-        </button>
+        </router-link>
       </div>
     </div>
 
-    <div class="acon-bg-light p-5 text-center">
+    <!-- TODO: Add scholarship and financial aid information when available -->
+    <!-- <div class="acon-bg-light p-5 text-center">
       <h3 class="fw-bold acon-text-primary">Scholarships & Financial Aid</h3>
       <p class="fw-light fs-5 text-muted mb-5">
         Don't let financial constraints limit your dreams. Explore our
@@ -543,7 +559,7 @@ export default {
           </div>
         </div>
       </div>
-    </div>
+    </div> -->
 
     <div class="acon-bg-secondary p-5 text-center">
       <h2 class="fw-bold">Ready to Apply?</h2>
@@ -560,13 +576,13 @@ export default {
         >
           Start Application <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
         </a>
-        <button
-          class="btn btn-outline-light px-5"
-          style="--bs-btn-hover-color: #1e3a47"
-          type="button"
+        <router-link
+          to="/contact"
+          class="btn btn-outline-light px-5 d-inline-flex align-items-center justify-content-center"
+          style="--bs-btn-hover-color: #a85a45"
         >
           Contact Admissions
-        </button>
+        </router-link>
       </div>
     </div>
   </div>

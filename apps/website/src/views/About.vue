@@ -106,7 +106,7 @@ export default {
 
             <div class="bg-light">
               <img
-                src="/src/assets/img/nurses.png"
+                src="https://placehold.co/400?text=IMG"
                 alt="College Logo"
                 class="img-fluid rounded-3"
                 style="max-width: 400px"
@@ -191,7 +191,8 @@ export default {
       </div>
     </div>
 
-    <div class="p-5 text-center">
+    <!-- TODO: Add "Our Journey" timeline section back when we have the content ready -->
+    <!-- <div class="p-5 text-center">
       <h2 class="fw-bold acon-text-primary">Our Journey</h2>
       <p class="text-secondary fs-5 fw-light mx-0 mx-md-5">
         From our humble beginnings to becoming Ekiti State's premier nursing
@@ -274,7 +275,7 @@ export default {
           </div>
         </div>
       </div>
-    </div>
+    </div> -->
 
     <div class="p-5 text-center acon-bg-light">
       <h2 class="fw-bold acon-text-primary">Leadership Team</h2>
@@ -287,53 +288,56 @@ export default {
         <div class="col">
           <div class="card border-0 shadow h-100 p-3">
             <img
-              src="/src/assets/img/nurse1.png"
+              src="https://placehold.co/200?text=IMG"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
               style="width: 200px; height: 200px"
               alt="Dr. Adebayo Oluwaseun"
             />
             <div class="card-body">
               <h5 class="card-title acon-text-primary fw-bold">
-                Dr. Adebayo Oluwaseun
+                Mrs. Yewande I. Akute
               </h5>
               <h6 class="acon-text-secondary">
-                Provost & Chief Academic Officer
+                Provost
               </h6>
-              <p class="card-text fw-ligt text-secondary">PhD, RN, FWACN</p>
+              <!-- TODO: Update credentials for Provost when we have them -->
+              <!-- <p class="card-text fw-ligt text-secondary">PHD, RN</p> -->
             </div>
           </div>
         </div>
         <div class="col">
           <div class="card border-0 shadow h-100 p-3">
             <img
-              src="/src/assets/img/nurse2.jpg"
+              src="https://placehold.co/200?text=IMG"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
               style="width: 200px; height: 200px"
               alt="Dr. Adebayo Oluwaseun"
             />
             <div class="card-body">
               <h5 class="card-title acon-text-primary fw-bold">
-                Mrs. Funmilayo Adeyemi
+                Dr. Olaopa
               </h5>
-              <h6 class="acon-text-secondary">Deputy Provost</h6>
-              <p class="card-text fw-ligt text-secondary">MSN, RN, CNE</p>
+              <h6 class="acon-text-secondary">HOD Nursing</h6>
+              <!-- TODO: Update credentials for HOD Nursing when we have them -->
+              <!-- <p class="card-text fw-ligt text-secondary">MSN, RN, CNE</p> -->
             </div>
           </div>
         </div>
         <div class="col">
           <div class="card border-0 shadow h-100 p-3">
             <img
-              src="/src/assets/img/nurse3.jpg"
+              src="https://placehold.co/200?text=IMG"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
               style="width: 200px; height: 200px"
               alt="Dr. Adebayo Oluwaseun"
             />
             <div class="card-body">
               <h5 class="card-title acon-text-primary fw-bold">
-                Prof. Emmanuella Ogundipe
+                Mr. Tunji Kehinde
               </h5>
-              <h6 class="acon-text-secondary">Dean of Academic Affairs</h6>
-              <p class="card-text fw-ligt text-secondary">PhD, RN, FWACN</p>
+              <h6 class="acon-text-secondary">Registrar</h6>
+              <!-- TODO: Update credentials for Registrar when we have them -->
+              <!-- <p class="card-text fw-ligt text-secondary">PhD, RN, FWACN</p> -->
             </div>
           </div>
         </div>

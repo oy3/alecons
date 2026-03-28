@@ -35,25 +35,25 @@ export default {
       <div class="row g-4">
         <div class="col-md-3">
           <i class="bi bi-people display-4 acon-text-secondary"></i>
-          <h3 class="fw-semibold acon-text-secondary">40+</h3>
+          <h3 class="fw-semibold acon-text-secondary">15+</h3>
           <p class="fw-light">Expert Faculty</p>
         </div>
 
         <div class="col-md-3">
           <i class="bi bi-mortarboard display-4 acon-text-secondary"></i>
-          <h3 class="fw-semibold acon-text-secondary">8</h3>
+          <h3 class="fw-semibold acon-text-secondary">2</h3>
           <p class="fw-light">PhD Holders</p>
         </div>
 
         <div class="col-md-3">
           <i class="bi bi-book display-4 acon-text-secondary"></i>
-          <h3 class="fw-semibold acon-text-secondary">15+</h3>
+          <h3 class="fw-semibold acon-text-secondary">1</h3>
           <p class="fw-light">Average Years Experience</p>
         </div>
 
         <div class="col-md-3">
           <i class="bi bi-award display-4 acon-text-secondary"></i>
-          <h3 class="fw-semibold acon-text-secondary">100+</h3>
+          <h3 class="fw-semibold acon-text-secondary">10+</h3>
           <p class="fw-light">Published Papers</p>
         </div>
       </div>

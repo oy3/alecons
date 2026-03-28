@@ -210,31 +210,31 @@ export default {
         </p>
         <ul class="list-unstyled d-flex">
           <li class="ms-3">
-            <a
+            <router-link
+              to="/privacy-policy"
               class="acon-link text-white fw-light small"
-              href="#"
               aria-label="Privacy Policy"
             >
               Privacy Policy
-            </a>
+            </router-link>
           </li>
           <li class="ms-3">
-            <a
+            <router-link
+              to="/terms-of-service"
               class="acon-link text-white fw-light small"
-              href="#"
               aria-label="TOS"
             >
               Terms of Service
-            </a>
+            </router-link>
           </li>
           <li class="ms-3">
-            <a
+            <router-link
+              to="/accessibility"
               class="acon-link text-white fw-light small"
-              href="#"
               aria-label="Accessibility"
             >
               Accessibility
-            </a>
+            </router-link>
           </li>
         </ul>
       </div>

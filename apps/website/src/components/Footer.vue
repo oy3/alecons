@@ -54,11 +54,11 @@ export default {
           <ul class="no-bullets fw-light small">
             <li>
               <i class="bi bi-geo-alt acon-text-accent fs-5 me-2"></i>
-              <span>Omuo Oke, Ekiti State, Nigeria</span>
+              <span>Omuoke, Ekiti State, Nigeria</span>
             </li>
             <li>
               <i class="bi bi-telephone acon-text-accent fs-5 me-2"></i>
-              <span>+234 708 460 1610, +234 916 000 8679</span>
+              <span>+234 916 000 8679, +234 708 460 1610</span>
             </li>
             <li>
               <i class="bi bi-envelope acon-text-accent fs-5 me-2"></i>

@@ -42,7 +42,7 @@ export default {
           <i class="bi bi-envelope-at me-1"></i> admissions@alecons.edu.ng
         </span>
       </div>
-      <span class="navbar-text text-white">Omuo Oke, Ekiti State, Nigeria</span>
+      <span class="navbar-text text-white">Omuoke, Ekiti State, Nigeria</span>
     </div>
     <div class="container-fluid bg-white py-2">
         <router-link

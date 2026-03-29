@@ -16,9 +16,7 @@ export default {
 <template>
     <div class="container-fluid acon-bg-primary-dark p-5 text-center rounded-5">
         <h2>Ready to Start Your Nursing Career?</h2>
-        <p class="fs-5 fw-light mx-0 mx-md-5">Join thousands of successful nursing graduates who started their journey at ALECONS. Apply
-            today and take the
-            first step towards becoming a healthcare professional.</p>
+        <p class="fs-5 fw-light mx-0 mx-md-5">Join our community of aspiring nursing professionals at ALECONS. Apply today and take the first step towards becoming a healthcare professional.</p>
         <div class="d-grid gap-2 d-md-flex justify-content-md-center">
                     <a
           :href="registrationUrl"

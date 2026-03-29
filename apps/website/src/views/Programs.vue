@@ -43,8 +43,8 @@ export default {
         <div class="col-md-4">
           <div class="card border-0 shadow p-0 h-100">
             <div class="card-header border-bottom-0 acon-bg-primary p-4">
-              <h5 class="card-title fw-bold mb-3">Basic Nursing Program</h5>
-              <div class="small mb-2"><i class="bi bi-clock"></i> 3 Years</div>
+              <h5 class="card-title fw-bold mb-3">Basic Nursing</h5>
+              <!-- <div class="small mb-2"><i class="bi bi-clock"></i> 3 Years</div> -->
               <div class="small mb-2">
                 <i class="bi bi-people"></i> 0 Students
               </div>
@@ -77,32 +77,27 @@ export default {
         <div class="col-md-4">
           <div class="card border-0 shadow p-0 h-100">
             <div class="card-header border-bottom-0 acon-bg-secondary p-4">
-              <h5 class="card-title fw-bold mb-3">Post-Basic Nursing</h5>
+              <h5 class="card-title fw-bold mb-3">Public Health</h5>
               <div class="small mb-2">
-                <i class="bi bi-clock"></i> 18 Months
+          <i class="bi bi-people"></i> 0 Students
               </div>
-              <div class="small mb-2">
-                <i class="bi bi-people"></i> 0 Students
-              </div>
-              <div class="small"><i class="bi bi-award"></i> Advanced RN</div>
+              <div class="small"><i class="bi bi-award"></i> Public Health Diploma</div>
             </div>
             <div class="card-body">
               <p class="card-text fw-light">
-                Advanced nursing education for practicing nurses seeking
-                specialization in critical care, pediatrics, midwifery, or
-                community health nursing.
+          Comprehensive program focused on community health, disease prevention, and health promotion. Train to address population health challenges and improve public health outcomes.
               </p>
               <h6 class="acon-text-primary fw-bold">Program Highlights:</h6>
               <ul class="card-text fw-light acon-bullet">
-                <li>Specialized clinical tracks</li>
-                <li>Research methodology</li>
-                <li>Leadership in healthcare</li>
-                <li>Evidence-based practice</li>
+          <li>Epidemiology and disease surveillance</li>
+          <li>Community health assessment</li>
+          <li>Health promotion and education</li>
+          <li>Environmental health management</li>
               </ul>
             </div>
             <div class="card-footer bg-white border-top-0 mb-3">
               <button class="btn btn-outline-acon-primary w-100" disabled>
-                Comming Soon
+          Coming Soon
               </button>
             </div>
           </div>
@@ -110,8 +105,8 @@ export default {
         <div class="col-md-4">
           <div class="card border-0 shadow p-0 h-100">
             <div class="card-header border-bottom-0 acon-bg-primary p-4">
-              <h5 class="card-title fw-bold mb-3">Midwifery Program</h5>
-              <div class="small mb-2"><i class="bi bi-clock"></i> 2 Years</div>
+              <h5 class="card-title fw-bold mb-3">Midwifery</h5>
+              <!-- <div class="small mb-2"><i class="bi bi-clock"></i> 2 Years</div> -->
               <div class="small mb-2">
                 <i class="bi bi-people"></i> 0 Students
               </div>
@@ -135,7 +130,7 @@ export default {
             </div>
             <div class="card-footer bg-white border-top-0 mb-3">
               <button class="btn btn-outline-acon-primary w-100" disabled>
-                Comming Soon
+                Coming Soon
               </button>
             </div>
           </div>
@@ -166,11 +161,10 @@ export default {
         </div>
 
         <div class="col-md-4">
-          <i class="bi bi-people display-4 acon-text-secondary"></i>
-          <h4 class="fw-semibold">Job Placement</h4>
+          <i class="bi bi-house display-4 acon-text-secondary"></i>
+          <h4 class="fw-semibold">Conducive Learning Environment</h4>
           <p class="fw-light">
-            95% of our graduates secure employment within 6 months of
-            graduation.
+            Our facilities are designed to provide a supportive and engaging atmosphere for all students.
           </p>
         </div>
       </div>

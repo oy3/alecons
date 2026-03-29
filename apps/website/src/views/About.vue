@@ -1,29 +1,30 @@
 <script lang="js">
-
 export default {
   name: "About",
   metaInfo: {
-    title: 'About - Alecons College of Nursing Sciences',
+    title: "About - Alecons College of Nursing Sciences",
     meta: [
       {
-        name: 'description',
-        content: 'Learn about Alecons College of Nursing Sciences, our mission, vision, and commitment to producing skilled, compassionate healthcare professionals.'
+        name: "description",
+        content:
+          "Learn about Alecons College of Nursing Sciences, our mission, vision, and commitment to producing skilled, compassionate healthcare professionals.",
       },
       {
-        name: 'keywords',
-        content: 'about Alecons College of Nursing Sciences, nursing school mission, nursing education Nigeria, healthcare training, alecons'
-      }
-    ]
+        name: "keywords",
+        content:
+          "about Alecons College of Nursing Sciences, nursing school mission, nursing education Nigeria, healthcare training, alecons",
+      },
+    ],
   },
   components: {},
-    computed: {
+  computed: {
     registrationUrl() {
       return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
     },
     applicationPortalUrl() {
       return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
-    }
-  }
+    },
+  },
 };
 </script>
 
@@ -40,26 +41,26 @@ export default {
 
     <div class="p-5 acon-bg-light">
       <p class="fw-light mb-5">
-        Alebiosu College of Nursing Sciences (ALECONS) has been a beacon of
-        nursing education in Ekiti State since our founding. We are committed to
-        developing competent, caring, and ethical nursing professionals who will
-        serve their communities with distinction.
+        Alebiosu College of Nursing Sciences (ALECONS) is a beacon of nursing
+        education in Ekiti State. We are committed to developing competent,
+        caring, and ethical nursing professionals who will serve their
+        communities with distinction.
       </p>
 
       <div class="row mb-5">
         <div class="col-md-6">
           <h3 class="fw-bold acon-text-primary">Shaping Healthcare Leaders</h3>
           <p class="text-dark-emphasis fw-light">
-            Located in the serene environment of Omuo Oke, Ekiti State, our
+            Located in the serene environment of Omuoke, Ekiti State, our
             college provides an ideal setting for learning and growth. Our
             modern facilities, experienced faculty, and comprehensive curriculum
             prepare students for successful careers in nursing.
           </p>
           <p class="text-dark-emphasis fw-light">
             We believe that nursing is more than a profession—it's a calling to
-            serve humanity with compassion and skill. Our graduates go on to
-            become leaders in hospitals, clinics, community health centers, and
-            specialized care facilities across Nigeria and beyond.
+            serve humanity with compassion and skill. We believe our graduates
+            will go on to become leaders in hospitals, clinics, community health
+            centers, and specialized care facilities across Nigeria and beyond.
           </p>
 
           <div
@@ -67,12 +68,14 @@ export default {
             style="border-color: #2d7d7d !important"
           >
             <div class="card-body">
-              <h6 class="acon-text-primary fw-bold">Our Mission</h6>
+              <h6 class="acon-text-primary fw-bold">Our Vision</h6>
               <p class="fw-light text-dark-emphasis small">
-                "To provide exceptional nursing education that produces
-                competent, compassionate, and culturally sensitive healthcare
-                professionals committed to improving health outcomes in Nigeria
-                and beyond."
+                To produce the next generation of nursing leaders and empower
+                them to focus on addressing the challenges of a complex and
+                diverse healthcare environment. To be one of the world's leading
+                sources of high-impact research, evidence and education that
+                enables nurses to address healthcare challenges and provide good
+                healthcare for all.
               </p>
             </div>
           </div>
@@ -82,12 +85,11 @@ export default {
             style="border-color: #2d7d7d !important"
           >
             <div class="card-body">
-              <h6 class="acon-text-primary fw-bold">Our Vision</h6>
+              <h6 class="acon-text-primary fw-bold">Our Mission</h6>
               <p class="fw-light text-dark-emphasis small">
-                "To provide exceptional nursing education that produces
-                competent, compassionate, and culturally sensitive healthcare
-                professionals committed to improving health outcomes in Nigeria
-                and beyond."
+                For faculty and students to contribute immensely to the health
+                of all through innovative and impactful nursing education,
+                research, practice, and service.
               </p>
             </div>
           </div>
@@ -109,7 +111,7 @@ export default {
                 src="../assets/img/campus2.jpg"
                 alt="College Logo"
                 class="img-fluid rounded-3 object-fit-cover"
-                style="max-width: 400px; height: 400px;"
+                style="max-width: 400px; height: 400px"
               />
             </div>
           </div>
@@ -192,90 +194,89 @@ export default {
     </div>
 
     <!-- TODO: Add "Our Journey" timeline section back when we have the content ready -->
-    <!-- <div class="p-5 text-center">
+    <div class="p-5 text-center">
       <h2 class="fw-bold acon-text-primary">Our Journey</h2>
       <p class="text-secondary fs-5 fw-light mx-0 mx-md-5">
-        From our humble beginnings to becoming Ekiti State's premier nursing
-        institution, our journey has been marked by continuous growth and
-        excellence.
+      From our humble beginnings to becoming Ekiti State's premier nursing
+      institution, our journey has been marked by continuous growth and
+      excellence.
       </p>
 
       <div class="row row-cols-1 row-cols-md-3 g-4 mx-0 mx-md-5 mb-5">
-        <div class="col">
-          <div class="card border-0 shadow p-0 h-100">
-            <div class="card-body text-start">
-              <h4 class="fw-bolder acon-text-secondary">2008</h4>
-              <h6 class="fw-bold acon-text-primary">Foundation</h6>
-              <p class="text-secondary small fw-light">
-                Alebiosu College of Nursing Sciences (ALECONS) was established
-                with a vision to provide quality nursing education in Ekiti
-                State.
-              </p>
-            </div>
-          </div>
+      <div class="col">
+        <div class="card border-0 shadow p-0 h-100">
+        <div class="card-body text-start">
+          <h4 class="fw-bolder acon-text-secondary">2014</h4>
+          <h6 class="fw-bold acon-text-primary">Facilities & Building</h6>
+          <p class="text-secondary small fw-light">
+          Constructed 1000-capacity hall, fully solar-powered campus,
+          state-of-the-art computer labs, and modern hostel facilities.
+          </p>
         </div>
-        <div class="col">
-          <div class="card border-0 shadow p-0 h-100">
-            <div class="card-body text-start">
-              <h4 class="fw-bolder acon-text-secondary">2012</h4>
-              <h6 class="fw-bold acon-text-primary">First Graduates</h6>
-              <p class="text-secondary small fw-light">
-                Our first cohort of 45 nursing students graduated with excellent
-                clinical competencies.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div class="col">
-          <div class="card border-0 shadow p-0 h-100">
-            <div class="card-body text-start">
-              <h4 class="fw-bolder acon-text-secondary">2015</h4>
-              <h6 class="fw-bold acon-text-primary">Accreditation</h6>
-              <p class="text-secondary small fw-light">
-                Received full accreditation from the Nursing and Midwifery
-                Council of Nigeria (NMCN).
-              </p>
-            </div>
-          </div>
-        </div>
-        <div class="col">
-          <div class="card border-0 shadow p-0 h-100">
-            <div class="card-body text-start">
-              <h4 class="fw-bolder acon-text-secondary">2018</h4>
-              <h6 class="fw-bold acon-text-primary">Expansion</h6>
-              <p class="text-secondary small fw-light">
-                Added Post-Basic Nursing and Midwifery programs to serve diverse
-                healthcare needs.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div class="col">
-          <div class="card border-0 shadow p-0 h-100">
-            <div class="card-body text-start">
-              <h4 class="fw-bolder acon-text-secondary">2020</h4>
-              <h6 class="fw-bold acon-text-primary">Modern Facilities</h6>
-              <p class="text-secondary small fw-light">
-                Opened state-of-the-art simulation labs and expanded clinical
-                training partnerships.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div class="col">
-          <div class="card border-0 shadow p-0 h-100">
-            <div class="card-body text-start">
-              <h4 class="fw-bolder acon-text-secondary">2024</h4>
-              <h6 class="fw-bold acon-text-primary">Excellence Award</h6>
-              <p class="text-secondary small fw-light">
-                Recognized as the leading nursing institution in Ekiti State for
-                academic excellence.
-              </p>
-            </div>
-          </div>
         </div>
       </div>
-    </div> -->
+      <div class="col">
+        <div class="card border-0 shadow p-0 h-100">
+        <div class="card-body text-start">
+          <h4 class="fw-bolder acon-text-secondary">2021</h4>
+          <h6 class="fw-bold acon-text-primary">Foundation</h6>
+          <p class="text-secondary small fw-light">
+          Birth of ACAS - Alebiosu College of Art and Sciences, expanding
+          educational offerings in Ekiti State.
+          </p>
+        </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card border-0 shadow p-0 h-100">
+        <div class="card-body text-start">
+          <h4 class="fw-bolder acon-text-secondary">2023</h4>
+          <h6 class="fw-bold acon-text-primary">Modern Facilities</h6>
+          <p class="text-secondary small fw-light">
+          Opened fully equipped labs, hospital (in view), hotel (in view),
+          and expanded clinical training partnerships.
+          </p>
+        </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card border-0 shadow p-0 h-100">
+        <div class="card-body text-start">
+          <h4 class="fw-bolder acon-text-secondary">2025</h4>
+          <h6 class="fw-bold acon-text-primary">Expansion</h6>
+          <p class="text-secondary small fw-light">
+          Birth of ALECONS - Alebiosu College of Nursing Sciences,
+          marking our dedicated focus on nursing education excellence.
+          </p>
+        </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card border-0 shadow p-0 h-100">
+        <div class="card-body text-start">
+          <h4 class="fw-bolder acon-text-secondary">2026 Q1</h4>
+          <h6 class="fw-bold acon-text-primary">Accreditation</h6>
+          <p class="text-secondary small fw-light">
+          Received full accreditation from the Nursing and Midwifery
+          Council of Nigeria (NMCN).
+          </p>
+        </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card border-0 shadow p-0 h-100">
+        <div class="card-body text-start">
+          <h4 class="fw-bolder acon-text-secondary">2026 Q2</h4>
+          <h6 class="fw-bold acon-text-primary">First Applicants</h6>
+          <p class="text-secondary small fw-light">
+          Welcomed our first cohort of applicants to ALECONS, beginning
+          our mission to produce excellent nursing professionals.
+          </p>
+        </div>
+        </div>
+      </div>
+      </div>
+    </div>
 
     <div class="p-5 text-center acon-bg-light">
       <h2 class="fw-bold acon-text-primary">Leadership Team</h2>
@@ -297,9 +298,7 @@ export default {
               <h5 class="card-title acon-text-primary fw-bold">
                 Mrs. Yewande I. Akute
               </h5>
-              <h6 class="acon-text-secondary">
-                Provost
-              </h6>
+              <h6 class="acon-text-secondary">Provost</h6>
               <!-- TODO: Update credentials for Provost when we have them -->
               <!-- <p class="card-text fw-ligt text-secondary">PHD, RN</p> -->
             </div>
@@ -314,9 +313,7 @@ export default {
               alt="Dr. Adebayo Oluwaseun"
             />
             <div class="card-body">
-              <h5 class="card-title acon-text-primary fw-bold">
-                Dr. Olaopa
-              </h5>
+              <h5 class="card-title acon-text-primary fw-bold">Dr. Olaopa</h5>
               <h6 class="acon-text-secondary">HOD Nursing</h6>
               <!-- TODO: Update credentials for HOD Nursing when we have them -->
               <!-- <p class="card-text fw-ligt text-secondary">MSN, RN, CNE</p> -->
@@ -351,14 +348,14 @@ export default {
         healthcare education meets compassion. Join a new generation of nurses
         equipped to make a difference in hospitals, communities, and the world.
       </p>
-              <a
-          :href="registrationUrl"
-          target="_blank"
-          class="btn btn-outline-light btn-lg px-5"
-          rel="noopener noreferrer"
-        >
-          Apply Now
-        </a>
+      <a
+        :href="registrationUrl"
+        target="_blank"
+        class="btn btn-outline-light btn-lg px-5"
+        rel="noopener noreferrer"
+      >
+        Apply Now
+      </a>
     </div>
   </div>
 </template>

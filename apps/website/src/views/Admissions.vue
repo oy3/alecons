@@ -80,7 +80,7 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">
                 Application Deadline
               </h6>
-              <p class="acon-text-secondary">June 30, 2026</p>
+              <p class="acon-text-secondary">April 30, 2026</p>
             </div>
           </div>
         </div>
@@ -92,7 +92,7 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">
                 Entrance Examination
               </h6>
-              <p class="acon-text-secondary">July 15, 2026</p>
+              <p class="acon-text-secondary">May 6, 2026</p>
             </div>
           </div>
         </div>
@@ -101,8 +101,8 @@ export default {
           <div class="card border-0 shadow p-1 h-100 text-center">
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
-              <h6 class="acon-text-primary fw-bold mt-2">Interview Period</h6>
-              <p class="acon-text-secondary">August 5-20, 2026</p>
+              <h6 class="acon-text-primary fw-bold mt-2">Screening Period</h6>
+              <p class="acon-text-secondary">May 11-13, 2026</p>
             </div>
           </div>
         </div>
@@ -112,7 +112,7 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Admission Results</h6>
-              <p class="acon-text-secondary">September 1, 2026</p>
+              <p class="acon-text-secondary">May 15, 2026</p>
             </div>
           </div>
         </div>
@@ -122,9 +122,9 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">
-                Registration Begins
+                Online Course Registration Begins
               </h6>
-              <p class="acon-text-secondary">September 15, 2026</p>
+              <p class="acon-text-secondary">May 18, 2026</p>
             </div>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Orientation Week</h6>
-              <p class="acon-text-secondary">October 1-7, 2026</p>
+              <p class="acon-text-secondary">May 19-22, 2026</p>
             </div>
           </div>
         </div>
@@ -144,7 +144,7 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Classes Begin</h6>
-              <p class="acon-text-secondary">October 10, 2026</p>
+              <p class="acon-text-secondary">May 25, 2026</p>
             </div>
           </div>
         </div>
@@ -175,7 +175,7 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  March - June
+                  March - April
                 </span>
               </div>
 
@@ -202,7 +202,7 @@ export default {
                 </li>
                 <li>
                   <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Medical fitness certificate
+                  Two reference letters
                 </li>
               </ul>
             </div>
@@ -224,17 +224,17 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  July
+                  May
                 </span>
               </div>
 
               <p class="mb-3 text-secondary">
-                Take the ALECONS entrance examination or use JAMB UTME score
+                Take the ALECONS entrance examination or use 2026 JAMB UTME score
               </p>
               <ul class="list-unstyled text-secondary fw-light">
                 <li>
                   <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Valid JAMB UTME score
+                  Valid 2026 JAMB UTME score
                 </li>
                 <li>
                   <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
@@ -268,7 +268,7 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  August
+                  May
                 </span>
               </div>
 
@@ -312,7 +312,7 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  September
+                  May
                 </span>
               </div>
 
@@ -346,8 +346,7 @@ export default {
     <div class="p-5 text-center">
       <h3 class="fw-bold acon-text-primary">Tuition & Fees</h3>
       <p class="fw-light fs-5 text-muted mb-5">
-        Affordable education with flexible payment options and scholarship
-        opportunities.
+        Affordable education tailored to support your nursing career goals.
       </p>
 
       <div class="row gy-4">
@@ -355,8 +354,8 @@ export default {
         <div class="col-md-4">
           <div class="card border-0 shadow text-center h-100">
             <div class="card-body">
-              <h5 class="fw-bold acon-text-primary">Basic Nursing Program</h5>
-              <p class="acon-text-secondary mb-4">3 Years</p>
+              <h5 class="fw-bold acon-text-primary">Nursing Program</h5>
+              <!-- <p class="acon-text-secondary mb-4">3 Years</p> -->
 
               <div class="d-flex justify-content-between">
                 <span class="text-muted fw-light">Application fee:</span>

@@ -274,7 +274,7 @@ export default {
             </div>
           </div>
         </div> -->
-        <div class="col-12 col-md-6 col-lg-3">
+        <!-- <div class="col-12 col-md-6 col-lg-3">
           <div class="card border-0 shadow p-1 h-100">
             <div class="card-body">
               <h2 class="fw-bolder acon-text-primary">95%</h2>
@@ -282,7 +282,7 @@ export default {
               <p class="text-secondary">Employment within 6 months</p>
             </div>
           </div>
-        </div>
+        </div> -->
         <!-- TODO: Add more stats as needed, and update the numbers and descriptions to reflect the school's strengths. -->
         <!-- <div class="col-12 col-md-6 col-lg-3">
           <div class="card border-0 shadow p-1 h-100">
@@ -322,11 +322,11 @@ export default {
               </div>
 
               <h5 class="card-title fw-bolder acon-text-secondary">
-                Basic Nursing Program
+                Basic Nursing
               </h5>
 
               <p class="text-secondary">
-                3-year comprehensive program covering all fundamental nursing
+                4-year comprehensive program covering all fundamental nursing
                 skills and knowledge.
               </p>
 
@@ -350,13 +350,12 @@ export default {
                 <i class="bi bi-people h3 mb-0 text-white"></i>
               </div>
 
-              <h5 class="card-title fw-bolder acon-text-secondary">
-                Post-Basic Nursing
-              </h5>
-              <p class="text-secondary">
-                18-month advanced program for practicing nurses seeking
-                specialization.
-              </p>
+                <h5 class="card-title fw-bolder acon-text-secondary">
+                Public Health Nursing
+                </h5>
+                <p class="text-secondary">
+                18-month specialized program focusing on community health and disease prevention.
+                </p>
               <router-link
                 to="/programs"
                 class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
@@ -378,7 +377,7 @@ export default {
               </div>
 
               <h5 class="card-title fw-bolder acon-text-secondary">
-                Midwifery Program
+                Midwifery
               </h5>
               <p class="text-secondary">
                 2-year specialized program focusing on maternal and infant care.

@@ -80,7 +80,7 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">
                 Application Deadline
               </h6>
-              <p class="acon-text-secondary">April 30, 2026</p>
+              <p class="acon-text-secondary">September 30, 2026</p>
             </div>
           </div>
         </div>
@@ -175,7 +175,7 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  March - April
+                  March - September
                 </span>
               </div>
 
@@ -190,7 +190,7 @@ export default {
                 </li>
                 <li>
                   <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  SSCE/WAEC certificate
+                  WASSCE/NABTEB certificate
                 </li>
                 <li>
                   <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
@@ -224,7 +224,7 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  May
+                  May & October
                 </span>
               </div>
 
@@ -268,7 +268,7 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  May
+                  May & October
                 </span>
               </div>
 
@@ -312,7 +312,7 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  May
+                  May & November
                 </span>
               </div>
 

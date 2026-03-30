@@ -1,22 +1,23 @@
 <script lang="js">
-
 export default {
   metaInfo: {
-  title: 'Contact - Alecons College of Nursing Sciences',
-  meta: [
-    {
-      name: 'description',
-      content: 'Get in touch with Alecons College of Nursing Sciences for admissions, program inquiries, and general information. We are here to help you start your journey in nursing.'
-    },
-    {
-      name: 'keywords',
-      content: 'contact Alecons College of Nursing Sciences, nursing school Nigeria contact, admissions help, nursing inquiries, alecons'
-    }
-  ]
-},
+    title: "Contact - Alecons College of Nursing Sciences",
+    meta: [
+      {
+        name: "description",
+        content:
+          "Get in touch with Alecons College of Nursing Sciences for admissions, program inquiries, and general information. We are here to help you start your journey in nursing.",
+      },
+      {
+        name: "keywords",
+        content:
+          "contact Alecons College of Nursing Sciences, nursing school Nigeria contact, admissions help, nursing inquiries, alecons",
+      },
+    ],
+  },
 
-    name: "Contact",
-    components: {},
+  name: "Contact",
+  components: {},
 };
 </script>
 
@@ -43,7 +44,9 @@ export default {
           <form>
             <div class="row g-3">
               <div class="col-md-6">
-                <label for="firstName" class="form-label">First Name <span class="text-danger">*</span></label>
+                <label for="firstName" class="form-label"
+                  >First Name <span class="text-danger">*</span></label
+                >
                 <input
                   type="text"
                   class="form-control"
@@ -54,7 +57,9 @@ export default {
               </div>
 
               <div class="col-md-6">
-                <label for="lastName" class="form-label">Last Name <span class="text-danger">*</span></label>
+                <label for="lastName" class="form-label"
+                  >Last Name <span class="text-danger">*</span></label
+                >
                 <input
                   type="text"
                   class="form-control"
@@ -65,7 +70,9 @@ export default {
               </div>
 
               <div class="col-md-6">
-                <label for="email" class="form-label">Email Address <span class="text-danger">*</span></label>
+                <label for="email" class="form-label"
+                  >Email Address <span class="text-danger">*</span></label
+                >
                 <input
                   type="email"
                   class="form-control"
@@ -87,7 +94,9 @@ export default {
               </div>
 
               <div class="col-12">
-                <label for="message" class="form-label">Your Message <span class="text-danger">*</span></label>
+                <label for="message" class="form-label"
+                  >Your Message <span class="text-danger">*</span></label
+                >
                 <textarea
                   class="form-control"
                   id="message"
@@ -111,9 +120,8 @@ export default {
     <div class="p-5 text-center">
       <h2 class="fw-bold acon-text-primary">Visit Our Campus</h2>
       <p class="text-secondary fs-5 fw-light mx-0 mx-md-5">
-        Located in the beautiful and serene environment of Omuo Oke, Ekiti
-        State, our campus provides an ideal setting for learning and personal
-        growth.
+        Located in the beautiful and serene environment of Omuoke, Ekiti State,
+        our campus provides an ideal setting for learning and personal growth.
       </p>
 
       <div class="row g-4 align-items-center mt-3">
@@ -127,7 +135,7 @@ export default {
                 <div class="ms-2">
                   <h6 class="mb-0 fw-semibold text-muted">Address</h6>
                   <p class="mb-0 fw-light text-secondary">
-                    Alebiosu College of Nursing<br />Omuo Oke, Ekiti State,
+                    Alebiosu College of Nursing Sciences,<br />Iyamoye-Abuja Road Omuoke, Ekiti State,
                     Nigeria
                   </p>
                 </div>
@@ -138,7 +146,7 @@ export default {
                 <div class="ms-2">
                   <h6 class="mb-0 fw-semibold text-muted">Phone</h6>
                   <p class="mb-0 fw-light text-secondary">
-                    +234 708 460 1610, +234 916 000 8679
+                    +234 916 000 8679, +234 708 460 1610
                   </p>
                 </div>
               </div>
@@ -240,9 +248,7 @@ export default {
 
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">Email</h6>
-                <p class="mb-0 fw-light text-secondary">
-                  -
-                </p>
+                <p class="mb-0 fw-light text-secondary">-</p>
               </div>
 
               <div class="">
@@ -275,9 +281,7 @@ export default {
 
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">Email</h6>
-                <p class="mb-0 fw-light text-secondary">
-                  -
-                </p>
+                <p class="mb-0 fw-light text-secondary">-</p>
               </div>
 
               <div class="">
@@ -310,9 +314,7 @@ export default {
 
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">Email</h6>
-                <p class="mb-0 fw-light text-secondary">-
-               
-                </p>
+                <p class="mb-0 fw-light text-secondary">-</p>
               </div>
 
               <div class="">
@@ -331,7 +333,7 @@ export default {
       <h2 class="fw-bold acon-text-primary">Getting to Campus</h2>
       <p class="text-secondary fs-5 fw-light mx-0 mx-md-5">
         Multiple transportation options are available to reach our campus in
-        Omuo Oke, Ekiti State.
+        Omuoke, Ekiti State.
       </p>
 
       <div class="row g-4 mt-3">
@@ -346,8 +348,8 @@ export default {
               </div>
               <h5 class="fw-bold acon-text-primary">By Car</h5>
               <p class="text-start">
-                Take the Lagos-Ado-Ekiti Expressway, then follow signs to Omuo
-                Oke. The campus is well-signposted from the main road.
+                Take the Lagos-Ado-Ekiti Expressway, then follow signs to
+                Omuoke. The campus is well-signposted from the main road.
               </p>
 
               <div class="mb-2 text-start">
@@ -378,8 +380,8 @@ export default {
               </div>
               <h5 class="fw-bold acon-text-primary">By Bus</h5>
               <p class="text-start">
-                Regular bus services available from major cities. Alight at Omuo
-                Oke motor park, then take local transport to the campus.
+                Regular bus services available from major cities. Alight at
+                Omuoke motor park, then take local transport to the campus.
               </p>
 
               <div class="mb-2 text-start">
@@ -410,8 +412,8 @@ export default {
               </div>
               <h5 class="fw-bold acon-text-primary">By Air</h5>
               <p class="text-start">
-                Fly to Akure Airport (closest), then take road transport to Omuo
-                Oke. Alternatively, fly to Lagos and travel by road.
+                Fly to Ado Airport (closest), then take road transport to
+                Omuoke. Alternatively, fly to Lagos and travel by road.
               </p>
 
               <div class="mb-2 text-start">
@@ -436,19 +438,15 @@ export default {
             <div class="card-body">
               <h4 class="fw-bold acon-text-primary mb-3">Nearby Landmarks</h4>
               <ul class="text-start fw-light text-muted row acon-bullet">
+                <li class="col-md-4">Omuoke Grammar School - 2 minutes walk</li>
+                <li class="col-md-4">Omuoke Market - 5 minutes walk</li>
                 <li class="col-md-4">
-                  Omuo Oke General Hospital - 2 minutes walk
+                  Federal Road Safetly office - 6 minutes walk
                 </li>
-                <li class="col-md-4">Omuo Oke Market - 5 minutes walk</li>
+                <li class="col-md-4">Omuoke Tipper Garage - 7 minutes walk</li>
+                <li class="col-md-4">Omuoke Police Station - 8 minutes walk</li>
                 <li class="col-md-4">
-                  First Bank Omuo Oke Branch - 3 minutes walk
-                </li>
-                <li class="col-md-4">Omuo Oke Post Office - 4 minutes walk</li>
-                <li class="col-md-4">
-                  Sacred Heart Catholic Church - 6 minutes walk
-                </li>
-                <li class="col-md-4">
-                  Omuo Oke Police Station - 8 minutes walk
+                  BOVAS Petrol Station Federal - 10 minutes walk
                 </li>
               </ul>
             </div>
@@ -459,5 +457,4 @@ export default {
   </div>
 </template>
 
-<style scoped>
-</style>
+<style scoped></style>

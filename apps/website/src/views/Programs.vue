@@ -183,7 +183,7 @@ export default {
           <ul class="list-unstyled fw-light fs-5 text-secondary">
             <li>
               <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-              Senior Secondary School Certificate (SSCE) with minimum 5 credits
+              West African Senior School Certificate Examination (WASSCE) with minimum 5 credits
               including English, Mathematics, Biology, Chemistry, and Physics
             </li>
             <li>
@@ -196,7 +196,7 @@ export default {
             </li>
             <li>
               <i class="bi bi-check2-circle acon-text-secondary me-2"></i> Valid
-              entrance examination score (JAMB UTME or ALECONS entrance exam)
+              entrance examination score (2026 JAMB UTME or ALECONS entrance exam)
             </li>
             <li>
               <i class="bi bi-check2-circle acon-text-secondary me-2"></i>

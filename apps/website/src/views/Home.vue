@@ -351,10 +351,10 @@ export default {
               </div>
 
                 <h5 class="card-title fw-bolder acon-text-secondary">
-                Public Health Nursing
+                Public Health
                 </h5>
                 <p class="text-secondary">
-                18-month specialized program focusing on community health and disease prevention.
+                Specialized program focusing on community health and disease prevention.
                 </p>
               <router-link
                 to="/programs"
@@ -380,7 +380,7 @@ export default {
                 Midwifery
               </h5>
               <p class="text-secondary">
-                2-year specialized program focusing on maternal and infant care.
+                Specialized program focusing on maternal and infant care.
               </p>
               <router-link
                 to="/programs"

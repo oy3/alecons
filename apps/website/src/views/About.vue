@@ -197,84 +197,87 @@ export default {
     <div class="p-5 text-center">
       <h2 class="fw-bold acon-text-primary">Our Journey</h2>
       <p class="text-secondary fs-5 fw-light mx-0 mx-md-5">
-      From our humble beginnings to becoming Ekiti State's premier nursing
-      institution, our journey has been marked by continuous growth and
-      excellence.
+        From our humble beginnings to becoming Ekiti State's premier nursing
+        institution, our journey has been marked by continuous growth and
+        excellence.
       </p>
 
       <div class="row row-cols-1 row-cols-md-3 g-4 mx-0 mx-md-5 mb-5">
-      <div class="col">
-        <div class="card border-0 shadow p-0 h-100">
-        <div class="card-body text-start">
-          <h4 class="fw-bolder acon-text-secondary">2014</h4>
-          <h6 class="fw-bold acon-text-primary">Facilities & Building</h6>
-          <p class="text-secondary small fw-light">
-          Constructed 1000-capacity hall, fully solar-powered campus,
-          state-of-the-art computer labs, and modern hostel facilities.
-          </p>
+        <div class="col">
+          <div class="card border-0 shadow p-0 h-100">
+            <div class="card-body text-start">
+              <h4 class="fw-bolder acon-text-secondary">2014</h4>
+              <h6 class="fw-bold acon-text-primary">Foundation</h6>
+              <p class="text-secondary small fw-light">
+                Our academic journey in the community began with the
+                commencement of our very first building, laying the foundation
+                for the growth of a purpose-driven learning environment.
+              </p>
+            </div>
+          </div>
         </div>
+        <div class="col">
+          <div class="card border-0 shadow p-0 h-100">
+            <div class="card-body text-start">
+              <h4 class="fw-bolder acon-text-secondary">2021</h4>
+              <h6 class="fw-bold acon-text-primary">ACAS</h6>
+              <p class="text-secondary small fw-light">
+                The establishment of Alebiosu College of Art and Sciences
+                (ACAS), a major milestone in our vision to broaden access to
+                quality, value-driven education across Ekiti State.
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="col">
-        <div class="card border-0 shadow p-0 h-100">
-        <div class="card-body text-start">
-          <h4 class="fw-bolder acon-text-secondary">2021</h4>
-          <h6 class="fw-bold acon-text-primary">Foundation</h6>
-          <p class="text-secondary small fw-light">
-          Birth of ACAS - Alebiosu College of Art and Sciences, expanding
-          educational offerings in Ekiti State.
-          </p>
+        <div class="col">
+          <div class="card border-0 shadow p-0 h-100">
+            <div class="card-body text-start">
+              <h4 class="fw-bolder acon-text-secondary">2023</h4>
+              <h6 class="fw-bold acon-text-primary">Modern Facilities</h6>
+              <p class="text-secondary small fw-light">
+                Constructed a solar-powered campus featuring a 1000-capacity
+                hall, modern hostel facilities, and ongoing hospital and hotel
+                projects, while expanding our clinical training partnerships.
+              </p>
+            </div>
+          </div>
         </div>
+        <div class="col">
+          <div class="card border-0 shadow p-0 h-100">
+            <div class="card-body text-start">
+              <h4 class="fw-bolder acon-text-secondary">2025</h4>
+              <h6 class="fw-bold acon-text-primary">Expansion</h6>
+              <p class="text-secondary small fw-light">
+                The birth of Alebiosu College of Nursing Sciences (ALECONS)
+                marking our dedicated focus on nursing education excellence.
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="col">
-        <div class="card border-0 shadow p-0 h-100">
-        <div class="card-body text-start">
-          <h4 class="fw-bolder acon-text-secondary">2023</h4>
-          <h6 class="fw-bold acon-text-primary">Modern Facilities</h6>
-          <p class="text-secondary small fw-light">
-          Opened fully equipped labs, hospital (in view), hotel (in view),
-          and expanded clinical training partnerships.
-          </p>
+        <div class="col">
+          <div class="card border-0 shadow p-0 h-100">
+            <div class="card-body text-start">
+              <h4 class="fw-bolder acon-text-secondary">2026 Q1</h4>
+              <h6 class="fw-bold acon-text-primary">Accreditation</h6>
+              <p class="text-secondary small fw-light">
+                Received full accreditation from the Nursing and Midwifery
+                Council of Nigeria (NMCN).
+              </p>
+            </div>
+          </div>
         </div>
+        <div class="col">
+          <div class="card border-0 shadow p-0 h-100">
+            <div class="card-body text-start">
+              <h4 class="fw-bolder acon-text-secondary">2026 Q2</h4>
+              <h6 class="fw-bold acon-text-primary">First Applicants</h6>
+              <p class="text-secondary small fw-light">
+                Welcomed our first cohort of applicants to ALECONS, beginning
+                our mission to produce excellent nursing professionals.
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="col">
-        <div class="card border-0 shadow p-0 h-100">
-        <div class="card-body text-start">
-          <h4 class="fw-bolder acon-text-secondary">2025</h4>
-          <h6 class="fw-bold acon-text-primary">Expansion</h6>
-          <p class="text-secondary small fw-light">
-          Birth of ALECONS - Alebiosu College of Nursing Sciences,
-          marking our dedicated focus on nursing education excellence.
-          </p>
-        </div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="card border-0 shadow p-0 h-100">
-        <div class="card-body text-start">
-          <h4 class="fw-bolder acon-text-secondary">2026 Q1</h4>
-          <h6 class="fw-bold acon-text-primary">Accreditation</h6>
-          <p class="text-secondary small fw-light">
-          Received full accreditation from the Nursing and Midwifery
-          Council of Nigeria (NMCN).
-          </p>
-        </div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="card border-0 shadow p-0 h-100">
-        <div class="card-body text-start">
-          <h4 class="fw-bolder acon-text-secondary">2026 Q2</h4>
-          <h6 class="fw-bold acon-text-primary">First Applicants</h6>
-          <p class="text-secondary small fw-light">
-          Welcomed our first cohort of applicants to ALECONS, beginning
-          our mission to produce excellent nursing professionals.
-          </p>
-        </div>
-        </div>
-      </div>
       </div>
     </div>
 

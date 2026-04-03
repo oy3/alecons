@@ -26,9 +26,20 @@ export default {
     paymentMethods() {
       return paymentService.getAvailablePaymentMethods();
     },
+    selectedManualTransferDetails() {
+      return (
+        this.selectedFee?.manualTransferDetails ||
+        this.paymentMethods.manualTransferDetails
+      );
+    },
     canUseManualTransfer() {
-      const details = this.paymentMethods.manualTransferDetails;
-      return this.paymentMethods.manualTransferEnabled && details.accountName && details.accountNumber && details.bankName;
+      const details = this.selectedManualTransferDetails;
+      return (
+        this.paymentMethods.manualTransferEnabled &&
+        details.accountName &&
+        details.accountNumber &&
+        details.bankName
+      );
     },
     canUsePaystack() {
       return this.paymentMethods.paystackEnabled;
@@ -37,7 +48,12 @@ export default {
       return this.canUsePaystack || this.canUseManualTransfer;
     },
     canSubmitManualTransfer() {
-      return this.selectedPaymentMethod === "manual_transfer" && this.manualTransferConfirmed && !!this.manualTransferReceipt && !this.manualTransferSubmitting;
+      return (
+        this.selectedPaymentMethod === "manual_transfer" &&
+        this.manualTransferConfirmed &&
+        !!this.manualTransferReceipt &&
+        !this.manualTransferSubmitting
+      );
     },
   },
   data() {
@@ -103,7 +119,7 @@ export default {
     },
 
     openPaymentMethodModal(fee) {
-      if (!this.hasAvailablePaymentMethods) {
+      if (!this.hasAvailablePaymentMethodsForFee(fee)) {
         Swal.fire({
           icon: "info",
           title: "Payments unavailable",
@@ -113,7 +129,11 @@ export default {
       }
 
       this.selectedFee = fee;
-      this.selectedPaymentMethod = this.canUsePaystack ? "paystack" : this.canUseManualTransfer ? "manual_transfer" : "";
+      this.selectedPaymentMethod = this.canUsePaystackForFee(fee)
+        ? "paystack"
+        : this.canUseManualTransferForFee(fee)
+          ? "manual_transfer"
+          : "";
       this.manualTransferConfirmed = false;
       this.manualTransferReceipt = null;
       this.manualTransferReceiptName = "";
@@ -168,7 +188,10 @@ export default {
           try {
             await this.authStore.fetchUserData();
           } catch (refreshError) {
-            logger.warn("Failed to refresh user data after payment:", refreshError);
+            logger.warn(
+              "Failed to refresh user data after payment:",
+              refreshError,
+            );
           }
 
           await this.fetchPayments();
@@ -204,13 +227,21 @@ export default {
       }
 
       if (!ALLOWED_RECEIPT_TYPES.includes(file.type)) {
-        Swal.fire({ icon: "error", title: "Invalid file type", text: "Receipt must be PNG, JPG, or PDF." });
+        Swal.fire({
+          icon: "error",
+          title: "Invalid file type",
+          text: "Receipt must be PNG, JPG, or PDF.",
+        });
         event.target.value = "";
         return;
       }
 
       if (file.size > MAX_RECEIPT_SIZE) {
-        Swal.fire({ icon: "error", title: "File too large", text: "Receipt file must not be more than 1MB." });
+        Swal.fire({
+          icon: "error",
+          title: "File too large",
+          text: "Receipt file must not be more than 1MB.",
+        });
         event.target.value = "";
         return;
       }
@@ -228,10 +259,15 @@ export default {
         this.manualTransferSubmitting = true;
         this.paymentLoading[this.selectedFee.id] = true;
 
-        const result = await paymentService.submitManualTransferReceipt(this.selectedFee.id, this.manualTransferReceipt);
+        const result = await paymentService.submitManualTransferReceipt(
+          this.selectedFee.id,
+          this.manualTransferReceipt,
+        );
 
         if (!result.success) {
-          throw new Error(result.message || "Failed to submit manual transfer receipt");
+          throw new Error(
+            result.message || "Failed to submit manual transfer receipt",
+          );
         }
 
         await this.fetchPayments();
@@ -245,7 +281,11 @@ export default {
         });
       } catch (error) {
         logger.error("Error submitting manual transfer receipt:", error);
-        Swal.fire({ icon: "error", title: "Submission Failed", text: error.message || "Failed to submit manual transfer receipt." });
+        Swal.fire({
+          icon: "error",
+          title: "Submission Failed",
+          text: error.message || "Failed to submit manual transfer receipt.",
+        });
       } finally {
         this.manualTransferSubmitting = false;
         if (this.selectedFee?.id) {
@@ -260,7 +300,11 @@ export default {
 
     downloadReceipt(fee) {
       if (!fee?.receiptUrl) {
-        Swal.fire({ icon: "info", title: "Receipt unavailable", text: "No uploaded receipt is available for this payment." });
+        Swal.fire({
+          icon: "info",
+          title: "Receipt unavailable",
+          text: "No uploaded receipt is available for this payment.",
+        });
         return;
       }
 
@@ -287,8 +331,40 @@ export default {
       return this.paymentLoading[feeId] || false;
     },
 
+    getManualTransferDetailsForFee(fee) {
+      return (
+        fee?.manualTransferDetails || this.paymentMethods.manualTransferDetails
+      );
+    },
+
+    canUseManualTransferForFee(fee) {
+      const details = this.getManualTransferDetailsForFee(fee);
+      return (
+        this.paymentMethods.manualTransferEnabled &&
+        details.accountName &&
+        details.accountNumber &&
+        details.bankName
+      );
+    },
+
+    canUsePaystackForFee() {
+      return this.paymentMethods.paystackEnabled;
+    },
+
+    hasAvailablePaymentMethodsForFee(fee) {
+      return (
+        this.canUsePaystackForFee(fee) || this.canUseManualTransferForFee(fee)
+      );
+    },
+
     isPaymentAvailable(fee) {
-      const paymentStageMap = { formFee: 2, acceptanceFee: 7, sundryFee: 8, schoolFee: 9, accommodationFee: 10 };
+      const paymentStageMap = {
+        formFee: 2,
+        acceptanceFee: 7,
+        sundryFee: 8,
+        schoolFee: 9,
+        accommodationFee: 10,
+      };
       const requiredStage = paymentStageMap[fee.paymentCode];
       return requiredStage && this.application?.currentStage === requiredStage;
     },
@@ -327,30 +403,82 @@ export default {
     <div v-else-if="error" class="alert alert-danger" role="alert">
       <i class="bi bi-exclamation-triangle"></i>
       {{ error }}
-      <button @click="fetchPayments" class="btn btn-outline-danger btn-sm ms-2">Try Again</button>
+      <button @click="fetchPayments" class="btn btn-outline-danger btn-sm ms-2">
+        Try Again
+      </button>
     </div>
 
     <div v-else class="row">
       <div class="col-md-9 mx-auto">
         <div class="mb-5">
-          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-            <h6 class="fw-bold mb-0">Unpaid Charges <span v-if="unpaidFees.length > 0" class="badge bg-warning text-dark ms-2">{{ unpaidFees.length }}</span></h6>
-            <span v-if="totalUnpaid > 0" class="small text-muted">Outstanding: {{ formatCurrency(totalUnpaid) }}</span>
+          <div
+            class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"
+          >
+            <h6 class="fw-bold mb-0">
+              Unpaid Charges
+              <span
+                v-if="unpaidFees.length > 0"
+                class="badge bg-warning text-dark ms-2"
+                >{{ unpaidFees.length }}</span
+              >
+            </h6>
+            <!-- <span v-if="totalUnpaid > 0" class="small text-muted">Outstanding: {{ formatCurrency(totalUnpaid) }}</span> -->
           </div>
 
-          <div v-if="unpaidFees.length === 0 && pendingFees.length === 0 && paidFees.length === 0" class="alert alert-info"><i class="bi bi-info-circle"></i> No fees available for your account at this time.</div>
-          <div v-else-if="unpaidFees.length === 0" class="alert alert-success"><i class="bi bi-check-circle"></i> No unpaid charges at the moment.</div>
+          <div
+            v-if="
+              unpaidFees.length === 0 &&
+              pendingFees.length === 0 &&
+              paidFees.length === 0
+            "
+            class="alert alert-info"
+          >
+            <i class="bi bi-info-circle"></i> No fees available for your account
+            at this time.
+          </div>
+          <div v-else-if="unpaidFees.length === 0" class="alert alert-success">
+            <i class="bi bi-check-circle"></i> No unpaid charges at the moment.
+          </div>
 
           <ul v-else class="list-unstyled">
-            <li v-for="fee in unpaidFees" :key="fee.id" class="d-flex justify-content-between align-items-center mb-4">
+            <li
+              v-for="fee in unpaidFees"
+              :key="fee.id"
+              class="d-flex justify-content-between align-items-center mb-4"
+            >
               <div class="d-grid">
                 <span>{{ fee.name }}</span>
                 <span class="fw-bold">{{ formatCurrency(fee.amount) }}</span>
-                <small v-if="!isPaymentAvailable(fee)" class="text-warning"><i class="bi bi-info-circle"></i> Not available yet</small>
-                <small v-else-if="!hasAvailablePaymentMethods" class="text-warning"><i class="bi bi-info-circle"></i> No payment methods enabled for this session</small>
+                <small v-if="!isPaymentAvailable(fee)" class="text-warning"
+                  ><i class="bi bi-info-circle"></i> Not available yet</small
+                >
+                <small
+                  v-else-if="!hasAvailablePaymentMethodsForFee(fee)"
+                  class="text-warning"
+                  ><i class="bi bi-info-circle"></i> No payment methods enabled
+                  for this session</small
+                >
               </div>
-              <button @click="openPaymentMethodModal(fee)" :disabled="isPaymentLoading(fee.id) || !isPaymentAvailable(fee) || !hasAvailablePaymentMethods" :class="['btn', 'btn-acon-primary', 'btn-sm', { loading: isPaymentLoading(fee.id) }]">
-                <span v-if="isPaymentLoading(fee.id)" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              <button
+                @click="openPaymentMethodModal(fee)"
+                :disabled="
+                  isPaymentLoading(fee.id) ||
+                  !isPaymentAvailable(fee) ||
+                  !hasAvailablePaymentMethodsForFee(fee)
+                "
+                :class="[
+                  'btn',
+                  'btn-acon-primary',
+                  'btn-sm',
+                  { loading: isPaymentLoading(fee.id) },
+                ]"
+              >
+                <span
+                  v-if="isPaymentLoading(fee.id)"
+                  class="spinner-border spinner-border-sm me-2"
+                  role="status"
+                  aria-hidden="true"
+                ></span>
                 {{ isPaymentLoading(fee.id) ? "Processing..." : "Pay Now" }}
               </button>
             </li>
@@ -358,138 +486,510 @@ export default {
         </div>
 
         <div class="mb-5">
-          <h6 class="fw-bold">Pending Verification <span v-if="pendingFees.length > 0" class="badge bg-warning text-dark ms-2">{{ pendingFees.length }}</span></h6>
-          <div v-if="pendingFees.length === 0" class="alert alert-light border"><i class="bi bi-clock-history"></i> No payments are awaiting staff verification.</div>
+          <h6 class="fw-bold">
+            Pending Verification
+            <span
+              v-if="pendingFees.length > 0"
+              class="badge bg-warning text-dark ms-2"
+              >{{ pendingFees.length }}</span
+            >
+          </h6>
+          <div v-if="pendingFees.length === 0" class="alert alert-light border">
+            <i class="bi bi-clock-history"></i> No payments are awaiting staff
+            verification.
+          </div>
           <ul v-else class="list-unstyled">
-            <li v-for="fee in pendingFees" :key="`pending-${fee.reference}`" class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded bg-warning-subtle">
+            <li
+              v-for="fee in pendingFees"
+              :key="`pending-${fee.reference}`"
+              class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded bg-warning-subtle"
+            >
               <div class="d-grid gap-1">
                 <span>{{ fee.name }}</span>
                 <span class="fw-bold">{{ formatCurrency(fee.amount) }}</span>
-                <small class="text-muted">{{ fee.remarks || "Payment successful but not verified by staff." }}</small>
+                <small class="text-muted">{{
+                  fee.remarks || "Payment successful but not verified by staff."
+                }}</small>
                 <small class="text-muted">Reference: {{ fee.reference }}</small>
               </div>
               <div class="d-flex flex-column align-items-end gap-2">
-                <span class="badge rounded-pill" :class="getStatusBadgeClass(fee.status)">{{ getStatusText(fee.status) }}</span>
-                <button v-if="fee.receiptUrl" @click="downloadReceipt(fee)" class="btn btn-outline-secondary btn-sm" type="button">View Uploaded Receipt</button>
+                <span
+                  class="badge rounded-pill"
+                  :class="getStatusBadgeClass(fee.status)"
+                  >{{ getStatusText(fee.status) }}</span
+                >
+                <button
+                  v-if="fee.receiptUrl"
+                  @click="downloadReceipt(fee)"
+                  class="btn btn-outline-secondary btn-sm"
+                  type="button"
+                >
+                  View Uploaded Receipt
+                </button>
               </div>
             </li>
           </ul>
         </div>
 
         <div class="mb-5">
-          <h6 class="fw-bold">Paid Charges <span v-if="paidFees.length > 0" class="badge bg-success ms-2">{{ paidFees.length }}</span></h6>
-          <div v-if="paidFees.length === 0" class="alert alert-info"><i class="bi bi-info-circle"></i> No verified payments have been recorded yet.</div>
+          <h6 class="fw-bold">
+            Paid Charges
+            <span v-if="paidFees.length > 0" class="badge bg-success ms-2">{{
+              paidFees.length
+            }}</span>
+          </h6>
+          <div v-if="paidFees.length === 0" class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No verified payments have been
+            recorded yet.
+          </div>
           <ul v-else class="list-unstyled">
-            <li v-for="fee in paidFees" :key="fee.reference || fee.id" class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded bg-light">
+            <li
+              v-for="fee in paidFees"
+              :key="fee.reference || fee.id"
+              class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded bg-light"
+            >
               <div class="d-grid">
                 <span>{{ fee.name }}</span>
                 <span class="fw-bold">{{ formatCurrency(fee.amount) }}</span>
               </div>
-              <button @click="viewReceipt(fee)" class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasViewReceipt" aria-controls="offcanvasViewReceipt">View Receipt</button>
+              <button
+                @click="viewReceipt(fee)"
+                class="btn btn-outline-secondary btn-sm"
+                type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#offcanvasViewReceipt"
+                aria-controls="offcanvasViewReceipt"
+              >
+                View Receipt
+              </button>
             </li>
           </ul>
         </div>
       </div>
     </div>
 
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasViewReceipt" aria-labelledby="offcanvasViewReceiptLabel">
+    <div
+      class="offcanvas offcanvas-end"
+      tabindex="-1"
+      id="offcanvasViewReceipt"
+      aria-labelledby="offcanvasViewReceiptLabel"
+    >
       <div class="offcanvas-header">
-        <h5 class="offcanvas-title fw-bold" id="offcanvasViewReceiptLabel">Payment Receipt</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <h5 class="offcanvas-title fw-bold" id="offcanvasViewReceiptLabel">
+          Payment Receipt
+        </h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="offcanvas"
+          aria-label="Close"
+        ></button>
       </div>
       <div class="offcanvas-body" v-if="selectedReceipt">
         <div class="d-grid text-center mb-5">
-          <h5 class="fw-bold acon-text-primary">{{ formatCurrency(selectedReceipt.amount) }}</h5>
+          <h5 class="fw-bold acon-text-primary">
+            {{ formatCurrency(selectedReceipt.amount) }}
+          </h5>
           <span>{{ selectedReceipt.name }}</span>
-          <small class="text-body-secondary">on {{ formatDate(selectedReceipt.paidAt || selectedReceipt.receiptUploadedAt) }}</small>
+          <small class="text-body-secondary"
+            >on
+            {{
+              formatDate(
+                selectedReceipt.paidAt || selectedReceipt.receiptUploadedAt,
+              )
+            }}</small
+          >
         </div>
 
         <div class="mb-5">
           <ul class="list-group list-group-flush">
-            <li class="list-group-item d-grid"><small>Description</small><span class="fw-bold">{{ selectedReceipt.description || selectedReceipt.name }}</span></li>
-            <li class="list-group-item d-flex justify-content-between">
-              <div class="d-grid"><small>Payment Method</small><span class="fw-bold text-capitalize">{{ getMethodLabel(selectedReceipt) }}</span></div>
-              <div class="d-grid text-center"><small>Fees</small><span class="badge rounded-pill acon-bg-secondary">{{ formatCurrency(selectedReceipt.fee || 0) }}</span></div>
+            <li class="list-group-item d-grid">
+              <small>Description</small
+              ><span class="fw-bold">{{
+                selectedReceipt.description || selectedReceipt.name
+              }}</span>
             </li>
-            <li class="list-group-item"><div class="d-grid"><small>Reference</small><span class="fw-bold">{{ selectedReceipt.reference }}</span></div></li>
-            <li class="list-group-item"><div class="d-flex flex-column align-items-start"><small>Status</small><span class="badge rounded-pill mt-2" :class="getStatusBadgeClass(selectedReceipt.status)">{{ getStatusText(selectedReceipt.status) }}</span></div></li>
-            <li v-if="selectedReceipt.remarks" class="list-group-item d-grid"><small>Remarks</small><span class="fw-bold">{{ selectedReceipt.remarks }}</span></li>
+            <li class="list-group-item d-flex justify-content-between">
+              <div class="d-grid">
+                <small>Payment Method</small
+                ><span class="fw-bold text-capitalize">{{
+                  getMethodLabel(selectedReceipt)
+                }}</span>
+              </div>
+              <div class="d-grid text-center">
+                <small>Fees</small
+                ><span class="badge rounded-pill acon-bg-secondary">{{
+                  formatCurrency(selectedReceipt.fee || 0)
+                }}</span>
+              </div>
+            </li>
+            <li class="list-group-item">
+              <div class="d-grid">
+                <small>Reference</small
+                ><span class="fw-bold">{{ selectedReceipt.reference }}</span>
+              </div>
+            </li>
+            <li class="list-group-item">
+              <div class="d-flex flex-column align-items-start">
+                <small>Status</small
+                ><span
+                  class="badge rounded-pill mt-2"
+                  :class="getStatusBadgeClass(selectedReceipt.status)"
+                  >{{ getStatusText(selectedReceipt.status) }}</span
+                >
+              </div>
+            </li>
+            <li v-if="selectedReceipt.remarks" class="list-group-item d-grid">
+              <small>Remarks</small
+              ><span class="fw-bold">{{ selectedReceipt.remarks }}</span>
+            </li>
           </ul>
         </div>
 
         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-          <button v-if="selectedReceipt.receiptUrl" class="btn btn-acon-primary me-md-2" type="button" @click="downloadReceipt(selectedReceipt)">View Uploaded Receipt</button>
+          <button
+            v-if="selectedReceipt.receiptUrl"
+            class="btn btn-acon-primary me-md-2"
+            type="button"
+            @click="downloadReceipt(selectedReceipt)"
+          >
+            View Uploaded Receipt
+          </button>
         </div>
       </div>
     </div>
 
-    <div class="modal fade" :class="{ show: showPaymentMethodModal }" :style="{ display: showPaymentMethodModal ? 'block' : 'none' }" tabindex="-1" aria-hidden="true">
+    <div
+      class="modal fade"
+      :class="{ show: showPaymentMethodModal }"
+      :style="{ display: showPaymentMethodModal ? 'block' : 'none' }"
+      tabindex="-1"
+      aria-hidden="true"
+    >
       <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title"><i class="bi bi-wallet2 me-2 text-primary"></i> Choose Payment Method</h5>
-            <button type="button" class="btn-close" @click="closePaymentMethodModal"></button>
+            <h6 class="modal-title">
+              <i class="bi bi-wallet2 me-2 text-primary"></i> Choose Payment
+              Method
+            </h6>
+            <button
+              type="button"
+              class="btn-close"
+              @click="closePaymentMethodModal"
+            ></button>
           </div>
-          <div class="modal-body" v-if="selectedFee">
-            <div class="alert alert-light border d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-              <div><div class="fw-bold">{{ selectedFee.name }}</div><small class="text-muted">{{ selectedFee.description }}</small></div>
-              <div class="fw-bold text-primary">{{ formatCurrency(selectedFee.amount) }}</div>
-            </div>
-
-            <div class="row g-3 mb-4">
-              <div class="col-md-6">
-                <button class="btn w-100 payment-method-card" :class="selectedPaymentMethod === 'paystack' ? 'btn-primary' : 'btn-outline-primary'" :disabled="!canUsePaystack" @click="selectedPaymentMethod = 'paystack'">
-                  <i class="bi bi-credit-card-2-front me-2"></i> Paystack
-                  <small class="d-block mt-1 opacity-75">Pay instantly online</small>
-                </button>
+          <div class="modal-body payment-modal-body" v-if="selectedFee">
+            <div class="payment-modal-summary mb-4">
+              <div>
+                <small class="text-uppercase text-body-secondary d-block mb-1">
+                  Selected fee
+                </small>
+                <div class="fw-bold fs-6">{{ selectedFee.name }}</div>
               </div>
-              <div class="col-md-6">
-                <button class="btn w-100 payment-method-card" :class="selectedPaymentMethod === 'manual_transfer' ? 'btn-success' : 'btn-outline-success'" :disabled="!canUseManualTransfer" @click="selectedPaymentMethod = 'manual_transfer'">
-                  <i class="bi bi-bank me-2"></i> Manual Transfer
-                  <small class="d-block mt-1 opacity-75">Transfer and upload receipt</small>
-                </button>
+              <div class="payment-modal-amount">
+                <small class="text-uppercase text-body-secondary d-block mb-1">
+                  Amount
+                </small>
+                <div class="fw-bold text-primary fs-6">
+                  {{ formatCurrency(selectedFee.amount) }}
+                </div>
               </div>
             </div>
 
-            <div v-if="!hasAvailablePaymentMethods" class="alert alert-warning mb-0">
+            <div
+              v-if="!hasAvailablePaymentMethodsForFee(selectedFee)"
+              class="alert alert-warning mb-0"
+            >
               <i class="bi bi-exclamation-circle me-2"></i>
               No payment methods are currently enabled for this session.
             </div>
 
-            <div v-if="selectedPaymentMethod === 'paystack'" class="alert alert-info mb-0"><i class="bi bi-info-circle me-2"></i> You will be redirected to the Paystack popup to complete this payment.</div>
+            <div
+              v-else
+              class="payment-method-layout row g-0 overflow-hidden rounded-4 bg-white"
+            >
+              <div class="col-lg-4 payment-method-sidebar border-end">
+                <div class="payment-method-sidebar-inner p-3 p-lg-4">
+                  <small
+                    class="text-uppercase text-body-secondary d-block mb-3"
+                  >
+                    Payment options
+                  </small>
 
-            <div v-if="selectedPaymentMethod === 'manual_transfer'" class="manual-transfer-panel border rounded p-3 bg-light">
-              <h6 class="fw-bold mb-3">Transfer to the account below</h6>
-              <div class="row g-3 mb-3">
-                <div class="col-md-4"><small class="text-muted d-block">Account Name</small><span class="fw-semibold">{{ paymentMethods.manualTransferDetails.accountName }}</span></div>
-                <div class="col-md-4"><small class="text-muted d-block">Account Number</small><span class="fw-semibold">{{ paymentMethods.manualTransferDetails.accountNumber }}</span></div>
-                <div class="col-md-4"><small class="text-muted d-block">Bank Name</small><span class="fw-semibold">{{ paymentMethods.manualTransferDetails.bankName }}</span></div>
+                  <button
+                    class="payment-method-option w-100 text-start mb-3"
+                    :class="{
+                      active: selectedPaymentMethod === 'paystack',
+                      disabled: !canUsePaystackForFee(selectedFee),
+                    }"
+                    :disabled="!canUsePaystackForFee(selectedFee)"
+                    @click="selectedPaymentMethod = 'paystack'"
+                  >
+                    <span class="payment-method-option-icon paystack">
+                      <i class="bi bi-credit-card-2-front"></i>
+                    </span>
+                    <span class="payment-method-option-copy">
+                      <span class="payment-method-option-title">Paystack</span>
+                      <!-- <small class="payment-method-option-text"
+                        >Pay instantly online with card, transfer, or bank
+                        options.</small
+                      > -->
+                    </span>
+                  </button>
+
+                  <button
+                    class="payment-method-option w-100 text-start"
+                    :class="{
+                      active: selectedPaymentMethod === 'manual_transfer',
+                      disabled: !canUseManualTransferForFee(selectedFee),
+                    }"
+                    :disabled="!canUseManualTransferForFee(selectedFee)"
+                    @click="selectedPaymentMethod = 'manual_transfer'"
+                  >
+                    <span class="payment-method-option-icon transfer">
+                      <i class="bi bi-bank"></i>
+                    </span>
+                    <span class="payment-method-option-copy">
+                      <span class="payment-method-option-title"
+                        >Manual Transfer</span
+                      >
+                      <!-- <small class="payment-method-option-text"
+                        >Transfer to the assigned account, then upload your
+                        receipt for review.</small
+                      > -->
+                    </span>
+                  </button>
+                </div>
               </div>
 
-              <div class="alert alert-warning small mb-3"><i class="bi bi-exclamation-circle me-2"></i> {{ paymentMethods.manualTransferDetails.note }}</div>
+              <div class="col-lg-8 payment-method-details">
+                <div
+                  v-if="selectedPaymentMethod === 'paystack'"
+                  class="p-3 p-lg-4 h-100 d-flex flex-column justify-content-between gap-4"
+                >
+                  <div>
+                    <div class="d-flex align-items-start gap-3 mb-4">
+                      <div class="payment-details-icon info">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                      </div>
+                      <div>
+                        <h6 class="fw-bold mb-1">Fast online payment</h6>
+                        <p class="text-body-secondary mb-0">
+                          You will be redirected to the Paystack popup to
+                          complete this payment securely.
+                        </p>
+                      </div>
+                    </div>
 
-              <div class="form-check mb-3">
-                <input id="manualTransferConfirmed" v-model="manualTransferConfirmed" class="form-check-input" type="checkbox" />
-                <label class="form-check-label" for="manualTransferConfirmed">I have completed the transfer and I want to upload the payment receipt.</label>
-              </div>
+                    <div class="row g-3">
+                      <div class="col-md-12">
+                        <div
+                          class="payment-step-card h-100 d-flex align-items-start gap-3"
+                        >
+                          <span class="payment-step-number">1</span>
+                          <div>
+                            <h6>Select method</h6>
+                            <p>
+                              Continue with Paystack for an instant online
+                              checkout.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div
+                          class="payment-step-card h-100 d-flex align-items-start gap-3"
+                        >
+                          <span class="payment-step-number">2</span>
+                          <div>
+                            <h6>Complete payment</h6>
+                            <p>
+                              Use your preferred card, bank, or transfer option
+                              in the popup.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div
+                          class="payment-step-card h-100 d-flex align-items-start gap-3"
+                        >
+                          <span class="payment-step-number">3</span>
+                          <div>
+                            <h6>Get confirmation</h6>
+                            <p>
+                              Your payment record updates immediately after a
+                              successful charge.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-              <div v-if="manualTransferConfirmed" class="mb-2">
-                <label class="form-label fw-semibold">Upload receipt (PNG, JPG, or PDF, max 1MB)</label>
-                <input class="form-control" type="file" accept=".png,.jpg,.jpeg,.pdf" @change="onReceiptSelected" />
-                <small v-if="manualTransferReceiptName" class="text-muted d-block mt-2">Selected: {{ manualTransferReceiptName }}</small>
+                  <div class="payment-help-note info">
+                    <i class="bi bi-shield-check me-2"></i>
+                    Secure checkout powered by Paystack.
+                  </div>
+                </div>
+
+                <div
+                  v-else-if="selectedPaymentMethod === 'manual_transfer'"
+                  class="p-3 p-lg-4 h-100 d-flex flex-column gap-4"
+                >
+                  <div>
+                    <div class="d-flex align-items-start gap-3 mb-4">
+                      <div class="payment-details-icon success">
+                        <i class="bi bi-bank2"></i>
+                      </div>
+                      <div>
+                        <h6 class="fw-bold mb-1">
+                          Transfer to the account below
+                        </h6>
+                        <p class="text-body-secondary mb-0">
+                          Use the assigned account details exactly as shown,
+                          then upload your receipt for staff verification.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-6">
+                        <div class="payment-detail-card h-100">
+                          <small class="payment-detail-label"
+                            >Account Number</small
+                          >
+                          <div class="payment-detail-value">
+                            {{ selectedManualTransferDetails.accountNumber }}
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-6">
+                        <div class="payment-detail-card h-100">
+                          <small class="payment-detail-label">Bank Name</small>
+                          <div class="payment-detail-value">
+                            {{ selectedManualTransferDetails.bankName }}
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="payment-detail-card h-100">
+                          <small class="payment-detail-label"
+                            >Account Name</small
+                          >
+                          <div class="payment-detail-value">
+                            {{ selectedManualTransferDetails.accountName }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="payment-help-note warning">
+                      <i class="bi bi-exclamation-circle me-2"></i>
+                      {{ selectedManualTransferDetails.note }}
+                    </div>
+                  </div>
+
+                  <div
+                    class="manual-transfer-actions border rounded-4 p-3 p-lg-4 bg-light-subtle"
+                  >
+                    <div class="form-check mb-3">
+                      <input
+                        id="manualTransferConfirmed"
+                        v-model="manualTransferConfirmed"
+                        class="form-check-input"
+                        type="checkbox"
+                      />
+                      <label
+                        class="form-check-label fw-medium"
+                        for="manualTransferConfirmed"
+                        >I have completed the transfer and I want to upload the
+                        payment receipt.</label
+                      >
+                    </div>
+
+                    <div
+                      v-if="manualTransferConfirmed"
+                      class="receipt-upload-panel"
+                    >
+                      <label class="form-label fw-semibold h6"
+                        >Upload receipt</label
+                      >
+                      <input
+                        class="form-control"
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.pdf"
+                        @change="onReceiptSelected"
+                      />
+                      <div class="small text-body-secondary mt-2">
+                        Accepted formats: PNG, JPG, PDF. Maximum file size: 1MB.
+                      </div>
+                      <div
+                        v-if="manualTransferReceiptName"
+                        class="selected-receipt-chip mt-3"
+                      >
+                        <i class="bi bi-paperclip me-2"></i>
+                        Selected: {{ manualTransferReceiptName }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  v-else
+                  class="p-4 h-100 d-flex align-items-center justify-content-center text-center text-body-secondary"
+                >
+                  <div>
+                    <i class="bi bi-wallet2 fs-1 d-block mb-3"></i>
+                    <p class="mb-0">
+                      Select a payment option to view the next step.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-outline-secondary" @click="closePaymentMethodModal">Cancel</button>
-            <button v-if="selectedPaymentMethod === 'paystack'" type="button" class="btn btn-primary" :disabled="!selectedFee || isPaymentLoading(selectedFee.id)" @click="proceedWithSelectedMethod">Continue to Paystack</button>
-            <button v-else-if="selectedPaymentMethod === 'manual_transfer'" type="button" class="btn btn-success" :disabled="!canSubmitManualTransfer" @click="proceedWithSelectedMethod"><span v-if="manualTransferSubmitting" class="spinner-border spinner-border-sm me-2"></span>Submit Receipt</button>
+            <button
+              type="button"
+              class="btn btn-outline-secondary"
+              @click="closePaymentMethodModal"
+            >
+              Cancel
+            </button>
+            <button
+              v-if="selectedPaymentMethod === 'paystack'"
+              type="button"
+              class="btn btn-primary"
+              :disabled="!selectedFee || isPaymentLoading(selectedFee.id)"
+              @click="proceedWithSelectedMethod"
+            >
+              Continue to Paystack
+            </button>
+            <button
+              v-else-if="selectedPaymentMethod === 'manual_transfer'"
+              type="button"
+              class="btn btn-success"
+              :disabled="!canSubmitManualTransfer"
+              @click="proceedWithSelectedMethod"
+            >
+              <span
+                v-if="manualTransferSubmitting"
+                class="spinner-border spinner-border-sm me-2"
+              ></span
+              >Submit Receipt
+            </button>
           </div>
         </div>
       </div>
     </div>
 
-    <div v-if="showPaymentMethodModal" class="modal-backdrop fade show" @click="closePaymentMethodModal"></div>
+    <div
+      v-if="showPaymentMethodModal"
+      class="modal-backdrop fade show"
+      @click="closePaymentMethodModal"
+    ></div>
   </div>
 </template>
 
@@ -518,17 +1018,265 @@ export default {
   display: block !important;
 }
 
-.payment-method-card {
-  min-height: 96px;
+.modal-dialog {
+  max-width: 920px;
 }
 
-.manual-transfer-panel {
-  border-style: dashed;
+.modal-content {
+  height: min(780px, calc(100vh - 3rem));
+  max-height: calc(100vh - 3rem);
+  overflow: hidden;
+}
+
+.payment-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: linear-gradient(180deg, #fcfdff 0%, #f8fafc 100%);
+}
+
+.payment-modal-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(13, 110, 253, 0.12);
+  border-radius: 1rem;
+  background: #f8fbff;
+}
+
+.payment-modal-amount {
+  text-align: right;
+}
+
+.payment-method-sidebar {
+  background: #fff;
+}
+
+.payment-method-sidebar-inner {
+  height: 100%;
+}
+
+.payment-method-option {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1rem;
+  border: 1px solid #dee2e6;
+  border-radius: 1rem;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+
+.payment-method-option:hover:not(:disabled) {
+  border-color: rgba(13, 110, 253, 0.35);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.payment-method-option.active {
+  border-color: transparent;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.payment-method-option.active .payment-method-option-icon {
+  background: rgba(13, 110, 253, 0.12);
+  color: #0d6efd;
+}
+
+/* .payment-method-option.active .payment-method-option-icon.transfer {
+  background: rgba(25, 135, 84, 0.12);
+  color: #198754;
+} */
+
+.payment-method-option.active {
+  background: linear-gradient(180deg, #f7fbff 0%, #eef6ff 100%);
+  font-weight: 700;
+}
+
+/* .payment-method-option.active:last-of-type {
+  background: linear-gradient(180deg, #f8fff9 0%, #eefaf2 100%);
+} */
+
+.payment-method-option.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.payment-method-option-icon,
+.payment-details-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.payment-method-option-icon {
+  background: #f1f3f5;
+  color: #495057;
+}
+
+.payment-details-icon.info {
+  background: rgba(13, 110, 253, 0.12);
+  color: #0d6efd;
+}
+
+.payment-details-icon.success {
+  background: rgba(25, 135, 84, 0.12);
+  color: #198754;
+}
+
+.payment-method-option-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.payment-method-option-title {
+  display: block;
+  /* font-weight: 500; */
+  color: #212529;
+  /* margin-bottom: 0.25rem; */
+}
+
+.payment-method-option-text {
+  display: block;
+  color: #6c757d;
+  line-height: 1.45;
+}
+
+.payment-detail-card {
+  border: 1px solid #e9ecef;
+  border-radius: 1rem;
+  padding: 1rem;
+  background: #fff;
+}
+
+.payment-step-card h6,
+.payment-detail-card .payment-detail-value {
+  margin-bottom: 0;
+}
+
+.payment-step-card p {
+  margin: 0.5rem 0 0;
+  color: #6c757d;
+  font-size: 0.925rem;
+  line-height: 1.45;
+}
+
+.payment-step-number {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(13, 110, 253, 0.1);
+  color: #0d6efd;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.payment-detail-label {
+  display: block;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6c757d;
+  margin-bottom: 0.4rem;
+}
+
+.payment-detail-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.payment-help-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  font-size: 0.95rem;
+}
+
+.payment-help-note.info {
+  background: rgba(13, 110, 253, 0.08);
+  color: #084298;
+}
+
+.payment-help-note.warning {
+  background: #fff3cd;
+  color: #997404;
+  border: 1px solid #ffe69c;
+}
+
+.manual-transfer-actions {
+  border-color: #e9ecef !important;
+}
+
+.receipt-upload-panel {
+  padding-top: 0.5rem;
+}
+
+.selected-receipt-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.625rem 0.875rem;
+  border-radius: 999px;
+  background: rgba(25, 135, 84, 0.1);
+  color: #146c43;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+@media (max-width: 991.98px) {
+  .payment-method-sidebar {
+    border-right: 0 !important;
+    border-bottom: 1px solid #dee2e6;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .modal-dialog {
+    max-width: none;
+    margin: 0.75rem;
+  }
+
+  .modal-content {
+    height: calc(100vh - 1.5rem);
+    max-height: calc(100vh - 1.5rem);
+  }
+
+  .payment-modal-summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .payment-modal-amount {
+    text-align: left;
+  }
 }
 
 @keyframes pulse {
-  0% { opacity: 0.7; }
-  50% { opacity: 0.5; }
-  100% { opacity: 0.7; }
+  0% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0.7;
+  }
 }
 </style>

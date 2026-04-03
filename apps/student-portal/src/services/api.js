@@ -49,20 +49,25 @@ class ApiService {
     async makeRequest(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
 
-        // Handle FormData differently - don't set Content-Type header
-        let headers;
-        if (options.body instanceof FormData) {
-            headers = {};
-            if (this.token) {
-                headers.Authorization = `Bearer ${this.token}`;
-            }
-        } else {
-            headers = this.getHeaders();
+        const isFormData = options.body instanceof FormData;
+        const defaultHeaders = isFormData ? {} : this.getHeaders();
+        const headers = {
+            ...defaultHeaders,
+            ...(options.headers || {}),
+        };
+
+        if (this.token) {
+            headers.Authorization = `Bearer ${this.token}`;
+        }
+
+        if (isFormData) {
+            delete headers['Content-Type'];
+            delete headers['content-type'];
         }
 
         const config = {
-            headers,
             ...options,
+            headers,
         };
 
         try {
@@ -148,15 +153,9 @@ class ApiService {
             ...customOptions
         };
 
-        // If custom headers are provided, merge them but don't override Content-Type for FormData
+        // If custom headers are provided, merge them with default JSON headers
         if (customOptions.headers) {
-            // For FormData uploads, don't set Content-Type (let browser set it)
-            if (data instanceof FormData) {
-                delete options.headers; // Let browser set proper Content-Type with boundary
-                options.body = data; // Don't JSON.stringify FormData
-            } else {
-                options.headers = { ...this.getHeaders(), ...customOptions.headers };
-            }
+            options.headers = { ...this.getHeaders(), ...customOptions.headers };
         }
 
         return this.makeRequest(endpoint, options);

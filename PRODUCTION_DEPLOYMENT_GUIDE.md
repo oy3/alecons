@@ -726,13 +726,12 @@ Set these values in the build environment for `apps/application-portal` and `app
 VITE_PAYSTACK_PUBLIC_KEY=pk_live_your_actual_live_public_key
 VITE_PAYMENT_PAYSTACK_ENABLED=true
 VITE_PAYMENT_MANUAL_TRANSFER_ENABLED=true
-VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NAME="Alecons College of Nursing Sciences"
-VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NUMBER="0123456789"
-VITE_PAYMENT_MANUAL_TRANSFER_BANK_NAME="Your Bank Name"
-VITE_PAYMENT_MANUAL_TRANSFER_NOTE="Upload a clear receipt after making the transfer. Receipts must be PNG, JPG, or PDF and not more than 1MB."
 ```
 
 Notes:
+
+- Configure manual transfer bank details and Paystack destination routing from the staff Payments destination accounts UI.
+- Keep one active default destination account per channel if you want new or unassigned fees to inherit a fallback route.
 - These frontend env values provide default visibility only.
 - Final availability is enforced by backend academic session controls.
 - If Paystack is not yet approved or must be suspended temporarily, leave `VITE_PAYMENT_MANUAL_TRANSFER_ENABLED=true` and disable Paystack at the session-control level for the affected audience.

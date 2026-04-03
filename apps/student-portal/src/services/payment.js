@@ -17,10 +17,10 @@ class StudentPaymentService {
             manualTransferEnabled: true,
         };
         this.manualTransferDetails = {
-            accountName: import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NAME || '',
-            accountNumber: import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NUMBER || '',
-            bankName: import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_BANK_NAME || '',
-            note: import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_NOTE || 'Upload a clear receipt after making the transfer.',
+            accountName: '',
+            accountNumber: '',
+            bankName: '',
+            note: '',
         };
     }
 
@@ -235,6 +235,14 @@ class StudentPaymentService {
                         resolve({
                             success: false,
                             message: 'Payment cancelled by user'
+                        });
+                    },
+                    onError: (error) => {
+                        logger.error('Paystack popup failed to load:', error);
+                        reject({
+                            success: false,
+                            message: error?.message || 'Failed to load Paystack checkout',
+                            error,
                         });
                     }
                 });

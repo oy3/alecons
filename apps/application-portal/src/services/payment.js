@@ -15,14 +15,10 @@ class PaymentService {
             manualTransferEnabled: true,
         };
         this.manualTransferDetails = {
-            accountName:
-                import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NAME || "",
-            accountNumber:
-                import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NUMBER || "",
-            bankName: import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_BANK_NAME || "",
-            note:
-                import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_NOTE ||
-                "Upload a clear receipt after making the transfer.",
+            accountName: "",
+            accountNumber: "",
+            bankName: "",
+            note: "",
         };
     }
 
@@ -158,7 +154,6 @@ class PaymentService {
 
             const { reference, access_code } = initResult.data;
 
-            // Launch Paystack popup using modern API
             return new Promise((resolve, reject) => {
                 const popup = new PaystackPop();
 
@@ -197,6 +192,10 @@ class PaymentService {
                             success: false,
                             message: "Payment cancelled by user",
                         });
+                    },
+                    onError: (error) => {
+                        logger.error("Paystack popup failed to load:", error);
+                        reject(new Error(error?.message || "Failed to load Paystack checkout"));
                     },
                 });
             });

@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type PaymentDocument = Payment & Document;
 
@@ -37,6 +37,12 @@ export class Payment {
         required: true
     })
     targetAudience: PaymentAudience[];
+
+    @Prop({ type: Types.ObjectId, ref: 'PaymentDestinationAccount' })
+    paystackDestinationAccountId?: Types.ObjectId;
+
+    @Prop({ type: Types.ObjectId, ref: 'PaymentDestinationAccount' })
+    manualTransferDestinationAccountId?: Types.ObjectId;
 }
 
 export const PaymentSchema = SchemaFactory.createForClass(Payment);

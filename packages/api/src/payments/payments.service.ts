@@ -3,6 +3,12 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Payment, PaymentDocument, PaymentAudience } from '../schemas/payment.schema';
 import { StudentPayment, StudentPaymentDocument, PaymentMethod, PaymentStatus, PaymentChannel } from '../schemas/student-payment.schema';
+import {
+    PaymentDestinationAccount,
+    PaymentDestinationAccountDocument,
+    PaymentDestinationChannelType,
+    PaymentDestinationProviderType,
+} from '../schemas/payment-destination-account.schema';
 import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
@@ -28,6 +34,32 @@ export interface PaymentSummary {
     receiptUrl?: string;
     receiptOriginalName?: string;
     receiptUploadedAt?: Date;
+    manualTransferDetails?: ManualTransferDetails;
+    paystackDestinationAccount?: DestinationAccountSummary | null;
+    manualTransferDestinationAccount?: DestinationAccountSummary | null;
+}
+
+export interface ManualTransferDetails {
+    accountName: string;
+    accountNumber: string;
+    bankName: string;
+    note: string;
+}
+
+export interface DestinationAccountSummary {
+    id: string;
+    title: string;
+    code: string;
+    channelType: PaymentDestinationChannelType;
+    providerType: PaymentDestinationProviderType;
+    isDefault: boolean;
+    active: boolean;
+    accountName?: string;
+    bankName?: string;
+    accountNumber?: string;
+    currency?: string;
+    paystackSubaccountCode?: string;
+    note?: string;
 }
 
 export interface StudentPaymentsSummary {
@@ -103,6 +135,7 @@ export class PaymentsService {
     constructor(
         @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
         @InjectModel(StudentPayment.name) private studentPaymentModel: Model<StudentPaymentDocument>,
+        @InjectModel(PaymentDestinationAccount.name) private paymentDestinationAccountModel: Model<PaymentDestinationAccountDocument>,
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
         @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
@@ -140,6 +173,283 @@ export class PaymentsService {
 
     private buildManualTransferReference(): string {
         return `MAN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    }
+
+    private toDestinationAccountSummary(account?: Partial<PaymentDestinationAccount> & { _id?: Types.ObjectId | string } | null): DestinationAccountSummary | null {
+        if (!account?._id) {
+            return null;
+        }
+
+        return {
+            id: account._id.toString(),
+            title: account.title || '',
+            code: account.code || '',
+            channelType: account.channelType as PaymentDestinationChannelType,
+            providerType: account.providerType as PaymentDestinationProviderType,
+            isDefault: Boolean(account.isDefault),
+            active: Boolean(account.active),
+            accountName: account.accountName,
+            bankName: account.bankName,
+            accountNumber: account.accountNumber,
+            currency: account.currency,
+            paystackSubaccountCode: account.paystackSubaccountCode,
+            note: account.note,
+        };
+    }
+
+    private toManualTransferDetails(account?: Partial<PaymentDestinationAccount> | null): ManualTransferDetails {
+        if (account?.accountName && account?.accountNumber && account?.bankName) {
+            return {
+                accountName: account.accountName,
+                accountNumber: account.accountNumber,
+                bankName: account.bankName,
+                note: account.note || 'Upload a clear receipt after making the transfer.',
+            };
+        }
+
+        return {
+            accountName: '',
+            accountNumber: '',
+            bankName: '',
+            note: '',
+        };
+    }
+
+    private buildDestinationSnapshot(account?: Partial<PaymentDestinationAccount> & { _id?: Types.ObjectId | string } | null) {
+        if (!account?._id) {
+            return {
+                destinationAccountId: undefined,
+                destinationAccountTitle: undefined,
+                destinationAccountCode: undefined,
+                destinationChannelType: undefined,
+                destinationProviderType: undefined,
+                destinationAccountName: undefined,
+                destinationBankName: undefined,
+                destinationAccountNumber: undefined,
+                destinationNote: undefined,
+                destinationPaystackSubaccountCode: undefined,
+            };
+        }
+
+        return {
+            destinationAccountId: new Types.ObjectId(account._id.toString()),
+            destinationAccountTitle: account.title,
+            destinationAccountCode: account.code,
+            destinationChannelType: account.channelType,
+            destinationProviderType: account.providerType,
+            destinationAccountName: account.accountName,
+            destinationBankName: account.bankName,
+            destinationAccountNumber: account.accountNumber,
+            destinationNote: account.note,
+            destinationPaystackSubaccountCode: account.paystackSubaccountCode,
+        };
+    }
+
+    private async getDestinationAccountsMap(ids: Array<Types.ObjectId | string | undefined | null>) {
+        const validIds = Array.from(
+            new Set(
+                ids
+                    .filter(Boolean)
+                    .map((value) => value!.toString())
+                    .filter((value) => Types.ObjectId.isValid(value)),
+            ),
+        );
+
+        if (validIds.length === 0) {
+            return new Map<string, any>();
+        }
+
+        const accounts = await this.paymentDestinationAccountModel
+            .find({ _id: { $in: validIds.map((id) => new Types.ObjectId(id)) } })
+            .lean();
+
+        return new Map(accounts.map((account) => [account._id.toString(), account]));
+    }
+
+    private async getActiveDefaultDestinationAccount(channelType: PaymentDestinationChannelType) {
+        return this.paymentDestinationAccountModel.findOne({ channelType, isDefault: true, active: true }).lean();
+    }
+
+    private async validateDestinationAccountId(
+        destinationAccountId: string | undefined,
+        channelType: PaymentDestinationChannelType,
+    ) {
+        if (!destinationAccountId) {
+            return null;
+        }
+
+        if (!Types.ObjectId.isValid(destinationAccountId)) {
+            throw new Error(`Invalid ${channelType} destination account ID`);
+        }
+
+        const account = await this.paymentDestinationAccountModel.findById(destinationAccountId).lean();
+        if (!account) {
+            throw new Error(`${channelType} destination account not found`);
+        }
+
+        if (account.channelType !== channelType) {
+            throw new Error(`${channelType} destination account has an invalid channel type`);
+        }
+
+        return account;
+    }
+
+    private async resolveDestinationForPayment(
+        payment: Partial<Payment> & {
+            paymentCode?: string;
+            paystackDestinationAccountId?: Types.ObjectId | string;
+            manualTransferDestinationAccountId?: Types.ObjectId | string;
+        },
+        channelType: PaymentDestinationChannelType,
+    ) {
+        const configuredId = channelType === PaymentDestinationChannelType.PAYSTACK
+            ? payment.paystackDestinationAccountId
+            : payment.manualTransferDestinationAccountId;
+
+        if (configuredId && Types.ObjectId.isValid(configuredId.toString())) {
+            const account = await this.paymentDestinationAccountModel.findById(configuredId).lean();
+            if (account?.active) {
+                return account;
+            }
+        }
+
+        return this.getActiveDefaultDestinationAccount(channelType);
+    }
+
+    private buildPaystackInitializePayload(params: {
+        email: string;
+        amount: number;
+        reference: string;
+        userId: string;
+        paymentId: string;
+        paymentName: string;
+        destinationAccount?: Partial<PaymentDestinationAccount> | null;
+        callbackUrl?: string;
+    }) {
+        const payload: Record<string, unknown> = {
+            email: params.email,
+            amount: params.amount * 100,
+            reference: params.reference,
+            metadata: {
+                userId: params.userId,
+                paymentId: params.paymentId,
+                paymentName: params.paymentName,
+            },
+        };
+
+        if (params.callbackUrl) {
+            payload.callback_url = params.callbackUrl;
+        }
+
+        if (
+            params.destinationAccount?.channelType === PaymentDestinationChannelType.PAYSTACK
+            && params.destinationAccount?.providerType === PaymentDestinationProviderType.SUBACCOUNT
+            && params.destinationAccount?.paystackSubaccountCode
+        ) {
+            payload.subaccount = params.destinationAccount.paystackSubaccountCode;
+
+            if (params.destinationAccount.paystackChargeBearer) {
+                payload.bearer = params.destinationAccount.paystackChargeBearer;
+            }
+
+            if (typeof params.destinationAccount.transactionCharge === 'number') {
+                payload.transaction_charge = Math.round(params.destinationAccount.transactionCharge * 100);
+            }
+        }
+
+        return payload;
+    }
+
+    private isTestPaystackEnvironment() {
+        return this.paystackSecretKey?.startsWith('sk_test_') || process.env.NODE_ENV !== 'production';
+    }
+
+    private shouldFallbackFromInvalidSubaccount(
+        message: string,
+        destinationAccount?: Partial<PaymentDestinationAccount> | null,
+    ) {
+        return Boolean(
+            this.isTestPaystackEnvironment()
+            && destinationAccount?.channelType === PaymentDestinationChannelType.PAYSTACK
+            && destinationAccount?.providerType === PaymentDestinationProviderType.SUBACCOUNT
+            && destinationAccount?.paystackSubaccountCode
+            && /invalid subaccount/i.test(message),
+        );
+    }
+
+    private formatPaystackInitializationError(
+        message: string,
+        destinationAccount?: Partial<PaymentDestinationAccount> | null,
+    ) {
+        if (
+            destinationAccount?.channelType === PaymentDestinationChannelType.PAYSTACK
+            && destinationAccount?.providerType === PaymentDestinationProviderType.SUBACCOUNT
+            && destinationAccount?.paystackSubaccountCode
+            && /invalid subaccount/i.test(message)
+        ) {
+            return `Configured Paystack subaccount ${destinationAccount.paystackSubaccountCode} is invalid for the current Paystack environment.`;
+        }
+
+        return message;
+    }
+
+    private async sendPaystackInitializeRequest(payload: Record<string, unknown>) {
+        const response = await fetch(`${this.paystackBaseUrl}/transaction/initialize`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.paystackSecretKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const text = await response.text();
+        let data: any = null;
+
+        try {
+            data = text ? JSON.parse(text) : null;
+        } catch {
+            data = null;
+        }
+
+        if (!response.ok || !data?.status) {
+            const message = data?.message || `Paystack API error: ${response.status} ${response.statusText}`;
+            const error = new Error(message) as Error & {
+                statusCode?: number;
+                responseBody?: unknown;
+            };
+            error.statusCode = response.status;
+            error.responseBody = data ?? text;
+            throw error;
+        }
+
+        return data;
+    }
+
+    private async initializePaystackTransactionWithFallback(
+        payload: Record<string, unknown>,
+        destinationAccount?: Partial<PaymentDestinationAccount> | null,
+    ) {
+        try {
+            return await this.sendPaystackInitializeRequest(payload);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Paystack initialization failed';
+
+            if (this.shouldFallbackFromInvalidSubaccount(message, destinationAccount)) {
+                const fallbackPayload = { ...payload };
+                delete fallbackPayload.subaccount;
+                delete fallbackPayload.bearer;
+                delete fallbackPayload.transaction_charge;
+
+                this.logger.warn(
+                    `Paystack subaccount ${destinationAccount?.paystackSubaccountCode} is invalid in the current environment. Retrying without destination split in test/development mode.`,
+                );
+
+                return this.sendPaystackInitializeRequest(fallbackPayload);
+            }
+
+            throw new Error(this.formatPaystackInitializationError(message, destinationAccount));
+        }
     }
 
     private getPaymentMethodControlNames(context: 'application-portal' | 'student-portal') {
@@ -307,6 +617,13 @@ export class PaymentsService {
             targetAudience: { $in: userAudiences }
         }).lean();
 
+        const destinationAccountsMap = await this.getDestinationAccountsMap(
+            allPayments.flatMap((payment: any) => [
+                payment.paystackDestinationAccountId,
+                payment.manualTransferDestinationAccountId,
+            ]),
+        );
+
         // Get student's successful payments and pending manual transfers
         const studentPayments = await this.studentPaymentModel
             .find({
@@ -347,6 +664,15 @@ export class PaymentsService {
             const paymentId = payment._id.toString();
             const successfulPayment = successfulPaymentsById.get(paymentId);
             const pendingManualPayment = pendingManualPaymentsById.get(paymentId);
+            const paystackDestinationAccount = this.toDestinationAccountSummary(
+                destinationAccountsMap.get(payment.paystackDestinationAccountId?.toString?.() || ''),
+            );
+            const manualTransferDestinationAccount = this.toDestinationAccountSummary(
+                destinationAccountsMap.get(payment.manualTransferDestinationAccountId?.toString?.() || ''),
+            );
+            const manualTransferDetails = this.toManualTransferDetails(
+                destinationAccountsMap.get(payment.manualTransferDestinationAccountId?.toString?.() || ''),
+            );
 
             if (successfulPayment) {
                 paidFees.push({
@@ -366,6 +692,9 @@ export class PaymentsService {
                     receiptUrl: successfulPayment.receiptUrl,
                     receiptOriginalName: successfulPayment.receiptOriginalName,
                     receiptUploadedAt: successfulPayment.receiptUploadedAt,
+                    manualTransferDetails,
+                    paystackDestinationAccount,
+                    manualTransferDestinationAccount,
                 });
             } else if (pendingManualPayment) {
                 pendingFees.push({
@@ -384,6 +713,9 @@ export class PaymentsService {
                     receiptUrl: pendingManualPayment.receiptUrl,
                     receiptOriginalName: pendingManualPayment.receiptOriginalName,
                     receiptUploadedAt: pendingManualPayment.receiptUploadedAt,
+                    manualTransferDetails,
+                    paystackDestinationAccount,
+                    manualTransferDestinationAccount,
                 });
             } else {
                 unpaidFees.push({
@@ -392,7 +724,10 @@ export class PaymentsService {
                     description: payment.description,
                     amount: payment.amount,
                     isPaid: false,
-                    paymentCode: payment.paymentCode
+                    paymentCode: payment.paymentCode,
+                    manualTransferDetails,
+                    paystackDestinationAccount,
+                    manualTransferDestinationAccount,
                 });
             }
         });
@@ -443,6 +778,10 @@ export class PaymentsService {
             }
 
             const linkedApplication = await this.resolveLinkedApplication(userId);
+            const paystackDestinationAccount = await this.resolveDestinationForPayment(
+                payment,
+                PaymentDestinationChannelType.PAYSTACK,
+            );
             await this.assertPaymentMethodEnabled(
                 PaymentMethod.PAYSTACK,
                 'application-portal',
@@ -528,12 +867,20 @@ export class PaymentsService {
                 const newReference = `alc${Date.now()}`;
                 this.logger.log('Creating new Paystack transaction with new reference:', newReference);
 
-                paystackData = await this.createPaystackTransaction(payment, email, newReference, userId, paymentId);
+                paystackData = await this.createPaystackTransaction(
+                    payment,
+                    email,
+                    newReference,
+                    userId,
+                    paymentId,
+                    paystackDestinationAccount,
+                );
 
                 // Update the existing record with the new reference
                 existingAttempt.reference = newReference;
                 existingAttempt.status = PaymentStatus.PENDING;
                 existingAttempt.remarks = `Payment re-initialized with new reference x${existingAttempt.retryCount || 1} - awaiting user action`;
+                Object.assign(existingAttempt, this.buildDestinationSnapshot(paystackDestinationAccount));
                 await existingAttempt.save();
 
                 return {
@@ -544,7 +891,14 @@ export class PaymentsService {
             } else {
                 // No existing attempt found, create new payment attempt
                 reference = `alc${Date.now()}`;
-                paystackData = await this.createPaystackTransaction(payment, email, reference, userId, paymentId);
+                paystackData = await this.createPaystackTransaction(
+                    payment,
+                    email,
+                    reference,
+                    userId,
+                    paymentId,
+                    paystackDestinationAccount,
+                );
 
                 // Create new payment attempt record
                 await this.studentPaymentModel.create({
@@ -557,7 +911,8 @@ export class PaymentsService {
                     status: PaymentStatus.PENDING,
                     method: PaymentMethod.PAYSTACK,
                     remarks: 'Payment initialized - awaiting user action',
-                    retryCount: 0
+                    retryCount: 0,
+                    ...this.buildDestinationSnapshot(paystackDestinationAccount),
                 });
 
                 return {
@@ -572,7 +927,15 @@ export class PaymentsService {
         }
     }
 
-    private async createPaystackTransaction(payment: any, email: string, reference: string, userId: string, paymentId: string) {
+    private async createPaystackTransaction(
+        payment: any,
+        email: string,
+        reference: string,
+        userId: string,
+        paymentId: string,
+        destinationAccount?: Partial<PaymentDestinationAccount> | null,
+        callbackUrl?: string,
+    ) {
         this.logger.log('Creating new Paystack transaction:', {
             paymentId,
             amount: payment.amount,
@@ -581,32 +944,21 @@ export class PaymentsService {
             reference
         });
 
-        // Initialize Paystack transaction
-        const response = await fetch(`${this.paystackBaseUrl}/transaction/initialize`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${this.paystackSecretKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
+        const data = await this.initializePaystackTransactionWithFallback(
+            this.buildPaystackInitializePayload({
                 email,
-                amount: payment.amount * 100, // Convert from Naira to kobo (Paystack requires kobo)
+                amount: payment.amount,
                 reference,
-                metadata: {
-                    userId,
-                    paymentId,
-                    paymentName: payment.name
-                }
-            })
-        });
-
-        const data = await response.json();
+                userId,
+                paymentId,
+                paymentName: payment.name,
+                destinationAccount,
+                callbackUrl,
+            }),
+            destinationAccount,
+        );
 
         this.logger.log('Paystack response:', data);
-
-        if (!data.status) {
-            throw new Error(data.message || 'Failed to initialize payment');
-        }
 
         return data;
     }
@@ -958,7 +1310,9 @@ export class PaymentsService {
         const [payments, totalCount] = await Promise.all([
             this.paymentModel
                 .find(query)
-                .select('_id name description amount category active paymentCode targetAudience createdAt updatedAt')
+                .populate('paystackDestinationAccountId', 'title code channelType providerType isDefault active accountName bankName accountNumber currency paystackSubaccountCode note')
+                .populate('manualTransferDestinationAccountId', 'title code channelType providerType isDefault active accountName bankName accountNumber currency paystackSubaccountCode note')
+                .select('_id name description amount category active paymentCode targetAudience paystackDestinationAccountId manualTransferDestinationAccountId createdAt updatedAt')
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
@@ -976,6 +1330,10 @@ export class PaymentsService {
             isActive: payment.active,
             paymentCode: payment.paymentCode,
             targetAudience: payment.targetAudience,
+            paystackDestinationAccount: this.toDestinationAccountSummary(payment.paystackDestinationAccountId as any),
+            manualTransferDestinationAccount: this.toDestinationAccountSummary(payment.manualTransferDestinationAccountId as any),
+            paystackDestinationAccountId: (payment.paystackDestinationAccountId as any)?._id?.toString?.() || null,
+            manualTransferDestinationAccountId: (payment.manualTransferDestinationAccountId as any)?._id?.toString?.() || null,
             createdAt: (payment as any).createdAt,
             updatedAt: (payment as any).updatedAt
         }));
@@ -995,7 +1353,11 @@ export class PaymentsService {
 
     async getPaymentById(id: string) {
         try {
-            const payment = await this.paymentModel.findById(id).lean();
+            const payment = await this.paymentModel
+                .findById(id)
+                .populate('paystackDestinationAccountId', 'title code channelType providerType isDefault active accountName bankName accountNumber currency paystackSubaccountCode note')
+                .populate('manualTransferDestinationAccountId', 'title code channelType providerType isDefault active accountName bankName accountNumber currency paystackSubaccountCode note')
+                .lean();
 
             if (!payment) {
                 return null;
@@ -1010,6 +1372,10 @@ export class PaymentsService {
                 isActive: payment.active,
                 paymentCode: payment.paymentCode,
                 targetAudience: payment.targetAudience,
+                paystackDestinationAccount: this.toDestinationAccountSummary(payment.paystackDestinationAccountId as any),
+                manualTransferDestinationAccount: this.toDestinationAccountSummary(payment.manualTransferDestinationAccountId as any),
+                paystackDestinationAccountId: (payment.paystackDestinationAccountId as any)?._id?.toString?.() || null,
+                manualTransferDestinationAccountId: (payment.manualTransferDestinationAccountId as any)?._id?.toString?.() || null,
                 createdAt: (payment as any).createdAt,
                 updatedAt: (payment as any).updatedAt
             };
@@ -1027,8 +1393,19 @@ export class PaymentsService {
         isActive?: boolean;
         paymentCode?: string;
         targetAudience?: PaymentAudience[];
+        paystackDestinationAccountId?: string;
+        manualTransferDestinationAccountId?: string;
     }) {
         try {
+            await this.validateDestinationAccountId(
+                createPaymentDto.paystackDestinationAccountId,
+                PaymentDestinationChannelType.PAYSTACK,
+            );
+            await this.validateDestinationAccountId(
+                createPaymentDto.manualTransferDestinationAccountId,
+                PaymentDestinationChannelType.MANUAL_TRANSFER,
+            );
+
             const paymentData = {
                 name: createPaymentDto.name,
                 description: createPaymentDto.description,
@@ -1036,25 +1413,41 @@ export class PaymentsService {
                 category: createPaymentDto.category,
                 active: createPaymentDto.isActive !== undefined ? createPaymentDto.isActive : true,
                 paymentCode: createPaymentDto.paymentCode,
-                targetAudience: createPaymentDto.targetAudience || [PaymentAudience.APPLICANT]
+                targetAudience: createPaymentDto.targetAudience || [PaymentAudience.APPLICANT],
+                paystackDestinationAccountId: createPaymentDto.paystackDestinationAccountId
+                    ? new Types.ObjectId(createPaymentDto.paystackDestinationAccountId)
+                    : undefined,
+                manualTransferDestinationAccountId: createPaymentDto.manualTransferDestinationAccountId
+                    ? new Types.ObjectId(createPaymentDto.manualTransferDestinationAccountId)
+                    : undefined,
             };
 
             const payment = new this.paymentModel(paymentData);
             const savedPayment = await payment.save();
 
+            const hydratedPayment = await this.paymentModel
+                .findById(savedPayment._id)
+                .populate('paystackDestinationAccountId', 'title code channelType providerType isDefault active accountName bankName accountNumber currency paystackSubaccountCode note')
+                .populate('manualTransferDestinationAccountId', 'title code channelType providerType isDefault active accountName bankName accountNumber currency paystackSubaccountCode note')
+                .lean();
+
             this.logger.log('Payment created successfully:', savedPayment._id);
 
             return {
-                id: savedPayment._id.toString(),
-                name: savedPayment.name,
-                description: savedPayment.description,
-                amount: savedPayment.amount,
-                category: savedPayment.category,
-                isActive: savedPayment.active,
-                paymentCode: savedPayment.paymentCode,
-                targetAudience: savedPayment.targetAudience,
-                createdAt: (savedPayment as any).createdAt,
-                updatedAt: (savedPayment as any).updatedAt
+                id: hydratedPayment!._id.toString(),
+                name: hydratedPayment!.name,
+                description: hydratedPayment!.description,
+                amount: hydratedPayment!.amount,
+                category: hydratedPayment!.category,
+                isActive: hydratedPayment!.active,
+                paymentCode: hydratedPayment!.paymentCode,
+                targetAudience: hydratedPayment!.targetAudience,
+                paystackDestinationAccount: this.toDestinationAccountSummary(hydratedPayment!.paystackDestinationAccountId as any),
+                manualTransferDestinationAccount: this.toDestinationAccountSummary(hydratedPayment!.manualTransferDestinationAccountId as any),
+                paystackDestinationAccountId: (hydratedPayment!.paystackDestinationAccountId as any)?._id?.toString?.() || null,
+                manualTransferDestinationAccountId: (hydratedPayment!.manualTransferDestinationAccountId as any)?._id?.toString?.() || null,
+                createdAt: (hydratedPayment! as any).createdAt,
+                updatedAt: (hydratedPayment! as any).updatedAt
             };
         } catch (error) {
             this.logger.error('Error creating payment:', error);
@@ -1070,6 +1463,8 @@ export class PaymentsService {
         isActive?: boolean;
         paymentCode?: string;
         targetAudience?: PaymentAudience[];
+        paystackDestinationAccountId?: string | null;
+        manualTransferDestinationAccountId?: string | null;
     }) {
         try {
             const updateData: any = {};
@@ -1095,9 +1490,33 @@ export class PaymentsService {
             if (updatePaymentDto.targetAudience !== undefined) {
                 updateData.targetAudience = updatePaymentDto.targetAudience;
             }
+            if (updatePaymentDto.paystackDestinationAccountId !== undefined) {
+                if (updatePaymentDto.paystackDestinationAccountId) {
+                    await this.validateDestinationAccountId(
+                        updatePaymentDto.paystackDestinationAccountId,
+                        PaymentDestinationChannelType.PAYSTACK,
+                    );
+                    updateData.paystackDestinationAccountId = new Types.ObjectId(updatePaymentDto.paystackDestinationAccountId);
+                } else {
+                    updateData.paystackDestinationAccountId = null;
+                }
+            }
+            if (updatePaymentDto.manualTransferDestinationAccountId !== undefined) {
+                if (updatePaymentDto.manualTransferDestinationAccountId) {
+                    await this.validateDestinationAccountId(
+                        updatePaymentDto.manualTransferDestinationAccountId,
+                        PaymentDestinationChannelType.MANUAL_TRANSFER,
+                    );
+                    updateData.manualTransferDestinationAccountId = new Types.ObjectId(updatePaymentDto.manualTransferDestinationAccountId);
+                } else {
+                    updateData.manualTransferDestinationAccountId = null;
+                }
+            }
 
             const payment = await this.paymentModel
                 .findByIdAndUpdate(id, updateData, { new: true })
+                .populate('paystackDestinationAccountId', 'title code channelType providerType isDefault active accountName bankName accountNumber currency paystackSubaccountCode note')
+                .populate('manualTransferDestinationAccountId', 'title code channelType providerType isDefault active accountName bankName accountNumber currency paystackSubaccountCode note')
                 .lean();
 
             if (!payment) {
@@ -1115,6 +1534,10 @@ export class PaymentsService {
                 isActive: payment.active,
                 paymentCode: payment.paymentCode,
                 targetAudience: payment.targetAudience,
+                paystackDestinationAccount: this.toDestinationAccountSummary(payment.paystackDestinationAccountId as any),
+                manualTransferDestinationAccount: this.toDestinationAccountSummary(payment.manualTransferDestinationAccountId as any),
+                paystackDestinationAccountId: (payment.paystackDestinationAccountId as any)?._id?.toString?.() || null,
+                manualTransferDestinationAccountId: (payment.manualTransferDestinationAccountId as any)?._id?.toString?.() || null,
                 createdAt: (payment as any).createdAt,
                 updatedAt: (payment as any).updatedAt
             };
@@ -1180,6 +1603,103 @@ export class PaymentsService {
             this.logger.error('Error deleting payment:', error);
             throw error;
         }
+    }
+
+    async getDestinationAccounts() {
+        const accounts = await this.paymentDestinationAccountModel
+            .find()
+            .sort({ channelType: 1, isDefault: -1, title: 1 })
+            .lean();
+
+        return accounts.map((account) => this.toDestinationAccountSummary(account));
+    }
+
+    async createDestinationAccount(createDto: {
+        title: string;
+        code: string;
+        channelType: PaymentDestinationChannelType;
+        providerType: PaymentDestinationProviderType;
+        isDefault?: boolean;
+        active?: boolean;
+        accountName?: string;
+        bankName?: string;
+        accountNumber?: string;
+        currency?: string;
+        paystackSubaccountCode?: string;
+        paystackChargeBearer?: string;
+        transactionCharge?: number;
+        note?: string;
+    }) {
+        if (createDto.isDefault) {
+            await this.paymentDestinationAccountModel.updateMany(
+                { channelType: createDto.channelType, isDefault: true },
+                { $set: { isDefault: false } },
+            );
+        }
+
+        const created = await this.paymentDestinationAccountModel.create({
+            ...createDto,
+            code: createDto.code.trim().toUpperCase(),
+            active: createDto.active !== undefined ? createDto.active : true,
+            currency: createDto.currency || 'NGN',
+        });
+
+        const account = await this.paymentDestinationAccountModel.findById(created._id).lean();
+        return this.toDestinationAccountSummary(account);
+    }
+
+    async updateDestinationAccount(id: string, updateDto: {
+        title?: string;
+        code?: string;
+        channelType?: PaymentDestinationChannelType;
+        providerType?: PaymentDestinationProviderType;
+        isDefault?: boolean;
+        active?: boolean;
+        accountName?: string;
+        bankName?: string;
+        accountNumber?: string;
+        currency?: string;
+        paystackSubaccountCode?: string;
+        paystackChargeBearer?: string;
+        transactionCharge?: number | null;
+        note?: string;
+    }) {
+        if (updateDto.isDefault && updateDto.channelType) {
+            await this.paymentDestinationAccountModel.updateMany(
+                { channelType: updateDto.channelType, isDefault: true, _id: { $ne: new Types.ObjectId(id) } },
+                { $set: { isDefault: false } },
+            );
+        }
+
+        const updateData: any = { ...updateDto };
+        if (updateDto.code !== undefined) {
+            updateData.code = updateDto.code.trim().toUpperCase();
+        }
+        if (updateDto.transactionCharge === null) {
+            updateData.transactionCharge = undefined;
+        }
+
+        const updated = await this.paymentDestinationAccountModel
+            .findByIdAndUpdate(id, updateData, { new: true })
+            .lean();
+
+        return this.toDestinationAccountSummary(updated);
+    }
+
+    async deleteDestinationAccount(id: string) {
+        const usageCount = await this.paymentModel.countDocuments({
+            $or: [
+                { paystackDestinationAccountId: new Types.ObjectId(id) },
+                { manualTransferDestinationAccountId: new Types.ObjectId(id) },
+            ],
+        });
+
+        if (usageCount > 0) {
+            throw new Error('Cannot delete a destination account that is assigned to existing payments');
+        }
+
+        const deleted = await this.paymentDestinationAccountModel.findByIdAndDelete(id);
+        return Boolean(deleted);
     }
 
     /**
@@ -1295,6 +1815,21 @@ export class PaymentsService {
 
         const activePaymentsForUnpaid = unpaidPaymentsQuery ? await this.paymentModel.find(unpaidPaymentsQuery).lean() : [];
 
+        const destinationAccountsMap = await this.getDestinationAccountsMap(
+            [
+                ...studentPayments.flatMap((studentPayment: any) => {
+                    const payment = studentPayment.paymentId as any;
+                    return payment && typeof payment === 'object'
+                        ? [payment.paystackDestinationAccountId, payment.manualTransferDestinationAccountId]
+                        : [];
+                }),
+                ...activePaymentsForUnpaid.flatMap((payment: any) => [
+                    payment.paystackDestinationAccountId,
+                    payment.manualTransferDestinationAccountId,
+                ]),
+            ],
+        );
+
         // Separate paid and unpaid fees
         const paidFees: PaymentSummary[] = [];
         const pendingFees: PaymentSummary[] = [];
@@ -1326,6 +1861,15 @@ export class PaymentsService {
         studentPayments.forEach(studentPayment => {
             if (studentPayment.status === PaymentStatus.SUCCESSFUL && studentPayment.paymentId && typeof studentPayment.paymentId === 'object') {
                 const payment = studentPayment.paymentId as any; // Type assertion since it's populated
+                const paystackDestinationAccount = this.toDestinationAccountSummary(
+                    destinationAccountsMap.get(payment.paystackDestinationAccountId?.toString?.() || ''),
+                );
+                const manualTransferDestinationAccount = this.toDestinationAccountSummary(
+                    destinationAccountsMap.get(payment.manualTransferDestinationAccountId?.toString?.() || ''),
+                );
+                const manualTransferDetails = this.toManualTransferDetails(
+                    destinationAccountsMap.get(payment.manualTransferDestinationAccountId?.toString?.() || ''),
+                );
                 paidFees.push({
                     id: payment._id.toString(),
                     name: payment.name,
@@ -1343,6 +1887,9 @@ export class PaymentsService {
                     receiptUrl: studentPayment.receiptUrl,
                     receiptOriginalName: studentPayment.receiptOriginalName,
                     receiptUploadedAt: studentPayment.receiptUploadedAt,
+                    manualTransferDetails,
+                    paystackDestinationAccount,
+                    manualTransferDestinationAccount,
                 });
             }
         });
@@ -1350,6 +1897,15 @@ export class PaymentsService {
         Array.from(pendingManualPaymentsById.values()).forEach((studentPayment: any) => {
             if (studentPayment.paymentId && typeof studentPayment.paymentId === 'object') {
                 const payment = studentPayment.paymentId as any;
+                const paystackDestinationAccount = this.toDestinationAccountSummary(
+                    destinationAccountsMap.get(payment.paystackDestinationAccountId?.toString?.() || ''),
+                );
+                const manualTransferDestinationAccount = this.toDestinationAccountSummary(
+                    destinationAccountsMap.get(payment.manualTransferDestinationAccountId?.toString?.() || ''),
+                );
+                const manualTransferDetails = this.toManualTransferDetails(
+                    destinationAccountsMap.get(payment.manualTransferDestinationAccountId?.toString?.() || ''),
+                );
                 pendingFees.push({
                     id: payment._id.toString(),
                     name: payment.name,
@@ -1366,6 +1922,9 @@ export class PaymentsService {
                     receiptUrl: studentPayment.receiptUrl,
                     receiptOriginalName: studentPayment.receiptOriginalName,
                     receiptUploadedAt: studentPayment.receiptUploadedAt,
+                    manualTransferDetails,
+                    paystackDestinationAccount,
+                    manualTransferDestinationAccount,
                 });
             }
         });
@@ -1373,6 +1932,15 @@ export class PaymentsService {
         // Then, add unpaid fees from currently active payments
         activePaymentsForUnpaid.forEach(payment => {
             const paymentId = payment._id.toString();
+            const paystackDestinationAccount = this.toDestinationAccountSummary(
+                destinationAccountsMap.get(payment.paystackDestinationAccountId?.toString?.() || ''),
+            );
+            const manualTransferDestinationAccount = this.toDestinationAccountSummary(
+                destinationAccountsMap.get(payment.manualTransferDestinationAccountId?.toString?.() || ''),
+            );
+            const manualTransferDetails = this.toManualTransferDetails(
+                destinationAccountsMap.get(payment.manualTransferDestinationAccountId?.toString?.() || ''),
+            );
 
             // Only add to unpaid if not already paid or awaiting manual verification
             if (!successfulPaymentsById.has(paymentId) && !pendingManualPaymentsById.has(paymentId)) {
@@ -1382,7 +1950,10 @@ export class PaymentsService {
                     description: payment.description,
                     amount: payment.amount,
                     isPaid: false,
-                    paymentCode: payment.paymentCode
+                    paymentCode: payment.paymentCode,
+                    manualTransferDetails,
+                    paystackDestinationAccount,
+                    manualTransferDestinationAccount,
                 });
             }
         });
@@ -1567,6 +2138,11 @@ export class PaymentsService {
             throw new Error('Payment not found');
         }
 
+        const paystackDestinationAccount = await this.resolveDestinationForPayment(
+            payment,
+            PaymentDestinationChannelType.PAYSTACK,
+        );
+
         // Check if user is authorized for this payment
         const user = await this.userModel.findById(userId);
         if (!user) {
@@ -1601,12 +2177,21 @@ export class PaymentsService {
             status: PaymentStatus.PENDING,
             method: PaymentMethod.PAYSTACK,
             remarks: 'Payment initialized - awaiting user action',
+            ...this.buildDestinationSnapshot(paystackDestinationAccount),
         });
 
         await studentPayment.save();
 
         // Initialize with Paystack
-        const paystackResponse = await this.initializePaystackPayment(reference, email, payment.amount);
+        const paystackResponse = await this.initializePaystackPayment(
+            reference,
+            email,
+            payment.amount,
+            userId,
+            paymentId,
+            payment.name,
+            paystackDestinationAccount,
+        );
 
         return {
             authorization_url: paystackResponse.authorization_url,
@@ -1666,6 +2251,11 @@ export class PaymentsService {
         if (!linkedApplication.applicationNumber) {
             throw new Error('Application record not found for receipt storage');
         }
+
+        const manualTransferDestinationAccount = await this.resolveDestinationForPayment(
+            payment,
+            PaymentDestinationChannelType.MANUAL_TRANSFER,
+        );
 
         await this.assertPaymentMethodEnabled(
             PaymentMethod.MANUAL_TRANSFER,
@@ -1732,6 +2322,7 @@ export class PaymentsService {
             receiptOriginalName: file.originalname,
             receiptUploadedAt: new Date(),
             retryCount: 0,
+            ...this.buildDestinationSnapshot(manualTransferDestinationAccount),
         });
 
         return {
@@ -1928,31 +2519,29 @@ export class PaymentsService {
     }
 
     // Helper method for Paystack initialization
-    private async initializePaystackPayment(reference: string, email: string, amount: number) {
+    private async initializePaystackPayment(
+        reference: string,
+        email: string,
+        amount: number,
+        userId: string,
+        paymentId: string,
+        paymentName: string,
+        destinationAccount?: Partial<PaymentDestinationAccount> | null,
+    ) {
         try {
-            const response = await fetch(`${this.paystackBaseUrl}/transaction/initialize`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.paystackSecretKey}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    email: email,
-                    amount: amount * 100, // Convert to kobo
-                    reference: reference,
-                    callback_url: `${process.env.STUDENT_PORTAL_URL}/payment/verify/${reference}`,
+            const data = await this.initializePaystackTransactionWithFallback(
+                this.buildPaystackInitializePayload({
+                    email,
+                    amount,
+                    reference,
+                    userId,
+                    paymentId,
+                    paymentName,
+                    destinationAccount,
+                    callbackUrl: `${process.env.STUDENT_PORTAL_URL}/payment/verify/${reference}`,
                 }),
-            });
-
-            if (!response.ok) {
-                throw new Error(`Paystack API error: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-
-            if (!data.status) {
-                throw new Error(data.message || 'Paystack initialization failed');
-            }
+                destinationAccount,
+            );
 
             return data.data;
         } catch (error) {

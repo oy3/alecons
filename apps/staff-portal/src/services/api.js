@@ -284,6 +284,30 @@ class StaffApiService {
         })
     }
 
+    async getPaymentDestinationAccounts() {
+        return this.makeRequest('/staff/payments/destination-accounts')
+    }
+
+    async createPaymentDestinationAccount(accountData) {
+        return this.makeRequest('/staff/payments/destination-accounts', {
+            method: 'POST',
+            body: JSON.stringify(accountData),
+        })
+    }
+
+    async updatePaymentDestinationAccount(id, accountData) {
+        return this.makeRequest(`/staff/payments/destination-accounts/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(accountData),
+        })
+    }
+
+    async deletePaymentDestinationAccount(id) {
+        return this.makeRequest(`/staff/payments/destination-accounts/${id}`, {
+            method: 'DELETE',
+        })
+    }
+
     // Student Payments
     async getStudentPayments(filters = {}) {
         const queryParams = new URLSearchParams(filters).toString()

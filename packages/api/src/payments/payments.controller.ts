@@ -3,6 +3,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { PaymentDestinationChannelType, PaymentDestinationProviderType } from '../schemas/payment-destination-account.schema';
+import { PaymentAudience } from '../schemas/payment.schema';
 
 @Controller('payments')
 @UseGuards(JwtAuthGuard)
@@ -132,6 +134,9 @@ export interface CreatePaymentDto {
     category?: string;
     isActive?: boolean;
     paymentCode: string; // Now required since it's manually input
+    targetAudience?: PaymentAudience[];
+    paystackDestinationAccountId?: string;
+    manualTransferDestinationAccountId?: string;
 }
 
 export interface UpdatePaymentDto {
@@ -141,7 +146,29 @@ export interface UpdatePaymentDto {
     category?: string;
     isActive?: boolean;
     paymentCode?: string;
+    targetAudience?: PaymentAudience[];
+    paystackDestinationAccountId?: string | null;
+    manualTransferDestinationAccountId?: string | null;
 }
+
+export interface CreateDestinationAccountDto {
+    title: string;
+    code: string;
+    channelType: PaymentDestinationChannelType;
+    providerType: PaymentDestinationProviderType;
+    isDefault?: boolean;
+    active?: boolean;
+    accountName?: string;
+    bankName?: string;
+    accountNumber?: string;
+    currency?: string;
+    paystackSubaccountCode?: string;
+    paystackChargeBearer?: string;
+    transactionCharge?: number;
+    note?: string;
+}
+
+export interface UpdateDestinationAccountDto extends Partial<CreateDestinationAccountDto> { }
 
 export interface ManualPaymentReviewDto {
     remarks?: string;
@@ -200,6 +227,109 @@ export class StaffPaymentsController {
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Get('destination-accounts')
+    @ApiOperation({ summary: 'Get all payment destination accounts' })
+    async getDestinationAccounts() {
+        try {
+            const accounts = await this.paymentsService.getDestinationAccounts();
+            return {
+                success: true,
+                data: accounts,
+            };
+        } catch (error) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to fetch destination accounts',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Post('destination-accounts')
+    @ApiOperation({ summary: 'Create payment destination account' })
+    async createDestinationAccount(@Body() createDto: CreateDestinationAccountDto) {
+        try {
+            const account = await this.paymentsService.createDestinationAccount(createDto);
+            return {
+                success: true,
+                message: 'Destination account created successfully',
+                data: account,
+            };
+        } catch (error) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to create destination account',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Put('destination-accounts/:id')
+    @ApiOperation({ summary: 'Update payment destination account' })
+    async updateDestinationAccount(
+        @Param('id') id: string,
+        @Body() updateDto: UpdateDestinationAccountDto,
+    ) {
+        try {
+            const account = await this.paymentsService.updateDestinationAccount(id, updateDto);
+            return {
+                success: true,
+                message: 'Destination account updated successfully',
+                data: account,
+            };
+        } catch (error) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to update destination account',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Delete('destination-accounts/:id')
+    @ApiOperation({ summary: 'Delete payment destination account' })
+    async deleteDestinationAccount(@Param('id') id: string) {
+        try {
+            const deleted = await this.paymentsService.deleteDestinationAccount(id);
+            if (!deleted) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Destination account not found',
+                    },
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            return {
+                success: true,
+                message: 'Destination account deleted successfully',
+            };
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to delete destination account',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
     }

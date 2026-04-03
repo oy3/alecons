@@ -1122,24 +1122,24 @@ export default {
       const file = event.target.files[0];
       if (!file) return;
 
-      await this.uploadFile(file, "profile_picture");
+      await this.uploadFile(file, "profile_picture", {}, event);
     },
 
     async handleOLevelUpload(event, sittingIndex) {
       const file = event.target.files[0];
       if (!file) return;
 
-      await this.uploadFile(file, "olevel_result", { sittingIndex });
+      await this.uploadFile(file, "olevel_result", { sittingIndex }, event);
     },
 
     async handleReferenceUpload(event, referenceIndex) {
       const file = event.target.files[0];
       if (!file) return;
 
-      await this.uploadFile(file, "reference_letter", { referenceIndex });
+      await this.uploadFile(file, "reference_letter", { referenceIndex }, event);
     },
 
-    async uploadFile(file, fileType, options = {}) {
+    async uploadFile(file, fileType, options = {}, inputEvent = null) {
       if (!file) {
         await Swal.fire({
           title: "No File Selected",
@@ -1210,15 +1210,7 @@ export default {
         }
 
         // Upload file
-        const response = await apiService.post(
-          "/applications/upload",
-          formData,
-          {
-            headers: {
-              "Content-Type": "multipart/form-data",
-            },
-          },
-        );
+        const response = await apiService.post("/applications/upload", formData);
 
         if (response.success) {
           logger.info("File uploaded to temporary storage:", {
@@ -1300,8 +1292,8 @@ export default {
       } finally {
         this.isUploading = false;
         // Clear the input so same file can be selected again if needed
-        if (event && event.target) {
-          event.target.value = "";
+        if (inputEvent?.target) {
+          inputEvent.target.value = "";
         }
       }
     },

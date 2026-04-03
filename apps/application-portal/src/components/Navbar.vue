@@ -89,8 +89,9 @@ export default {
               authStore.application?.profileImageUrl || 'https://placehold.co/40?text=IMG'
             "
             width="40"
+            height="40"
             alt="Profile"
-            class="rounded-circle me-2 border border-secondary"
+            class="rounded-circle me-2 border border-secondary object-fit-cover"
           />
           <span class="fw-bold d-none d-sm-inline">{{
             authStore.user?.firstName || "User"

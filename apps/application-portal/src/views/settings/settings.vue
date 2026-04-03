@@ -170,7 +170,7 @@ export default {
             :src="
               application.profileImageUrl || 'https://placehold.co/100?text=IMG'
             "
-            class="rounded-circle me-3"
+            class="rounded-circle me-3 object-fit-cover border"
             width="100"
             height="100"
           />

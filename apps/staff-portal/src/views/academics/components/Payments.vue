@@ -9,10 +9,12 @@ export default {
     return {
       allPayments: [], // Store all payments from server
       payments: [], // Displayed payments after filtering
+      destinationAccounts: [],
       isLoading: true,
       searchQuery: '',
       currentPage: 1,
-      perPage: 10
+      perPage: 10,
+      showDestinationAccountsModal: false,
     }
   },
   computed: {
@@ -55,7 +57,7 @@ export default {
     }
   },
   async mounted() {
-    await this.loadPayments()
+    await Promise.all([this.loadPayments(), this.loadDestinationAccounts()])
   },
   methods: {
     async loadPayments() {
@@ -79,6 +81,10 @@ export default {
             isActive: payment.isActive,
             paymentCode: payment.paymentCode,
             targetAudience: payment.targetAudience,
+            paystackDestinationAccount: payment.paystackDestinationAccount || null,
+            manualTransferDestinationAccount: payment.manualTransferDestinationAccount || null,
+            paystackDestinationAccountId: payment.paystackDestinationAccountId || null,
+            manualTransferDestinationAccountId: payment.manualTransferDestinationAccountId || null,
             createdAt: new Date(payment.createdAt),
             updatedAt: new Date(payment.updatedAt)
           }))
@@ -110,6 +116,8 @@ export default {
             amount: 25000,
             isActive: true,
             paymentCode: 'APP_FEE',
+            paystackDestinationAccount: null,
+            manualTransferDestinationAccount: null,
             createdAt: new Date('2024-01-15')
           },
           {
@@ -119,6 +127,8 @@ export default {
             amount: 350000,
             isActive: true,
             paymentCode: 'TUITION_S1',
+            paystackDestinationAccount: null,
+            manualTransferDestinationAccount: null,
             createdAt: new Date('2024-01-20')
           },
           {
@@ -128,6 +138,8 @@ export default {
             amount: 15000,
             isActive: true,
             paymentCode: 'LIBRARY_FEE',
+            paystackDestinationAccount: null,
+            manualTransferDestinationAccount: null,
             createdAt: new Date('2024-01-25')
           }
         ]
@@ -142,6 +154,50 @@ export default {
       } finally {
         this.isLoading = false
       }
+    },
+
+    async loadDestinationAccounts() {
+      try {
+        const response = await apiService.getPaymentDestinationAccounts()
+
+        if (response.success) {
+          this.destinationAccounts = response.data || []
+        } else {
+          throw new Error(response.message || 'Failed to load destination accounts')
+        }
+      } catch (error) {
+        logger.error('Error loading destination accounts:', error)
+        this.destinationAccounts = []
+      }
+    },
+
+    getDestinationAccountsByChannel(channelType) {
+      return this.destinationAccounts.filter(account => account.channelType === channelType)
+    },
+
+    buildDestinationOptions(channelType, selectedId = '') {
+      const accounts = this.getDestinationAccountsByChannel(channelType)
+      const emptyLabel = channelType === 'paystack'
+        ? 'Default main Paystack account'
+        : 'Default manual transfer account / env fallback'
+
+      const options = [`<option value="">${emptyLabel}</option>`]
+
+      accounts.forEach(account => {
+        const selected = selectedId && selectedId === account.id ? 'selected' : ''
+        const badge = account.isDefault ? ' (Default)' : ''
+        options.push(`<option value="${account.id}" ${selected}>${account.title} - ${account.code}${badge}</option>`)
+      })
+
+      return options.join('')
+    },
+
+    formatDestinationAccount(account, emptyLabel) {
+      if (!account) {
+        return emptyLabel
+      }
+
+      return `${account.title} (${account.code})`
     },
 
     async showAddPaymentModal() {
@@ -176,6 +232,18 @@ export default {
               </select>
               <div class="form-text">Hold Ctrl/Cmd to select multiple audiences</div>
             </div>
+            <div class="col-md-6">
+              <label for="swal-paystack-destination" class="form-label">Paystack Destination</label>
+              <select id="swal-paystack-destination" class="form-select">
+                ${this.buildDestinationOptions('paystack')}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="swal-manual-destination" class="form-label">Manual Transfer Destination</label>
+              <select id="swal-manual-destination" class="form-select">
+                ${this.buildDestinationOptions('manual_transfer')}
+              </select>
+            </div>
             <div class="col-12">
               <div class="form-check text-start">
                 <input id="swal-payment-active" class="form-check-input" type="checkbox" checked>
@@ -199,6 +267,8 @@ export default {
           const isActive = document.getElementById('swal-payment-active').checked
           const audienceSelect = document.getElementById('swal-target-audience')
           const targetAudience = Array.from(audienceSelect.selectedOptions).map(option => option.value)
+          const paystackDestinationAccountId = document.getElementById('swal-paystack-destination').value || null
+          const manualTransferDestinationAccountId = document.getElementById('swal-manual-destination').value || null
 
           if (!name || !paymentCode || !amount) {
             Swal.showValidationMessage('Please fill in all required fields')
@@ -222,7 +292,7 @@ export default {
             return false
           }
 
-          return { name, paymentCode, description, amount: parseFloat(amount), isActive, targetAudience }
+          return { name, paymentCode, description, amount: parseFloat(amount), isActive, targetAudience, paystackDestinationAccountId, manualTransferDestinationAccountId }
         }
       })
 
@@ -303,6 +373,18 @@ export default {
               </select>
               <div class="form-text">Hold Ctrl/Cmd to select multiple audiences</div>
             </div>
+            <div class="col-md-6">
+              <label for="swal-edit-paystack-destination" class="form-label">Paystack Destination</label>
+              <select id="swal-edit-paystack-destination" class="form-select">
+                ${this.buildDestinationOptions('paystack', payment.paystackDestinationAccountId || '')}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="swal-edit-manual-destination" class="form-label">Manual Transfer Destination</label>
+              <select id="swal-edit-manual-destination" class="form-select">
+                ${this.buildDestinationOptions('manual_transfer', payment.manualTransferDestinationAccountId || '')}
+              </select>
+            </div>
             <div class="col-12">
               <div class="form-check text-start">
                 <input id="swal-edit-active" class="form-check-input" type="checkbox" ${payment.isActive ? 'checked' : ''}>
@@ -335,6 +417,8 @@ export default {
           const isActive = document.getElementById('swal-edit-active').checked
           const audienceSelect = document.getElementById('swal-edit-target-audience')
           const targetAudience = Array.from(audienceSelect.selectedOptions).map(option => option.value)
+          const paystackDestinationAccountId = document.getElementById('swal-edit-paystack-destination').value || null
+          const manualTransferDestinationAccountId = document.getElementById('swal-edit-manual-destination').value || null
 
           if (!name || !paymentCode || !amount) {
             Swal.showValidationMessage('Please fill in all required fields')
@@ -358,7 +442,7 @@ export default {
             return false
           }
 
-          return { name, paymentCode, description, amount: parseFloat(amount), isActive, targetAudience }
+          return { name, paymentCode, description, amount: parseFloat(amount), isActive, targetAudience, paystackDestinationAccountId, manualTransferDestinationAccountId }
         }
       })
 
@@ -509,6 +593,189 @@ export default {
       }
     },
 
+    openDestinationAccountsModal() {
+      this.showDestinationAccountsModal = true
+    },
+
+    closeDestinationAccountsModal() {
+      this.showDestinationAccountsModal = false
+    },
+
+    async showDestinationAccountForm(account = null) {
+      const isEdit = !!account
+      const { value: formValues } = await Swal.fire({
+        title: isEdit ? 'Edit Destination Account' : 'Add Destination Account',
+        width: '780px',
+        customClass: {
+          popup: 'destination-account-swal-popup',
+          htmlContainer: 'destination-account-swal-html'
+        },
+        html: `
+          <div class="text-start">
+            <div class="alert alert-light border small mb-3">
+              <div class="fw-semibold mb-2">Example values</div>
+              <div><strong>Main Paystack account:</strong> Title = Main Revenue Account, Code = MAIN_PAYSTACK, Channel = Paystack, Provider = Main</div>
+              <div><strong>Accommodation Paystack subaccount:</strong> Title = Accommodation Account, Code = ACCOMMODATION_PAYSTACK, Channel = Paystack, Provider = Subaccount, Paystack Subaccount Code = ACCT_8f3sdfk0kdl</div>
+              <div><strong>Manual transfer account:</strong> Title = Accommodation Manual Account, Code = ACCOMMODATION_MANUAL, Channel = Manual Transfer, Provider = Bank Account, Account Name = Alecons Accommodation, Bank Name = Wema Bank, Account Number = 0123456789</div>
+            </div>
+            <div class="row g-3 text-start">
+            <div class="col-md-6">
+              <label for="swal-destination-title" class="form-label">Title</label>
+              <input id="swal-destination-title" class="form-control" value="${account?.title || ''}" placeholder="e.g. Accommodation Account" required>
+              <div class="form-text">Friendly name staff will see when assigning payment routes.</div>
+            </div>
+            <div class="col-md-6">
+              <label for="swal-destination-code" class="form-label">Code</label>
+              <input id="swal-destination-code" class="form-control" value="${account?.code || ''}" placeholder="e.g. ACCOMMODATION_PAYSTACK" required>
+              <div class="form-text">Internal unique code used to identify this destination account.</div>
+            </div>
+            <div class="col-md-6">
+              <label for="swal-destination-channel" class="form-label">Channel</label>
+              <select id="swal-destination-channel" class="form-select">
+                <option value="paystack" ${account?.channelType === 'paystack' ? 'selected' : ''}>Paystack</option>
+                <option value="manual_transfer" ${account?.channelType === 'manual_transfer' ? 'selected' : ''}>Manual Transfer</option>
+              </select>
+              <div class="form-text">Choose how this destination account will be used.</div>
+            </div>
+            <div class="col-md-6">
+              <label for="swal-destination-provider" class="form-label">Provider Type</label>
+              <select id="swal-destination-provider" class="form-select">
+                <option value="main" ${account?.providerType === 'main' ? 'selected' : ''}>Main</option>
+                <option value="subaccount" ${account?.providerType === 'subaccount' ? 'selected' : ''}>Subaccount</option>
+                <option value="bank_account" ${account?.providerType === 'bank_account' ? 'selected' : ''}>Bank Account</option>
+              </select>
+              <div class="form-text">Use <strong>Main</strong> for default Paystack settlement, <strong>Subaccount</strong> for Paystack subaccounts, and <strong>Bank Account</strong> for manual transfers.</div>
+            </div>
+            <div class="col-md-6">
+              <label for="swal-destination-account-name" class="form-label">Account Name</label>
+              <input id="swal-destination-account-name" class="form-control" value="${account?.accountName || ''}" placeholder="e.g. Alecons Accommodation Account">
+            </div>
+            <div class="col-md-6">
+              <label for="swal-destination-bank-name" class="form-label">Bank Name</label>
+              <input id="swal-destination-bank-name" class="form-control" value="${account?.bankName || ''}" placeholder="e.g. Wema Bank">
+            </div>
+            <div class="col-md-6">
+              <label for="swal-destination-account-number" class="form-label">Account Number</label>
+              <input id="swal-destination-account-number" class="form-control" value="${account?.accountNumber || ''}" placeholder="e.g. 0123456789">
+            </div>
+            <div class="col-md-6">
+              <label for="swal-destination-subaccount" class="form-label">Paystack Subaccount Code</label>
+              <input id="swal-destination-subaccount" class="form-control" value="${account?.paystackSubaccountCode || ''}" placeholder="e.g. ACCT_8f3sdfk0kdl">
+              <div class="form-text">Required only when Channel = Paystack and Provider Type = Subaccount.</div>
+            </div>
+            <div class="col-12">
+              <label for="swal-destination-note" class="form-label">Note</label>
+              <textarea id="swal-destination-note" class="form-control" rows="3" placeholder="e.g. Use this account for accommodation-related payments only">${account?.note || ''}</textarea>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check mt-2">
+                <input id="swal-destination-default" class="form-check-input" type="checkbox" ${account?.isDefault ? 'checked' : ''}>
+                <label for="swal-destination-default" class="form-check-label">Set as default for this channel</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check mt-2">
+                <input id="swal-destination-active" class="form-check-input" type="checkbox" ${account?.active !== false ? 'checked' : ''}>
+                <label for="swal-destination-active" class="form-check-label">Active</label>
+              </div>
+            </div>
+            </div>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: isEdit ? 'Update Account' : 'Create Account',
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d',
+        preConfirm: () => {
+          const title = document.getElementById('swal-destination-title').value.trim()
+          const code = document.getElementById('swal-destination-code').value.trim().toUpperCase()
+          const channelType = document.getElementById('swal-destination-channel').value
+          const providerType = document.getElementById('swal-destination-provider').value
+          const accountName = document.getElementById('swal-destination-account-name').value.trim()
+          const bankName = document.getElementById('swal-destination-bank-name').value.trim()
+          const accountNumber = document.getElementById('swal-destination-account-number').value.trim()
+          const paystackSubaccountCode = document.getElementById('swal-destination-subaccount').value.trim()
+          const note = document.getElementById('swal-destination-note').value.trim()
+          const isDefault = document.getElementById('swal-destination-default').checked
+          const active = document.getElementById('swal-destination-active').checked
+
+          if (!title || !code) {
+            Swal.showValidationMessage('Title and code are required')
+            return false
+          }
+
+          if (channelType === 'manual_transfer' && (!accountName || !bankName || !accountNumber)) {
+            Swal.showValidationMessage('Manual transfer accounts require account name, bank name, and account number')
+            return false
+          }
+
+          if (channelType === 'paystack' && providerType === 'subaccount' && !paystackSubaccountCode) {
+            Swal.showValidationMessage('Paystack subaccount code is required for paystack subaccounts')
+            return false
+          }
+
+          return { title, code, channelType, providerType, accountName, bankName, accountNumber, paystackSubaccountCode, note, isDefault, active }
+        }
+      })
+
+      if (!formValues) return
+
+      try {
+        const response = isEdit
+          ? await apiService.updatePaymentDestinationAccount(account.id, formValues)
+          : await apiService.createPaymentDestinationAccount(formValues)
+
+        if (!response.success) {
+          throw new Error(response.message || `Failed to ${isEdit ? 'update' : 'create'} destination account`)
+        }
+
+        await Promise.all([this.loadDestinationAccounts(), this.loadPayments()])
+
+        Swal.fire({
+          title: 'Success!',
+          text: `Destination account ${isEdit ? 'updated' : 'created'} successfully.`,
+          icon: 'success',
+          confirmButtonColor: '#198754'
+        })
+      } catch (error) {
+        logger.error('Error saving destination account:', error)
+        Swal.fire({
+          title: 'Error!',
+          text: error.message || 'Failed to save destination account.',
+          icon: 'error',
+          confirmButtonColor: '#dc3545'
+        })
+      }
+    },
+
+    async deleteDestinationAccount(account) {
+      const result = await Swal.fire({
+        title: 'Delete Destination Account?',
+        text: `Are you sure you want to delete "${account.title}"?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, delete',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d'
+      })
+
+      if (!result.isConfirmed) return
+
+      try {
+        const response = await apiService.deletePaymentDestinationAccount(account.id)
+        if (!response.success) {
+          throw new Error(response.message || 'Failed to delete destination account')
+        }
+
+        await Promise.all([this.loadDestinationAccounts(), this.loadPayments()])
+        Swal.fire({ title: 'Deleted!', text: 'Destination account deleted successfully.', icon: 'success', confirmButtonColor: '#198754' })
+      } catch (error) {
+        logger.error('Error deleting destination account:', error)
+        Swal.fire({ title: 'Error!', text: error.message || 'Failed to delete destination account.', icon: 'error', confirmButtonColor: '#dc3545' })
+      }
+    },
+
     formatAmount(amount) {
       return new Intl.NumberFormat('en-NG', {
         minimumFractionDigits: 2,
@@ -547,7 +814,7 @@ export default {
         <div class="card p-0 border-0 shadow-sm">
           <div class="card-body">
             <div class="row g-3 align-items-end">
-              <div class="col-md-8">
+              <div class="col-md-6">
                 <label class="form-label">Search Payments</label>
                 <input
                   v-model="searchQuery"
@@ -562,6 +829,14 @@ export default {
                   @click="showAddPaymentModal"
                 >
                   <i class="bi bi-plus-circle me-2"></i>Add New Payment
+                </button>
+              </div>
+              <div class="col-md-2">
+                <button
+                  class="btn btn-outline-staff-primary w-100"
+                  @click="openDestinationAccountsModal"
+                >
+                  <i class="bi bi-diagram-3 me-2"></i>Accounts
                 </button>
               </div>
             </div>
@@ -591,6 +866,8 @@ export default {
                     <th>Payment Code</th>
                     <th>Description</th>
                     <th>Amount</th>
+                    <th>Paystack Route</th>
+                    <th>Manual Route</th>
                     <th>Target Audience</th>
                     <th>Status</th>
                     <th width="150">Actions</th>
@@ -611,6 +888,12 @@ export default {
                       <div class="fw-semibold text-success">
                         ₦{{ formatAmount(payment.amount) }}
                       </div>
+                    </td>
+                    <td>
+                      <small class="text-muted d-block">{{ formatDestinationAccount(payment.paystackDestinationAccount, 'Main / Default account') }}</small>
+                    </td>
+                    <td>
+                      <small class="text-muted d-block">{{ formatDestinationAccount(payment.manualTransferDestinationAccount, 'Default / Env fallback') }}</small>
                     </td>
                     <td>
                       <div class="d-flex flex-wrap gap-1">
@@ -659,7 +942,7 @@ export default {
                     </td>
                   </tr>
                   <tr v-if="paginatedPayments.length === 0">
-                    <td colspan="7" class="text-center py-4 text-muted">
+                    <td colspan="9" class="text-center py-4 text-muted">
                       <i class="bi bi-credit-card display-6 d-block mb-2"></i>
                       {{ searchQuery ? 'No payments found matching your search.' : 'No payments available. Create one to get started.' }}
                     </td>
@@ -709,6 +992,93 @@ export default {
         </nav>
       </div>
     </div>
+
+    <div class="modal fade" :class="{ show: showDestinationAccountsModal }" :style="{ display: showDestinationAccountsModal ? 'block' : 'none' }" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-diagram-3 me-2 text-staff-primary"></i>
+              Payment Destination Accounts
+            </h5>
+            <button type="button" class="btn-close" @click="closeDestinationAccountsModal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+              <p class="text-muted mb-0">Manage Paystack and manual transfer destination accounts used by each payment.</p>
+              <button class="btn btn-staff-primary" @click="showDestinationAccountForm()">
+                <i class="bi bi-plus-circle me-2"></i>Add Destination Account
+              </button>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-hover align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>Title</th>
+                    <th>Code</th>
+                    <th>Channel</th>
+                    <th>Provider</th>
+                    <th>Account Details</th>
+                    <th>Status</th>
+                    <th width="140">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="account in destinationAccounts" :key="account.id">
+                    <td>
+                      <div class="fw-semibold">{{ account.title }}</div>
+                      <small v-if="account.note" class="text-muted">{{ account.note }}</small>
+                    </td>
+                    <td><code class="text-primary">{{ account.code }}</code></td>
+                    <td>
+                      <span class="badge" :class="account.channelType === 'paystack' ? 'bg-primary' : 'bg-success'">
+                        {{ account.channelType === 'paystack' ? 'Paystack' : 'Manual Transfer' }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="text-capitalize">{{ account.providerType.replace('_', ' ') }}</span>
+                      <span v-if="account.isDefault" class="badge bg-warning text-dark ms-2">Default</span>
+                    </td>
+                    <td>
+                      <div v-if="account.accountName" class="small fw-semibold">{{ account.accountName }}</div>
+                      <div v-if="account.bankName || account.accountNumber" class="small text-muted">{{ account.bankName || '—' }} • {{ account.accountNumber || '—' }}</div>
+                      <div v-if="account.paystackSubaccountCode" class="small text-muted">{{ account.paystackSubaccountCode }}</div>
+                    </td>
+                    <td>
+                      <span class="badge" :class="account.active ? 'bg-success' : 'bg-danger'">
+                        {{ account.active ? 'Active' : 'Inactive' }}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-staff-primary" @click="showDestinationAccountForm(account)" title="Edit Account">
+                          <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" @click="deleteDestinationAccount(account)" title="Delete Account">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-if="destinationAccounts.length === 0">
+                    <td colspan="7" class="text-center py-4 text-muted">
+                      <i class="bi bi-bank display-6 d-block mb-2"></i>
+                      No destination accounts have been created yet.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" @click="closeDestinationAccountsModal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showDestinationAccountsModal" class="modal-backdrop fade show" @click="closeDestinationAccountsModal"></div>
   </div>
 </template>
 
@@ -765,6 +1135,30 @@ export default {
 
 .btn-group .btn:last-child {
   margin-right: 0;
+}
+
+.modal {
+  z-index: 1050;
+}
+
+.modal-backdrop {
+  z-index: 1040;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal.show {
+  display: block !important;
+}
+
+:deep(.destination-account-swal-popup) {
+  width: min(980px, 92vw) !important;
+  max-width: 980px !important;
+  height: 82vh;
+}
+
+:deep(.destination-account-swal-html) {
+  max-height: calc(82vh - 180px);
+  overflow-y: auto;
 }
 
 </style>

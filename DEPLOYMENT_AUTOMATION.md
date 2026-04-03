@@ -114,10 +114,6 @@ Add these as **Environment Variables**:
 - `VITE_PAYSTACK_PUBLIC_KEY` = your live public Paystack key
 - `VITE_PAYMENT_PAYSTACK_ENABLED` = `true`
 - `VITE_PAYMENT_MANUAL_TRANSFER_ENABLED` = `true`
-- `VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NAME` = your manual transfer account name
-- `VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NUMBER` = your manual transfer account number
-- `VITE_PAYMENT_MANUAL_TRANSFER_BANK_NAME` = your manual transfer bank name
-- `VITE_PAYMENT_MANUAL_TRANSFER_NOTE` = your manual transfer receipt instruction note
 - `VITE_APP_ENV` = `production`
 - `VITE_APP_DEBUG` = `false`
 - `VITE_CBT_APP_NAME` = `ALECONS CBT`
@@ -127,7 +123,7 @@ Add these as **Environment Variables**:
 
 The workflow derives `VITE_API_URL`, `VITE_API_BASE_URL`, and `VITE_SOCKET_URL` automatically from `VITE_APP_API_URL`, so you do not need to enter those separately in GitHub.
 
-For applicant and student payments, the workflow now also renders the frontend fallback payment settings into the production builds. If these variables are missing in GitHub, the renderer falls back to sensible defaults, but you should still set the real manual transfer account values in the `production` environment for consistency.
+For applicant and student payments, the workflow renders only the frontend payment method flags into the production builds. Manual transfer bank details and Paystack routing now come from destination accounts configured in the staff Payments screen, with the default destination account acting as the only fallback.
 
 ## Phase 4: How The Workflow Runs
 

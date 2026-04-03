@@ -80,6 +80,36 @@ export class StudentPayment {
     @Prop()
     receiptUploadedAt?: Date;
 
+    @Prop({ type: Types.ObjectId, ref: 'PaymentDestinationAccount' })
+    destinationAccountId?: Types.ObjectId;
+
+    @Prop()
+    destinationAccountTitle?: string;
+
+    @Prop()
+    destinationAccountCode?: string;
+
+    @Prop()
+    destinationChannelType?: string;
+
+    @Prop()
+    destinationProviderType?: string;
+
+    @Prop()
+    destinationAccountName?: string;
+
+    @Prop()
+    destinationBankName?: string;
+
+    @Prop()
+    destinationAccountNumber?: string;
+
+    @Prop()
+    destinationNote?: string;
+
+    @Prop()
+    destinationPaystackSubaccountCode?: string;
+
     // Paystack specific fields
     @Prop()
     authorizationCode?: string;

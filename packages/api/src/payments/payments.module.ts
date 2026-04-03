@@ -11,6 +11,7 @@ import { Program, ProgramSchema } from '../schemas/program.schema';
 import { Student, StudentSchema } from '../schemas/student.schema';
 import { TenancyAgreement, TenancyAgreementSchema } from '../schemas/tenancy-agreement.schema';
 import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
+import { PaymentDestinationAccount, PaymentDestinationAccountSchema } from '../schemas/payment-destination-account.schema';
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
 import { UploadModule } from '../modules/upload.module';
@@ -27,6 +28,7 @@ import { UploadModule } from '../modules/upload.module';
             { name: Student.name, schema: StudentSchema },
             { name: TenancyAgreement.name, schema: TenancyAgreementSchema },
             { name: AcademicSession.name, schema: AcademicSessionSchema },
+            { name: PaymentDestinationAccount.name, schema: PaymentDestinationAccountSchema },
         ]),
     ],
     controllers: [PaymentsController, StaffPaymentsController, StudentPaymentsController],

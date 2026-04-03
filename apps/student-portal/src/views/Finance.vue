@@ -100,17 +100,19 @@ export default {
         !this.manualTransferSubmitting
       );
     },
+
+    selectedManualTransferDetails() {
+      return this.getManualTransferDetailsForFee(this.selectedFee);
+    },
   },
 
   async mounted() {
     await this.initializePage();
 
-    // Add ESC key listener for modal
     document.addEventListener("keydown", this.handleKeydown);
   },
 
   beforeUnmount() {
-    // Remove ESC key listener
     document.removeEventListener("keydown", this.handleKeydown);
   },
 
@@ -120,16 +122,12 @@ export default {
         this.isLoading = true;
         this.error = null;
 
-        // Get user data from auth store
         const authStore = useAuthStore();
         this.user = authStore.user;
 
-        // Load academic sessions
         await this.loadAcademicSessions();
 
-        // Load initial payment data
         if (this.academicSessions.length > 0) {
-          // Default to the most recent session
           this.selectedSessionId = this.academicSessions[0].id;
           await this.loadPaymentData();
         }
@@ -147,7 +145,6 @@ export default {
         const response = await studentPaymentService.getAcademicSessions();
 
         if (response.success) {
-          // The response.data contains the result from academicSessionsService.findAll()
           const sessions = response.data.sessions || [];
           this.academicSessions = sessions.map((session) => ({
             id: session._id,
@@ -174,7 +171,6 @@ export default {
           this.selectedSessionId,
         );
 
-        // Load payment summary
         const summaryResponse = await studentPaymentService.getPaymentSummary(
           this.selectedSessionId,
         );
@@ -183,10 +179,7 @@ export default {
           logger.info("Loaded payment summary");
         }
 
-        // Load payment history
         await this.loadPaymentHistory();
-
-        // Load available payments
         await this.loadAvailablePayments();
       } catch (error) {
         logger.error("Error loading payment data:", error);
@@ -252,18 +245,15 @@ export default {
           throw new Error("User email not found");
         }
 
-        // Find the payment details if not provided
         let payment = null;
         if (!paymentCode) {
           payment =
             this.paymentSummary?.unpaidFees?.find(
               (fee) => fee.id === paymentId,
-            ) ||
-            this.availablePayments?.find((payment) => payment.id === paymentId);
+            ) || this.availablePayments?.find((item) => item.id === paymentId);
           paymentCode = payment?.paymentCode || "";
         }
 
-        // Check if this is an accommodation payment and if tenancy agreement is required
         if (tenancyAgreementService.isAccommodationPayment(paymentCode)) {
           logger.info("Checking tenancy agreement for accommodation payment");
 
@@ -271,7 +261,6 @@ export default {
             await tenancyAgreementService.canMakeAccommodationPayment();
 
           if (!eligibilityCheck.canPay) {
-            // Show dialog to redirect to tenancy agreement
             const result = await Swal.fire({
               icon: "warning",
               title: "Tenancy Agreement Required",
@@ -284,18 +273,16 @@ export default {
             });
 
             if (result.isConfirmed) {
-              // Redirect to tenancy agreement page
               this.$router.push("/tenancy-agreement");
             }
 
-            return; // Stop payment process
+            return;
           }
         }
 
         this.isPaymentLoading = true;
         logger.info("Initiating payment:", paymentId);
 
-        // Initialize payment
         const response = await studentPaymentService.initializePayment(
           paymentId,
           this.user.email,
@@ -303,19 +290,14 @@ export default {
         );
 
         if (response.success) {
-          // Launch Paystack popup
           try {
             const paymentResult =
               await studentPaymentService.launchPaystackPayment(response.data);
 
             if (paymentResult.success) {
-              // Close modal if open
               this.closePaymentModal();
-
-              // Payment completed, reload data
               await this.loadPaymentData();
 
-              // Show success message
               Swal.fire({
                 icon: "success",
                 title: "Payment Successful!",
@@ -328,15 +310,14 @@ export default {
           } catch (paymentError) {
             if (!paymentError.cancelled) {
               throw paymentError;
-            } else {
-              // Payment was cancelled by user
-              Swal.fire({
-                icon: "info",
-                title: "Payment Cancelled",
-                text: "You cancelled the payment process.",
-                confirmButtonText: "OK",
-              });
             }
+
+            Swal.fire({
+              icon: "info",
+              title: "Payment Cancelled",
+              text: "You cancelled the payment process.",
+              confirmButtonText: "OK",
+            });
           }
         } else {
           throw new Error(response.message);
@@ -356,7 +337,7 @@ export default {
     },
 
     openPaymentMethodStep(fee) {
-      if (!this.hasAvailablePaymentMethods) {
+      if (!this.hasAvailablePaymentMethodsForFee(fee)) {
         Swal.fire({
           icon: "info",
           title: "Payments unavailable",
@@ -367,9 +348,9 @@ export default {
       }
 
       this.selectedFee = fee;
-      this.selectedPaymentMethod = this.canUsePaystack
+      this.selectedPaymentMethod = this.canUsePaystackForFee(fee)
         ? "paystack"
-        : this.canUseManualTransfer
+        : this.canUseManualTransferForFee(fee)
           ? "manual_transfer"
           : "";
       this.manualTransferConfirmed = false;
@@ -407,6 +388,32 @@ export default {
       } else if (this.selectedPaymentMethod === "manual_transfer") {
         await this.submitManualTransfer();
       }
+    },
+
+    getManualTransferDetailsForFee(fee) {
+      return (
+        fee?.manualTransferDetails || this.paymentMethods.manualTransferDetails
+      );
+    },
+
+    canUseManualTransferForFee(fee) {
+      const details = this.getManualTransferDetailsForFee(fee);
+      return (
+        this.paymentMethods.manualTransferEnabled &&
+        details.accountName &&
+        details.accountNumber &&
+        details.bankName
+      );
+    },
+
+    canUsePaystackForFee() {
+      return this.paymentMethods.paystackEnabled;
+    },
+
+    hasAvailablePaymentMethodsForFee(fee) {
+      return (
+        this.canUsePaystackForFee(fee) || this.canUseManualTransferForFee(fee)
+      );
     },
 
     onReceiptSelected(event) {
@@ -730,10 +737,10 @@ export default {
                 <h4 class="fw-bold text-warning mb-0">
                   {{ formatCurrency(pendingAmount) }}
                 </h4>
-                <small class="text-muted"
-                  >{{ paymentSummary?.pendingFees?.length || 0 }} payment(s)
-                  awaiting verification</small
-                >
+                <!-- <small class="text-muted">
+                  {{ paymentSummary?.pendingFees?.length || 0 }} payment(s)
+                  awaiting verification
+                </small> -->
               </div>
             </div>
           </div>
@@ -934,7 +941,8 @@ export default {
                           )
                         "
                         :disabled="
-                          isPaymentLoading || !hasAvailablePaymentMethods
+                          isPaymentLoading ||
+                          !hasAvailablePaymentMethodsForFee(unpaidFee)
                         "
                       >
                         <span
@@ -987,7 +995,7 @@ export default {
               class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
             >
               <span class="text-muted">{{ paidFee.name }}</span>
-              <span class="fw-bold text-success">{{
+              <span class="fw-bold text-dark">{{
                 formatCurrency(paidFee.amount)
               }}</span>
             </div>
@@ -1133,7 +1141,9 @@ export default {
           <div class="modal-header">
             <h5 class="modal-title" id="paymentModalLabel">
               <i class="bi bi-credit-card me-2 text-primary"></i>
-              Outstanding Payments
+              {{
+                selectedFee ? "Choose Payment Method" : "Outstanding Payments"
+              }}
             </h5>
             <button
               type="button"
@@ -1142,26 +1152,45 @@ export default {
               aria-label="Close"
             ></button>
           </div>
-          <div class="modal-body">
+          <div
+            class="modal-body"
+            :class="
+              selectedFee ? 'payment-modal-body' : 'outstanding-payments-body'
+            "
+          >
             <div v-if="!selectedFee" class="mb-3">
-              <div
-                class="alert alert-warning d-flex align-items-center"
-                role="alert"
-              >
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              <div class="payment-modal-summary">
                 <div>
-                  You have
-                  <strong>{{ paymentSummary?.unpaidFees?.length || 0 }}</strong>
-                  outstanding payment(s) totaling
-                  <strong>{{
-                    formatCurrency(paymentSummary?.totalUnpaid || 0)
-                  }}</strong>
+                  <small
+                    class="text-uppercase text-body-secondary d-block mb-1"
+                  >
+                    Outstanding payments
+                  </small>
+                  <div class="fw-bold fs-6">
+                    {{ paymentSummary?.unpaidFees?.length || 0 }} pending
+                    charge(s)
+                  </div>
+                </div>
+                <div class="payment-modal-amount">
+                  <small
+                    class="text-uppercase text-body-secondary d-block mb-1"
+                  >
+                    Total due
+                  </small>
+                  <div class="fw-bold text-primary fs-6">
+                    {{ formatCurrency(paymentSummary?.totalUnpaid || 0) }}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div v-if="!selectedFee" class="table-responsive">
-              <table class="table table-hover">
+            <div
+              v-if="
+                !selectedFee && (paymentSummary?.unpaidFees?.length || 0) > 0
+              "
+              class="table-responsive outstanding-payments-table-wrap"
+            >
+              <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                   <tr>
                     <th class="fw-bold">Payment Description</th>
@@ -1185,21 +1214,17 @@ export default {
                       </div>
                     </td>
                     <td class="py-3 text-end">
-                      <span class="fw-bold text-warning fs-5">{{
-                        formatCurrency(unpaidFee.amount)
-                      }}</span>
+                      <span class="fw-bold text-warning fs-5">
+                        {{ formatCurrency(unpaidFee.amount) }}
+                      </span>
                     </td>
                     <td class="py-3 text-center">
                       <button
                         class="btn btn-success px-4 py-2"
-                        @click="
-                          makePaymentFromModal(
-                            unpaidFee.id,
-                            unpaidFee.paymentCode,
-                          )
-                        "
+                        @click="openPaymentMethodStep(unpaidFee)"
                         :disabled="
-                          isPaymentLoading || !hasAvailablePaymentMethods
+                          isPaymentLoading ||
+                          !hasAvailablePaymentMethodsForFee(unpaidFee)
                         "
                       >
                         <span
@@ -1216,9 +1241,9 @@ export default {
                   <tr>
                     <th class="py-3">Total Outstanding</th>
                     <th class="py-3 text-end">
-                      <span class="fw-bold text-danger fs-4">{{
-                        formatCurrency(paymentSummary?.totalUnpaid || 0)
-                      }}</span>
+                      <span class="fw-bold text-danger fs-4">
+                        {{ formatCurrency(paymentSummary?.totalUnpaid || 0) }}
+                      </span>
                     </th>
                     <th class="py-3"></th>
                   </tr>
@@ -1226,13 +1251,7 @@ export default {
               </table>
             </div>
 
-            <!-- Empty State -->
-            <div
-              v-if="
-                !selectedFee && (paymentSummary?.unpaidFees?.length || 0) === 0
-              "
-              class="text-center py-5"
-            >
+            <div v-else-if="!selectedFee" class="text-center py-5">
               <i
                 class="bi bi-check-circle text-success mb-3"
                 style="font-size: 3rem"
@@ -1253,61 +1272,35 @@ export default {
                 payments
               </button>
 
-              <div
-                class="alert alert-light border d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4"
-              >
+              <div class="payment-modal-summary mb-4">
                 <div>
-                  <div class="fw-bold">{{ selectedFee.name }}</div>
-                  <small class="text-muted">{{
-                    selectedFee.description
-                  }}</small>
-                </div>
-                <div class="fw-bold text-primary">
-                  {{ formatCurrency(selectedFee.amount) }}
-                </div>
-              </div>
-
-              <div class="row g-3 mb-4">
-                <div class="col-md-6">
-                  <button
-                    class="btn w-100 payment-method-card"
-                    :class="
-                      selectedPaymentMethod === 'paystack'
-                        ? 'btn-primary'
-                        : 'btn-outline-primary'
-                    "
-                    :disabled="!canUsePaystack"
-                    @click="selectedPaymentMethod = 'paystack'"
+                  <small
+                    class="text-uppercase text-body-secondary d-block mb-1"
                   >
-                    <i class="bi bi-credit-card-2-front me-2"></i>
-                    Paystack
-                    <small class="d-block mt-1 opacity-75"
-                      >Pay instantly online</small
-                    >
-                  </button>
-                </div>
-                <div class="col-md-6">
-                  <button
-                    class="btn w-100 payment-method-card"
-                    :class="
-                      selectedPaymentMethod === 'manual_transfer'
-                        ? 'btn-success'
-                        : 'btn-outline-success'
-                    "
-                    :disabled="!canUseManualTransfer"
-                    @click="selectedPaymentMethod = 'manual_transfer'"
+                    Selected fee
+                  </small>
+                  <div class="fw-bold fs-6">{{ selectedFee.name }}</div>
+                  <small
+                    v-if="selectedFee.description"
+                    class="text-muted d-block mt-1"
                   >
-                    <i class="bi bi-bank me-2"></i>
-                    Manual Transfer
-                    <small class="d-block mt-1 opacity-75"
-                      >Transfer and upload receipt</small
-                    >
-                  </button>
+                    {{ selectedFee.description }}
+                  </small>
+                </div>
+                <div class="payment-modal-amount">
+                  <small
+                    class="text-uppercase text-body-secondary d-block mb-1"
+                  >
+                    Amount
+                  </small>
+                  <div class="fw-bold text-primary fs-6">
+                    {{ formatCurrency(selectedFee.amount) }}
+                  </div>
                 </div>
               </div>
 
               <div
-                v-if="!hasAvailablePaymentMethods"
+                v-if="!hasAvailablePaymentMethodsForFee(selectedFee)"
                 class="alert alert-warning mb-0"
               >
                 <i class="bi bi-exclamation-circle me-2"></i>
@@ -1315,77 +1308,245 @@ export default {
               </div>
 
               <div
-                v-if="selectedPaymentMethod === 'paystack'"
-                class="alert alert-info mb-0"
+                v-else
+                class="payment-method-layout row g-0 overflow-hidden rounded-4 bg-white"
               >
-                <i class="bi bi-info-circle me-2"></i>
-                You will be redirected to the Paystack popup to complete this
-                payment.
-              </div>
+                <div class="col-lg-4 payment-method-sidebar border-end">
+                  <div class="payment-method-sidebar-inner p-3 p-lg-4">
+                    <small
+                      class="text-uppercase text-body-secondary d-block mb-3"
+                    >
+                      Payment options
+                    </small>
 
-              <div
-                v-if="selectedPaymentMethod === 'manual_transfer'"
-                class="manual-transfer-panel border rounded p-3 bg-light"
-              >
-                <h6 class="fw-bold mb-3">Transfer to the account below</h6>
-                <div class="row g-3 mb-3">
-                  <div class="col-md-4">
-                    <small class="text-muted d-block">Account Name</small>
-                    <span class="fw-semibold">{{
-                      paymentMethods.manualTransferDetails.accountName
-                    }}</span>
-                  </div>
-                  <div class="col-md-4">
-                    <small class="text-muted d-block">Account Number</small>
-                    <span class="fw-semibold">{{
-                      paymentMethods.manualTransferDetails.accountNumber
-                    }}</span>
-                  </div>
-                  <div class="col-md-4">
-                    <small class="text-muted d-block">Bank Name</small>
-                    <span class="fw-semibold">{{
-                      paymentMethods.manualTransferDetails.bankName
-                    }}</span>
+                    <button
+                      class="payment-method-option w-100 text-start mb-3"
+                      :class="{
+                        active: selectedPaymentMethod === 'paystack',
+                        disabled: !canUsePaystackForFee(selectedFee),
+                      }"
+                      :disabled="!canUsePaystackForFee(selectedFee)"
+                      @click="selectedPaymentMethod = 'paystack'"
+                    >
+                      <span class="payment-method-option-icon paystack">
+                        <i class="bi bi-credit-card-2-front"></i>
+                      </span>
+                      <span class="payment-method-option-copy">
+                        <span class="payment-method-option-title"
+                          >Paystack</span
+                        >
+                      </span>
+                    </button>
+
+                    <button
+                      class="payment-method-option w-100 text-start"
+                      :class="{
+                        active: selectedPaymentMethod === 'manual_transfer',
+                        disabled: !canUseManualTransferForFee(selectedFee),
+                      }"
+                      :disabled="!canUseManualTransferForFee(selectedFee)"
+                      @click="selectedPaymentMethod = 'manual_transfer'"
+                    >
+                      <span class="payment-method-option-icon transfer">
+                        <i class="bi bi-bank"></i>
+                      </span>
+                      <span class="payment-method-option-copy">
+                        <span class="payment-method-option-title"
+                          >Manual Transfer</span
+                        >
+                      </span>
+                    </button>
                   </div>
                 </div>
 
-                <div class="alert alert-warning small mb-3">
-                  <i class="bi bi-exclamation-circle me-2"></i>
-                  {{ paymentMethods.manualTransferDetails.note }}
-                </div>
+                <div class="col-lg-8 payment-method-details">
+                  <div
+                    v-if="selectedPaymentMethod === 'paystack'"
+                    class="p-3 p-lg-4 h-100 d-flex flex-column justify-content-between gap-4"
+                  >
+                    <div>
+                      <div class="d-flex align-items-start gap-3 mb-4">
+                        <div class="payment-details-icon info">
+                          <i class="bi bi-lightning-charge-fill"></i>
+                        </div>
+                        <div>
+                          <h6 class="fw-bold mb-1">Fast online payment</h6>
+                          <p class="text-body-secondary mb-0">
+                            You will be redirected to the Paystack popup to
+                            complete this payment securely.
+                          </p>
+                        </div>
+                      </div>
 
-                <div class="form-check mb-3">
-                  <input
-                    id="studentManualTransferConfirmed"
-                    v-model="manualTransferConfirmed"
-                    class="form-check-input"
-                    type="checkbox"
-                  />
-                  <label
-                    class="form-check-label"
-                    for="studentManualTransferConfirmed"
-                  >
-                    I have completed the transfer and I want to upload the
-                    payment receipt.
-                  </label>
-                </div>
+                      <div class="row g-3">
+                        <div class="col-md-12">
+                          <div
+                            class="payment-step-card h-100 d-flex align-items-start gap-3"
+                          >
+                            <span class="payment-step-number">1</span>
+                            <div>
+                              <h6>Select method</h6>
+                              <p>
+                                Continue with Paystack for an instant online
+                                checkout.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="col-md-12">
+                          <div
+                            class="payment-step-card h-100 d-flex align-items-start gap-3"
+                          >
+                            <span class="payment-step-number">2</span>
+                            <div>
+                              <h6>Complete payment</h6>
+                              <p>
+                                Use your preferred card, bank, or transfer
+                                option in the popup.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="col-md-12">
+                          <div
+                            class="payment-step-card h-100 d-flex align-items-start gap-3"
+                          >
+                            <span class="payment-step-number">3</span>
+                            <div>
+                              <h6>Get confirmation</h6>
+                              <p>
+                                Your payment record updates immediately after a
+                                successful charge.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
 
-                <div v-if="manualTransferConfirmed">
-                  <label class="form-label fw-semibold"
-                    >Upload receipt (PNG, JPG, or PDF, max 1MB)</label
+                    <div class="payment-help-note info">
+                      <i class="bi bi-shield-check me-2"></i>
+                      Secure checkout powered by Paystack.
+                    </div>
+                  </div>
+
+                  <div
+                    v-else-if="selectedPaymentMethod === 'manual_transfer'"
+                    class="p-3 p-lg-4 h-100 d-flex flex-column gap-4"
                   >
-                  <input
-                    class="form-control"
-                    type="file"
-                    accept=".png,.jpg,.jpeg,.pdf"
-                    @change="onReceiptSelected"
-                  />
-                  <small
-                    v-if="manualTransferReceiptName"
-                    class="text-muted d-block mt-2"
+                    <div>
+                      <div class="d-flex align-items-start gap-3 mb-4">
+                        <div class="payment-details-icon success">
+                          <i class="bi bi-bank2"></i>
+                        </div>
+                        <div>
+                          <h6 class="fw-bold mb-1">
+                            Transfer to the account below
+                          </h6>
+                          <p class="text-body-secondary mb-0">
+                            Use the assigned account details exactly as shown,
+                            then upload your receipt for staff verification.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                          <div class="payment-detail-card h-100">
+                            <small class="payment-detail-label"
+                              >Account Number</small
+                            >
+                            <div class="payment-detail-value">
+                              {{ selectedManualTransferDetails.accountNumber }}
+                            </div>
+                          </div>
+                        </div>
+                        <div class="col-md-6">
+                          <div class="payment-detail-card h-100">
+                            <small class="payment-detail-label"
+                              >Bank Name</small
+                            >
+                            <div class="payment-detail-value">
+                              {{ selectedManualTransferDetails.bankName }}
+                            </div>
+                          </div>
+                        </div>
+                        <div class="col-md-12">
+                          <div class="payment-detail-card h-100">
+                            <small class="payment-detail-label"
+                              >Account Name</small
+                            >
+                            <div class="payment-detail-value">
+                              {{ selectedManualTransferDetails.accountName }}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="payment-help-note warning">
+                        <i class="bi bi-exclamation-circle me-2"></i>
+                        {{ selectedManualTransferDetails.note }}
+                      </div>
+                    </div>
+
+                    <div
+                      class="manual-transfer-actions border rounded-4 p-3 p-lg-4 bg-light-subtle"
+                    >
+                      <div class="form-check mb-3">
+                        <input
+                          id="studentManualTransferConfirmed"
+                          v-model="manualTransferConfirmed"
+                          class="form-check-input"
+                          type="checkbox"
+                        />
+                        <label
+                          class="form-check-label fw-medium"
+                          for="studentManualTransferConfirmed"
+                        >
+                          I have completed the transfer and I want to upload the
+                          payment receipt.
+                        </label>
+                      </div>
+
+                      <div
+                        v-if="manualTransferConfirmed"
+                        class="receipt-upload-panel"
+                      >
+                        <label class="form-label h6 text-dark"
+                          >Upload receipt</label
+                        >
+                        <input
+                          class="form-control"
+                          type="file"
+                          accept=".png,.jpg,.jpeg,.pdf"
+                          @change="onReceiptSelected"
+                        />
+                        <div class="small text-body-secondary mt-2">
+                          Accepted formats: PNG, JPG, PDF. Maximum file size:
+                          1MB.
+                        </div>
+                        <div
+                          v-if="manualTransferReceiptName"
+                          class="selected-receipt-chip mt-3"
+                        >
+                          <i class="bi bi-paperclip me-2"></i>
+                          Selected: {{ manualTransferReceiptName }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    v-else
+                    class="p-4 h-100 d-flex align-items-center justify-content-center text-center text-body-secondary"
                   >
-                    Selected: {{ manualTransferReceiptName }}
-                  </small>
+                    <div>
+                      <i class="bi bi-wallet2 fs-1 d-block mb-3"></i>
+                      <p class="mb-0">
+                        Select a payment option to view the next step.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1393,10 +1554,10 @@ export default {
           <div class="modal-footer">
             <button
               type="button"
-              class="btn btn-secondary"
+              class="btn btn-outline-secondary"
               @click="closePaymentModal"
             >
-              Close
+              {{ selectedFee ? "Cancel" : "Close" }}
             </button>
             <button
               v-if="selectedFee && selectedPaymentMethod === 'paystack'"
@@ -1405,6 +1566,10 @@ export default {
               :disabled="isPaymentLoading"
               @click="proceedWithSelectedMethod"
             >
+              <span
+                v-if="isPaymentLoading"
+                class="spinner-border spinner-border-sm me-2"
+              ></span>
               Continue to Paystack
             </button>
             <button
@@ -1421,16 +1586,6 @@ export default {
                 class="spinner-border spinner-border-sm me-2"
               ></span>
               Submit Receipt
-            </button>
-            <button
-              v-else
-              type="button"
-              class="btn btn-primary"
-              @click="closePaymentModal"
-              v-if="(paymentSummary?.unpaidFees?.length || 0) > 0"
-            >
-              <i class="bi bi-arrow-left me-2"></i>
-              Continue Later
             </button>
           </div>
         </div>
@@ -1489,10 +1644,36 @@ code {
   display: block !important;
 }
 
+.modal-dialog {
+  max-width: 920px;
+}
+
 .modal-dialog-centered {
   display: flex;
   align-items: center;
   min-height: calc(100vh - 3.5rem);
+}
+
+.modal-content {
+  height: min(780px, calc(100vh - 3rem));
+  max-height: calc(100vh - 3rem);
+  overflow: hidden;
+}
+
+.outstanding-payments-body,
+.payment-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.outstanding-payments-body {
+  background: #fbfcfe;
+}
+
+.payment-modal-body {
+  background: linear-gradient(180deg, #fcfdff 0%, #f8fafc 100%);
 }
 
 /* Payment modal specific styles */
@@ -1504,16 +1685,227 @@ code {
   border-radius: 8px;
 }
 
+.payment-modal-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(13, 110, 253, 0.12);
+  border-radius: 1rem;
+  background: #f8fbff;
+}
+
+.payment-modal-amount {
+  text-align: right;
+}
+
+.outstanding-payments-table-wrap {
+  border: 1px solid #e9ecef;
+  border-radius: 1rem;
+  background: #fff;
+  overflow: hidden;
+}
+
 .btn-success:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.payment-method-card {
-  min-height: 96px;
+.payment-method-sidebar {
+  background: #fff;
 }
 
-.manual-transfer-panel {
-  border-style: dashed;
+.payment-method-sidebar-inner {
+  height: 100%;
+}
+
+.payment-method-option {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1rem;
+  border: 1px solid #dee2e6;
+  border-radius: 1rem;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+
+.payment-method-option:hover:not(:disabled) {
+  border-color: rgba(13, 110, 253, 0.35);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.payment-method-option.active {
+  border-color: transparent;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  background: linear-gradient(180deg, #f7fbff 0%, #eef6ff 100%);
+  font-weight: 700;
+}
+
+.payment-method-option.active .payment-method-option-icon {
+  background: rgba(13, 110, 253, 0.12);
+  color: #0d6efd;
+}
+
+.payment-method-option.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.payment-method-option-icon,
+.payment-details-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.payment-method-option-icon {
+  background: #f1f3f5;
+  color: #495057;
+}
+
+.payment-details-icon.info {
+  background: rgba(13, 110, 253, 0.12);
+  color: #0d6efd;
+}
+
+.payment-details-icon.success {
+  background: rgba(25, 135, 84, 0.12);
+  color: #198754;
+}
+
+.payment-method-option-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.payment-method-option-title {
+  display: block;
+  color: #212529;
+}
+
+.payment-detail-card {
+  border: 1px solid #e9ecef;
+  border-radius: 1rem;
+  padding: 1rem;
+  background: #fff;
+}
+
+.payment-step-card h6,
+.payment-detail-card .payment-detail-value {
+  margin-bottom: 0;
+}
+
+.payment-step-card p {
+  margin: 0.5rem 0 0;
+  color: #6c757d;
+  font-size: 0.925rem;
+  line-height: 1.45;
+}
+
+.payment-step-number {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(13, 110, 253, 0.1);
+  color: #0d6efd;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.payment-detail-label {
+  display: block;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6c757d;
+  margin-bottom: 0.4rem;
+}
+
+.payment-detail-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.payment-help-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  font-size: 0.95rem;
+}
+
+.payment-help-note.info {
+  background: rgba(13, 110, 253, 0.08);
+  color: #084298;
+}
+
+.payment-help-note.warning {
+  background: #fff3cd;
+  color: #997404;
+  border: 1px solid #ffe69c;
+}
+
+.manual-transfer-actions {
+  border-color: #e9ecef !important;
+}
+
+.receipt-upload-panel {
+  padding-top: 0.5rem;
+}
+
+.selected-receipt-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.625rem 0.875rem;
+  border-radius: 999px;
+  background: rgba(25, 135, 84, 0.1);
+  color: #146c43;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+@media (max-width: 991.98px) {
+  .payment-method-sidebar {
+    border-right: 0 !important;
+    border-bottom: 1px solid #dee2e6;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .modal-dialog {
+    max-width: none;
+    margin: 0.75rem;
+  }
+
+  .modal-content {
+    height: calc(100vh - 1.5rem);
+    max-height: calc(100vh - 1.5rem);
+  }
+
+  .payment-modal-summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .payment-modal-amount {
+    text-align: left;
+  }
 }
 </style>

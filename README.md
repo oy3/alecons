@@ -221,17 +221,14 @@ Frontend payment-related env values:
 VITE_PAYSTACK_PUBLIC_KEY=pk_live_or_test_key
 VITE_PAYMENT_PAYSTACK_ENABLED=true
 VITE_PAYMENT_MANUAL_TRANSFER_ENABLED=true
-VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NAME="Alecons College of Nursing Sciences"
-VITE_PAYMENT_MANUAL_TRANSFER_ACCOUNT_NUMBER="0123456789"
-VITE_PAYMENT_MANUAL_TRANSFER_BANK_NAME="Bank Name"
-VITE_PAYMENT_MANUAL_TRANSFER_NOTE="Upload a clear receipt after making the transfer. Receipts must be PNG, JPG, or PDF and not more than 1MB."
 ```
 
 Notes:
 - If a method is disabled in session controls, the portal hides or blocks it even when the frontend env flag is `true`.
 - Manual transfer receipt uploads depend on the API Spaces configuration being valid in production.
+- Manual transfer bank details and Paystack destination routing are configured from destination accounts in the staff Payments screen, not frontend env files.
 - Pending manual transfer payments show separately from unpaid fees until staff verification is completed.
-- In automated production deploys, these `VITE_PAYMENT_*` values should be set in the GitHub `production` environment so the generated frontend `.env.production` files include the same payment fallback settings as local development.
+- In automated production deploys, set the payment flags and public key in the GitHub `production` environment; destination account details stay in the database.
 
 ### Workspace Configuration
 This project uses npm workspaces for monorepo management. Each app and package has its own `package.json` with specific dependencies and scripts.

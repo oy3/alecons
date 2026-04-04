@@ -54,7 +54,7 @@ export default {
           <ul class="no-bullets fw-light small">
             <li>
               <i class="bi bi-geo-alt acon-text-accent fs-5 me-2"></i>
-              <span>Omuoke, Ekiti State, Nigeria</span>
+              <span>Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria</span>
             </li>
             <li>
               <i class="bi bi-telephone acon-text-accent fs-5 me-2"></i>

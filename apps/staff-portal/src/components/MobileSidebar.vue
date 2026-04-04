@@ -1,6 +1,9 @@
 <script lang="js">
 import { useAuthStore } from '../stores/auth.js'
 import BrandLogo from './BrandLogo.vue'
+import { logger } from '@shared/utils/logger'
+import Swal from 'sweetalert2'
+import { staffNavigationItems } from '../services/navigation.js'
 
 export default {
   name: 'StaffMobileSidebar',
@@ -12,47 +15,58 @@ export default {
   },
   computed: {
     menuItems() {
-      const items = [
-        {
-          title: 'Dashboard',
-          icon: 'bi-house-door',
-          route: '/dashboard',
-          permissions: ['view', 'dashboard:view']
-        },
-        {
-          title: 'Applications',
-          icon: 'bi-file-earmark-text',
-          route: '/applications',
-          permissions: ['view', 'applications:view']
-        },
-        {
-          title: 'Users',
-          icon: 'bi-people',
-          route: '/users',
-          permissions: ['view', 'users:view']
-        },
-        {
-          title: 'Reports',
-          icon: 'bi-graph-up',
-          route: '/reports',
-          permissions: ['view', 'reports:view']
-        },
-        {
-          title: 'Settings',
-          icon: 'bi-gear',
-          route: '/settings',
-          permissions: ['view', 'settings:view']
-        }
-      ]
-
-      // Filter menu items based on user permissions
-      return items.filter(item => 
+      return staffNavigationItems.filter(item => 
         this.authStore.hasAnyPermission(item.permissions)
       )
     }
   },
   components: {
     BrandLogo
+  },
+  methods: {
+    closeOffcanvas() {
+      const offcanvasElement = document.getElementById('staffMobileSidebar')
+
+      if (!offcanvasElement) {
+        return
+      }
+
+      const closeButton = offcanvasElement.querySelector('.btn-close')
+      if (closeButton) {
+        closeButton.click()
+      }
+    },
+
+    async logout() {
+      const result = await Swal.fire({
+        title: 'Are you sure?',
+        text: 'You will be logged out of the staff portal.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#1a5f5f',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, logout'
+      })
+
+      if (result.isConfirmed) {
+        logger.info('User confirmed logout from staff mobile sidebar')
+        await this.authStore.logout()
+
+        this.$router.push({ name: 'Login' }).then(() => {
+          this.authStore.completeLogout()
+          this.closeOffcanvas()
+        })
+
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Logged out successfully.',
+          showConfirmButton: false,
+          timer: 2000,
+        })
+      }
+    }
   }
 }
 </script>
@@ -84,11 +98,21 @@ export default {
               :to="item.route"
               class="nav-link d-flex align-items-center py-2 px-3 rounded"
               :class="{ 'active bg-staff-light text-staff-primary': $route.path === item.route }"
-              data-bs-dismiss="offcanvas"
+              @click="closeOffcanvas"
             >
               <i :class="item.icon" class="me-3"></i>
               <span>{{ item.title }}</span>
             </router-link>
+          </li>
+          <li class="nav-item mt-2 pt-2 border-top">
+            <button
+              type="button"
+              class="nav-link nav-button d-flex align-items-center py-2 px-3 rounded w-100 border-0 bg-transparent"
+              @click="logout"
+            >
+              <i class="bi bi-box-arrow-right me-3"></i>
+              <span>Logout</span>
+            </button>
           </li>
         </ul>
       </div>
@@ -130,6 +154,10 @@ export default {
 .nav-link i {
   width: 20px;
   text-align: center;
+}
+
+.nav-button {
+  text-align: left;
 }
 
 .offcanvas-header {

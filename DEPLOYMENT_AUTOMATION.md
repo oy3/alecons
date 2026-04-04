@@ -228,6 +228,7 @@ sudo -u deploy pm2 startOrReload ecosystem.config.cjs --update-env
 If the app is already running and you only want a straight process reload by name:
 
 sudo -u deploy pm2 reload alecons-api --update-env
+
 Useful follow-ups:
 
 sudo -u deploy pm2 status

@@ -106,6 +106,7 @@ export default {
           to="/dashboard"
           class="nav-link text-white py-4"
           active-class="active"
+          @click="closeOffcanvas"
         >
           <i class="bi bi-house h5 me-2"></i> Home
         </router-link>
@@ -113,6 +114,7 @@ export default {
           to="/payment"
           class="nav-link text-white py-4"
           active-class="active"
+          @click="closeOffcanvas"
         >
           <i class="bi bi-credit-card h5 me-2"></i> Payments
         </router-link>
@@ -120,6 +122,7 @@ export default {
           to="/settings"
           class="nav-link text-white py-4"
           active-class="active"
+          @click="closeOffcanvas"
         >
           <i class="bi bi-gear h5 me-2"></i> Settings
         </router-link>

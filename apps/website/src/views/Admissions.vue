@@ -80,7 +80,10 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">
                 Application Deadline
               </h6>
-              <p class="acon-text-secondary">September 30, 2026</p>
+              <p class="acon-text-secondary">
+                April 30, 2026 <br />
+                September 30, 2026
+              </p>
             </div>
           </div>
         </div>
@@ -92,7 +95,10 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">
                 Entrance Examination
               </h6>
-              <p class="acon-text-secondary">May 6, 2026</p>
+              <p class="acon-text-secondary">
+                May 6, 2026 <br />
+                October 6, 2026
+              </p>
             </div>
           </div>
         </div>
@@ -102,7 +108,10 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Screening Period</h6>
-              <p class="acon-text-secondary">May 11-13, 2026</p>
+              <p class="acon-text-secondary">
+                May 11-13, 2026 <br />
+                October 12-15, 2026
+              </p>
             </div>
           </div>
         </div>
@@ -112,7 +121,10 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Admission Results</h6>
-              <p class="acon-text-secondary">May 15, 2026</p>
+              <p class="acon-text-secondary">
+                May 15, 2026 <br />
+                October 15, 2026
+              </p>
             </div>
           </div>
         </div>
@@ -124,7 +136,10 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">
                 Online Course Registration Begins
               </h6>
-              <p class="acon-text-secondary">May 18, 2026</p>
+              <p class="acon-text-secondary">
+                May 18, 2026 <br />
+                October 20, 2026
+              </p>
             </div>
           </div>
         </div>
@@ -134,7 +149,10 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Orientation Week</h6>
-              <p class="acon-text-secondary">May 19-22, 2026</p>
+              <p class="acon-text-secondary">
+                May 19-22, 2026 <br />
+                October 26-30, 2026
+              </p>
             </div>
           </div>
         </div>
@@ -144,7 +162,10 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Classes Begin</h6>
-              <p class="acon-text-secondary">May 25, 2026</p>
+              <p class="acon-text-secondary">
+                May 25, 2026 <br />
+                November 2, 2026
+              </p>
             </div>
           </div>
         </div>
@@ -229,7 +250,8 @@ export default {
               </div>
 
               <p class="mb-3 text-secondary">
-                Take the ALECONS entrance examination or use 2026 JAMB UTME score
+                Take the ALECONS entrance examination or use 2026 JAMB UTME
+                score
               </p>
               <ul class="list-unstyled text-secondary fw-light">
                 <li>
@@ -392,7 +414,9 @@ export default {
         <!-- TODO: Add Post-Basic Nursing details when available -->
         <!-- Post-Basic Nursing -->
         <div class="col-md-4">
-          <div class="card border-0 shadow text-center h-100 position-relative overflow-hidden">
+          <div
+            class="card border-0 shadow text-center h-100 position-relative overflow-hidden"
+          >
             <div class="program-coming-soon">Coming Soon</div>
             <div class="card-body">
               <h5 class="fw-bold acon-text-primary">Post-Basic Nursing</h5>
@@ -433,13 +457,15 @@ export default {
         <!-- TODO: Add Midwifery Program details when available -->
         <!-- Midwifery Program -->
         <div class="col-md-4">
-          <div class="card border-0 shadow text-center h-100 position-relative overflow-hidden">
+          <div
+            class="card border-0 shadow text-center h-100 position-relative overflow-hidden"
+          >
             <div class="program-coming-soon">Coming Soon</div>
             <div class="card-body">
               <h5 class="fw-bold acon-text-primary">Midwifery Program</h5>
               <p class="acon-text-secondary mb-4">2 Years</p>
 
-                 <div class="d-flex justify-content-between">
+              <div class="d-flex justify-content-between">
                 <span class="text-muted fw-light">Application fee:</span>
                 <span class="fw-medium">-</span>
               </div>
@@ -469,8 +495,7 @@ export default {
               <p class="mt-2 text-muted fw-light small">per session</p>
             </div>
           </div>
-        </div> 
-    
+        </div>
       </div>
     </div>
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { ApplicationNumberService } from '../services/application-number.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -8,17 +8,21 @@ export class ApplicationNumberController {
     constructor(private readonly appNumberService: ApplicationNumberService) { }
 
     /**
-     * Generate a test application number for a program
+        * Generate a test application number for a program in an academic session
      */
     @Post('generate')
-    async generateApplicationNumber(@Body('programId') programId: string) {
+    async generateApplicationNumber(
+        @Body('programId') programId: string,
+        @Body('academicSessionId') academicSessionId: string,
+    ) {
         try {
-            const applicationNumber = await this.appNumberService.generateApplicationNumber(programId);
+            const applicationNumber = await this.appNumberService.generateApplicationNumber(programId, academicSessionId);
             return {
                 success: true,
                 data: {
                     applicationNumber,
-                    programId
+                    programId,
+                    academicSessionId,
                 }
             };
         } catch (error) {
@@ -50,16 +54,16 @@ export class ApplicationNumberController {
     }
 
     /**
-     * Get counter status for a specific program
+     * Get counter status for a session year
      */
-    @Get('counter/:programId')
+    @Get('counter')
     async getCounterStatus(
-        @Param('programId') programId: string,
-        @Query('year') year?: string
+        @Query('academicSessionId') academicSessionId?: string,
+        @Query('year') year?: string,
     ) {
         try {
             const targetYear = year ? parseInt(year) : undefined;
-            const counter = await this.appNumberService.getCounterStatus(programId, targetYear);
+            const counter = await this.appNumberService.getCounterStatus(academicSessionId, targetYear);
             return {
                 success: true,
                 data: counter
@@ -73,18 +77,16 @@ export class ApplicationNumberController {
     }
 
     /**
-     * Initialize/reset counter for a program
+     * Initialize/reset counter for an academic session year
      */
     @Post('counter/initialize')
     async initializeCounter(@Body() body: {
-        programId: string;
-        year?: number;
+        academicSessionId: string;
         startSequence?: number;
     }) {
         try {
             await this.appNumberService.initializeCounter(
-                body.programId,
-                body.year,
+                body.academicSessionId,
                 body.startSequence || 0
             );
             return {

@@ -84,12 +84,6 @@ export class StudentPayment {
     destinationAccountId?: Types.ObjectId;
 
     @Prop()
-    destinationAccountTitle?: string;
-
-    @Prop()
-    destinationAccountCode?: string;
-
-    @Prop()
     destinationChannelType?: string;
 
     @Prop()
@@ -103,9 +97,6 @@ export class StudentPayment {
 
     @Prop()
     destinationAccountNumber?: string;
-
-    @Prop()
-    destinationNote?: string;
 
     @Prop()
     destinationPaystackSubaccountCode?: string;

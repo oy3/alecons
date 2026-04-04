@@ -117,6 +117,37 @@ export default {
   },
 
   methods: {
+    getStudentEntryYear() {
+      const authStore = useAuthStore();
+      const admissionYear = authStore.student?.admissionYear;
+
+      if (typeof admissionYear === "number" && !Number.isNaN(admissionYear)) {
+        return admissionYear;
+      }
+
+      return this.getSessionStartYear(
+        authStore.student?.academicSession?.sessionYear ||
+          authStore.application?.entryAcademicSession?.sessionYear,
+      );
+    },
+
+    getSessionStartYear(sessionLabel) {
+      const match = String(sessionLabel || "").match(/\d{4}/);
+      return match ? Number(match[0]) : null;
+    },
+
+    filterEligibleAcademicSessions(sessions) {
+      const entryYear = this.getStudentEntryYear();
+      if (!entryYear) {
+        return sessions;
+      }
+
+      return sessions.filter((session) => {
+        const sessionYear = this.getSessionStartYear(session.sessionYear);
+        return !sessionYear || sessionYear >= entryYear;
+      });
+    },
+
     async initializePage() {
       try {
         this.isLoading = true;
@@ -145,7 +176,9 @@ export default {
         const response = await studentPaymentService.getAcademicSessions();
 
         if (response.success) {
-          const sessions = response.data.sessions || [];
+          const sessions = this.filterEligibleAcademicSessions(
+            response.data.sessions || [],
+          );
           this.academicSessions = sessions.map((session) => ({
             id: session._id,
             name: session.sessionYear,

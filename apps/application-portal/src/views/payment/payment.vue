@@ -67,6 +67,7 @@ export default {
       totalPending: 0,
       totalUnpaid: 0,
       selectedReceipt: null,
+      showReceiptPreviewModal: false,
       paymentLoading: {},
       showPaymentMethodModal: false,
       selectedFee: null,
@@ -140,8 +141,8 @@ export default {
       this.showPaymentMethodModal = true;
     },
 
-    closePaymentMethodModal() {
-      if (this.manualTransferSubmitting) {
+    closePaymentMethodModal(force = false) {
+      if (this.manualTransferSubmitting && !force) {
         return;
       }
 
@@ -151,6 +152,24 @@ export default {
       this.manualTransferConfirmed = false;
       this.manualTransferReceipt = null;
       this.manualTransferReceiptName = "";
+    },
+
+    openReceiptPreview(fee) {
+      if (!fee?.receiptUrl) {
+        Swal.fire({
+          icon: "info",
+          title: "Receipt unavailable",
+          text: "No uploaded receipt is available for this payment.",
+        });
+        return;
+      }
+
+      this.selectedReceipt = fee;
+      this.showReceiptPreviewModal = true;
+    },
+
+    closeReceiptPreviewModal() {
+      this.showReceiptPreviewModal = false;
     },
 
     async proceedWithSelectedMethod() {
@@ -255,12 +274,14 @@ export default {
         return;
       }
 
+      const selectedFeeId = this.selectedFee.id;
+
       try {
         this.manualTransferSubmitting = true;
-        this.paymentLoading[this.selectedFee.id] = true;
+        this.paymentLoading[selectedFeeId] = true;
 
         const result = await paymentService.submitManualTransferReceipt(
-          this.selectedFee.id,
+          selectedFeeId,
           this.manualTransferReceipt,
         );
 
@@ -271,7 +292,7 @@ export default {
         }
 
         await this.fetchPayments();
-        this.closePaymentMethodModal();
+        this.closePaymentMethodModal(true);
 
         Swal.fire({
           icon: "success",
@@ -288,9 +309,7 @@ export default {
         });
       } finally {
         this.manualTransferSubmitting = false;
-        if (this.selectedFee?.id) {
-          this.paymentLoading[this.selectedFee.id] = false;
-        }
+        this.paymentLoading[selectedFeeId] = false;
       }
     },
 
@@ -299,16 +318,31 @@ export default {
     },
 
     downloadReceipt(fee) {
-      if (!fee?.receiptUrl) {
-        Swal.fire({
-          icon: "info",
-          title: "Receipt unavailable",
-          text: "No uploaded receipt is available for this payment.",
-        });
-        return;
-      }
+      this.openReceiptPreview(fee);
+    },
 
-      paymentService.openReceipt(fee.receiptUrl);
+    getReceiptSource(receipt = this.selectedReceipt) {
+      return receipt?.receiptUrl || "";
+    },
+
+    getReceiptFilename(receipt = this.selectedReceipt) {
+      return receipt?.receiptOriginalName || receipt?.receiptUrl || "receipt";
+    },
+
+    getReceiptExtension(receipt = this.selectedReceipt) {
+      const source = this.getReceiptFilename(receipt).split("?")[0];
+      const segments = source.split(".");
+      return segments.length > 1 ? segments.pop().toLowerCase() : "";
+    },
+
+    isPdfReceipt(receipt = this.selectedReceipt) {
+      return this.getReceiptExtension(receipt) === "pdf";
+    },
+
+    isImageReceipt(receipt = this.selectedReceipt) {
+      return ["png", "jpg", "jpeg", "webp"].includes(
+        this.getReceiptExtension(receipt),
+      );
     },
 
     formatCurrency(amount) {
@@ -380,6 +414,11 @@ export default {
     },
 
     handleKeydown(event) {
+      if (event.key === "Escape" && this.showReceiptPreviewModal) {
+        this.closeReceiptPreviewModal();
+        return;
+      }
+
       if (event.key === "Escape" && this.showPaymentMethodModal) {
         this.closePaymentMethodModal();
       }
@@ -520,7 +559,7 @@ export default {
                 >
                 <button
                   v-if="fee.receiptUrl"
-                  @click="downloadReceipt(fee)"
+                  @click="openReceiptPreview(fee)"
                   class="btn btn-outline-secondary btn-sm"
                   type="button"
                 >
@@ -651,10 +690,72 @@ export default {
             v-if="selectedReceipt.receiptUrl"
             class="btn btn-acon-primary me-md-2"
             type="button"
-            @click="downloadReceipt(selectedReceipt)"
+            @click="openReceiptPreview(selectedReceipt)"
           >
             View Uploaded Receipt
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="modal fade"
+      :class="{ show: showReceiptPreviewModal }"
+      :style="{ display: showReceiptPreviewModal ? 'block' : 'none' }"
+      tabindex="-1"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-xl modal-dialog-centered receipt-preview-dialog">
+        <div class="modal-content receipt-preview-modal">
+          <div class="modal-header border-0 pb-0">
+            <div>
+              <h6 class="modal-title fw-bold">Uploaded Receipt</h6>
+              <p class="text-body-secondary mb-0 small" v-if="selectedReceipt">
+                {{ selectedReceipt.name }} · {{ getReceiptFilename() }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn-close"
+              @click="closeReceiptPreviewModal"
+            ></button>
+          </div>
+
+          <div class="modal-body pt-3" v-if="selectedReceipt">
+            <div class="receipt-preview-shell">
+              <img
+                v-if="isImageReceipt()"
+                :src="getReceiptSource()"
+                :alt="getReceiptFilename()"
+                class="receipt-preview-image"
+              />
+
+              <iframe
+                v-else-if="isPdfReceipt()"
+                :src="getReceiptSource()"
+                title="Uploaded receipt preview"
+                class="receipt-preview-frame"
+              ></iframe>
+
+              <div v-else class="receipt-preview-fallback text-center">
+                <i class="bi bi-file-earmark-text fs-1 mb-3 d-block text-muted"></i>
+                <h6 class="fw-bold">Preview unavailable</h6>
+                <p class="text-body-secondary mb-0">
+                  This receipt format cannot be previewed inline.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer border-0 pt-0">
+            <button
+              type="button"
+              class="btn btn-outline-secondary"
+              @click="closeReceiptPreviewModal"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -990,6 +1091,12 @@ export default {
       class="modal-backdrop fade show"
       @click="closePaymentMethodModal"
     ></div>
+
+    <div
+      v-if="showReceiptPreviewModal"
+      class="modal-backdrop fade show"
+      @click="closeReceiptPreviewModal"
+    ></div>
   </div>
 </template>
 
@@ -1221,6 +1328,48 @@ export default {
   border: 1px solid #ffe69c;
 }
 
+.receipt-preview-dialog {
+  max-width: 1100px;
+}
+
+.receipt-preview-modal {
+  height: min(92vh, 920px);
+  max-height: calc(100vh - 2rem);
+}
+
+.receipt-preview-shell {
+  height: 100%;
+  min-height: 60vh;
+  border-radius: 1.25rem;
+  background: #f8f9fb;
+  border: 1px solid #e9ecef;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.receipt-preview-image {
+  width: 100%;
+  height: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  background: #fff;
+}
+
+.receipt-preview-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 70vh;
+  border: 0;
+  background: #fff;
+}
+
+.receipt-preview-fallback {
+  max-width: 28rem;
+  padding: 2rem;
+}
+
 .manual-transfer-actions {
   border-color: #e9ecef !important;
 }
@@ -1265,6 +1414,25 @@ export default {
 
   .payment-modal-amount {
     text-align: left;
+  }
+
+  .receipt-preview-dialog {
+    margin: 0.5rem;
+  }
+
+  .receipt-preview-modal {
+    height: calc(100vh - 1rem);
+    max-height: calc(100vh - 1rem);
+  }
+
+  .receipt-preview-shell {
+    min-height: calc(100vh - 10rem);
+  }
+
+  .receipt-preview-image,
+  .receipt-preview-frame {
+    max-height: calc(100vh - 12rem);
+    min-height: calc(100vh - 12rem);
   }
 }
 

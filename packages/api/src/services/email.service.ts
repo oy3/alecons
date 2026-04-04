@@ -23,10 +23,10 @@ export class EmailService {
 
     if (!hasOAuth2) {
       this.logger.error(
-        "OAuth2 credentials not configured. Please set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN in your environment variables."
+        "OAuth2 credentials not configured. Please set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN in your environment variables.",
       );
       throw new Error(
-        "Email service cannot be initialized: OAuth2 credentials are required."
+        "Email service cannot be initialized: OAuth2 credentials are required.",
       );
     }
 
@@ -36,7 +36,7 @@ export class EmailService {
     this.oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      "https://developers.google.com/oauthplayground" // Redirect URL
+      "https://developers.google.com/oauthplayground", // Redirect URL
     );
 
     // Set credentials
@@ -96,11 +96,11 @@ export class EmailService {
           messageParts.push(`--${boundary}`);
           messageParts.push(
             `Content-Type: ${attachment.contentType || "application/octet-stream"
-            }; name="${attachment.filename}"`
+            }; name="${attachment.filename}"`,
           );
           messageParts.push("Content-Transfer-Encoding: base64");
           messageParts.push(
-            `Content-Disposition: attachment; filename="${attachment.filename}"`
+            `Content-Disposition: attachment; filename="${attachment.filename}"`,
           );
           messageParts.push("");
 
@@ -152,7 +152,7 @@ export class EmailService {
 
   private async sendEmailWithRetry(
     mailOptions: any,
-    maxRetries: number = 3
+    maxRetries: number = 3,
   ): Promise<void> {
     let lastError: Error;
 
@@ -165,7 +165,7 @@ export class EmailService {
         lastError = error;
         this.logger.warn(
           `Email send attempt ${attempt} failed:`,
-          error.message
+          error.message,
         );
 
         if (attempt < maxRetries) {
@@ -182,14 +182,15 @@ export class EmailService {
   async sendVerificationEmail(
     email: string,
     firstName: string,
-    verificationToken: string
+    verificationToken: string,
   ): Promise<void> {
     const verificationUrl = `${process.env.APPLICATION_PORTAL_URL}/verify-email?token=${verificationToken}`;
 
     const mailOptions = {
-      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: "Verify Your Email Address - Alebiosu College of Nursing",
+      subject:
+        "Verify Your Email Address - Alebiosu College of Nursing Sciences",
       html: `
                 <!DOCTYPE html>
                 <html>
@@ -209,12 +210,12 @@ export class EmailService {
                 <body>
                     <div class="container">
                         <div class="header">
-                            <h1>Welcome to Alebiosu College of Nursing</h1>
+                            <h1>Welcome to Alebiosu College of Nursing Sciences</h1>
                         </div>
                         
                         <h2>Hello ${firstName},</h2>
                         
-                        <p>Thank you for creating your account with Alebiosu College of Nursing Services (ALECONS)!</p>
+                        <p>Thank you for creating your account with Alebiosu College of Nursing Sciences (ALECONS)!</p>
                         
                         <p>To complete your registration and proceed with your application, please verify your email address by clicking the button below:</p>
                         
@@ -239,10 +240,10 @@ export class EmailService {
                         <p>If you didn't create this account, please ignore this email.</p>
                         
                         <div class="footer">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -256,7 +257,7 @@ export class EmailService {
     } catch (error) {
       this.logger.error(
         `Failed to send verification email to ${email}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -264,9 +265,10 @@ export class EmailService {
 
   async sendWelcomeEmail(email: string, firstName: string): Promise<void> {
     const mailOptions = {
-      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: "Email Verified Successfully - Alebiosu College of Nursing",
+      subject:
+        "Email Verified Successfully - ALECONS",
       html: `
                 <!DOCTYPE html>
                 <html>
@@ -309,10 +311,10 @@ export class EmailService {
                         <p>If you have any questions or need assistance, please contact our admissions office.</p>
                         
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -334,7 +336,7 @@ export class EmailService {
     firstName: string,
     examDate: Date,
     examTime: string,
-    examLink: string
+    examLink: string,
   ): Promise<void> {
     const formattedDate = examDate.toLocaleDateString("en-US", {
       weekday: "long",
@@ -344,9 +346,9 @@ export class EmailService {
     });
 
     const mailOptions = {
-      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: "Entrance Examination Scheduled - Alebiosu College of Nursing",
+      subject: "Entrance Examination Scheduled - ALECONS",
       html: `
                 <!DOCTYPE html>
                 <html>
@@ -399,10 +401,10 @@ export class EmailService {
                         <p>If you have any technical issues or questions, please contact our support team immediately.</p>
                         
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -413,12 +415,12 @@ export class EmailService {
     try {
       await this.sendEmailWithRetry(mailOptions);
       this.logger.log(
-        `Entrance exam scheduled email sent successfully to ${email}`
+        `Entrance exam scheduled email sent successfully to ${email}`,
       );
     } catch (error) {
       this.logger.error(
         `Failed to send entrance exam email to ${email}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -429,7 +431,7 @@ export class EmailService {
     firstName: string,
     screeningDate: Date,
     screeningTime: string,
-    venue: string
+    venue: string,
   ): Promise<void> {
     const formattedDate = screeningDate.toLocaleDateString("en-US", {
       weekday: "long",
@@ -439,9 +441,9 @@ export class EmailService {
     });
 
     const mailOptions = {
-      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: "Screening & Interview Scheduled - Alebiosu College of Nursing",
+      subject: "Screening & Interview Scheduled - ALECONS",
       html: `
                 <!DOCTYPE html>
                 <html>
@@ -482,7 +484,6 @@ export class EmailService {
                                 <li>Birth Certificate or Age Declaration</li>
                                 <li>State of Origin Certificate</li>
                                 <li>Passport Photographs (2 copies)</li>
-                                <li>Medical Certificate of Fitness</li>
                                 <li>Character Reference Letters</li>
                                 <li>Any other certificates/qualifications</li>
                             </ul>
@@ -492,17 +493,16 @@ export class EmailService {
                         <ul>
                             <li>Document verification</li>
                             <li>Personal interview</li>
-                            <li>Medical fitness assessment</li>
                             <li>Background verification</li>
                         </ul>
                         
                         <p><strong>Please arrive 30 minutes early.</strong> Late arrivals may not be accommodated.</p>
                         
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -513,7 +513,7 @@ export class EmailService {
     try {
       await this.sendEmailWithRetry(mailOptions);
       this.logger.log(
-        `Screening scheduled email sent successfully to ${email}`
+        `Screening scheduled email sent successfully to ${email}`,
       );
     } catch (error) {
       this.logger.error(`Failed to send screening email to ${email}:`, error);
@@ -526,12 +526,13 @@ export class EmailService {
     firstName: string,
     pdfBuffer: Buffer,
     programName: string,
-    academicSession: string
+    academicSession: string,
   ): Promise<void> {
     const mailOptions = {
-      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: "Congratulations! Provisional Offer of Admission - Alebiosu College of Nursing",
+      subject:
+        "Congratulations! Provisional Offer of Admission - ALECONS",
       attachments: [
         {
           filename: `Provisional_Offer_of_Admission_${firstName.replace(/\s+/g, "_")}.pdf`,
@@ -564,7 +565,7 @@ export class EmailService {
                         
                         <div class="celebration">
                             <h2>Dear ${firstName},</h2>
-                            <p><strong>We are delighted to offer you provisional admission to Alebiosu College of Nursing for the ${academicSession} Academic Session!</strong></p>
+                            <p><strong>We are delighted to offer you provisional admission to Alebiosu College of Nursing Sciences for the ${academicSession} Academic Session!</strong></p>
                         </div>
                         
                         <p>After careful review of your application and your performance in our entrance examination, we are pleased to inform you that you have been selected to join our prestigious <strong>${programName}</strong> programme.</p>
@@ -590,10 +591,10 @@ export class EmailService {
                         <p>Welcome to the ALECONS family! We look forward to supporting you on your journey to becoming a professional nurse.</p>
                         
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                        Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -607,7 +608,7 @@ export class EmailService {
     } catch (error) {
       this.logger.error(
         `Failed to send admission letter email to ${email}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -617,12 +618,12 @@ export class EmailService {
     email: string,
     firstName: string,
     programName: string,
-    academicSession: string
+    academicSession: string,
   ): Promise<void> {
     const mailOptions = {
-      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: "Congratulations! Admission Offer - Alebiosu College of Nursing",
+      subject: "Congratulations! Admission Offer - ALECONS",
       html: `
                 <!DOCTYPE html>
                 <html>
@@ -673,10 +674,10 @@ export class EmailService {
                         <p>Welcome to the ALECONS family! We look forward to supporting you on your journey to becoming a professional nurse.</p>
 
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -688,7 +689,10 @@ export class EmailService {
       await this.sendEmailWithRetry(mailOptions);
       this.logger.log(`Admission offer email sent successfully to ${email}`);
     } catch (error) {
-      this.logger.error(`Failed to send admission offer email to ${email}:`, error);
+      this.logger.error(
+        `Failed to send admission offer email to ${email}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -696,12 +700,12 @@ export class EmailService {
   async sendRejectionEmail(
     email: string,
     firstName: string,
-    reason?: string
+    reason?: string,
   ): Promise<void> {
     const mailOptions = {
-      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: "Application Update - Alebiosu College of Nursing",
+      subject: "Application Update - ALECONS",
       html: `
                 <!DOCTYPE html>
                 <html>
@@ -748,10 +752,10 @@ export class EmailService {
                         <p>We appreciate your interest in our institution and wish you success in your future endeavors.</p>
                         
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -772,10 +776,10 @@ export class EmailService {
     email: string,
     firstName: string,
     matricNumber: string,
-    studentPortalUrl: string
+    studentPortalUrl: string,
   ): Promise<void> {
     const mailOptions = {
-      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
       subject: "Welcome to ALECONS - Your Matriculation Details",
       html: `
@@ -803,7 +807,7 @@ export class EmailService {
                         
                         <h2>Dear ${firstName},</h2>
                         
-                        <p>Congratulations! You have successfully completed all admission requirements. Welcome to the Alebiosu College of Nursing family!</p>
+                        <p>Congratulations! You have successfully completed all admission requirements. Welcome to the Alebiosu College of Nursing Sciences family!</p>
                         
                         <div class="matric-details">
                             <h3>📝 Your Matriculation Details</h3>
@@ -837,10 +841,10 @@ export class EmailService {
                         <p>We're excited to have you join our community of future healthcare professionals!</p>
                         
                         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -854,7 +858,7 @@ export class EmailService {
     } catch (error) {
       this.logger.error(
         `Failed to send matriculation email to ${email}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -869,7 +873,7 @@ export class EmailService {
     examTitle: string,
     examDate: Date,
     examDuration: number,
-    targetType: string
+    targetType: string,
   ): Promise<void> {
     const examDateTime = examDate.toLocaleDateString("en-NG", {
       weekday: "long",
@@ -882,9 +886,9 @@ export class EmailService {
     });
 
     const mailOptions = {
-      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: `Exam Scheduled: ${examTitle} - Alebiosu College of Nursing`,
+      subject: `Exam Scheduled: ${examTitle} - ALECONS`,
       html: `
                 <!DOCTYPE html>
                 <html>
@@ -953,12 +957,12 @@ export class EmailService {
     try {
       await this.sendEmailWithRetry(mailOptions);
       this.logger.log(
-        `Exam scheduled email sent successfully to ${email} for exam: ${examTitle}`
+        `Exam scheduled email sent successfully to ${email} for exam: ${examTitle}`,
       );
     } catch (error) {
       this.logger.error(
         `Failed to send exam scheduled email to ${email}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -973,7 +977,7 @@ export class EmailService {
     examTitle: string,
     examPassword: string,
     examDate: Date,
-    isRegenerated: boolean = false
+    isRegenerated: boolean = false,
   ): Promise<void> {
     const examDateTime = examDate.toLocaleDateString("en-NG", {
       weekday: "long",
@@ -1060,10 +1064,10 @@ export class EmailService {
                         <p>If you have any issues accessing your exam, please contact the administration office immediately.</p>
                         
                         <div class="footer">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -1074,12 +1078,12 @@ export class EmailService {
     try {
       await this.sendEmailWithRetry(mailOptions);
       this.logger.log(
-        `Exam password email sent successfully to ${email} for exam: ${examTitle}`
+        `Exam password email sent successfully to ${email} for exam: ${examTitle}`,
       );
     } catch (error) {
       this.logger.error(
         `Failed to send exam password email to ${email}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -1092,7 +1096,7 @@ export class EmailService {
     email: string,
     firstName: string,
     examTitle: string,
-    examDate: Date
+    examDate: Date,
   ): Promise<void> {
     const examDateTime = examDate.toLocaleDateString("en-NG", {
       weekday: "long",
@@ -1105,7 +1109,7 @@ export class EmailService {
     });
 
     const mailOptions = {
-      from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
       subject: `⏰ Exam Reminder: ${examTitle} starts in 30 minutes`,
       html: `
@@ -1164,10 +1168,10 @@ export class EmailService {
                         <p><strong>Good luck with your exam!</strong> 🍀</p>
                         
                         <div class="footer">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -1178,12 +1182,12 @@ export class EmailService {
     try {
       await this.sendEmailWithRetry(mailOptions);
       this.logger.log(
-        `Exam reminder email sent successfully to ${email} for exam: ${examTitle}`
+        `Exam reminder email sent successfully to ${email} for exam: ${examTitle}`,
       );
     } catch (error) {
       this.logger.error(
         `Failed to send exam reminder email to ${email}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -1199,7 +1203,7 @@ export class EmailService {
     submissionTime: Date,
     score?: number,
     totalMarks?: number,
-    isAutoSubmitted?: boolean
+    isAutoSubmitted?: boolean,
   ): Promise<void> {
     const submissionDateTime = submissionTime.toLocaleDateString("en-NG", {
       weekday: "long",
@@ -1220,7 +1224,7 @@ export class EmailService {
     const mailOptions = {
       from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: `✅ Exam Completed: ${examTitle} - Alebiosu College of Nursing`,
+      subject: `✅ Exam Completed: ${examTitle} - ALECONS`,
       html: `
                 <!DOCTYPE html>
                 <html>
@@ -1314,10 +1318,10 @@ export class EmailService {
         }</p>
                         
                         <div class="footer">
-                            <p><strong>Alebiosu College of Nursing Services</strong><br>
-                            Omuo Oke, Ekiti State, Nigeria<br>
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
                             Email: admissions@alecons.edu.ng<br>
-                            Phone: +234 708 460 1610</p>
+                            Phone: +234 916 000 8679</p>
                         </div>
                     </div>
                 </body>
@@ -1328,12 +1332,12 @@ export class EmailService {
     try {
       await this.sendEmailWithRetry(mailOptions);
       this.logger.log(
-        `Exam completion email sent successfully to ${email} for exam: ${examTitle}`
+        `Exam completion email sent successfully to ${email} for exam: ${examTitle}`,
       );
     } catch (error) {
       this.logger.error(
         `Failed to send exam completion email to ${email}:`,
-        error
+        error,
       );
       throw error;
     }
@@ -1387,7 +1391,7 @@ export class EmailService {
     }
 
     this.logger.log(
-      `Bulk email send completed: ${successful} successful, ${failed.length} failed`
+      `Bulk email send completed: ${successful} successful, ${failed.length} failed`,
     );
     return { successful, failed };
   }
@@ -1403,7 +1407,7 @@ export class EmailService {
     totalQuestions: number,
     percentage: number,
     status: string,
-    gradedAt: Date
+    gradedAt: Date,
   ): Promise<void> {
     try {
       const subject = `📊 Exam Results Released - ${examTitle}`;
@@ -1521,19 +1525,19 @@ export class EmailService {
             `;
 
       await this.sendEmailWithRetry({
-        from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+        from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
         to: email,
         subject,
         html,
       });
 
       this.logger.log(
-        `Exam result email sent successfully to ${email} for exam: ${examTitle}`
+        `Exam result email sent successfully to ${email} for exam: ${examTitle}`,
       );
     } catch (error) {
       this.logger.error(
         `Failed to send exam result email to ${email}:`,
-        error.message
+        error.message,
       );
       throw error;
     }
@@ -1542,11 +1546,11 @@ export class EmailService {
   async sendAdminLoginCredentials(
     email: string,
     firstName: string,
-    password: string
+    password: string,
   ): Promise<void> {
     try {
       const mailOptions = {
-        from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+        from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
         to: email,
         subject: "Admin Account Created - ALECONS Staff Portal",
         html: `
@@ -1619,7 +1623,7 @@ export class EmailService {
     } catch (error) {
       this.logger.error(
         `Failed to send admin login credentials to ${email}:`,
-        error.message
+        error.message,
       );
       throw error;
     }
@@ -1629,11 +1633,11 @@ export class EmailService {
     email: string,
     firstName: string,
     password: string,
-    staffId: string
+    staffId: string,
   ): Promise<void> {
     try {
       const mailOptions = {
-        from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+        from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
         to: email,
         subject: "Staff Account Created - ALECONS Staff Portal",
         html: `
@@ -1699,12 +1703,12 @@ export class EmailService {
 
       await this.sendEmailWithRetry(mailOptions);
       this.logger.log(
-        `Staff login credentials sent to ${email} for Staff ID: ${staffId}`
+        `Staff login credentials sent to ${email} for Staff ID: ${staffId}`,
       );
     } catch (error) {
       this.logger.error(
         `Failed to send staff login credentials to ${email}:`,
-        error.message
+        error.message,
       );
       throw error;
     }
@@ -1713,11 +1717,11 @@ export class EmailService {
   async sendPasswordReset(
     email: string,
     firstName: string,
-    newPassword: string
+    newPassword: string,
   ): Promise<void> {
     try {
       const mailOptions = {
-        from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+        from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
         to: email,
         subject: "Password Reset - Application Portal",
         html: `
@@ -1785,7 +1789,7 @@ export class EmailService {
     } catch (error) {
       this.logger.error(
         `Failed to send password reset email to ${email}:`,
-        error.message
+        error.message,
       );
       throw error;
     }
@@ -1793,11 +1797,11 @@ export class EmailService {
 
   async sendPasswordChangeNotification(
     email: string,
-    firstName: string
+    firstName: string,
   ): Promise<void> {
     try {
       const mailOptions = {
-        from: `"Alebiosu College of Nursing" <${process.env.SMTP_USER}>`,
+        from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
         to: email,
         subject: "Password Changed Successfully - Student Portal",
         html: `
@@ -1839,7 +1843,7 @@ export class EmailService {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
-          }
+          },
         )} (WAT)
                             </div>
                             
@@ -1861,14 +1865,15 @@ export class EmailService {
                                     <li>Do not ignore this notification</li>
                                 </ul>
                                 <p><strong>Contact Information:</strong><br>
-                                Email: it@alecons.edu.ng<br>
-                                Phone: +234 (0)708 460 1610</p>
+                                Email: support@alecons.edu.ng<br>
+                                Phone: +234 916 000 8679</p>
                             </div>
                             
                             <p><strong>Portal Access:</strong><br>
                             <a href="${process.env.STUDENT_PORTAL_URL ||
           process.env.FRONTEND_URL
-          }">${process.env.STUDENT_PORTAL_URL || process.env.FRONTEND_URL
+          }">${process.env.STUDENT_PORTAL_URL ||
+          process.env.FRONTEND_URL
           }</a></p>
                             
                             <div class="footer">
@@ -1887,7 +1892,7 @@ export class EmailService {
     } catch (error) {
       this.logger.error(
         `Failed to send password change notification to ${email}:`,
-        error.message
+        error.message,
       );
       throw error;
     }

@@ -12,7 +12,7 @@ export class Student {
     applicationId: Types.ObjectId;
 
     @Prop({ required: true, unique: true })
-    matriculationNumber: string; // New format: ALC/25/01-0001
+    matriculationNumber: string; // New format: ALC/ND/25/010001
 
     @Prop({ type: Types.ObjectId, ref: 'Program', required: true })
     programId: Types.ObjectId;
@@ -54,4 +54,4 @@ export class Student {
 export const StudentSchema = SchemaFactory.createForClass(Student);
 
 // Note: Matriculation number generation is now handled by MatriculationService
-// to ensure proper format (ALC/YY/program.code-nnnn) and uniqueness
+// to ensure proper format (ALC/programType/YY/programCode+sequence) and uniqueness

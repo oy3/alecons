@@ -1,13 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
+import { AcademicSession } from '../schemas/academic-session.schema';
 
-// Counter schema for atomic sequence generation
 interface ApplicationCounter {
     _id: string;
     sequence: number;
     year: number;
-    programCode: string;
+    academicSessionId: Types.ObjectId;
+    createdAt?: Date;
+    updatedAt?: Date;
+    repairedAt?: Date;
 }
 
 @Injectable()
@@ -17,42 +20,26 @@ export class ApplicationNumberService {
     constructor(
         @InjectModel('Application') private applicationModel: Model<any>,
         @InjectModel('Program') private programModel: Model<any>,
+        @InjectModel(AcademicSession.name) private academicSessionModel: Model<any>,
     ) { }
+
+    private getCountersCollection() {
+        return this.applicationModel.db.collection<ApplicationCounter>('application_counters');
+    }
 
     /**
      * Generate a unique application number using atomic operations
      * Format: ALEC{YY}{PROGRAM_CODE}{SEQUENCE}
-     * - YY: Last 2 digits of current year
+        * - YY: Last 2 digits of the entry academic session start year
      * - PROGRAM_CODE: 2-digit program code (padded with 0 if needed)
      * - SEQUENCE: 4-digit sequence starting from 0001, then continues to 99990, 99991, etc.
      */
-    async generateApplicationNumber(programId: string): Promise<string> {
+    async generateApplicationNumber(programId: string, academicSessionId: string): Promise<string> {
         try {
-            const currentYear = new Date().getFullYear();
-            const yearString = currentYear.toString().slice(-2);
-
-            // Get program details
-            const program = await this.programModel.findById(programId);
-            if (!program) {
-                throw new Error('Program not found for application number generation');
-            }
-
-            const programCode = String(program.code).padStart(2, '0');
-            const counterId = `ALEC${yearString}${programCode}`;
-
-            // Use atomic findOneAndUpdate to get next sequence number
-            // This ensures no race conditions even with concurrent requests
-            const counter = await this.getNextSequenceNumber(counterId, currentYear, programCode);
-
-            // Format sequence number
-            let sequenceStr: string;
-            if (counter.sequence <= 9999) {
-                sequenceStr = String(counter.sequence).padStart(4, '0');
-            } else {
-                // For numbers > 9999, use the number as-is (99990, 99991, etc.)
-                sequenceStr = String(counter.sequence);
-            }
-
+            const { counterId, year, yearString } = await this.getCounterContext(academicSessionId);
+            const programCode = await this.getProgramCode(programId);
+            const counter = await this.getNextSequenceNumber(counterId, year, academicSessionId);
+            const sequenceStr = this.formatSequence(counter.sequence);
             const applicationNumber = `ALEC${yearString}${programCode}${sequenceStr}`;
 
             this.logger.log(`Generated application number: ${applicationNumber} (sequence: ${counter.sequence})`);
@@ -67,60 +54,104 @@ export class ApplicationNumberService {
     /**
      * Atomic sequence number generation using MongoDB's findOneAndUpdate
      */
-    private async getNextSequenceNumber(counterId: string, year: number, programCode: string): Promise<ApplicationCounter> {
-        // Create or get a collection for counters
-        const db = this.applicationModel.db;
-        const countersCollection = db.collection('application_counters');
+    private async getNextSequenceNumber(counterId: string, year: number, academicSessionId: string): Promise<ApplicationCounter> {
+        const countersCollection = this.getCountersCollection();
 
-        // Use atomic findOneAndUpdate with upsert to ensure uniqueness
         const result = await countersCollection.findOneAndUpdate(
             { _id: counterId } as any,
             {
                 $inc: { sequence: 1 },
+                $set: {
+                    updatedAt: new Date(),
+                    year,
+                    academicSessionId: new Types.ObjectId(academicSessionId),
+                },
                 $setOnInsert: {
-                    year: year,
-                    programCode: programCode,
-                    createdAt: new Date()
+                    createdAt: new Date(),
                 }
             },
             {
                 upsert: true,
-                returnDocument: 'after' // Return the updated document
+                returnDocument: 'after'
             }
         );
 
-        return result as unknown as ApplicationCounter;
+        return result as ApplicationCounter;
+    }
+
+    private async getProgramCode(programId: string): Promise<string> {
+        const program = await this.programModel.findById(programId).select('code');
+        if (!program) {
+            throw new Error('Program not found for application number generation');
+        }
+
+        return String(program.code).padStart(2, '0');
+    }
+
+    private async getCounterContext(academicSessionId: string): Promise<{
+        academicSessionId: string;
+        counterId: string;
+        year: number;
+        yearString: string;
+    }> {
+        const session = await this.academicSessionModel
+            .findById(academicSessionId)
+            .select('sessionYear');
+
+        if (!session) {
+            throw new Error('Academic session not found for application number generation');
+        }
+
+        const year = this.extractSessionStartYear(session.sessionYear);
+        const yearString = year.toString().slice(-2);
+
+        return {
+            academicSessionId,
+            counterId: `ALEC${yearString}`,
+            year,
+            yearString,
+        };
+    }
+
+    private extractSessionStartYear(sessionYear: string): number {
+        const match = sessionYear?.match(/\d{4}/);
+        if (!match) {
+            throw new Error(`Unable to extract application counter year from academic session: ${sessionYear}`);
+        }
+
+        return Number(match[0]);
+    }
+
+    private buildCounterIdFromYear(year: number): string {
+        return `ALEC${year.toString().slice(-2)}`;
+    }
+
+    private formatSequence(sequence: number): string {
+        if (sequence <= 9999) {
+            return String(sequence).padStart(4, '0');
+        }
+
+        return String(sequence);
     }
 
     /**
-     * Initialize or reset counter for a specific year and program
-     * Useful for testing or administrative purposes
+     * Initialize or reset counter for a specific academic session year.
      */
-    async initializeCounter(programId: string, year?: number, startSequence: number = 0): Promise<void> {
-        const targetYear = year || new Date().getFullYear();
-        const yearString = targetYear.toString().slice(-2);
+    async initializeCounter(academicSessionId: string, startSequence: number = 0): Promise<void> {
+        const { counterId, year } = await this.getCounterContext(academicSessionId);
 
-        const program = await this.programModel.findById(programId);
-        if (!program) {
-            throw new Error('Program not found');
-        }
-
-        const programCode = String(program.code).padStart(2, '0');
-        const counterId = `ALEC${yearString}${programCode}`;
-
-        const db = this.applicationModel.db;
-        const countersCollection = db.collection('application_counters');
+        const countersCollection = this.getCountersCollection();
 
         await countersCollection.replaceOne(
             { _id: counterId } as any,
             {
                 _id: counterId,
                 sequence: startSequence,
-                year: targetYear,
-                programCode: programCode,
+                year,
+                academicSessionId: new Types.ObjectId(academicSessionId),
                 createdAt: new Date(),
                 updatedAt: new Date()
-            },
+            } as any,
             { upsert: true }
         );
 
@@ -128,31 +159,28 @@ export class ApplicationNumberService {
     }
 
     /**
-     * Get current counter status for a program and year
+     * Get current counter status for a year/session.
      */
-    async getCounterStatus(programId: string, year?: number): Promise<ApplicationCounter | null> {
-        const targetYear = year || new Date().getFullYear();
-        const yearString = targetYear.toString().slice(-2);
+    async getCounterStatus(academicSessionId?: string, year?: number): Promise<ApplicationCounter | null> {
+        let counterId: string;
 
-        const program = await this.programModel.findById(programId);
-        if (!program) {
-            throw new Error('Program not found');
+        if (academicSessionId) {
+            counterId = (await this.getCounterContext(academicSessionId)).counterId;
+        } else if (year) {
+            counterId = this.buildCounterIdFromYear(year);
+        } else {
+            counterId = this.buildCounterIdFromYear(new Date().getFullYear());
         }
 
-        const programCode = String(program.code).padStart(2, '0');
-        const counterId = `ALEC${yearString}${programCode}`;
+        const countersCollection = this.getCountersCollection();
 
-        const db = this.applicationModel.db;
-        const countersCollection = db.collection('application_counters');
-
-        return await countersCollection.findOne({ _id: counterId } as any) as unknown as ApplicationCounter | null;
+        return await countersCollection.findOne({ _id: counterId });
     }
 
     /**
      * Validate application number format
      */
     validateApplicationNumber(applicationNumber: string): boolean {
-        // ALEC + 2 digits year + 2 digits program code + 4+ digits sequence
         const pattern = /^ALEC\d{2}\d{2}\d{4,}$/;
         return pattern.test(applicationNumber);
     }
@@ -168,125 +196,156 @@ export class ApplicationNumberService {
             programName: string;
             count: number;
             latest: string;
-            nextSequence: number;
         }>;
+        counter: {
+            id: string;
+            sequence: number;
+            nextSequence: number;
+            academicSessionId?: string;
+        } | null;
     }> {
         const targetYear = year || new Date().getFullYear();
         const yearString = targetYear.toString().slice(-2);
+        const counterId = this.buildCounterIdFromYear(targetYear);
 
-        // Get all counters for the year
-        const db = this.applicationModel.db;
-        const countersCollection = db.collection('application_counters');
+        const countersCollection = this.getCountersCollection();
+        const counter = await countersCollection.findOne({ _id: counterId });
 
-        const counters = await countersCollection.find({
-            year: targetYear
-        }).toArray();
-
-        const byProgram = [];
-        let totalApplications = 0;
-
-        for (const counter of counters) {
-            // Get program details
-            const program = await this.programModel.findOne({ code: parseInt(counter.programCode) });
-
-            // Get latest application number
-            const prefix = `ALEC${yearString}${counter.programCode}`;
-            const latestApp = await this.applicationModel
-                .findOne({ applicationNumber: { $regex: `^${prefix}` } })
-                .sort({ applicationNumber: -1 })
-                .select('applicationNumber')
-                .lean() as { applicationNumber?: string } | null;
-
-            byProgram.push({
-                programCode: counter.programCode,
-                programName: program?.name || 'Unknown Program',
-                count: counter.sequence,
-                latest: latestApp?.applicationNumber || 'None',
-                nextSequence: counter.sequence + 1
-            });
-
-            totalApplications += counter.sequence;
+        if (!counter) {
+            return {
+                year: targetYear,
+                totalApplications: 0,
+                byProgram: [],
+                counter: null,
+            };
         }
+
+        const applications = await this.applicationModel
+            .find({ entryAcademicSession: counter.academicSessionId })
+            .populate('programId', 'code name')
+            .select('applicationNumber programId')
+            .lean();
+
+        const groupedPrograms = new Map<string, {
+            programCode: string;
+            programName: string;
+            count: number;
+            latest: string;
+        }>();
+
+        for (const app of applications) {
+            const programCode = String(app.programId?.code || '').padStart(2, '0');
+            const existing = groupedPrograms.get(programCode);
+
+            if (!existing) {
+                groupedPrograms.set(programCode, {
+                    programCode,
+                    programName: app.programId?.name || 'Unknown Program',
+                    count: 1,
+                    latest: app.applicationNumber,
+                });
+                continue;
+            }
+
+            existing.count += 1;
+            if (app.applicationNumber > existing.latest) {
+                existing.latest = app.applicationNumber;
+            }
+        }
+
+        const byProgram = Array.from(groupedPrograms.values()).sort((left, right) => {
+            if (left.programCode === right.programCode) {
+                return 0;
+            }
+            return left.programCode < right.programCode ? -1 : 1;
+        });
 
         return {
             year: targetYear,
-            totalApplications,
-            byProgram
+            totalApplications: counter.sequence,
+            byProgram,
+            counter: {
+                id: counter._id,
+                sequence: counter.sequence,
+                nextSequence: counter.sequence + 1,
+                academicSessionId: counter.academicSessionId?.toString?.(),
+            },
         };
     }
 
     /**
-     * Repair any inconsistencies between counters and actual applications
-     * Useful for data migration or fixing issues
+     * Repair year/session counters using actual applications.
      */
     async repairCounters(year?: number): Promise<{ repaired: string[]; errors: string[] }> {
         const targetYear = year || new Date().getFullYear();
-        const yearString = targetYear.toString().slice(-2);
         const repaired = [];
         const errors = [];
 
         try {
-            // Get all applications for the year
             const applications = await this.applicationModel
                 .find({
-                    applicationNumber: { $regex: `^ALEC${yearString}` },
-                    createdAt: {
-                        $gte: new Date(targetYear, 0, 1),
-                        $lt: new Date(targetYear + 1, 0, 1)
-                    }
+                    applicationNumber: { $regex: `^${this.buildCounterIdFromYear(targetYear)}` },
                 })
-                .populate('programId', 'code name')
-                .select('applicationNumber programId')
+                .populate('entryAcademicSession', 'sessionYear')
+                .select('applicationNumber entryAcademicSession')
                 .lean();
 
-            // Group by program
-            const programGroups = new Map();
+            const countersByYear = new Map<string, {
+                counterId: string;
+                academicSessionId: string;
+                year: number;
+                count: number;
+            }>();
 
             for (const app of applications) {
-                const programCode = String(app.programId.code).padStart(2, '0');
-                const key = `ALEC${yearString}${programCode}`;
+                const session = app.entryAcademicSession;
+                if (!session?._id || !session?.sessionYear) {
+                    continue;
+                }
 
-                if (!programGroups.has(key)) {
-                    programGroups.set(key, {
-                        programId: app.programId._id,
-                        programCode,
-                        applications: []
+                const sessionYear = this.extractSessionStartYear(session.sessionYear);
+                const counterId = this.buildCounterIdFromYear(sessionYear);
+                const key = counterId;
+
+                if (!countersByYear.has(key)) {
+                    countersByYear.set(key, {
+                        counterId,
+                        academicSessionId: session._id.toString(),
+                        year: sessionYear,
+                        count: 0,
                     });
                 }
 
-                programGroups.get(key).applications.push(app);
+                countersByYear.get(key)!.count += 1;
             }
 
-            // Fix counters for each program
-            const db = this.applicationModel.db;
-            const countersCollection = db.collection('application_counters');
+            const countersCollection = this.getCountersCollection();
 
-            for (const [counterId, group] of programGroups) {
-                const actualCount = group.applications.length;
-                const currentCounter = await countersCollection.findOne({ _id: counterId });
+            for (const group of countersByYear.values()) {
+                const currentCounter = await countersCollection.findOne({ _id: group.counterId });
 
-                if (!currentCounter || currentCounter.sequence !== actualCount) {
+                if (!currentCounter || currentCounter.sequence !== group.count) {
                     await countersCollection.replaceOne(
-                        { _id: counterId },
+                        { _id: group.counterId },
                         {
-                            _id: counterId,
-                            sequence: actualCount,
-                            year: targetYear,
-                            programCode: group.programCode,
+                            _id: group.counterId,
+                            sequence: group.count,
+                            year: group.year,
+                            academicSessionId: new Types.ObjectId(group.academicSessionId),
                             createdAt: currentCounter?.createdAt || new Date(),
                             updatedAt: new Date(),
                             repairedAt: new Date()
-                        },
+                        } as any,
                         { upsert: true }
                     );
 
-                    repaired.push(`${counterId}: ${currentCounter?.sequence || 0} → ${actualCount}`);
-                    this.logger.log(`Repaired counter ${counterId}: ${currentCounter?.sequence || 0} → ${actualCount}`);
+                    repaired.push(`${group.counterId}: ${currentCounter?.sequence || 0} → ${group.count}`);
+                    this.logger.log(`Repaired counter ${group.counterId}: ${currentCounter?.sequence || 0} → ${group.count}`);
                 }
             }
 
         } catch (error) {
-            errors.push(error.message);
+            errors.push(error instanceof Error ? error.message : 'Unknown repair error');
             this.logger.error('Error repairing counters:', error);
         }
 

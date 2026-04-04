@@ -221,6 +221,20 @@ pm2 env 0 | grep -E 'SMTP_USER|EMAIL_FROM|GOOGLE_CLIENT_ID|GOOGLE_REFRESH_TOKEN'
 
 This hard-resets the deploy user's PM2 daemon and avoids stale environment values being reused by an older process.
 
+
+Reload command for this repo:
+
+sudo -u deploy pm2 startOrReload ecosystem.config.cjs --update-env
+If the app is already running and you only want a straight process reload by name:
+
+sudo -u deploy pm2 reload alecons-api --update-env
+Useful follow-ups:
+
+sudo -u deploy pm2 status
+sudo -u deploy pm2 logs alecons-api --lines 100
+sudo -u deploy pm2 save
+
+
 ### Troubleshooting PM2 ownership
 
 If `curl http://127.0.0.1:8000/api/v1/health` works but `pm2 status` does not show `alecons-api`, you are probably checking the wrong PM2 home.

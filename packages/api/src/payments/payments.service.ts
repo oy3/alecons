@@ -12,6 +12,7 @@ import {
 import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
+import { AcademicSession, AcademicSessionDocument } from '../schemas/academic-session.schema';
 import { TenancyAgreement, TenancyAgreementDocument } from '../schemas/tenancy-agreement.schema';
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
@@ -95,8 +96,6 @@ export interface StaffLinkedPaymentRecord {
     verifiedAt?: Date;
     rejectedAt?: Date;
     verificationRemarks?: string;
-    isApplicationLinked: boolean;
-    isAcademicSessionLinked: boolean;
     payment: {
         id?: string;
         name: string;
@@ -139,6 +138,7 @@ export class PaymentsService {
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
         @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
+        @InjectModel(AcademicSession.name) private academicSessionModel: Model<AcademicSessionDocument>,
         @InjectModel(TenancyAgreement.name) private tenancyAgreementModel: Model<TenancyAgreementDocument>,
         private matriculationService: MatriculationService,
         private emailService: EmailService,
@@ -171,8 +171,13 @@ export class PaymentsService {
             && !!payment.receiptUrl;
     }
 
+    private buildPaymentReference(): string {
+        const smallSuffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+        return `ALC${Date.now()}${smallSuffix}`;
+    }
+
     private buildManualTransferReference(): string {
-        return `MAN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+        return this.buildPaymentReference();
     }
 
     private toDestinationAccountSummary(account?: Partial<PaymentDestinationAccount> & { _id?: Types.ObjectId | string } | null): DestinationAccountSummary | null {
@@ -219,28 +224,22 @@ export class PaymentsService {
         if (!account?._id) {
             return {
                 destinationAccountId: undefined,
-                destinationAccountTitle: undefined,
-                destinationAccountCode: undefined,
                 destinationChannelType: undefined,
                 destinationProviderType: undefined,
                 destinationAccountName: undefined,
                 destinationBankName: undefined,
                 destinationAccountNumber: undefined,
-                destinationNote: undefined,
                 destinationPaystackSubaccountCode: undefined,
             };
         }
 
         return {
             destinationAccountId: new Types.ObjectId(account._id.toString()),
-            destinationAccountTitle: account.title,
-            destinationAccountCode: account.code,
             destinationChannelType: account.channelType,
             destinationProviderType: account.providerType,
             destinationAccountName: account.accountName,
             destinationBankName: account.bankName,
             destinationAccountNumber: account.accountNumber,
-            destinationNote: account.note,
             destinationPaystackSubaccountCode: account.paystackSubaccountCode,
         };
     }
@@ -588,6 +587,82 @@ export class PaymentsService {
         this.logger.log(`Accommodation payment authorized for user ${userId} - tenancy agreement signed`);
     }
 
+    private extractSessionStartYear(session?: { sessionYear?: string; startDate?: Date | string } | null): number | null {
+        if (!session) {
+            return null;
+        }
+
+        const sessionYearMatch = session.sessionYear?.match(/\d{4}/);
+        if (sessionYearMatch) {
+            return Number(sessionYearMatch[0]);
+        }
+
+        if (session.startDate) {
+            const startDate = new Date(session.startDate);
+            if (!Number.isNaN(startDate.getTime())) {
+                return startDate.getFullYear();
+            }
+        }
+
+        return null;
+    }
+
+    private async getStudentEntryYear(userId: string): Promise<number | null> {
+        const student = await this.studentModel
+            .findOne({ userId: new Types.ObjectId(userId) })
+            .select('admissionYear academicSession')
+            .populate('academicSession', 'sessionYear startDate')
+            .lean();
+
+        if (typeof student?.admissionYear === 'number') {
+            return student.admissionYear;
+        }
+
+        const studentAcademicSession = student?.academicSession && typeof student.academicSession === 'object'
+            ? student.academicSession as any
+            : null;
+
+        const studentYear = this.extractSessionStartYear(studentAcademicSession);
+        if (studentYear) {
+            return studentYear;
+        }
+
+        const linkedApplication = await this.resolveLinkedApplication(userId);
+        if (!linkedApplication.academicSessionId) {
+            return null;
+        }
+
+        const applicationSession = await this.academicSessionModel
+            .findById(linkedApplication.academicSessionId)
+            .select('sessionYear startDate')
+            .lean();
+
+        return this.extractSessionStartYear(applicationSession as any);
+    }
+
+    private async canStudentAccessAcademicSession(userId: string, academicSessionId?: string): Promise<boolean> {
+        if (!academicSessionId || !Types.ObjectId.isValid(academicSessionId)) {
+            return true;
+        }
+
+        const entryYear = await this.getStudentEntryYear(userId);
+        if (!entryYear) {
+            return true;
+        }
+
+        const selectedSession = await this.academicSessionModel
+            .findById(academicSessionId)
+            .select('sessionYear startDate')
+            .lean();
+
+        const selectedYear = this.extractSessionStartYear(selectedSession as any);
+        if (!selectedYear) {
+            return true;
+        }
+
+        return selectedYear >= entryYear;
+    }
+
     async getStudentPaymentsSummary(userId: string, context: 'application-portal' | 'student-portal' = 'application-portal'): Promise<StudentPaymentsSummary> {
         const userObjectId = new Types.ObjectId(userId);
 
@@ -864,7 +939,7 @@ export class PaymentsService {
 
                 // For existing attempts, we need to create a NEW Paystack transaction with a NEW reference
                 // because Paystack references are unique and cannot be reused
-                const newReference = `alc${Date.now()}`;
+                const newReference = this.buildPaymentReference();
                 this.logger.log('Creating new Paystack transaction with new reference:', newReference);
 
                 paystackData = await this.createPaystackTransaction(
@@ -890,7 +965,7 @@ export class PaymentsService {
                 };
             } else {
                 // No existing attempt found, create new payment attempt
-                reference = `alc${Date.now()}`;
+                reference = this.buildPaymentReference();
                 paystackData = await this.createPaystackTransaction(
                     payment,
                     email,
@@ -1158,9 +1233,23 @@ export class PaymentsService {
             const programId = fullApplication.programId._id || fullApplication.programId;
             this.logger.log('Extracted programId:', programId);
             this.logger.log('programId.toString():', programId.toString());
+            const normalizedUserId = typeof fullApplication.userId === 'object' && fullApplication.userId !== null
+                ? (fullApplication.userId as any)._id
+                : fullApplication.userId;
+            const normalizedApplicationId = fullApplication._id;
+
+            const academicSessionId = typeof fullApplication.entryAcademicSession === 'object'
+                && fullApplication.entryAcademicSession !== null
+                ? (fullApplication.entryAcademicSession as any)._id
+                : fullApplication.entryAcademicSession;
+
+            if (!academicSessionId) {
+                throw new Error('Academic session not found for matriculation generation');
+            }
 
             const matriculationNumber = await this.matriculationService.generateMatriculationNumber(
-                programId.toString()
+                programId.toString(),
+                academicSessionId.toString(),
             );
 
             // Update application with matriculation number and completion status
@@ -1170,10 +1259,6 @@ export class PaymentsService {
             await fullApplication.save();
 
             // Extract the ObjectId from the populated entryAcademicSession
-            const academicSessionId = typeof fullApplication.entryAcademicSession === 'object'
-                && fullApplication.entryAcademicSession !== null
-                ? (fullApplication.entryAcademicSession as any)._id
-                : fullApplication.entryAcademicSession;
             const admissionYear = new Date().getFullYear();
 
             this.logger.log('About to check for existing student record...');
@@ -1182,7 +1267,10 @@ export class PaymentsService {
             // Create Student record (migrate from applicant to student)
             try {
                 const existingStudent = await this.studentModel.findOne({
-                    userId: fullApplication.userId
+                    $or: [
+                        { userId: normalizedUserId },
+                        { applicationId: normalizedApplicationId },
+                    ],
                 });
 
                 this.logger.log('Existing student check result:', existingStudent ? 'Found' : 'Not found');
@@ -1190,8 +1278,8 @@ export class PaymentsService {
                 if (!existingStudent) {
                     this.logger.log('Creating new student record...');
                     this.logger.log('Student data:', {
-                        userId: fullApplication.userId,
-                        applicationId: fullApplication._id,
+                        userId: normalizedUserId,
+                        applicationId: normalizedApplicationId,
                         matriculationNumber: matriculationNumber,
                         programId: fullApplication.programId,
                         programTypeId: fullApplication.programTypeId,
@@ -1201,8 +1289,8 @@ export class PaymentsService {
                     });
 
                     const newStudent = new this.studentModel({
-                        userId: fullApplication.userId,
-                        applicationId: fullApplication._id,
+                        userId: normalizedUserId,
+                        applicationId: normalizedApplicationId,
                         matriculationNumber: matriculationNumber,
                         programId: fullApplication.programId,
                         programTypeId: fullApplication.programTypeId,
@@ -1220,6 +1308,20 @@ export class PaymentsService {
                     await newStudent.save();
                     this.logger.log('✅ Student record created successfully:', newStudent._id);
                 } else {
+                    existingStudent.userId = normalizedUserId;
+                    existingStudent.applicationId = normalizedApplicationId;
+                    existingStudent.matriculationNumber = matriculationNumber;
+                    existingStudent.programId = fullApplication.programId;
+                    existingStudent.programTypeId = fullApplication.programTypeId;
+                    existingStudent.programModeId = fullApplication.programModeId;
+                    existingStudent.admissionYear = admissionYear;
+                    existingStudent.academicSession = academicSessionId;
+                    existingStudent.profileImageUrl = fullApplication.profileImageUrl;
+                    existingStudent.status = existingStudent.status || 'active';
+                    existingStudent.currentLevel = existingStudent.currentLevel || 1;
+                    existingStudent.currentSemester = existingStudent.currentSemester || 1;
+                    existingStudent.isActive = existingStudent.isActive !== false;
+                    await existingStudent.save();
                     this.logger.log('Student record already exists:', existingStudent._id);
                 }
             } catch (studentError) {
@@ -1780,6 +1882,22 @@ export class PaymentsService {
             throw new Error('User not found');
         }
 
+        const canAccessSelectedSession = await this.canStudentAccessAcademicSession(userId, academicSessionId);
+        if (!canAccessSelectedSession) {
+            return {
+                paidFees: [],
+                pendingFees: [],
+                unpaidFees: [],
+                totalPaid: 0,
+                totalPending: 0,
+                totalUnpaid: 0,
+                availableMethods: {
+                    paystackEnabled: false,
+                    manualTransferEnabled: false,
+                },
+            };
+        }
+
         const availableMethods = await this.getPaymentMethodAvailability('student-portal', academicSessionId);
 
         // Get student's successful payments for this session
@@ -1981,6 +2099,20 @@ export class PaymentsService {
         const { page = 1, limit = 10 } = options;
         const userObjectId = new Types.ObjectId(userId);
 
+        const canAccessSelectedSession = await this.canStudentAccessAcademicSession(userId, academicSessionId);
+        if (!canAccessSelectedSession) {
+            return {
+                payments: [],
+                totalPaid: 0,
+                pagination: {
+                    page,
+                    limit,
+                    totalCount: 0,
+                    totalPages: 0,
+                }
+            };
+        }
+
         // Build query
         let query: any = {
             userId: userObjectId,
@@ -2087,8 +2219,6 @@ export class PaymentsService {
                 verifiedAt: payment.verifiedAt,
                 rejectedAt: payment.rejectedAt,
                 verificationRemarks: payment.verificationRemarks,
-                isApplicationLinked: !!applicationObjectId && linkedApplicationId === applicationObjectId.toString(),
-                isAcademicSessionLinked: !!academicSessionObjectId && linkedAcademicSessionId === academicSessionObjectId.toString(),
                 payment: {
                     id: linkedPayment?._id?.toString(),
                     name: linkedPayment?.name || 'Unknown Payment',
@@ -2124,6 +2254,13 @@ export class PaymentsService {
         email: string,
         academicSessionId?: string
     ): Promise<PaystackInitializeResponse> {
+        if (academicSessionId) {
+            const canAccessSelectedSession = await this.canStudentAccessAcademicSession(userId, academicSessionId);
+            if (!canAccessSelectedSession) {
+                throw new Error('Selected academic session is not available for this student');
+            }
+        }
+
         // Check if payment is available for the academic session
         if (academicSessionId) {
             const isAvailable = await this.isPaymentAvailableForSession(paymentId, academicSessionId);
@@ -2164,7 +2301,7 @@ export class PaymentsService {
         const linkedApplication = await this.resolveLinkedApplication(userId);
 
         // Generate unique reference
-        const reference = `PAY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const reference = this.buildPaymentReference();
 
         // Create student payment record
         const studentPayment = new this.studentPaymentModel({
@@ -2235,6 +2372,11 @@ export class PaymentsService {
         }
 
         if (options.context === 'student-portal') {
+            const canAccessSelectedSession = await this.canStudentAccessAcademicSession(userId, options.academicSessionId);
+            if (!canAccessSelectedSession) {
+                throw new Error('Selected academic session is not available for this student');
+            }
+
             if (!options.academicSessionId) {
                 throw new Error('Academic session is required for student payments');
             }
@@ -2432,6 +2574,11 @@ export class PaymentsService {
         const user = await this.userModel.findById(userId);
         if (!user) {
             throw new Error('User not found');
+        }
+
+        const canAccessSelectedSession = await this.canStudentAccessAcademicSession(userId, academicSessionId);
+        if (!canAccessSelectedSession) {
+            return [];
         }
 
         // Get all active payments for students

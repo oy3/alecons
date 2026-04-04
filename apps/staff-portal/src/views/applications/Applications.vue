@@ -51,6 +51,8 @@ export default {
       selectedApplication: null,
       selectedApplicationId: null,
       selectedPaymentHistory: createEmptyPaymentHistory(),
+      selectedPaymentReceipt: null,
+      showPaymentReceiptModal: false,
       processingPaymentId: null,
 
       statusOptions: [
@@ -322,6 +324,44 @@ export default {
       return session.sessionYear || 'N/A'
     },
 
+    getPaymentAcademicSessionLabel(payment) {
+      return payment?.academicSession?.sessionYear || 'N/A'
+    },
+
+    getProgramTypeLabel(application) {
+      const programType = application?.programTypeId
+      if (!programType) return 'N/A'
+      if (typeof programType === 'string') return programType
+      return programType.description || programType.name || programType.type || 'N/A'
+    },
+
+    getStudyModeLabel(application) {
+      const studyMode = application?.programModeId
+      if (!studyMode) return 'N/A'
+      if (typeof studyMode === 'string') return studyMode
+      return studyMode.description || studyMode.name || studyMode.mode || 'N/A'
+    },
+
+    getApplicationStatusLabel(application) {
+      return `Status: ${this.formatLabel(application?.status)}`
+    },
+
+    getAdmissionDecisionLabel(application) {
+      const decision = application?.admissionDecision
+      if (!decision || decision === 'pending') {
+        return 'Decision Pending'
+      }
+
+      return `Decision: ${this.formatLabel(decision)}`
+    },
+
+    getAdmissionDecisionValue(application) {
+      const decision = application?.admissionDecision
+      if (!decision) return 'N/A'
+      if (decision === 'pending') return 'Pending Review'
+      return this.formatLabel(decision)
+    },
+
     getStageLabel(stage) {
       return stageLabels[stage] || `Stage ${stage || 'N/A'}`
     },
@@ -390,6 +430,8 @@ export default {
       this.selectedApplication = null
       this.selectedApplicationId = null
       this.selectedPaymentHistory = createEmptyPaymentHistory()
+      this.selectedPaymentReceipt = null
+      this.showPaymentReceiptModal = false
       this.processingPaymentId = null
     },
 
@@ -416,7 +458,35 @@ export default {
         return
       }
 
-      window.open(payment.receiptUrl, '_blank', 'noopener,noreferrer')
+      this.selectedPaymentReceipt = payment
+      this.showPaymentReceiptModal = true
+    },
+
+    closePaymentReceiptModal() {
+      this.showPaymentReceiptModal = false
+      this.selectedPaymentReceipt = null
+    },
+
+    getReceiptSource(receipt = this.selectedPaymentReceipt) {
+      return receipt?.receiptUrl || ''
+    },
+
+    getReceiptFilename(receipt = this.selectedPaymentReceipt) {
+      return receipt?.receiptOriginalName || receipt?.receiptUrl || 'receipt'
+    },
+
+    getReceiptExtension(receipt = this.selectedPaymentReceipt) {
+      const source = this.getReceiptFilename(receipt).split('?')[0]
+      const segments = source.split('.')
+      return segments.length > 1 ? segments.pop().toLowerCase() : ''
+    },
+
+    isPdfReceipt(receipt = this.selectedPaymentReceipt) {
+      return this.getReceiptExtension(receipt) === 'pdf'
+    },
+
+    isImageReceipt(receipt = this.selectedPaymentReceipt) {
+      return ['png', 'jpg', 'jpeg', 'webp'].includes(this.getReceiptExtension(receipt))
     },
 
     async reloadSelectedApplicationDetails() {
@@ -804,10 +874,10 @@ export default {
         // Show confirmation dialog
         const result = await this.$swal.fire({
           icon: 'question',
-          title: 'Generate Matriculation Number',
-          text: `Generate matriculation number for ${application.applicantName}? This will also send the email automatically.`,
+          title: 'Recover Matriculation Number',
+          text: `Recover the missing matriculation number for ${application.applicantName}? This will also send the email automatically.`,
           showCancelButton: true,
-          confirmButtonText: 'Generate',
+          confirmButtonText: 'Recover',
           cancelButtonText: 'Cancel',
           confirmButtonColor: '#1a5f5f',
           cancelButtonColor: '#6c757d'
@@ -819,8 +889,8 @@ export default {
 
         // Show loading
         this.$swal.fire({
-          title: 'Generating Matriculation Number...',
-          text: 'Please wait while we generate the matriculation number and send the email.',
+          title: 'Recovering Matriculation Number...',
+          text: 'Please wait while we recover the matriculation number and send the email.',
           allowOutsideClick: false,
           showConfirmButton: false,
           willOpen: () => {
@@ -834,8 +904,8 @@ export default {
         if (response.success) {
           this.$swal.fire({
             icon: 'success',
-            title: 'Matriculation Number Generated!',
-            text: `Matriculation number generated and email sent to ${application.email}`,
+            title: 'Matriculation Number Recovered!',
+            text: `Matriculation number recovered and email sent to ${application.email}`,
             confirmButtonColor: '#1a5f5f'
           })
 
@@ -856,8 +926,8 @@ export default {
         
         this.$swal.fire({
           icon: 'error',
-          title: 'Failed to Generate Matriculation Number',
-          text: error.message || 'An error occurred while generating the matriculation number',
+          title: 'Failed to Recover Matriculation Number',
+          text: error.message || 'An error occurred while recovering the matriculation number',
           confirmButtonColor: '#dc3545'
         })
       }
@@ -1097,8 +1167,8 @@ export default {
                                 @click.prevent="handleMatriculationAction(app)"
                               >
                               <i class="bi bi-envelope text-success me-2" v-if="app.matriculationNumber"></i>
-                              <i class="bi bi-plus-circle text-primary me-2" v-else></i>
-                               {{ app.matriculationNumber ? 'Send matric no.' : 'Generate matric no.' }}
+                                <i class="bi bi-arrow-repeat text-primary me-2" v-else></i>
+                                 {{ app.matriculationNumber ? 'Send matric no.' : 'Recover matric no.' }}
                             </a>                      
                             </li>
 <!-- 
@@ -1258,13 +1328,13 @@ export default {
                           <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                             <h4 class="fw-bold mb-0">{{ getApplicantFullName(selectedApplication) }}</h4>
                             <span class="badge rounded-pill" :class="getStatusBadgeClass(selectedApplication.status)">
-                              {{ formatLabel(selectedApplication.status) }}
+                              {{ getApplicationStatusLabel(selectedApplication) }}
                             </span>
                             <span
                               class="badge rounded-pill"
                               :class="getDecisionBadgeClass(selectedApplication.admissionDecision)"
                             >
-                              {{ formatLabel(selectedApplication.admissionDecision) }}
+                              {{ getAdmissionDecisionLabel(selectedApplication) }}
                             </span>
                           </div>
 
@@ -1347,11 +1417,11 @@ export default {
                         </div>
                         <div>
                           <span class="details-label">Program Type</span>
-                          <span class="details-value">{{ selectedApplication.programTypeId?.name || 'N/A' }}</span>
+                          <span class="details-value">{{ getProgramTypeLabel(selectedApplication) }}</span>
                         </div>
                         <div>
                           <span class="details-label">Study Mode</span>
-                          <span class="details-value">{{ selectedApplication.programModeId?.name || 'N/A' }}</span>
+                          <span class="details-value">{{ getStudyModeLabel(selectedApplication) }}</span>
                         </div>
                         <div>
                           <span class="details-label">State of Origin</span>
@@ -1604,7 +1674,7 @@ export default {
                       <div class="details-grid single-column-grid">
                         <div>
                           <span class="details-label">Decision</span>
-                          <span class="details-value">{{ formatLabel(selectedApplication.admissionDecision) }}</span>
+                          <span class="details-value">{{ getAdmissionDecisionValue(selectedApplication) }}</span>
                         </div>
                         <div>
                           <span class="details-label">Admission Date</span>
@@ -1682,10 +1752,6 @@ export default {
                           <td>
                             <div class="fw-semibold">{{ payment.payment?.name || 'Unknown Payment' }}</div>
                             <div class="small text-muted">{{ payment.payment?.paymentCode || 'No code' }}</div>
-                            <div class="mt-1 d-flex flex-wrap gap-1">
-                              <span v-if="payment.isApplicationLinked" class="badge bg-primary-subtle text-primary-emphasis">This application</span>
-                              <span v-if="payment.isAcademicSessionLinked" class="badge bg-info-subtle text-info-emphasis">Same session</span>
-                            </div>
                           </td>
                           <td>
                             <div class="small fw-semibold">{{ payment.reference }}</div>
@@ -1700,7 +1766,7 @@ export default {
                             <div class="fw-semibold">{{ formatCurrency(payment.amount) }}</div>
                             <div class="small text-muted" v-if="payment.fee">Fee: {{ formatCurrency(payment.fee) }}</div>
                           </td>
-                          <td>{{ payment.academicSession?.sessionYear || 'N/A' }}</td>
+                          <td>{{ getPaymentAcademicSessionLabel(payment) }}</td>
                           <td>
                             <div>{{ formatDateTime(payment.paidAt || payment.createdAt) }}</div>
                             <div class="small text-muted" v-if="payment.remarks">{{ payment.remarks }}</div>
@@ -1710,7 +1776,7 @@ export default {
                             <div class="d-flex flex-wrap gap-2 justify-content-end">
                               <button
                                 v-if="payment.receiptUrl"
-                                type="button"
+                                 type="button"
                                 class="btn btn-sm btn-outline-secondary"
                                 @click="openPaymentReceipt(payment)"
                               >
@@ -1769,7 +1835,58 @@ export default {
       </div>
     </div>
 
-    <div class="modal-backdrop fade" :class="{ show: showDetailsModal }" v-if="showDetailsModal"></div>
+    <div
+      class="modal fade receipt-preview-layer"
+      :class="{ show: showPaymentReceiptModal }"
+      :style="{ display: showPaymentReceiptModal ? 'block' : 'none' }"
+      tabindex="-1"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-xl modal-dialog-centered receipt-preview-dialog">
+        <div class="modal-content receipt-preview-modal">
+          <div class="modal-header border-0 pb-0">
+            <div>
+              <h6 class="modal-title fw-bold text-staff-primary">Uploaded Receipt</h6>
+              <p v-if="selectedPaymentReceipt" class="text-muted mb-0 small">
+                {{ selectedPaymentReceipt.payment?.name || 'Payment Receipt' }} · {{ getReceiptFilename() }}
+              </p>
+            </div>
+            <button type="button" class="btn-close" @click="closePaymentReceiptModal"></button>
+          </div>
+
+          <div class="modal-body pt-3" v-if="selectedPaymentReceipt">
+            <div class="receipt-preview-shell">
+              <img
+                v-if="isImageReceipt()"
+                :src="getReceiptSource()"
+                :alt="getReceiptFilename()"
+                class="receipt-preview-image"
+              />
+
+              <iframe
+                v-else-if="isPdfReceipt()"
+                :src="getReceiptSource()"
+                title="Uploaded receipt preview"
+                class="receipt-preview-frame"
+              ></iframe>
+
+              <div v-else class="receipt-preview-fallback text-center">
+                <i class="bi bi-file-earmark-text fs-1 mb-3 d-block text-muted"></i>
+                <h6 class="fw-bold">Preview unavailable</h6>
+                <p class="text-muted mb-0">This receipt format cannot be previewed inline.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-outline-secondary" @click="closePaymentReceiptModal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop fade" :class="{ show: showDetailsModal }" v-if="showDetailsModal && !showPaymentReceiptModal"></div>
+    <div class="modal-backdrop fade receipt-preview-backdrop" :class="{ show: showPaymentReceiptModal }" v-if="showPaymentReceiptModal" @click="closePaymentReceiptModal"></div>
   </div>
 </template>
 
@@ -1967,11 +2084,85 @@ code {
   justify-content: flex-start;
 }
 
+.receipt-preview-dialog {
+  max-width: 1100px;
+}
+
+.receipt-preview-layer {
+  z-index: 1070;
+}
+
+.receipt-preview-modal {
+  border: none;
+  border-radius: 20px;
+  height: min(92vh, 920px);
+  max-height: calc(100vh - 2rem);
+}
+
+.receipt-preview-shell {
+  height: 100%;
+  min-height: 60vh;
+  border-radius: 1.25rem;
+  background: #f8f9fb;
+  border: 1px solid rgba(26, 95, 95, 0.08);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.receipt-preview-image {
+  width: 100%;
+  height: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  background: #fff;
+}
+
+.receipt-preview-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 70vh;
+  border: 0;
+  background: #fff;
+}
+
+.receipt-preview-fallback {
+  max-width: 28rem;
+  padding: 2rem;
+}
+
+.receipt-preview-backdrop {
+  z-index: 1060;
+}
+
 @media (max-width: 991.98px) {
   .details-grid,
   .summary-panel,
   .payment-summary-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .receipt-preview-dialog {
+    max-width: none;
+    margin: 0.5rem;
+  }
+
+  .receipt-preview-modal {
+    height: calc(100vh - 1rem);
+    max-height: calc(100vh - 1rem);
+  }
+
+  .receipt-preview-shell {
+    min-height: calc(100vh - 10rem);
+  }
+
+  .receipt-preview-image,
+  .receipt-preview-frame {
+    max-height: calc(100vh - 12rem);
+    min-height: calc(100vh - 12rem);
   }
 }
 </style>

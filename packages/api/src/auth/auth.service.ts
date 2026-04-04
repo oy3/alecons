@@ -151,7 +151,10 @@ export class AuthService {
         await user.save();
 
         // Generate unique application number using the service
-        const applicationNumber = await this.applicationNumberService.generateApplicationNumber(programId);
+        const applicationNumber = await this.applicationNumberService.generateApplicationNumber(
+            programId,
+            activeSession._id.toString(),
+        );
 
         // Convert string IDs to ObjectIds
         const programObjectId = new Types.ObjectId(programId);

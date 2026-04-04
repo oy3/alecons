@@ -295,8 +295,8 @@ export class AdmissionLetterPdfService {
         <div class="school-name">Alebiosu College of Nursing Sciences</div>
         <div class="school-subtitle">Excellence in Nursing Education</div>
         <div class="school-contact">
-            Omuo-Oke, Ekiti State, Nigeria<br>
-            Tel: +234 708 460 1610 | Email: admissions@alecons.edu.ng<br>
+            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
+            Tel: +234 916 000 8679 | Email: admissions@alecons.edu.ng<br>
             Website: www.alecons.edu.ng
         </div>
     </div>

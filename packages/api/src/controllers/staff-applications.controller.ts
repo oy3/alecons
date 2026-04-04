@@ -295,8 +295,8 @@ export class StaffApplicationsController {
                 .findById(id)
                 .populate('userId', 'firstName lastName otherName email role')
                 .populate('programId', 'name code')
-                .populate('programTypeId', 'name')
-                .populate('programModeId', 'name')
+                .populate('programTypeId', 'name type description')
+                .populate('programModeId', 'name mode description')
                 .populate('entryAcademicSession', 'sessionYear')
                 .exec();
 
@@ -1039,11 +1039,11 @@ export class StaffApplicationsController {
     }
 
     @Patch(':id/generate-matric')
-    @ApiOperation({ summary: 'Generate matriculation number and complete application' })
-    @ApiResponse({ status: 200, description: 'Matriculation number generated successfully' })
+    @ApiOperation({ summary: 'Recover missing matriculation number and complete application setup' })
+    @ApiResponse({ status: 200, description: 'Matriculation number recovered successfully' })
     async generateMatriculationNumber(@Param('id') id: string) {
         try {
-            this.logger.log('Generating matriculation number for application:', id);
+            this.logger.log('Recovering matriculation number for application:', id);
 
             const application = await this.applicationModel.findById(id)
                 .populate(['userId', 'programId', 'entryAcademicSession'])
@@ -1081,11 +1081,21 @@ export class StaffApplicationsController {
             }
 
             const user = application.userId as any;
+            const userId = typeof application.userId === 'object' && application.userId !== null
+                ? (application.userId as any)._id
+                : application.userId;
+            const applicationId = application._id;
 
             // Generate matriculation number using the proper service
             // Extract the actual ObjectId from the populated program
             const programId = application.programId._id || application.programId;
-            const matriculationNumber = await this.matriculationService.generateMatriculationNumber(programId.toString());
+            const academicSessionId = typeof application.entryAcademicSession === 'object' && application.entryAcademicSession !== null
+                ? (application.entryAcademicSession as any)._id
+                : application.entryAcademicSession;
+            const matriculationNumber = await this.matriculationService.generateMatriculationNumber(
+                programId.toString(),
+                academicSessionId.toString(),
+            );
 
             // Update application
             application.matriculationNumber = matriculationNumber;
@@ -1095,26 +1105,29 @@ export class StaffApplicationsController {
 
             // Get academic session for student record
             // Extract the ObjectId from the populated entryAcademicSession
-            const academicSessionId = typeof application.entryAcademicSession === 'object' && application.entryAcademicSession !== null
+            const studentAcademicSessionId = typeof application.entryAcademicSession === 'object' && application.entryAcademicSession !== null
                 ? (application.entryAcademicSession as any)._id
                 : application.entryAcademicSession;
             const admissionYear = new Date().getFullYear();
 
             // Create Student record (migrate from applicant to student)
             const existingStudent = await this.studentModel.findOne({
-                userId: application.userId
+                $or: [
+                    { userId },
+                    { applicationId },
+                ],
             });
 
             if (!existingStudent) {
                 const newStudent = new this.studentModel({
-                    userId: application.userId,
-                    applicationId: application._id,
+                    userId,
+                    applicationId,
                     matriculationNumber: matriculationNumber,
                     programId: application.programId,
                     programTypeId: application.programTypeId,
                     programModeId: application.programModeId,
                     admissionYear: admissionYear,
-                    academicSession: academicSessionId, // Store ObjectId reference
+                    academicSession: studentAcademicSessionId, // Store ObjectId reference
                     status: 'active',
                     currentLevel: 1,
                     currentSemester: 1,
@@ -1126,11 +1139,25 @@ export class StaffApplicationsController {
                 await newStudent.save();
                 this.logger.log('Student record created successfully:', newStudent._id);
             } else {
+                existingStudent.userId = userId;
+                existingStudent.applicationId = applicationId;
+                existingStudent.matriculationNumber = matriculationNumber;
+                existingStudent.programId = application.programId;
+                existingStudent.programTypeId = application.programTypeId;
+                existingStudent.programModeId = application.programModeId;
+                existingStudent.admissionYear = admissionYear;
+                existingStudent.academicSession = studentAcademicSessionId;
+                existingStudent.profileImageUrl = application.profileImageUrl;
+                existingStudent.status = existingStudent.status || 'active';
+                existingStudent.currentLevel = existingStudent.currentLevel || 1;
+                existingStudent.currentSemester = existingStudent.currentSemester || 1;
+                existingStudent.isActive = existingStudent.isActive !== false;
+                await existingStudent.save();
                 this.logger.log('Student record already exists:', existingStudent._id);
             }
 
             // Update User role from APPLICANT to STUDENT
-            const userRecord = await this.userModel.findById(application.userId);
+            const userRecord = await this.userModel.findById(userId);
             if (userRecord && userRecord.role === UserRole.APPLICANT) {
                 userRecord.role = UserRole.STUDENT;
                 await userRecord.save();
@@ -1148,11 +1175,11 @@ export class StaffApplicationsController {
                 studentPortalUrl
             );
 
-            this.logger.log('Matriculation number generated successfully:', matriculationNumber);
+            this.logger.log('Matriculation number recovered successfully:', matriculationNumber);
 
             return {
                 success: true,
-                message: 'Matriculation number generated and email sent successfully',
+                message: 'Matriculation number recovered and email sent successfully',
                 data: {
                     application,
                     matriculationNumber
@@ -1160,11 +1187,11 @@ export class StaffApplicationsController {
             };
 
         } catch (error) {
-            this.logger.error('Error generating matriculation number:', error.message);
+            this.logger.error('Error recovering matriculation number:', error.message);
             throw new HttpException(
                 {
                     success: false,
-                    message: 'Failed to generate matriculation number',
+                    message: 'Failed to recover matriculation number',
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR

@@ -58,7 +58,6 @@ export class AuthService {
             programMode: application.programModeId,
             dob: application.dob,
             gender: application.gender,
-            phone: application.phone,
             religion: application.religion,
             maritalStatus: application.maritalStatus,
             address: application.address,

@@ -136,9 +136,6 @@ export class Application {
     gender?: string;
 
     @Prop()
-    phone?: string;
-
-    @Prop()
     stateOfOrigin?: string;
 
     @Prop()

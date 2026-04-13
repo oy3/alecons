@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import mongoose, { Schema, Types } from 'mongoose';
+import { connect, disconnect, model, Schema, Types } from 'mongoose';
 
-const loggerPrefix = '[UserPhoneBackfill]';
+const loggerPrefix = '[ApplicationPhoneCleanup]';
 
 type UserDocumentShape = {
     _id: Types.ObjectId;
@@ -74,7 +74,7 @@ function loadEnvironmentVariables() {
     }
 }
 
-async function backfillUserPhones() {
+async function cleanupApplicationPhones() {
     loadEnvironmentVariables();
 
     const databaseUrl = process.env.DATABASE_URL;
@@ -84,16 +84,16 @@ async function backfillUserPhones() {
         return;
     }
 
-    const UserModel = mongoose.model<UserDocumentShape>('BackfillUser', userSchema);
-    const ApplicationModel = mongoose.model<ApplicationDocumentShape>('BackfillApplication', applicationSchema);
+    const UserModel = model<UserDocumentShape>('CleanupUser', userSchema);
+    const ApplicationModel = model<ApplicationDocumentShape>('CleanupApplication', applicationSchema);
 
-    let updatedCount = 0;
-    let skippedWithExistingPhone = 0;
-    let skippedWithoutUser = 0;
     let inspectedCount = 0;
+    let unsetCount = 0;
+    let skippedMissingUser = 0;
+    let skippedMissingUserPhone = 0;
 
     try {
-        await mongoose.connect(databaseUrl);
+        await connect(databaseUrl);
         console.log(`${loggerPrefix} Connected to MongoDB.`);
 
         const cursor = ApplicationModel.find({
@@ -108,43 +108,46 @@ async function backfillUserPhones() {
             inspectedCount += 1;
 
             if (!application.userId) {
-                skippedWithoutUser += 1;
+                skippedMissingUser += 1;
                 continue;
             }
 
             const user = await UserModel.findById(application.userId)
-                .select('_id phone email')
+                .select('_id email phone')
                 .lean();
 
             if (!user) {
-                skippedWithoutUser += 1;
+                skippedMissingUser += 1;
                 console.warn(
                     `${loggerPrefix} Skipping application ${application.applicationNumber || application._id} because linked user was not found.`,
                 );
                 continue;
             }
 
-            if (user.phone) {
-                skippedWithExistingPhone += 1;
+            if (!user.phone) {
+                skippedMissingUserPhone += 1;
+                console.warn(
+                    `${loggerPrefix} Skipping application ${application.applicationNumber || application._id} because linked user ${user.email || user._id} has no phone yet.`,
+                );
                 continue;
             }
 
-            await UserModel.updateOne(
-                { _id: user._id, phone: { $in: [null, ''] } },
-                { $set: { phone: application.phone } },
+            await ApplicationModel.updateOne(
+                { _id: application._id, phone: { $exists: true } },
+                { $unset: { phone: '' } },
             );
 
-            updatedCount += 1;
+            unsetCount += 1;
 
-            if (updatedCount <= 20 || updatedCount % 100 === 0) {
+            if (unsetCount <= 20 || unsetCount % 100 === 0) {
                 console.log(
-                    `${loggerPrefix} Backfilled phone for user ${user.email || user._id} from application ${application.applicationNumber || application._id}.`,
+                    `${loggerPrefix} Removed legacy phone from application ${application.applicationNumber || application._id}.`,
                 );
             }
         }
 
         console.log(
-            `${loggerPrefix} Complete. Inspected: ${inspectedCount}, updated: ${updatedCount}, skipped-existing: ${skippedWithExistingPhone}, skipped-missing-user: ${skippedWithoutUser}.`,
+            `${loggerPrefix} Complete. Inspected: ${inspectedCount}, unset: ${unsetCount}, skipped-missing-user: ${skippedMissingUser}, skipped-missing-user-phone: ${skippedMissingUserPhone}.`,
         );
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -155,8 +158,8 @@ async function backfillUserPhones() {
         }
         process.exitCode = 1;
     } finally {
-        await mongoose.disconnect();
+        await disconnect();
     }
 }
 
-void backfillUserPhones();
+void cleanupApplicationPhones();

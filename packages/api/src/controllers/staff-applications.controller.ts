@@ -294,7 +294,7 @@ export class StaffApplicationsController {
 
             const application = await this.applicationModel
                 .findById(id)
-                .populate('userId', 'firstName lastName otherName email role')
+                .populate('userId', 'firstName lastName otherName email phone role')
                 .populate('programId', 'name code')
                 .populate('programTypeId', 'name type description')
                 .populate('programModeId', 'name mode description')

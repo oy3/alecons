@@ -1348,7 +1348,7 @@ export default {
                               <i class="bi bi-envelope-at me-1"></i>{{ selectedApplication.userId?.email || 'N/A' }}
                             </span>
                             <span class="detail-chip">
-                              <i class="bi bi-telephone me-1"></i>{{ selectedApplication.phone || 'N/A' }}
+                              <i class="bi bi-telephone me-1"></i>{{ selectedApplication.userId?.phone || 'N/A' }}
                             </span>
                             <span class="detail-chip">
                               <i class="bi bi-mortarboard me-1"></i>{{ getAcademicSessionLabel(selectedApplication) }}

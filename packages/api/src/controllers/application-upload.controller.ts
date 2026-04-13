@@ -361,7 +361,6 @@ export class ApplicationUploadController {
                     religion: application.religion,
                     maritalStatus: application.maritalStatus,
                     address: application.address,
-                    phone: application.phone,
                     gender: application.gender
                 });
 

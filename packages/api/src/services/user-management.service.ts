@@ -111,6 +111,7 @@ export class UserManagementService {
                     student.matriculationNumber || application?.matriculationNumber,
                 applicationNumber: application?.applicationNumber,
                 phone: user.phone,
+                profileImageUrl: (student as any).profileImageUrl,
                 studentDepartment: this.getStudentDepartmentName(application),
                 studentProgram: this.buildStudentProgramLabel(application),
             };

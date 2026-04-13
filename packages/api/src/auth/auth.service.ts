@@ -82,6 +82,7 @@ export class AuthService {
     }
 
     async register(registerDto: RegisterDto) {
+        const session = await this.userModel.db.startSession();
         const {
             email,
             password,
@@ -134,56 +135,67 @@ export class AuthService {
         const verificationToken = crypto.randomBytes(32).toString('hex');
         const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-        // Create new user
-        const user = new this.userModel({
-            email,
-            passwordHash: password, // This will be hashed by the pre-save hook
-            firstName,
-            otherName,
-            lastName,
-            phone,
-            role: UserRole.APPLICANT,
-            isEmailVerified: false,
-            emailVerificationToken: verificationToken,
-            emailVerificationTokenExpires: tokenExpires,
-        });
+        let user;
+        let application;
 
-        await user.save();
+        try {
+            session.startTransaction();
 
-        // Generate unique application number using the service
-        const applicationNumber = await this.applicationNumberService.generateApplicationNumber(
-            programId,
-            activeSession._id.toString(),
-        );
+            user = new this.userModel({
+                email,
+                passwordHash: password,
+                firstName,
+                otherName,
+                lastName,
+                phone,
+                role: UserRole.APPLICANT,
+                isEmailVerified: false,
+                emailVerificationToken: verificationToken,
+                emailVerificationTokenExpires: tokenExpires,
+            });
 
-        // Convert string IDs to ObjectIds
-        const programObjectId = new Types.ObjectId(programId);
-        const programTypeObjectId = new Types.ObjectId(programTypeId);
-        const programModeObjectId = new Types.ObjectId(programModeId);
+            await user.save({ session });
 
-        // Create application record with all required data
-        const applicationData: any = {
-            userId: user._id,
-            applicationNumber: applicationNumber,
-            programId: programObjectId,
-            programTypeId: programTypeObjectId,
-            programModeId: programModeObjectId,
-            entryAcademicSession: activeSession._id, // Link to current academic session
-            status: 'pending',
-            currentStage: 1,
-            referees: [],
-            examinations: [],
-            documents: {
-                olevelResults: [],
-                referenceLetters: []
-            },
-        };
+            const applicationNumber = await this.applicationNumberService.generateApplicationNumber(
+                programId,
+                activeSession._id.toString(),
+            );
 
-        // Add optional fields if provided
-        if (dateOfBirth) applicationData.dob = new Date(dateOfBirth);
-        if (gender) applicationData.gender = gender;
-        const application = new this.applicationModel(applicationData);
-        await application.save();
+            const programObjectId = new Types.ObjectId(programId);
+            const programTypeObjectId = new Types.ObjectId(programTypeId);
+            const programModeObjectId = new Types.ObjectId(programModeId);
+
+            const applicationData: any = {
+                userId: user._id,
+                applicationNumber,
+                programId: programObjectId,
+                programTypeId: programTypeObjectId,
+                programModeId: programModeObjectId,
+                entryAcademicSession: activeSession._id,
+                status: 'pending',
+                currentStage: 1,
+                referees: [],
+                examinations: [],
+                documents: {
+                    olevelResults: [],
+                    referenceLetters: []
+                },
+            };
+
+            if (dateOfBirth) applicationData.dob = new Date(dateOfBirth);
+            if (gender) applicationData.gender = gender;
+
+            application = new this.applicationModel(applicationData);
+            await application.save({ session });
+
+            await session.commitTransaction();
+        } catch (error) {
+            await session.abortTransaction();
+            this.logger.error('Applicant registration transaction failed:', error);
+            throw error;
+        } finally {
+            await session.endSession();
+        }
 
         this.logger.log('Application created successfully', {
             applicationId: application._id,

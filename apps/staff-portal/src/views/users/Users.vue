@@ -210,21 +210,72 @@ export default {
       return new Date(dateString).toLocaleString();
     },
 
+    getVerificationMeta(isVerified, type = "email") {
+      if (type === "email") {
+        return isVerified
+          ? {
+              badgeClass: "badge text-bg-success rounded-pill",
+              iconClass: "bi bi-patch-check-fill",
+              label: "Verified",
+              srLabel: "Email verified",
+            }
+          : {
+              badgeClass: "badge text-bg-warning rounded-pill",
+              iconClass: "bi bi-hourglass-split",
+              label: "Pending",
+              srLabel: "Email pending verification",
+            };
+      }
+
+      return {
+        badgeClass: "badge text-bg-secondary rounded-pill",
+        iconClass: "bi bi-dash-circle",
+        label: "Unavailable",
+        srLabel: "Verification unavailable",
+      };
+    },
+
+    getVerificationBadgeHtml(isVerified, type = "email") {
+      const verificationMeta = this.getVerificationMeta(isVerified, type);
+      return `<span class="${verificationMeta.badgeClass}" title="${verificationMeta.srLabel}" aria-label="${verificationMeta.srLabel}"><i class="${verificationMeta.iconClass} me-1"></i>${verificationMeta.label}</span>`;
+    },
+
+    hasStudentProfileImage(user) {
+      return user?.role === "student" && !!user?.profileImageUrl;
+    },
+
     viewUser(user) {
       // Get role name for display
       const role = this.roles.find((r) => r._id === user.roleId);
       const roleName = role ? role.name : user.role || "N/A";
+      const profileImageHtml = this.hasStudentProfileImage(user)
+        ? `
+          <div class="text-center mb-3">
+            <img
+              src="${user.profileImageUrl}"
+              alt="${user.firstName} ${user.lastName}"
+              class="img-thumbnail border"
+              style="width: 88px; height: 88px; object-fit: cover"
+            />
+          </div>
+        `
+        : "";
 
       // Format user details for display
       const userDetailsHtml = `
         <div class="text-start">
+          ${profileImageHtml}
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Name:</strong></div>
             <div class="col-sm-8">${user.firstName} ${user.lastName} ${user.otherName || ""}</div>
           </div>
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Email:</strong></div>
-            <div class="col-sm-8">${user.email}</div>
+            <div class="col-sm-8 d-flex align-items-center gap-2 flex-wrap">${user.email}${this.getVerificationBadgeHtml(user.isEmailVerified, "email")}</div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Phone:</strong></div>
+            <div class="col-sm-8">${user.phone || "-"}</div>
           </div>
           <div class="row mb-3">
             <div class="col-sm-4"><strong>User Type:</strong></div>
@@ -273,7 +324,7 @@ export default {
             <div class="col-sm-8">${user.studentDepartment}</div>
           </div>
           `
-              : ""
+                : ""
           }
           ${
             user.position
@@ -290,7 +341,7 @@ export default {
             <div class="col-sm-8">${user.studentProgram}</div>
           </div>
           `
-              : ""
+                : ""
           }
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Status:</strong></div>
@@ -302,14 +353,24 @@ export default {
           </div>
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Created:</strong></div>
-            <div class="col-sm-8">${this.formatDate(user.createdAt)}</div>
+            <div class="col-sm-8">${this.formatDateTime(user.createdAt)}</div>
           </div>
+          ${
+            user.updatedAt
+              ? `
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>Last Updated:</strong></div>
+            <div class="col-sm-8">${this.formatDateTime(user.updatedAt)}</div>
+          </div>
+          `
+              : ""
+          }
           ${
             user.lastLogin
               ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Last Login:</strong></div>
-            <div class="col-sm-8">${this.formatDate(user.lastLogin)}</div>
+            <div class="col-sm-8">${this.formatDateTime(user.lastLogin)}</div>
           </div>
           `
               : ""
@@ -320,11 +381,14 @@ export default {
       Swal.fire({
         title: "User Details",
         html: userDetailsHtml,
-        icon: "info",
         width: "600px",
-        confirmButtonText: "Close",
+        heightAuto: false,
+        showConfirmButton: false,
+        showCloseButton: true,
         customClass: {
           container: "user-details-modal",
+          popup: "user-details-popup",
+          htmlContainer: "user-details-content",
         },
       });
     },
@@ -1288,8 +1352,18 @@ export default {
                 <tr v-for="user in users" :key="user._id">
                   <td>
                     <div class="d-flex align-items-center">
-                      <div class="bg-staff-light rounded-circle p-2 me-2">
-                        <i class="bi bi-person text-staff-primary"></i>
+                      <div
+                        class="bg-staff-light rounded-circle overflow-hidden d-flex align-items-center justify-content-center me-2"
+                        style="width: 40px; height: 40px"
+                      >
+                        <img
+                          v-if="hasStudentProfileImage(user)"
+                          :src="user.profileImageUrl"
+                          :alt="`${user.firstName} ${user.lastName}`"
+                          class="w-100 h-100"
+                          style="object-fit: cover"
+                        />
+                        <i v-else class="bi bi-person text-staff-primary"></i>
                       </div>
                       <div>
                         <div class="fw-medium">
@@ -1299,10 +1373,16 @@ export default {
                         <div class="small text-muted" v-if="user.staffId">
                           Staff ID: {{ user.staffId }}
                         </div>
-                        <div class="small text-muted" v-else-if="user.matriculationNumber">
+                        <div
+                          class="small text-muted"
+                          v-else-if="user.matriculationNumber"
+                        >
                           Matric No: {{ user.matriculationNumber }}
                         </div>
-                        <div class="small text-muted" v-else-if="user.applicationNumber">
+                        <div
+                          class="small text-muted"
+                          v-else-if="user.applicationNumber"
+                        >
                           Application No: {{ user.applicationNumber }}
                         </div>
                         <div class="small text-muted" v-else>
@@ -1313,9 +1393,20 @@ export default {
                   </td>
                   <td>
                     <div>
-                      <div class="small">
-                        {{ user.email ?? "-"}} <br />
-                        {{ user.phone ?? "-" }}
+                      <div class="small contact-details">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                          <span>{{ user.email ?? "-" }}</span>
+                          <span
+                            :class="getVerificationMeta(user.isEmailVerified, 'email').badgeClass"
+                            :title="getVerificationMeta(user.isEmailVerified, 'email').srLabel"
+                            :aria-label="getVerificationMeta(user.isEmailVerified, 'email').srLabel"
+                          >
+                            <i
+                              :class="getVerificationMeta(user.isEmailVerified, 'email').iconClass"
+                            ></i>
+                          </span>
+                        </div>
+                        <div class="mt-1 text-muted">{{ user.phone ?? "-" }}</div>
                       </div>
                     </div>
                   </td>
@@ -1338,8 +1429,14 @@ export default {
                           {{ user.position || "-" }}
                         </div>
                       </template>
-                      <template v-else-if="user.studentDepartment || user.studentProgram">
-                        <div class="small">{{ user.studentDepartment || "-" }}</div>
+                      <template
+                        v-else-if="
+                          user.studentDepartment || user.studentProgram
+                        "
+                      >
+                        <div class="small">
+                          {{ user.studentDepartment || "-" }}
+                        </div>
                         <div class="small text-muted">
                           {{ user.studentProgram || "-" }}
                         </div>
@@ -1749,145 +1846,6 @@ export default {
       </div>
     </div>
 
-    <!-- User Details View Modal -->
-    <div
-      class="modal fade"
-      :class="{ show: showUserModal && selectedUser && !isEditMode }"
-      :style="{
-        display:
-          showUserModal && selectedUser && !isEditMode ? 'block' : 'none',
-      }"
-      tabindex="-1"
-    >
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">
-              <i class="bi bi-person-circle me-2"></i>
-              User Details
-            </h5>
-            <button
-              type="button"
-              class="btn-close"
-              @click="closeUserModal"
-            ></button>
-          </div>
-          <div class="modal-body" v-if="selectedUser">
-            <div class="row">
-              <div class="col-md-8">
-                <h6 class="fw-bold">
-                  {{ selectedUser.firstName }} {{ selectedUser.lastName }}
-                </h6>
-                <p class="text-muted mb-2" v-if="selectedUser.otherName">
-                  Other Name: {{ selectedUser.otherName }}
-                </p>
-                <p class="mb-2">
-                  <strong>Email:</strong> {{ selectedUser.email }}
-                </p>
-                <p class="mb-2">
-                  <strong>Role:</strong>
-                  <span
-                    class="badge rounded-pill"
-                    :class="getRoleBadgeClass(selectedUser.role)"
-                  >
-                    {{ selectedUser.role.toUpperCase() }}
-                  </span>
-                </p>
-                <p class="mb-2" v-if="selectedUser.staffId">
-                  <strong>Staff ID:</strong> {{ selectedUser.staffId }}
-                </p>
-                <p class="mb-2" v-else-if="selectedUser.matriculationNumber">
-                  <strong>Matric No:</strong> {{ selectedUser.matriculationNumber }}
-                </p>
-                <p class="mb-2" v-else-if="selectedUser.applicationNumber">
-                  <strong>Application No:</strong> {{ selectedUser.applicationNumber }}
-                </p>
-                <p class="mb-2" v-if="selectedUser.department">
-                  <strong>Department:</strong> {{ selectedUser.department }}
-                </p>
-                <p class="mb-2" v-else-if="selectedUser.studentDepartment">
-                  <strong>Department:</strong> {{ selectedUser.studentDepartment }}
-                </p>
-                <p class="mb-2" v-if="selectedUser.position">
-                  <strong>Position:</strong> {{ selectedUser.position }}
-                </p>
-                <p class="mb-2" v-else-if="selectedUser.studentProgram">
-                  <strong>Program:</strong> {{ selectedUser.studentProgram }}
-                </p>
-                <p class="mb-2" v-if="selectedUser.roleName">
-                  <strong>Role:</strong> {{ selectedUser.roleName }}
-                </p>
-                <p class="mb-2">
-                  <strong>Status:</strong>
-                  <span
-                    class="badge rounded-pill"
-                    :class="getStatusBadgeClass(selectedUser.isActive)"
-                  >
-                    {{ selectedUser.isActive ? "ACTIVE" : "INACTIVE" }}
-                  </span>
-                </p>
-                <p class="mb-2">
-                  <strong>Email Verified:</strong>
-                  <span
-                    :class="
-                      selectedUser.isEmailVerified
-                        ? 'text-success'
-                        : 'text-warning'
-                    "
-                  >
-                    {{ selectedUser.isEmailVerified ? "Yes" : "No" }}
-                  </span>
-                </p>
-                <p class="mb-2">
-                  <strong>Created:</strong>
-                  {{ formatDateTime(selectedUser.createdAt) }}
-                </p>
-                <p class="mb-2" v-if="selectedUser.updatedAt">
-                  <strong>Last Updated:</strong>
-                  {{ formatDateTime(selectedUser.updatedAt) }}
-                </p>
-              </div>
-              <div class="col-md-4">
-                <div class="bg-light p-3 rounded">
-                  <h6 class="fw-bold mb-3">Quick Actions</h6>
-                  <div class="d-grid gap-2">
-                    <button
-                      class="btn btn-outline-primary btn-sm"
-                      @click="editUser(selectedUser)"
-                    >
-                      <i class="bi bi-pencil me-2"></i>Edit User
-                    </button>
-                    <button
-                      class="btn btn-outline-warning btn-sm"
-                      @click="resetPassword(selectedUser)"
-                    >
-                      <i class="bi bi-key me-2"></i>Reset Password
-                    </button>
-                    <button
-                      class="btn btn-outline-secondary btn-sm"
-                      @click="updateUserStatus(selectedUser)"
-                    >
-                      <i class="bi bi-arrow-repeat me-2"></i
-                      >{{ selectedUser.isActive ? "Deactivate" : "Activate" }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="closeUserModal"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Modal Backdrop -->
     <div
       class="modal-backdrop fade"
@@ -1963,6 +1921,17 @@ export default {
   margin-bottom: 0.5rem;
 }
 
+:global(.user-details-modal .user-details-popup) {
+  height: 90vh;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+:global(.user-details-modal .user-details-content) {
+  overflow-y: auto;
+}
+
 .pagination .page-item.active .page-link {
   color: white;
   background-color: var(--staff-primary);
@@ -1980,6 +1949,10 @@ export default {
 
 .modal.show {
   animation: modalFadeIn 0.3s ease-out;
+}
+
+.contact-details {
+  line-height: 1.35;
 }
 
 @keyframes modalFadeIn {

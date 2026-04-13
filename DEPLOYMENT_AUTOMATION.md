@@ -235,6 +235,8 @@ sudo -u deploy pm2 status
 sudo -u deploy pm2 logs alecons-api --lines 100
 sudo -u deploy pm2 save
 
+Clear all PM2 logs:
+sudo -u deploy pm2 flush
 
 ### Troubleshooting PM2 ownership
 

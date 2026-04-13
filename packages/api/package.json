@@ -14,8 +14,7 @@
     "start:prod": "node dist/main",
     "test": "echo \"No tests yet\"",
     "clean": "rm -rf node_modules yarn.lock package-lock.json dist* tsconfig.build.tsbuildinfo",
-    "seed:staff": "ts-node -r tsconfig-paths/register src/scripts/seed-staff.ts",
-    "cleanup:application-phones": "ts-node -r tsconfig-paths/register src/scripts/cleanup-application-phones.ts"
+    "seed:staff": "ts-node -r tsconfig-paths/register src/scripts/seed-staff.ts"
   },
   "keywords": [],
   "author": "",

@@ -142,6 +142,7 @@ export class AuthService {
             firstName,
             otherName,
             lastName,
+            phone,
             role: UserRole.APPLICANT,
             isEmailVerified: false,
             emailVerificationToken: verificationToken,
@@ -182,8 +183,6 @@ export class AuthService {
         // Add optional fields if provided
         if (dateOfBirth) applicationData.dob = new Date(dateOfBirth);
         if (gender) applicationData.gender = gender;
-        if (phone) applicationData.phone = phone;
-
         const application = new this.applicationModel(applicationData);
         await application.save();
 
@@ -214,6 +213,7 @@ export class AuthService {
                 firstName: user.firstName,
                 otherName: user.otherName,
                 lastName: user.lastName,
+                phone: user.phone,
                 role: user.role,
                 fullName: user.fullName,
                 isEmailVerified: user.isEmailVerified,
@@ -301,6 +301,7 @@ export class AuthService {
                 firstName: user.firstName,
                 otherName: user.otherName,
                 lastName: user.lastName,
+                phone: user.phone,
                 role: user.role,
                 fullName: user.fullName,
                 isEmailVerified: user.isEmailVerified,
@@ -468,6 +469,7 @@ export class AuthService {
                         firstName: user.firstName,
                         otherName: user.otherName,
                         lastName: user.lastName,
+                        phone: user.phone,
                         role: user.role,
                         isActive: user.isActive,
                         isEmailVerified: user.isEmailVerified,
@@ -725,6 +727,7 @@ export class AuthService {
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
+            phone: user.phone,
             fullName: user.fullName,
             role: user.role,
             isActive: user.isActive,
@@ -795,6 +798,7 @@ export class AuthService {
                 email: user.email,
                 firstName: user.firstName,
                 lastName: user.lastName,
+                phone: user.phone,
                 fullName: user.fullName,
                 role: user.role,
                 isActive: user.isActive,

@@ -185,16 +185,16 @@ export default {
     },
 
     userPhone() {
-      // Phone number is stored in application object
-      const applicationPhone = this.application?.phone;
+      const profilePhone = this.user?.phone;
       
       logger.info('Phone data check:', {
-        applicationPhone,
+        profilePhone,
+        userPhone: this.user?.phone,
         hasApplication: !!this.application,
         applicationKeys: this.application ? Object.keys(this.application) : []
       });
       
-      return applicationPhone || 'N/A';
+      return profilePhone || 'N/A';
     },
 
     userLocation() {

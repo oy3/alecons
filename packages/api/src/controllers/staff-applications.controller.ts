@@ -152,6 +152,7 @@ export class StaffApplicationsController {
                             $concat: ['$user.firstName', ' ', '$user.lastName']
                         },
                         email: '$user.email',
+                        phone: '$user.phone',
                         programName: '$program.name',
                         hasJambScore: {
                             $cond: [{ $ne: ['$jambScore', null] }, 1, 0]
@@ -458,6 +459,9 @@ export class StaffApplicationsController {
 
             const stats = await this.applicationModel.aggregate([
                 {
+                    $match: { isActive: true }
+                },
+                {
                     $group: {
                         _id: '$status',
                         count: { $sum: 1 }
@@ -466,6 +470,21 @@ export class StaffApplicationsController {
             ]);
 
             const totalApplications = await this.applicationModel.countDocuments({ isActive: true });
+            const pendingApplications = await this.applicationModel.countDocuments({
+                isActive: true,
+                status: ApplicationStatus.PENDING,
+            });
+            const admittedStudents = await this.applicationModel.countDocuments({
+                isActive: true,
+                $or: [
+                    { admissionDecision: AdmissionDecision.GRANTED },
+                    { status: ApplicationStatus.ADMITTED },
+                    {
+                        status: ApplicationStatus.COMPLETED,
+                        admissionDecision: AdmissionDecision.GRANTED,
+                    },
+                ],
+            });
 
             const statsObject = stats.reduce((acc, stat) => {
                 acc[stat._id] = stat.count;
@@ -478,6 +497,8 @@ export class StaffApplicationsController {
                 success: true,
                 data: {
                     total: totalApplications,
+                    pending: pendingApplications,
+                    admitted: admittedStudents,
                     byStatus: statsObject
                 }
             };

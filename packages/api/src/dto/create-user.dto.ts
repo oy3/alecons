@@ -17,6 +17,10 @@ export class CreateUserDto {
     @IsNotEmpty()
     lastName: string;
 
+    @IsString()
+    @IsOptional()
+    phone?: string;
+
     @IsBoolean()
     @IsOptional()
     isActive?: boolean = true;

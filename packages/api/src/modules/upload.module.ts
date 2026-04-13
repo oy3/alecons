@@ -8,6 +8,7 @@ import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { Program, ProgramSchema } from '../schemas/program.schema';
 import { ProgramType, ProgramTypeSchema } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeSchema } from '../schemas/program-mode.schema';
+import { User, UserSchema } from '../schemas/user.schema';
 import { AcademicSessionsModule } from './academic-sessions.module';
 import * as multer from 'multer';
 
@@ -19,7 +20,8 @@ import * as multer from 'multer';
             { name: Application.name, schema: ApplicationSchema },
             { name: Program.name, schema: ProgramSchema },
             { name: ProgramType.name, schema: ProgramTypeSchema },
-            { name: ProgramMode.name, schema: ProgramModeSchema }
+            { name: ProgramMode.name, schema: ProgramModeSchema },
+            { name: User.name, schema: UserSchema }
         ]),
         MulterModule.register({
             // Configure multer for memory storage (files will be uploaded to Spaces)

@@ -18,6 +18,10 @@ export class CreateStaffDto {
     lastName: string;
 
     @IsString()
+    @IsOptional()
+    phone?: string;
+
+    @IsString()
     @IsNotEmpty()
     department: string;
 

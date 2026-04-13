@@ -21,6 +21,7 @@ import { Program, ProgramDocument } from '../schemas/program.schema';
 import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
 import { SessionControlsService } from '../services/session-controls.service';
+import { User, UserDocument } from '../schemas/user.schema';
 
 interface UploadFileDto {
     fileType: 'profile_picture' | 'olevel_result' | 'reference_letter';
@@ -40,6 +41,7 @@ export class ApplicationUploadController {
         @InjectModel(Program.name) private programModel: Model<ProgramDocument>,
         @InjectModel(ProgramType.name) private programTypeModel: Model<ProgramTypeDocument>,
         @InjectModel(ProgramMode.name) private programModeModel: Model<ProgramModeDocument>,
+        @InjectModel(User.name) private userModel: Model<UserDocument>,
     ) { }
 
     @Post('upload')
@@ -342,7 +344,11 @@ export class ApplicationUploadController {
                 // Personal information
                 application.dob = applicationData.personalInfo.dob ? new Date(applicationData.personalInfo.dob) : undefined;
                 application.gender = applicationData.personalInfo.gender;
-                application.phone = applicationData.personalInfo.phone;
+                if (applicationData.personalInfo.phone) {
+                    await this.userModel.findByIdAndUpdate(req.user._id, {
+                        phone: applicationData.personalInfo.phone,
+                    });
+                }
                 application.religion = applicationData.personalInfo.religion;
                 application.maritalStatus = applicationData.personalInfo.maritalStatus;
                 application.address = applicationData.personalInfo.address;
@@ -454,7 +460,7 @@ export class ApplicationUploadController {
                     religion: application.religion,
                     maritalStatus: application.maritalStatus,
                     address: application.address,
-                    phone: application.phone,
+                    phone: applicationData.personalInfo.phone,
                     gender: application.gender,
                     stateOfOrigin: application.stateOfOrigin,
                     lga: application.lga,
@@ -470,7 +476,7 @@ export class ApplicationUploadController {
                     religion: savedApplication.religion,
                     maritalStatus: savedApplication.maritalStatus,
                     address: savedApplication.address,
-                    phone: savedApplication.phone,
+                    phone: applicationData.personalInfo.phone,
                     gender: savedApplication.gender,
                     stateOfOrigin: savedApplication.stateOfOrigin,
                     lga: savedApplication.lga,

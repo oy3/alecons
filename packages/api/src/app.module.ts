@@ -13,6 +13,7 @@ import { UploadModule } from './modules/upload.module';
 import { AcademicSessionsModule } from './modules/academic-sessions.module';
 import { DepartmentsModule } from './modules/departments.module';
 import { ExamModule } from './modules/exam.module';
+import { StaffDashboardModule } from './modules/staff-dashboard.module';
 import { UserManagementModule } from './modules/user-management.module';
 import { StudentModule } from './modules/student.module';
 import { CoursesModule } from './courses/courses.module';
@@ -68,6 +69,7 @@ import { AdmissionLetterPdfService } from './services/admission-letter-pdf.servi
         DepartmentsModule,
         CoursesModule,
         ExamModule,
+        StaffDashboardModule,
         UserManagementModule,
         StudentModule,
     ],

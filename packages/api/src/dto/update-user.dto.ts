@@ -13,6 +13,10 @@ export class UpdateUserDto {
     @IsOptional()
     lastName?: string;
 
+    @IsString()
+    @IsOptional()
+    phone?: string;
+
     @IsBoolean()
     @IsOptional()
     isActive?: boolean;

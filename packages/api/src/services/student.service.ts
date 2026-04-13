@@ -99,6 +99,7 @@ export class StudentService {
                         firstName: (student.userId as any).firstName,
                         otherName: (student.userId as any).otherName,
                         lastName: (student.userId as any).lastName,
+                        phone: (student.userId as any).phone,
                         role: (student.userId as any).role,
                         isActive: (student.userId as any).isActive,
                         isEmailVerified: (student.userId as any).isEmailVerified,

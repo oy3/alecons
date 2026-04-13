@@ -15,6 +15,10 @@ export class UpdateStaffDto {
 
     @IsString()
     @IsOptional()
+    phone?: string;
+
+    @IsString()
+    @IsOptional()
     department?: string;
 
     @IsString()

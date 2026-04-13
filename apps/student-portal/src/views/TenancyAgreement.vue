@@ -53,7 +53,7 @@ export default {
     // Pre-fill user data
     if (this.user) {
       this.formData.tenantName = `${this.user.firstName} ${this.user.otherName} ${this.user.lastName}`;
-      this.formData.phoneNumber = authStore.application.phone || "";
+      this.formData.phoneNumber = authStore.user?.phone || "";
       this.formData.courseOfStudy = authStore.fullProgramWithMode || "";
       this.formData.residentialAddress = authStore.application.address || "";
     }

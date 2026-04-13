@@ -6,6 +6,10 @@ import * as crypto from "crypto";
 import { User, UserDocument, UserRole } from "../schemas/user.schema";
 import { Staff, StaffDocument } from "../schemas/staff.schema";
 import { Role, RoleDocument } from "../schemas/role.schema";
+import { Student, StudentDocument } from "../schemas/student.schema";
+import { Application, ApplicationDocument } from "../schemas/application.schema";
+import { Program, ProgramDocument } from "../schemas/program.schema";
+import { Department, DepartmentDocument } from "../schemas/department.schema";
 import { EmailService } from "./email.service";
 import { CreateUserDto } from "../dto/create-user.dto";
 import { UpdateUserDto } from "../dto/update-user.dto";
@@ -20,8 +24,113 @@ export class UserManagementService {
         @InjectModel(User.name) private userModel: Model<UserDocument>,
         @InjectModel(Staff.name) private staffModel: Model<StaffDocument>,
         @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
+        @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
+        @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
+        @InjectModel(Program.name) private programModel: Model<ProgramDocument>,
+        @InjectModel(Department.name) private departmentModel: Model<DepartmentDocument>,
         private emailService: EmailService
     ) { }
+
+    private buildStudentProgramLabel(application: any): string | undefined {
+        const programType = application?.programTypeId?.type;
+        const programMode = application?.programModeId?.mode;
+        const programName = application?.programId?.name;
+
+        return [programType, programMode, programName].filter(Boolean).join(' ') || undefined;
+    }
+
+    private getStudentDepartmentName(application: any): string | undefined {
+        return application?.programId?.departmentId?.name;
+    }
+
+    private async getStudentApplicationDetails(userId: any, applicationId?: any) {
+        if (applicationId) {
+            const applicationById = await this.applicationModel
+                .findById(applicationId)
+                .populate({
+                    path: 'programId',
+                    select: 'name departmentId',
+                    populate: { path: 'departmentId', select: 'name' },
+                })
+                .populate('programTypeId', 'type')
+                .populate('programModeId', 'mode')
+                .select('applicationNumber matriculationNumber programId programTypeId programModeId')
+                .lean();
+
+            if (applicationById) {
+                return applicationById;
+            }
+        }
+
+        return this.applicationModel
+            .findOne({ userId })
+            .populate({
+                path: 'programId',
+                select: 'name departmentId',
+                populate: { path: 'departmentId', select: 'name' },
+            })
+            .populate('programTypeId', 'type')
+            .populate('programModeId', 'mode')
+            .select('applicationNumber matriculationNumber programId programTypeId programModeId')
+            .lean();
+    }
+
+    private async enrichUserWithProfileData(user: any) {
+        if (user.role === UserRole.STAFF || user.role === UserRole.ADMIN) {
+            const staff = await this.staffModel
+                .findOne({ userId: user._id })
+                .populate("roleId")
+                .lean();
+
+            if (staff) {
+                const role = staff.roleId as any;
+                return {
+                    ...user,
+                    staffId: staff.staffId,
+                    department: staff.department,
+                    position: staff.position,
+                    roleId: role._id,
+                    roleName: role.name,
+                    staffIsActive: staff.isActive,
+                };
+            }
+
+            return user;
+        }
+
+        const student = await this.studentModel
+            .findOne({ userId: user._id })
+            .populate("applicationId", "applicationNumber matriculationNumber phone")
+            .lean();
+
+        if (student) {
+            const application = await this.getStudentApplicationDetails(user._id, (student as any).applicationId?._id || (student as any).applicationId);
+            return {
+                ...user,
+                matriculationNumber:
+                    student.matriculationNumber || application?.matriculationNumber,
+                applicationNumber: application?.applicationNumber,
+                phone: user.phone,
+                studentDepartment: this.getStudentDepartmentName(application),
+                studentProgram: this.buildStudentProgramLabel(application),
+            };
+        }
+
+        const application = await this.getStudentApplicationDetails(user._id);
+
+        if (application) {
+            return {
+                ...user,
+                matriculationNumber: application.matriculationNumber,
+                applicationNumber: application.applicationNumber,
+                phone: user.phone,
+                studentDepartment: user.role === UserRole.STUDENT ? this.getStudentDepartmentName(application) : undefined,
+                studentProgram: user.role === UserRole.STUDENT ? this.buildStudentProgramLabel(application) : undefined,
+            };
+        }
+
+        return user;
+    }
 
     private async generateStaffId(department: string): Promise<string> {
         const prefix = "ALCN";
@@ -139,28 +248,7 @@ export class UserManagementService {
 
         // Get staff details for staff/admin users
         const usersWithStaffInfo = await Promise.all(
-            users.map(async (user) => {
-                if (user.role === UserRole.STAFF || user.role === UserRole.ADMIN) {
-                    const staff = await this.staffModel
-                        .findOne({ userId: user._id })
-                        .populate("roleId")
-                        .lean();
-
-                    if (staff) {
-                        const role = staff.roleId as any;
-                        return {
-                            ...user,
-                            staffId: staff.staffId,
-                            department: staff.department,
-                            position: staff.position,
-                            roleId: role._id,
-                            roleName: role.name,
-                            staffIsActive: staff.isActive,
-                        };
-                    }
-                }
-                return user;
-            })
+            users.map((user) => this.enrichUserWithProfileData(user))
         );
 
         return {
@@ -188,29 +276,23 @@ export class UserManagementService {
             throw new NotFoundException("User not found");
         }
 
-        // Get staff details if applicable
-        if (user.role === UserRole.STAFF || user.role === UserRole.ADMIN) {
-            const staff = await this.staffModel
-                .findOne({ userId: user._id })
-                .populate("roleId")
-                .lean();
+        const enrichedUser = await this.enrichUserWithProfileData(user);
 
-            if (staff) {
-                const role = staff.roleId as any;
+        if (
+            (enrichedUser.role === UserRole.STAFF || enrichedUser.role === UserRole.ADMIN) &&
+            enrichedUser.roleId
+        ) {
+            const role = await this.roleModel.findById(enrichedUser.roleId).select("modules").lean();
+
+            if (role) {
                 return {
-                    ...user,
-                    staffId: staff.staffId,
-                    department: staff.department,
-                    position: staff.position,
-                    roleId: role._id,
-                    roleName: role.name,
+                    ...enrichedUser,
                     roleModules: role.modules,
-                    staffIsActive: staff.isActive,
                 };
             }
         }
 
-        return user;
+        return enrichedUser;
     }
 
     async getRoles() {

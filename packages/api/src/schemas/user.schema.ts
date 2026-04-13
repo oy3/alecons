@@ -31,6 +31,9 @@ export class User {
     @Prop({ required: true })
     lastName: string;
 
+    @Prop()
+    phone?: string;
+
     @Prop({ default: true })
     isActive: boolean;
 

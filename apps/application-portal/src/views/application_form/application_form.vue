@@ -684,12 +684,13 @@ export default {
         this.firstName = this.user.firstName || "";
         this.lastName = this.user.lastName || "";
         this.email = this.user.email || "";
-        // phone is now stored in application collection, not user
+        this.phone = this.user.phone || "";
 
         logger.info("Prefilled user data:", {
           firstName: this.firstName,
           lastName: this.lastName,
           email: this.email,
+          phone: this.phone,
         });
       }
 
@@ -698,16 +699,16 @@ export default {
           applicationData: this.application,
           hasDob: !!this.application.dob,
           hasGender: !!this.application.gender,
-          hasPhone: !!this.application.phone,
+          hasPhone: !!this.user?.phone,
           dobValue: this.application.dob,
           genderValue: this.application.gender,
-          phoneValue: this.application.phone,
+          phoneValue: this.user?.phone,
         });
 
         // Prefill application-specific data if it exists
         this.middleName =
           this.application.middleName || this.user?.otherName || "";
-        this.phone = this.application.phone || ""; // Phone from application collection
+        this.phone = this.user?.phone || "";
         this.dateOfBirth = this.application.dob
           ? new Date(this.application.dob).toISOString().split("T")[0]
           : "";

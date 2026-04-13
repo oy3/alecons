@@ -143,6 +143,10 @@ class StaffApiService {
         return this.makeRequest(`/staff/applications/${id}`)
     }
 
+    async getApplicationsStats() {
+        return this.makeRequest('/staff/applications/stats/summary')
+    }
+
     async updateApplicationStatus(id, status, remarks = '') {
         return this.makeRequest(`/staff/applications/${id}/status`, {
             method: 'PATCH',

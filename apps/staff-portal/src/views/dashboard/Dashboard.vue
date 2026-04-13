@@ -40,32 +40,36 @@ export default {
 
         // Fetch all necessary data in parallel
         const [
-          academicSessionsResponse,
+          dashboardStatsResponse,
           recentAppsResponse,
-          allAppsResponse,
-          usersResponse,
           programTypesResponse,
-          programModesResponse,
-          studentPaymentsStatsResponse
+          programModesResponse
         ] = await Promise.all([
-          apiService.getAcademicSessions(),
+          apiService.getDashboardStats(),
           apiService.getApplications({ limit: 5, sort: 'createdAt', order: 'desc' }),
-          apiService.getApplications({ limit: 1000 }),
-          apiService.getUsers(),
           apiService.getProgramTypes(),
-          apiService.getProgramModes(),
-          apiService.getStudentPaymentsStats({ limit: 1000 })
+          apiService.getProgramModes()
         ])
 
-        // Process academic sessions
-        if (academicSessionsResponse.success) {
-          const sessionsData = academicSessionsResponse.data?.sessions || []
-          const sessions = Array.isArray(sessionsData) ? sessionsData : []
+        // Process dashboard summary stats
+        if (dashboardStatsResponse.success) {
+          const dashboardData = dashboardStatsResponse.data?.data || dashboardStatsResponse.data || {}
 
-          if (sessions.length > 0) {
-            this.currentAcademicSession = sessions.find(session => session.status === 'open') ||
-                                         sessions.find(session => session.status === 'ongoing') ||
-                                         sessions[0]
+          this.currentAcademicSession = dashboardData.currentAcademicSession || null
+          this.stats = {
+            ...this.stats,
+            ...(dashboardData.stats || {})
+          }
+        } else {
+          this.currentAcademicSession = null
+          this.stats = {
+            ...this.stats,
+            totalApplications: 0,
+            pendingApplications: 0,
+            admittedStudents: 0,
+            totalRevenue: 0,
+            totalUsers: 0,
+            systemHealth: 'Good'
           }
         }
 
@@ -127,66 +131,6 @@ export default {
         } else {
           this.recentApplications = []
         }
-
-        // Process all applications for stats calculation
-        if (allAppsResponse.success) {
-          const allAppsData = allAppsResponse.data?.applications ||
-                            allAppsResponse.data?.data ||
-                            allAppsResponse.data || []
-          const allApps = Array.isArray(allAppsData) ? allAppsData : []
-
-          this.stats.pendingApplications = allApps.filter(app => app.status === 'pending').length
-          this.stats.admittedStudents = allApps.filter(app =>
-            app.admissionDecision === 'admitted' ||
-            app.status === 'admitted' ||
-            (app.status === 'completed' && app.admissionDecision === 'admitted')
-          ).length
-        } else {
-          this.stats.pendingApplications = 0
-          this.stats.admittedStudents = 0
-        }
-
-        // Process users data
-        if (usersResponse.success) {
-          const usersData = usersResponse.data?.data ||
-                          usersResponse.data?.users ||
-                          usersResponse.data || []
-          const users = Array.isArray(usersData) ? usersData : []
-          this.stats.totalUsers = users.length
-        } else {
-          this.stats.totalUsers = 0
-        }
-
-        // Process student payments for revenue calculation
-        if (studentPaymentsStatsResponse.success) {
-          let revenue = 0
-
-          // If we have a current academic session, get revenue for that session
-          if (this.currentAcademicSession?.id) {
-            try {
-              const sessionFilteredResponse = await apiService.getStudentPaymentsStats({
-                academicSessionId: this.currentAcademicSession.id,
-                status: 'successful',
-                limit: 1000
-              })
-
-              if (sessionFilteredResponse.success) {
-                revenue = sessionFilteredResponse.data?.totalRevenue || 0
-              }
-            } catch (error) {
-              revenue = studentPaymentsStatsResponse.data?.totalRevenue || 0
-            }
-          } else {
-            revenue = studentPaymentsStatsResponse.data?.totalRevenue || 0
-          }
-
-          this.stats.totalRevenue = revenue
-        } else {
-          this.stats.totalRevenue = 0
-        }
-
-        // Set default system health
-        this.stats.systemHealth = 'Good'
 
         logger.info('Staff dashboard data loaded successfully')
       } catch (error) {

@@ -8,6 +8,10 @@ import { RoleSeederService } from '../services/role-seeder.service';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Staff, StaffSchema } from '../schemas/staff.schema';
 import { Role, RoleSchema } from '../schemas/role.schema';
+import { Student, StudentSchema } from '../schemas/student.schema';
+import { Application, ApplicationSchema } from '../schemas/application.schema';
+import { Program, ProgramSchema } from '../schemas/program.schema';
+import { Department, DepartmentSchema } from '../schemas/department.schema';
 import { EmailService } from '../services/email.service';
 
 @Module({
@@ -15,7 +19,11 @@ import { EmailService } from '../services/email.service';
         MongooseModule.forFeature([
             { name: User.name, schema: UserSchema },
             { name: Staff.name, schema: StaffSchema },
-            { name: Role.name, schema: RoleSchema }
+            { name: Role.name, schema: RoleSchema },
+            { name: Student.name, schema: StudentSchema },
+            { name: Application.name, schema: ApplicationSchema },
+            { name: Program.name, schema: ProgramSchema },
+            { name: Department.name, schema: DepartmentSchema }
         ])
     ],
     controllers: [UserManagementController, RolesController],

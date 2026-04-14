@@ -95,6 +95,62 @@ export default {
     this.removeScrollAndResizeListeners();
   },
   methods: {
+    normalizeNameValue(value) {
+      if (typeof value !== 'string') {
+        return value;
+      }
+
+      return value.trim().replace(/\s+/g, ' ').toLowerCase();
+    },
+
+    normalizeEmailValue(value) {
+      if (typeof value !== 'string') {
+        return value;
+      }
+
+      return value.trim().replace(/\s+/g, '').toLowerCase();
+    },
+
+    sanitizePhoneValue(value) {
+      if (typeof value !== 'string') {
+        return '';
+      }
+
+      let sanitized = value.replace(/[^\d+]/g, '');
+
+      if (sanitized.startsWith('+')) {
+        sanitized = `+${sanitized.slice(1).replace(/\+/g, '')}`;
+        return sanitized.slice(0, 14);
+      }
+
+      sanitized = sanitized.replace(/\+/g, '');
+      return sanitized.slice(0, 11);
+    },
+
+    normalizeRegistrationFields() {
+      this.formData.firstName = this.normalizeNameValue(this.formData.firstName);
+      this.formData.otherName = this.normalizeNameValue(this.formData.otherName || '');
+      this.formData.lastName = this.normalizeNameValue(this.formData.lastName);
+      this.formData.email = this.normalizeEmailValue(this.formData.email);
+      this.formData.confirmEmail = this.normalizeEmailValue(this.formData.confirmEmail);
+      this.formData.phone = this.sanitizePhoneValue(this.formData.phone);
+    },
+
+    normalizeField(field) {
+      if (['email', 'confirmEmail'].includes(field)) {
+        this.formData[field] = this.normalizeEmailValue(this.formData[field]);
+        return;
+      }
+
+      if (['firstName', 'otherName', 'lastName'].includes(field)) {
+        this.formData[field] = this.normalizeNameValue(this.formData[field] || '');
+      }
+    },
+
+    onPhoneInput(event) {
+      this.formData.phone = this.sanitizePhoneValue(event?.target?.value ?? this.formData.phone);
+    },
+
     async checkRegistrationEligibility() {
       try {
         logger.info('Checking registration eligibility...');
@@ -193,6 +249,8 @@ export default {
 
     async onSubmit() {
       try {
+        this.normalizeRegistrationFields();
+
         // Check if registration is allowed
         if (!this.registrationAllowed) {
           await Swal.fire({
@@ -288,6 +346,8 @@ export default {
     },
 
     validateForm() {
+      this.normalizeRegistrationFields();
+
       const {
         firstName,
         lastName,
@@ -590,8 +650,11 @@ export default {
                       type="text"
                       id="firstName"
                       v-model="formData.firstName"
+                      autocapitalize="off"
+                      spellcheck="false"
                       placeholder="John"
                       class="form-control"
+                      @blur="normalizeField('firstName')"
                       required
                     />
                   </div>
@@ -602,8 +665,11 @@ export default {
                       type="text"
                       id="otherName"
                       v-model="formData.otherName"
+                      autocapitalize="off"
+                      spellcheck="false"
                       placeholder="Matt"
                       class="form-control"
+                      @blur="normalizeField('otherName')"
                     />
                   </div>
 
@@ -615,8 +681,11 @@ export default {
                       type="text"
                       id="lastName"
                       v-model="formData.lastName"
+                      autocapitalize="off"
+                      spellcheck="false"
                       placeholder="Doe"
                       class="form-control"
+                      @blur="normalizeField('lastName')"
                       required
                     />
                   </div>
@@ -629,8 +698,11 @@ export default {
                       type="email"
                       id="email"
                       v-model="formData.email"
+                      autocapitalize="off"
+                      spellcheck="false"
                       placeholder="john.doe@mail.com"
                       class="form-control"
+                      @blur="normalizeField('email')"
                       required
                     />
                   </div>
@@ -643,8 +715,11 @@ export default {
                       type="email"
                       id="confirmEmail"
                       v-model="formData.confirmEmail"
+                      autocapitalize="off"
+                      spellcheck="false"
                       placeholder="john.doe@mail.com"
                       class="form-control"
+                      @blur="normalizeField('confirmEmail')"
                       required
                     />
                   </div>
@@ -657,8 +732,12 @@ export default {
                       type="tel"
                       id="phone"
                       v-model="formData.phone"
+                      inputmode="numeric"
+                      autocomplete="tel"
+                      maxlength="14"
                       placeholder="08012345678"
                       class="form-control"
+                      @input="onPhoneInput"
                       required
                     />
                   </div>

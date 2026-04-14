@@ -1,6 +1,6 @@
-import { Injectable, ConflictException, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -23,6 +23,7 @@ import { SessionControlsService } from '../services/session-controls.service';
 @Injectable()
 export class AuthService {
     private readonly logger = new Logger(AuthService.name);
+    private readonly maxApplicationNumberRetries = 3;
 
     constructor(
         @InjectModel(User.name) private userModel: Model<UserDocument>,
@@ -81,8 +82,101 @@ export class AuthService {
         };
     }
 
+    private buildApplicantUser(data: {
+        email: string;
+        password: string;
+        firstName: string;
+        otherName?: string;
+        lastName: string;
+        phone?: string;
+        verificationToken: string;
+        tokenExpires: Date;
+    }) {
+        return new this.userModel({
+            email: data.email,
+            passwordHash: data.password,
+            firstName: data.firstName,
+            otherName: data.otherName,
+            lastName: data.lastName,
+            phone: data.phone,
+            role: UserRole.APPLICANT,
+            isEmailVerified: false,
+            emailVerificationToken: data.verificationToken,
+            emailVerificationTokenExpires: data.tokenExpires,
+        });
+    }
+
+    private async createApplicantApplication(data: {
+        userId: Types.ObjectId;
+        programId: string;
+        programTypeId: string;
+        programModeId: string;
+        activeSessionId: Types.ObjectId;
+        dateOfBirth?: string;
+        gender?: string;
+        applicationNumber: string;
+    }) {
+        const applicationData: any = {
+            userId: data.userId,
+            applicationNumber: data.applicationNumber,
+            programId: new Types.ObjectId(data.programId),
+            programTypeId: new Types.ObjectId(data.programTypeId),
+            programModeId: new Types.ObjectId(data.programModeId),
+            entryAcademicSession: data.activeSessionId,
+            status: 'pending',
+            currentStage: 1,
+            referees: [],
+            examinations: [],
+            documents: {
+                olevelResults: [],
+                referenceLetters: []
+            },
+        };
+
+        if (data.dateOfBirth) applicationData.dob = new Date(data.dateOfBirth);
+        if (data.gender) applicationData.gender = data.gender;
+
+        return new this.applicationModel(applicationData);
+    }
+
+    private isTransactionUnsupportedError(error: any): boolean {
+        const errorMessage = error?.message || error?.errorResponse?.errmsg || '';
+        return error?.code === 20 || /Transaction numbers are only allowed on a replica set member or mongos/i.test(errorMessage);
+    }
+
+    private isDuplicateApplicationNumberError(error: any): boolean {
+        const keyValue = error?.keyValue || error?.errorResponse?.keyValue || {};
+        return error?.code === 11000 && Boolean(keyValue.applicationNumber);
+    }
+
+    private buildGenericRegistrationError(error: any): InternalServerErrorException {
+        this.logger.error('Applicant registration failed after retries:', error);
+        return new InternalServerErrorException('Registration failed. Please try again.');
+    }
+
+    private async buildApplicantApplicationWithNumber(data: {
+        userId: Types.ObjectId;
+        programId: string;
+        programTypeId: string;
+        programModeId: string;
+        activeSessionId: Types.ObjectId;
+        dateOfBirth?: string;
+        gender?: string;
+        session?: ClientSession;
+    }) {
+        const applicationNumber = await this.applicationNumberService.generateApplicationNumber(
+            data.programId,
+            data.activeSessionId.toString(),
+            data.session,
+        );
+
+        return this.createApplicantApplication({
+            ...data,
+            applicationNumber,
+        });
+    }
+
     async register(registerDto: RegisterDto) {
-        const session = await this.userModel.db.startSession();
         const {
             email,
             password,
@@ -137,64 +231,173 @@ export class AuthService {
 
         let user;
         let application;
+        let session = null;
 
-        try {
-            session.startTransaction();
-
-            user = new this.userModel({
+        const createRecordsWithFallback = async () => {
+            user = this.buildApplicantUser({
                 email,
-                passwordHash: password,
+                password,
                 firstName,
                 otherName,
                 lastName,
                 phone,
-                role: UserRole.APPLICANT,
-                isEmailVerified: false,
-                emailVerificationToken: verificationToken,
-                emailVerificationTokenExpires: tokenExpires,
+                verificationToken,
+                tokenExpires,
             });
 
-            await user.save({ session });
+            await user.save();
 
-            const applicationNumber = await this.applicationNumberService.generateApplicationNumber(
-                programId,
-                activeSession._id.toString(),
-            );
+            try {
+                let lastError;
 
-            const programObjectId = new Types.ObjectId(programId);
-            const programTypeObjectId = new Types.ObjectId(programTypeId);
-            const programModeObjectId = new Types.ObjectId(programModeId);
+                for (let attempt = 1; attempt <= this.maxApplicationNumberRetries; attempt += 1) {
+                    try {
+                        application = await this.buildApplicantApplicationWithNumber({
+                            userId: user._id,
+                            programId,
+                            programTypeId,
+                            programModeId,
+                            activeSessionId: activeSession._id,
+                            dateOfBirth,
+                            gender,
+                        });
 
-            const applicationData: any = {
-                userId: user._id,
-                applicationNumber,
-                programId: programObjectId,
-                programTypeId: programTypeObjectId,
-                programModeId: programModeObjectId,
-                entryAcademicSession: activeSession._id,
-                status: 'pending',
-                currentStage: 1,
-                referees: [],
-                examinations: [],
-                documents: {
-                    olevelResults: [],
-                    referenceLetters: []
-                },
-            };
+                        await application.save();
 
-            if (dateOfBirth) applicationData.dob = new Date(dateOfBirth);
-            if (gender) applicationData.gender = gender;
+                        if (attempt > 1) {
+                            this.logger.log('Applicant registration fallback recovered after duplicate application number retry', {
+                                email,
+                                applicationNumber: application.applicationNumber,
+                                attempt,
+                            });
+                        }
 
-            application = new this.applicationModel(applicationData);
-            await application.save({ session });
+                        return;
+                    } catch (error) {
+                        lastError = error;
 
-            await session.commitTransaction();
+                        if (!this.isDuplicateApplicationNumberError(error) || attempt === this.maxApplicationNumberRetries) {
+                            throw error;
+                        }
+
+                        this.logger.warn('Duplicate application number encountered during fallback registration; retrying application number generation', {
+                            email,
+                            attempt,
+                            maxAttempts: this.maxApplicationNumberRetries,
+                            applicationNumber: error?.keyValue?.applicationNumber || application?.applicationNumber,
+                        });
+                    }
+                }
+
+                throw lastError;
+            } catch (error) {
+                try {
+                    await this.userModel.deleteOne({ _id: user._id });
+                    this.logger.warn('Applicant registration fallback rolled back created user after downstream failure', {
+                        userId: user._id,
+                        email,
+                    });
+                } catch (cleanupError) {
+                    this.logger.error('Failed to rollback applicant user during fallback cleanup:', cleanupError);
+                }
+
+                throw error;
+            }
+        };
+
+        try {
+            let lastError;
+
+            for (let attempt = 1; attempt <= this.maxApplicationNumberRetries; attempt += 1) {
+                session = await this.userModel.db.startSession();
+
+                try {
+                    session.startTransaction();
+
+                    user = this.buildApplicantUser({
+                        email,
+                        password,
+                        firstName,
+                        otherName,
+                        lastName,
+                        phone,
+                        verificationToken,
+                        tokenExpires,
+                    });
+
+                    await user.save({ session });
+
+                    application = await this.buildApplicantApplicationWithNumber({
+                        userId: user._id,
+                        programId,
+                        programTypeId,
+                        programModeId,
+                        activeSessionId: activeSession._id,
+                        dateOfBirth,
+                        gender,
+                        session,
+                    });
+                    await application.save({ session });
+
+                    await session.commitTransaction();
+
+                    if (attempt > 1) {
+                        this.logger.log('Applicant registration transaction succeeded after duplicate application number retry', {
+                            email,
+                            applicationNumber: application.applicationNumber,
+                            attempt,
+                        });
+                    }
+
+                    lastError = null;
+                    break;
+                } catch (error) {
+                    lastError = error;
+
+                    if (session?.inTransaction()) {
+                        await session.abortTransaction();
+                    }
+
+                    if (this.isTransactionUnsupportedError(error)) {
+                        this.logger.warn('MongoDB transactions are unavailable; falling back to standalone-safe registration flow');
+                        await createRecordsWithFallback();
+                        lastError = null;
+                        break;
+                    }
+
+                    if (this.isDuplicateApplicationNumberError(error) && attempt < this.maxApplicationNumberRetries) {
+                        this.logger.warn('Duplicate application number encountered during transactional registration; retrying with a fresh number', {
+                            email,
+                            attempt,
+                            maxAttempts: this.maxApplicationNumberRetries,
+                            applicationNumber: error?.keyValue?.applicationNumber || application?.applicationNumber,
+                        });
+                        continue;
+                    }
+
+                    throw error;
+                } finally {
+                    if (session) {
+                        await session.endSession();
+                        session = null;
+                    }
+                }
+            }
+
+            if (lastError) {
+                throw lastError;
+            }
         } catch (error) {
-            await session.abortTransaction();
+            if (error instanceof ConflictException || error instanceof BadRequestException) {
+                throw error;
+            }
+
+            if (this.isDuplicateApplicationNumberError(error)) {
+                throw this.buildGenericRegistrationError(error);
+            }
+
             this.logger.error('Applicant registration transaction failed:', error);
-            throw error;
-        } finally {
-            await session.endSession();
+            throw this.buildGenericRegistrationError(error);
         }
 
         this.logger.log('Application created successfully', {

@@ -75,10 +75,12 @@ export default {
         { value: "academics", label: "Academics" },
         { value: "exams", label: "Exams" },
         { value: "users", label: "Users" },
+        { value: "utilities", label: "Utilities" },
         { value: "reports", label: "Reports" },
         { value: "settings", label: "Settings" },
       ],
       availablePermissions: [
+        { value: "view", label: "View" },
         { value: "create", label: "Create" },
         { value: "read", label: "Read/View" },
         { value: "update", label: "Update/Edit" },

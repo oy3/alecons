@@ -247,6 +247,27 @@ class StaffApiService {
         })
     }
 
+    // Utilities
+    async getApplicationNumberStats(year) {
+        const query = year ? `?year=${encodeURIComponent(year)}` : ''
+        return this.makeRequest(`/admin/application-numbers/stats${query}`)
+    }
+
+    async getApplicationCounterStatus({ academicSessionId, year } = {}) {
+        const params = new URLSearchParams()
+        if (academicSessionId) params.set('academicSessionId', academicSessionId)
+        if (year) params.set('year', year)
+        const query = params.toString()
+        return this.makeRequest(`/admin/application-numbers/counter${query ? `?${query}` : ''}`)
+    }
+
+    async repairApplicationCounters(year) {
+        return this.makeRequest('/admin/application-numbers/repair', {
+            method: 'POST',
+            body: JSON.stringify(year ? { year } : {}),
+        })
+    }
+
     // Health check
     async healthCheck() {
         return this.makeRequest('/health')

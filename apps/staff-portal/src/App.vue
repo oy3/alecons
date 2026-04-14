@@ -92,7 +92,7 @@ export default {
     watch(() => route.path, (newPath, oldPath) => {
       if (newPath !== oldPath && authStore.isAuthenticated) {
         const highPriorityRoutes = ['/dashboard', '/settings']
-        const normalPriorityRoutes = ['/applications', '/users', '/reports']
+        const normalPriorityRoutes = ['/applications', '/users', '/reports', '/utilities']
         
         if (highPriorityRoutes.includes(newPath)) {
           refreshUserData('route-change', 'high')

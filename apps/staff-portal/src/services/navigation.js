@@ -36,6 +36,12 @@ export const staffNavigationItems = [
         permissions: ['view', 'users:view']
     },
     {
+        title: 'Utilities',
+        icon: 'bi-tools',
+        route: '/utilities',
+        permissions: ['view', 'settings:view']
+    },
+    {
         title: 'Reports',
         icon: 'bi-graph-up',
         route: '/reports',

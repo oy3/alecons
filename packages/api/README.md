@@ -9,6 +9,40 @@ Backend API for the Alecons Application Portal built with NestJS, MongoDB, and J
 - MongoDB running locally or connection string
 - npm or yarn
 
+### Local MongoDB with transactions on macOS
+
+If you want local registration and other atomic write flows to use MongoDB transactions, run MongoDB as a single-node replica set instead of a standalone server.
+
+1. Ensure MongoDB is installed via Homebrew:
+```bash
+brew install mongodb-community
+```
+
+2. Enable replica set mode in `/opt/homebrew/etc/mongod.conf`:
+```yaml
+replication:
+  replSetName: rs0
+```
+
+3. Restart the service or your active launch agent:
+```bash
+brew services restart mongodb-community
+```
+
+If you use a custom launch agent instead of the Homebrew service, restart that agent after editing the config so `mongod` reloads the new settings.
+
+4. Initialize the single-node replica set once:
+```bash
+mongosh --eval "rs.initiate({_id: 'rs0', members: [{ _id: 0, host: '127.0.0.1:27017' }]})"
+```
+
+5. Verify the node becomes primary:
+```bash
+mongosh --eval "rs.status().members.map(m => ({ name: m.name, stateStr: m.stateStr }))"
+```
+
+Expected result should include `PRIMARY` for `127.0.0.1:27017`.
+
 ### Installation & Setup
 
 1. **Install dependencies:**
@@ -25,7 +59,7 @@ cp .env.example .env
 3. **Configure your `.env` file:**
 ```env
 # Database
-DATABASE_URL=mongodb://localhost:27017/alecons
+DATABASE_URL=mongodb://127.0.0.1:27017/alecons?replicaSet=rs0
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key-change-in-production

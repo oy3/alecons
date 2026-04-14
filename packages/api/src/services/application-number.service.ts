@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { AcademicSession } from '../schemas/academic-session.schema';
 
 interface ApplicationCounter {
@@ -34,11 +34,11 @@ export class ApplicationNumberService {
      * - PROGRAM_CODE: 2-digit program code (padded with 0 if needed)
      * - SEQUENCE: 4-digit sequence starting from 0001, then continues to 99990, 99991, etc.
      */
-    async generateApplicationNumber(programId: string, academicSessionId: string): Promise<string> {
+    async generateApplicationNumber(programId: string, academicSessionId: string, session?: ClientSession): Promise<string> {
         try {
             const { counterId, year, yearString } = await this.getCounterContext(academicSessionId);
             const programCode = await this.getProgramCode(programId);
-            const counter = await this.getNextSequenceNumber(counterId, year, academicSessionId);
+            const counter = await this.getNextSequenceNumber(counterId, year, academicSessionId, session);
             const sequenceStr = this.formatSequence(counter.sequence);
             const applicationNumber = `ALEC${yearString}${programCode}${sequenceStr}`;
 
@@ -54,7 +54,7 @@ export class ApplicationNumberService {
     /**
      * Atomic sequence number generation using MongoDB's findOneAndUpdate
      */
-    private async getNextSequenceNumber(counterId: string, year: number, academicSessionId: string): Promise<ApplicationCounter> {
+    private async getNextSequenceNumber(counterId: string, year: number, academicSessionId: string, session?: ClientSession): Promise<ApplicationCounter> {
         const countersCollection = this.getCountersCollection();
 
         const result = await countersCollection.findOneAndUpdate(
@@ -72,7 +72,8 @@ export class ApplicationNumberService {
             },
             {
                 upsert: true,
-                returnDocument: 'after'
+                returnDocument: 'after',
+                session,
             }
         );
 
@@ -185,12 +186,22 @@ export class ApplicationNumberService {
         return pattern.test(applicationNumber);
     }
 
+    private extractSequenceFromApplicationNumber(applicationNumber: string): number {
+        const match = applicationNumber?.match(/^ALEC\d{4}(\d{4,})$/);
+        if (!match) {
+            return 0;
+        }
+
+        return Number(match[1]) || 0;
+    }
+
     /**
      * Get statistics about application numbers for a given year
      */
     async getApplicationNumberStats(year?: number): Promise<{
         year: number;
         totalApplications: number;
+        highestSequence: number;
         byProgram: Array<{
             programCode: string;
             programName: string;
@@ -202,29 +213,26 @@ export class ApplicationNumberService {
             sequence: number;
             nextSequence: number;
             academicSessionId?: string;
+            status: 'healthy' | 'out-of-sync';
+            drift: number;
         } | null;
     }> {
         const targetYear = year || new Date().getFullYear();
-        const yearString = targetYear.toString().slice(-2);
         const counterId = this.buildCounterIdFromYear(targetYear);
 
         const countersCollection = this.getCountersCollection();
         const counter = await countersCollection.findOne({ _id: counterId });
 
-        if (!counter) {
-            return {
-                year: targetYear,
-                totalApplications: 0,
-                byProgram: [],
-                counter: null,
-            };
-        }
-
         const applications = await this.applicationModel
-            .find({ entryAcademicSession: counter.academicSessionId })
+            .find({ applicationNumber: { $regex: `^${counterId}` } })
             .populate('programId', 'code name')
             .select('applicationNumber programId')
             .lean();
+
+        const highestSequence = applications.reduce((highest: number, app: any) => {
+            const sequence = this.extractSequenceFromApplicationNumber(app.applicationNumber);
+            return sequence > highest ? sequence : highest;
+        }, 0);
 
         const groupedPrograms = new Map<string, {
             programCode: string;
@@ -262,21 +270,24 @@ export class ApplicationNumberService {
 
         return {
             year: targetYear,
-            totalApplications: counter.sequence,
+            totalApplications: applications.length,
+            highestSequence,
             byProgram,
-            counter: {
+            counter: counter ? {
                 id: counter._id,
                 sequence: counter.sequence,
                 nextSequence: counter.sequence + 1,
                 academicSessionId: counter.academicSessionId?.toString?.(),
-            },
+                status: counter.sequence === highestSequence ? 'healthy' : 'out-of-sync',
+                drift: highestSequence - counter.sequence,
+            } : null,
         };
     }
 
     /**
      * Repair year/session counters using actual applications.
      */
-    async repairCounters(year?: number): Promise<{ repaired: string[]; errors: string[] }> {
+    async repairCounters(year?: number): Promise<{ repaired: Array<{ counterId: string; previousSequence: number; newSequence: number; highestSequence: number; totalApplications: number }>; errors: string[] }> {
         const targetYear = year || new Date().getFullYear();
         const repaired = [];
         const errors = [];
@@ -290,58 +301,51 @@ export class ApplicationNumberService {
                 .select('applicationNumber entryAcademicSession')
                 .lean();
 
-            const countersByYear = new Map<string, {
-                counterId: string;
-                academicSessionId: string;
-                year: number;
-                count: number;
-            }>();
-
-            for (const app of applications) {
-                const session = app.entryAcademicSession;
-                if (!session?._id || !session?.sessionYear) {
-                    continue;
-                }
-
-                const sessionYear = this.extractSessionStartYear(session.sessionYear);
-                const counterId = this.buildCounterIdFromYear(sessionYear);
-                const key = counterId;
-
-                if (!countersByYear.has(key)) {
-                    countersByYear.set(key, {
-                        counterId,
-                        academicSessionId: session._id.toString(),
-                        year: sessionYear,
-                        count: 0,
-                    });
-                }
-
-                countersByYear.get(key)!.count += 1;
-            }
-
             const countersCollection = this.getCountersCollection();
 
-            for (const group of countersByYear.values()) {
-                const currentCounter = await countersCollection.findOne({ _id: group.counterId });
+            const counterId = this.buildCounterIdFromYear(targetYear);
+            const currentCounter = await countersCollection.findOne({ _id: counterId });
 
-                if (!currentCounter || currentCounter.sequence !== group.count) {
-                    await countersCollection.replaceOne(
-                        { _id: group.counterId },
-                        {
-                            _id: group.counterId,
-                            sequence: group.count,
-                            year: group.year,
-                            academicSessionId: new Types.ObjectId(group.academicSessionId),
-                            createdAt: currentCounter?.createdAt || new Date(),
-                            updatedAt: new Date(),
-                            repairedAt: new Date()
-                        } as any,
-                        { upsert: true }
-                    );
+            if (!applications.length) {
+                return { repaired, errors };
+            }
 
-                    repaired.push(`${group.counterId}: ${currentCounter?.sequence || 0} → ${group.count}`);
-                    this.logger.log(`Repaired counter ${group.counterId}: ${currentCounter?.sequence || 0} → ${group.count}`);
-                }
+            const highestSequence = applications.reduce((highest: number, app: any) => {
+                const sequence = this.extractSequenceFromApplicationNumber(app.applicationNumber);
+                return sequence > highest ? sequence : highest;
+            }, 0);
+
+            const sessionWithYear = applications.find((app: any) => app.entryAcademicSession?._id && app.entryAcademicSession?.sessionYear)?.entryAcademicSession;
+
+            if (!sessionWithYear?._id || !sessionWithYear?.sessionYear) {
+                throw new Error(`Unable to determine academic session for ${counterId} repair`);
+            }
+
+            const parsedYear = this.extractSessionStartYear(sessionWithYear.sessionYear);
+
+            if (!currentCounter || currentCounter.sequence !== highestSequence) {
+                await countersCollection.replaceOne(
+                    { _id: counterId },
+                    {
+                        _id: counterId,
+                        sequence: highestSequence,
+                        year: parsedYear,
+                        academicSessionId: new Types.ObjectId(sessionWithYear._id.toString()),
+                        createdAt: currentCounter?.createdAt || new Date(),
+                        updatedAt: new Date(),
+                        repairedAt: new Date()
+                    } as any,
+                    { upsert: true }
+                );
+
+                repaired.push({
+                    counterId,
+                    previousSequence: currentCounter?.sequence || 0,
+                    newSequence: highestSequence,
+                    highestSequence,
+                    totalApplications: applications.length,
+                });
+                this.logger.log(`Repaired counter ${counterId}: ${currentCounter?.sequence || 0} → ${highestSequence}`);
             }
 
         } catch (error) {

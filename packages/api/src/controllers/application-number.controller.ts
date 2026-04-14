@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { ApplicationNumberService } from '../services/application-number.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-@Controller('/api/v1/admin/application-numbers')
+@Controller('admin/application-numbers')
 @UseGuards(JwtAuthGuard)
 export class ApplicationNumberController {
     constructor(private readonly appNumberService: ApplicationNumberService) { }

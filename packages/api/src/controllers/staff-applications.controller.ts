@@ -141,10 +141,38 @@ export class StaffApplicationsController {
                     }
                 },
                 {
+                    $lookup: {
+                        from: 'programtypes',
+                        localField: 'programTypeId',
+                        foreignField: '_id',
+                        as: 'programType'
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'programmodes',
+                        localField: 'programModeId',
+                        foreignField: '_id',
+                        as: 'programMode'
+                    }
+                },
+                {
                     $unwind: '$user'
                 },
                 {
                     $unwind: '$program'
+                },
+                {
+                    $unwind: {
+                        path: '$programType',
+                        preserveNullAndEmptyArrays: true,
+                    }
+                },
+                {
+                    $unwind: {
+                        path: '$programMode',
+                        preserveNullAndEmptyArrays: true,
+                    }
                 },
                 {
                     $addFields: {
@@ -154,6 +182,8 @@ export class StaffApplicationsController {
                         email: '$user.email',
                         phone: '$user.phone',
                         programName: '$program.name',
+                        programTypeLabel: { $ifNull: ['$programType.type', '$programType.description'] },
+                        programModeLabel: { $ifNull: ['$programMode.mode', '$programMode.description'] },
                         hasJambScore: {
                             $cond: [{ $ne: ['$jambScore', null] }, 1, 0]
                         }
@@ -209,6 +239,8 @@ export class StaffApplicationsController {
                     email: 1,
                     phone: 1,
                     programName: 1,
+                    programTypeLabel: 1,
+                    programModeLabel: 1,
                     status: 1,
                     admissionDecision: 1,
                     currentStage: 1,

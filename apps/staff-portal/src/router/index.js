@@ -62,6 +62,12 @@ const routes = [
         meta: { requiresAuth: true, permissions: ['view', 'users:view'] }
     },
     {
+        path: '/payments',
+        name: 'Payments',
+        component: () => import('../views/payments/Payments.vue'),
+        meta: { requiresAuth: true, permissions: ['view', 'read', 'payments:view', 'payments:read'] }
+    },
+    {
         path: '/utilities',
         name: 'Utilities',
         component: () => import('../views/utilities/Utilities.vue'),

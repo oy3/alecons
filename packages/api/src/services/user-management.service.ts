@@ -125,8 +125,14 @@ export class UserManagementService {
                 matriculationNumber: application.matriculationNumber,
                 applicationNumber: application.applicationNumber,
                 phone: user.phone,
-                studentDepartment: user.role === UserRole.STUDENT ? this.getStudentDepartmentName(application) : undefined,
-                studentProgram: user.role === UserRole.STUDENT ? this.buildStudentProgramLabel(application) : undefined,
+                studentDepartment:
+                    user.role === UserRole.STUDENT || user.role === UserRole.APPLICANT
+                        ? this.getStudentDepartmentName(application)
+                        : undefined,
+                studentProgram:
+                    user.role === UserRole.STUDENT || user.role === UserRole.APPLICANT
+                        ? this.buildStudentProgramLabel(application)
+                        : undefined,
             };
         }
 

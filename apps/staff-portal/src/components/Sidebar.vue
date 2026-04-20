@@ -60,13 +60,13 @@ export default {
   <aside
     class="sidebar d-none d-md-flex flex-column acon-bg-dark rounded-start-0 nav-custom-rounded text-white p-3"
   >
-    <div class="text-center my-4">
+    <div class="sidebar-logo text-center my-4 flex-shrink-0">
       <!-- <BrandLogo /> -->
       <img src="@shared/assets/logo.png" alt="Logo" width="70" class="" />
     </div>
 
     <!-- Navigation Menu -->
-    <div class="flex-grow-1">
+    <div class="sidebar-menu flex-grow-1">
       <nav class="nav flex-column">
         <div class="nav-item mb-3" v-for="item in menuItems" :key="item.route">
           <router-link
@@ -81,7 +81,7 @@ export default {
       </nav>
     </div>
 
-    <div class="p-3 border-top border-light border-opacity-25">
+    <div class="sidebar-footer p-3 border-top border-light border-opacity-25 flex-shrink-0">
       <button
         @click="logout"
         class="d-flex align-items-center nav-link text-white acon-link"
@@ -103,7 +103,33 @@ export default {
   width: 200px;
   min-width: 200px;
   max-width: 200px;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  position: sticky;
+  top: 0;
 }
+
+.sidebar-menu {
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  padding-right: 0.25rem;
+}
+
+.sidebar-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+}
+
+.sidebar-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .nav-link {
   color: rgba(255, 255, 255, 0.7);
   transition: all 0.3s ease;

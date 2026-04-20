@@ -71,6 +71,7 @@ export default {
       availableModules: [
         { value: "dashboard", label: "Dashboard" },
         { value: "applications", label: "Applications" },
+        { value: "payments", label: "Payments" },
         { value: "admissions", label: "Admissions" },
         { value: "academics", label: "Academics" },
         { value: "exams", label: "Exams" },

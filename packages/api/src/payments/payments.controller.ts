@@ -71,27 +71,6 @@ export class PaymentsController {
         }
     }
 
-    @Post('verify/:reference')
-    async verifyPayment(@Param('reference') reference: string) {
-        try {
-            const result = await this.paymentsService.verifyPayment(reference);
-
-            return {
-                success: true,
-                data: result
-            };
-        } catch (error) {
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Failed to verify payment',
-                    error: error.message
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR
-            );
-        }
-    }
-
     @Post('manual-transfer/submit')
     @UseInterceptors(FileInterceptor('file'))
     async submitManualTransfer(
@@ -118,6 +97,32 @@ export class PaymentsController {
                 {
                     success: false,
                     message: 'Failed to submit manual transfer receipt',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Post('verify/:reference')
+    @ApiOperation({ summary: 'Verify application portal payment' })
+    @ApiResponse({ status: 200, description: 'Payment verified successfully' })
+    async verifyPayment(@Param('reference') reference: string) {
+        try {
+            this.logger.log(`Verifying payment with reference: ${reference}`);
+
+            const result = await this.paymentsService.verifyPayment(reference);
+
+            return {
+                success: true,
+                data: result,
+            };
+        } catch (error) {
+            this.logger.error('Error verifying payment:', error);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to verify payment',
                     error: error.message,
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR,
@@ -334,47 +339,6 @@ export class StaffPaymentsController {
         }
     }
 
-    @Get(':id')
-    @ApiOperation({ summary: 'Get payment by ID' })
-    @ApiResponse({ status: 200, description: 'Payment retrieved successfully' })
-    async getPayment(@Param('id') id: string) {
-        try {
-            this.logger.log('Getting payment by ID:', id);
-
-            const payment = await this.paymentsService.getPaymentById(id);
-
-            if (!payment) {
-                throw new HttpException(
-                    {
-                        success: false,
-                        message: 'Payment not found'
-                    },
-                    HttpStatus.NOT_FOUND
-                );
-            }
-
-            return {
-                success: true,
-                data: payment
-            };
-        } catch (error) {
-            this.logger.error('Error getting payment:', error);
-
-            if (error instanceof HttpException) {
-                throw error;
-            }
-
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Failed to fetch payment',
-                    error: error.message
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR
-            );
-        }
-    }
-
     @Post()
     @ApiOperation({ summary: 'Create new payment' })
     @ApiResponse({ status: 201, description: 'Payment created successfully' })
@@ -585,6 +549,109 @@ export class StaffPaymentsController {
                 {
                     success: false,
                     message: 'Failed to fetch student payments statistics',
+                    error: error.message
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Get('student-payments')
+    @ApiOperation({ summary: 'Get student payment records for staff management' })
+    @ApiResponse({ status: 200, description: 'Student payment records retrieved successfully' })
+    async getStudentPayments(
+        @Query('page') page: number = 1,
+        @Query('limit') limit: number = 10,
+        @Query('search') search?: string,
+        @Query('date') date?: string,
+        @Query('status') status?: string,
+        @Query('paymentId') paymentId?: string,
+        @Query('method') method?: string,
+        @Query('programId') programId?: string,
+        @Query('academicSessionId') academicSessionId?: string,
+        @Query('sortBy') sortBy: string = 'paidAt',
+        @Query('sortOrder') sortOrder: string = 'desc',
+    ) {
+        try {
+            this.logger.log('Getting student payment records with filters:', {
+                page,
+                limit,
+                search,
+                date,
+                status,
+                paymentId,
+                method,
+                programId,
+                academicSessionId,
+                sortBy,
+                sortOrder,
+            });
+
+            const result = await this.paymentsService.getStudentPaymentsForManagement({
+                page: Number(page),
+                limit: Number(limit),
+                search,
+                date,
+                status: status as any,
+                paymentId,
+                method: method as any,
+                programId,
+                academicSessionId,
+                sortBy,
+                sortOrder: sortOrder === 'asc' ? 'asc' : 'desc',
+            });
+
+            return {
+                success: true,
+                data: result,
+            };
+        } catch (error) {
+            this.logger.error('Error getting student payment records:', error);
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to fetch student payment records',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Get(':id')
+    @ApiOperation({ summary: 'Get payment by ID' })
+    @ApiResponse({ status: 200, description: 'Payment retrieved successfully' })
+    async getPayment(@Param('id') id: string) {
+        try {
+            this.logger.log('Getting payment by ID:', id);
+
+            const payment = await this.paymentsService.getPaymentById(id);
+
+            if (!payment) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Payment not found'
+                    },
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            return {
+                success: true,
+                data: payment
+            };
+        } catch (error) {
+            this.logger.error('Error getting payment:', error);
+
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to fetch payment',
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR

@@ -89,9 +89,9 @@ export default {
       ></button>
     </div>
     
-    <div class="offcanvas-body p-0">
+    <div class="offcanvas-body mobile-sidebar-body p-0">
       <!-- Navigation Menu -->
-      <div class="p-3">
+      <div class="mobile-sidebar-menu p-3">
         <ul class="nav flex-column">
           <li class="nav-item" v-for="item in menuItems" :key="item.route">
             <router-link
@@ -162,5 +162,17 @@ export default {
 
 .offcanvas-header {
   background: linear-gradient(135deg, var(--staff-primary) 0%, var(--staff-secondary) 100%);
+}
+
+.mobile-sidebar-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mobile-sidebar-menu {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 </style>

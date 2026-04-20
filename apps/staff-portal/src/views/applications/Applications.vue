@@ -194,7 +194,13 @@ export default {
             email: app.email,
             phone: app.phone || 'N/A',
             program: app.programName,
+            programDisplay: this.getApplicationProgramDisplay({
+              program: app.programName,
+              programTypeLabel: app.programTypeLabel,
+              programModeLabel: app.programModeLabel
+            }),
             status: app.status,
+            currentStage: app.currentStage,
             profileImageUrl: app.profileImageUrl,
             submittedAt: app.createdAt,
             lastUpdated: app.updatedAt,
@@ -317,6 +323,16 @@ export default {
       return application?.programId?.name || application?.program || 'N/A'
     },
 
+    getApplicationProgramDisplay(application) {
+      const programType = application?.programTypeLabel || this.getProgramTypeLabel(application)
+      const studyMode = application?.programModeLabel || this.getStudyModeLabel(application)
+      const programName = this.getProgramName(application)
+
+      return [programType, studyMode, programName]
+        .filter(value => value && value !== 'N/A')
+        .join(' ') || 'N/A'
+    },
+
     getAcademicSessionLabel(application) {
       const session = application?.entryAcademicSession
       if (!session) return 'N/A'
@@ -332,7 +348,7 @@ export default {
       const programType = application?.programTypeId
       if (!programType) return 'N/A'
       if (typeof programType === 'string') return programType
-      return programType.description || programType.name || programType.type || 'N/A'
+      return programType.type || programType.name || programType.description || 'N/A'
     },
 
     getStudyModeLabel(application) {
@@ -1058,6 +1074,7 @@ export default {
                     <th>Applicant</th>
                     <th>Contact</th>
                     <th>Program</th>
+                    <th class="text-center">Stage</th>
                     <th class="text-center">Status</th>
                     <th class="text-center">Submitted</th>
                     <th>Actions</th>
@@ -1066,7 +1083,7 @@ export default {
                 <tbody>
                   <!-- No data message when no applications found -->
                   <tr v-if="paginatedApplications.length === 0">
-                    <td colspan="7" class="text-center py-5">
+                    <td colspan="8" class="text-center py-5">
                       <div class="text-muted">
                         <i class="bi bi-inbox fs-1 mb-3 d-block"></i>
                         <h5 class="mb-2">No Applications Found</h5>
@@ -1129,7 +1146,8 @@ export default {
                         <div class="small text-muted">{{ app.phone }}</div>
                       </div>
                     </td>
-                    <td>{{ app.program }}</td>
+                    <td>{{ app.programDisplay }}</td>
+                    <td class="text-center">{{ getStageLabel(app.currentStage) }}</td>
                     <td class="text-center">
                       <span
                         class="badge rounded-pill"
@@ -1339,8 +1357,8 @@ export default {
                           </div>
 
                           <p class="text-muted mb-3">
-                            {{ getProgramName(selectedApplication) }}
-                            <span v-if="selectedApplication.programId?.code">({{ selectedApplication.programId.code }})</span>
+                            {{ getApplicationProgramDisplay(selectedApplication) }}
+                            <!-- <span v-if="selectedApplication.programId?.code">({{ selectedApplication.programId.code }})</span> -->
                           </p>
 
                           <div class="d-flex flex-wrap gap-2 mb-3">

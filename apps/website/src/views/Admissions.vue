@@ -399,11 +399,16 @@ export default {
                 <span class="fw-medium">₦350,000</span>
               </div>
 
+              <div class="d-flex justify-content-between">
+                <span class="text-muted fw-light">Accommodation fee:</span>
+                <span class="fw-medium">₦105,000</span>
+              </div>
+
               <hr />
 
               <div class="d-flex justify-content-between acon-text-primary">
                 <span class="fw-medium">Total:</span>
-                <span class="fw-bold">₦700,000</span>
+                <span class="fw-bold">₦805,000</span>
               </div>
 
               <p class="mt-2 text-muted fw-light small">per session</p>

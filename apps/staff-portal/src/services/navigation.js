@@ -36,6 +36,12 @@ export const staffNavigationItems = [
         permissions: ['view', 'users:view']
     },
     {
+        title: 'Payments',
+        icon: 'bi-credit-card-2-front',
+        route: '/payments',
+        permissions: ['view', 'read', 'payments:view', 'payments:read']
+    },
+    {
         title: 'Utilities',
         icon: 'bi-tools',
         route: '/utilities',

@@ -180,6 +180,10 @@ export class PaymentsService {
         return this.buildPaymentReference();
     }
 
+    private escapeRegex(value: string): string {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
     private toDestinationAccountSummary(account?: Partial<PaymentDestinationAccount> & { _id?: Types.ObjectId | string } | null): DestinationAccountSummary | null {
         if (!account?._id) {
             return null;
@@ -1869,6 +1873,385 @@ export class PaymentsService {
             this.logger.error('Error getting student payments stats:', error);
             throw error;
         }
+    }
+
+    async getStudentPaymentsForManagement(filters: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        date?: string;
+        status?: PaymentStatus;
+        paymentId?: string;
+        method?: PaymentMethod;
+        programId?: string;
+        academicSessionId?: string;
+        sortBy?: string;
+        sortOrder?: 'asc' | 'desc';
+    } = {}) {
+        const page = Math.max(1, Number(filters.page) || 1);
+        const limit = Math.max(1, Number(filters.limit) || 10);
+        const skip = (page - 1) * limit;
+
+        const baseMatch: any = {};
+
+        if (filters.status) {
+            baseMatch.status = filters.status;
+        }
+
+        if (filters.method) {
+            baseMatch.method = filters.method;
+        }
+
+        if (filters.paymentId) {
+            if (!Types.ObjectId.isValid(filters.paymentId)) {
+                throw new Error('Invalid payment filter');
+            }
+            baseMatch.paymentId = new Types.ObjectId(filters.paymentId);
+        }
+
+        const pipeline: any[] = [
+            { $match: baseMatch },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'userId',
+                    foreignField: '_id',
+                    as: 'user',
+                },
+            },
+            {
+                $unwind: {
+                    path: '$user',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $lookup: {
+                    from: 'applications',
+                    localField: 'applicationId',
+                    foreignField: '_id',
+                    as: 'application',
+                },
+            },
+            {
+                $unwind: {
+                    path: '$application',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $lookup: {
+                    from: 'students',
+                    localField: 'userId',
+                    foreignField: 'userId',
+                    as: 'student',
+                },
+            },
+            {
+                $unwind: {
+                    path: '$student',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $lookup: {
+                    from: 'applications',
+                    localField: 'student.applicationId',
+                    foreignField: '_id',
+                    as: 'studentApplication',
+                },
+            },
+            {
+                $unwind: {
+                    path: '$studentApplication',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $addFields: {
+                    resolvedApplication: {
+                        $ifNull: ['$application', '$studentApplication'],
+                    },
+                    resolvedProgramId: {
+                        $ifNull: [
+                            '$student.programId',
+                            {
+                                $ifNull: ['$application.programId', '$studentApplication.programId'],
+                            },
+                        ],
+                    },
+                    resolvedProgramTypeId: {
+                        $ifNull: [
+                            '$student.programTypeId',
+                            {
+                                $ifNull: ['$application.programTypeId', '$studentApplication.programTypeId'],
+                            },
+                        ],
+                    },
+                    resolvedProgramModeId: {
+                        $ifNull: [
+                            '$student.programModeId',
+                            {
+                                $ifNull: ['$application.programModeId', '$studentApplication.programModeId'],
+                            },
+                        ],
+                    },
+                    resolvedAcademicSessionId: {
+                        $ifNull: [
+                            '$academicSessionId',
+                            {
+                                $ifNull: ['$student.academicSession', '$application.entryAcademicSession'],
+                            },
+                        ],
+                    },
+                    applicationNumber: {
+                        $ifNull: ['$application.applicationNumber', '$studentApplication.applicationNumber'],
+                    },
+                    matriculationNumber: {
+                        $ifNull: [
+                            '$student.matriculationNumber',
+                            {
+                                $ifNull: ['$application.matriculationNumber', '$studentApplication.matriculationNumber'],
+                            },
+                        ],
+                    },
+                    userName: {
+                        $trim: {
+                            input: {
+                                $concat: [
+                                    { $ifNull: ['$user.firstName', ''] },
+                                    ' ',
+                                    { $ifNull: ['$user.otherName', ''] },
+                                    ' ',
+                                    { $ifNull: ['$user.lastName', ''] },
+                                ],
+                            },
+                        },
+                    },
+                    effectivePaidAt: {
+                        $ifNull: ['$paidAt', '$createdAt'],
+                    },
+                },
+            },
+            {
+                $lookup: {
+                    from: 'programs',
+                    localField: 'resolvedProgramId',
+                    foreignField: '_id',
+                    as: 'program',
+                },
+            },
+            {
+                $lookup: {
+                    from: 'programtypes',
+                    localField: 'resolvedProgramTypeId',
+                    foreignField: '_id',
+                    as: 'programType',
+                },
+            },
+            {
+                $lookup: {
+                    from: 'programmodes',
+                    localField: 'resolvedProgramModeId',
+                    foreignField: '_id',
+                    as: 'programMode',
+                },
+            },
+            {
+                $lookup: {
+                    from: 'payments',
+                    localField: 'paymentId',
+                    foreignField: '_id',
+                    as: 'payment',
+                },
+            },
+            {
+                $lookup: {
+                    from: 'academicsessions',
+                    localField: 'resolvedAcademicSessionId',
+                    foreignField: '_id',
+                    as: 'academicSession',
+                },
+            },
+            {
+                $unwind: {
+                    path: '$program',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $unwind: {
+                    path: '$programType',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $unwind: {
+                    path: '$programMode',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $unwind: {
+                    path: '$payment',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $unwind: {
+                    path: '$academicSession',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $addFields: {
+                    paymentName: '$payment.name',
+                    programName: '$program.name',
+                    programTypeLabel: {
+                        $ifNull: ['$programType.type', { $ifNull: ['$programType.name', '$programType.description'] }],
+                    },
+                    programModeLabel: {
+                        $ifNull: ['$programMode.mode', { $ifNull: ['$programMode.name', '$programMode.description'] }],
+                    },
+                    academicSessionLabel: '$academicSession.sessionYear',
+                },
+            },
+        ];
+
+        if (filters.programId) {
+            if (!Types.ObjectId.isValid(filters.programId)) {
+                throw new Error('Invalid program filter');
+            }
+
+            pipeline.push({
+                $match: {
+                    resolvedProgramId: new Types.ObjectId(filters.programId),
+                },
+            });
+        }
+
+        if (filters.academicSessionId) {
+            if (!Types.ObjectId.isValid(filters.academicSessionId)) {
+                throw new Error('Invalid academic session filter');
+            }
+
+            pipeline.push({
+                $match: {
+                    resolvedAcademicSessionId: new Types.ObjectId(filters.academicSessionId),
+                },
+            });
+        }
+
+        if (filters.date) {
+            const start = new Date(filters.date);
+            if (Number.isNaN(start.getTime())) {
+                throw new Error('Invalid date filter');
+            }
+
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(start);
+            end.setDate(end.getDate() + 1);
+
+            pipeline.push({
+                $match: {
+                    effectivePaidAt: {
+                        $gte: start,
+                        $lt: end,
+                    },
+                },
+            });
+        }
+
+        if (filters.search?.trim()) {
+            const searchRegex = new RegExp(this.escapeRegex(filters.search.trim()), 'i');
+
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { userName: searchRegex },
+                        { paymentName: searchRegex },
+                        { applicationNumber: searchRegex },
+                        { matriculationNumber: searchRegex },
+                        { reference: searchRegex },
+                    ],
+                },
+            });
+        }
+
+        const sortFieldMap: Record<string, string> = {
+            createdAt: 'createdAt',
+            paidAt: 'effectivePaidAt',
+            amount: 'amount',
+            status: 'status',
+            userName: 'userName',
+            paymentName: 'paymentName',
+        };
+
+        const sortField = sortFieldMap[filters.sortBy || 'paidAt'] || 'effectivePaidAt';
+        const sortDirection = filters.sortOrder === 'asc' ? 1 : -1;
+
+        pipeline.push({
+            $facet: {
+                payments: [
+                    {
+                        $sort: {
+                            [sortField]: sortDirection,
+                            _id: sortDirection,
+                        },
+                    },
+                    { $skip: skip },
+                    { $limit: limit },
+                    {
+                        $project: {
+                            _id: 1,
+                            userId: '$user._id',
+                            userName: 1,
+                            email: '$user.email',
+                            applicationNumber: 1,
+                            matriculationNumber: 1,
+                            programName: 1,
+                            programTypeLabel: 1,
+                            programModeLabel: 1,
+                            academicSessionLabel: 1,
+                            paymentName: 1,
+                            paymentCode: '$payment.paymentCode',
+                            amount: 1,
+                            reference: 1,
+                            method: 1,
+                            status: 1,
+                            paidAt: 1,
+                            effectivePaidAt: 1,
+                            createdAt: 1,
+                            receiptUrl: 1,
+                            receiptOriginalName: 1,
+                            receiptUploadedAt: 1,
+                            verificationRemarks: 1,
+                            remarks: 1,
+                            channel: 1,
+                        },
+                    },
+                ],
+                totalCount: [
+                    { $count: 'count' },
+                ],
+            },
+        });
+
+        const [result] = await this.studentPaymentModel.aggregate(pipeline);
+
+        const payments = result?.payments || [];
+        const totalItems = result?.totalCount?.[0]?.count || 0;
+        const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+
+        return {
+            payments,
+            pagination: {
+                totalItems,
+                currentPage: page,
+                totalPages,
+                limit,
+            },
+        };
     }
 
     // Student Portal Specific Methods

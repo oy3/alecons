@@ -336,7 +336,7 @@ class StaffApiService {
     // Student Payments
     async getStudentPayments(filters = {}) {
         const queryParams = new URLSearchParams(filters).toString()
-        return this.makeRequest(`/staff/studentpayments${queryParams ? `?${queryParams}` : ''}`)
+        return this.makeRequest(`/staff/payments/student-payments${queryParams ? `?${queryParams}` : ''}`)
     }
 
     // Student Payments Statistics

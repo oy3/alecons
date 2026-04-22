@@ -87,7 +87,7 @@ export class StaffApplicationsController {
         @Query('page') page: number = 1,
         @Query('limit') limit: number = 10,
         @Query('status') status?: string,
-        @Query('program') program?: string,
+        @Query('programId') programId?: string,
         @Query('search') search?: string,
         @Query('sortBy') sortBy: string = 'createdAt',
         @Query('sortOrder') sortOrder: string = 'desc'
@@ -97,7 +97,7 @@ export class StaffApplicationsController {
                 page,
                 limit,
                 status,
-                program,
+                programId,
                 search,
                 sortBy,
                 sortOrder
@@ -110,11 +110,8 @@ export class StaffApplicationsController {
                 filter.status = status;
             }
 
-            if (program && program !== 'all') {
-                const programDoc = await this.programModel.findOne({ name: program });
-                if (programDoc) {
-                    filter.programId = programDoc._id;
-                }
+            if (programId && programId !== 'all') {
+                filter.programId = new Types.ObjectId(programId);
             }
 
             // Calculate pagination
@@ -122,8 +119,11 @@ export class StaffApplicationsController {
             const normalizedSortOrder = sortOrder === 'asc' ? 1 : -1;
 
             // Build aggregation pipeline
+            // All program info flows through programId → programs → programtypes/programmodes
             const pipeline = [
                 { $match: filter },
+
+                // 1. Resolve user info
                 {
                     $lookup: {
                         from: 'users',
@@ -132,6 +132,9 @@ export class StaffApplicationsController {
                         as: 'user'
                     }
                 },
+                { $unwind: '$user' },
+
+                // 2. Resolve the program document (single source of truth)
                 {
                     $lookup: {
                         from: 'programs',
@@ -140,53 +143,40 @@ export class StaffApplicationsController {
                         as: 'program'
                     }
                 },
+                { $unwind: '$program' },
+
+                // 3. Resolve programType through program.programTypeId
                 {
                     $lookup: {
                         from: 'programtypes',
-                        localField: 'programTypeId',
+                        localField: 'program.programTypeId',
                         foreignField: '_id',
                         as: 'programType'
                     }
                 },
+                { $unwind: { path: '$programType', preserveNullAndEmptyArrays: true } },
+
+                // 4. Resolve programMode through program.programModeId
                 {
                     $lookup: {
                         from: 'programmodes',
-                        localField: 'programModeId',
+                        localField: 'program.programModeId',
                         foreignField: '_id',
                         as: 'programMode'
                     }
                 },
-                {
-                    $unwind: '$user'
-                },
-                {
-                    $unwind: '$program'
-                },
-                {
-                    $unwind: {
-                        path: '$programType',
-                        preserveNullAndEmptyArrays: true,
-                    }
-                },
-                {
-                    $unwind: {
-                        path: '$programMode',
-                        preserveNullAndEmptyArrays: true,
-                    }
-                },
+                { $unwind: { path: '$programMode', preserveNullAndEmptyArrays: true } },
+
+                // 5. Compute display fields
                 {
                     $addFields: {
-                        applicantName: {
-                            $concat: ['$user.firstName', ' ', '$user.lastName']
-                        },
+                        applicantName: { $concat: ['$user.firstName', ' ', '$user.lastName'] },
                         email: '$user.email',
                         phone: '$user.phone',
                         programName: '$program.name',
-                        programTypeLabel: { $ifNull: ['$programType.type', '$programType.description'] },
-                        programModeLabel: { $ifNull: ['$programMode.mode', '$programMode.description'] },
-                        hasJambScore: {
-                            $cond: [{ $ne: ['$jambScore', null] }, 1, 0]
-                        }
+                        programTypeLabel: '$programType.type',
+                        programModeLabel: '$programMode.description',
+                        hasJambScore: { $cond: [{ $ne: ['$jambScore', null] }, 1, 0] }
                     }
                 }
             ];

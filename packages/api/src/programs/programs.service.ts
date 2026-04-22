@@ -715,6 +715,7 @@ export class ProgramsService {
             programType: program.programTypeId?.type || null,
             programModeId: this.extractReferenceId(program.programModeId),
             programMode: program.programModeId?.mode || null,
+            programModeDescription: program.programModeId?.description || null,
             durationYears: program.durationYears,
             active: program.active,
             createdAt: program.createdAt,

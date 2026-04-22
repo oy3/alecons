@@ -64,7 +64,7 @@ export default {
         { value: 'rejected', label: 'Rejected' }
       ],
 
-      programs: ['All Programs']
+      programs: []
     }
   },
   async mounted() {
@@ -87,36 +87,19 @@ export default {
   },
   computed: {
     filteredApplications() {
-      let filtered = this.applications
-
-      if (this.searchQuery) {
-        filtered = filtered.filter(app =>
-          app.applicantName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          app.applicationNumber.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          app.email.toLowerCase().includes(this.searchQuery.toLowerCase())
-        )
-      }
-
-      if (this.statusFilter !== 'all') {
-        filtered = filtered.filter(app => app.status === this.statusFilter)
-      }
-
-      if (this.programFilter !== 'all') {
-        filtered = filtered.filter(app => app.program === this.programFilter)
-      }
-
-      return filtered
+      // All filtering (status, program, search) is handled server-side in loadApplications().
+      // Returning applications directly avoids double-filtering bugs.
+      return this.applications
     },
 
     paginatedApplications() {
-      const start = (this.currentPage - 1) * this.perPage
-      const end = start + this.perPage
-      return this.filteredApplications.slice(start, end)
+      // Server already paginates; just return the current page's data directly
+      return this.filteredApplications
     },
 
     totalPages() {
-      const calculated = Math.ceil(this.filteredApplications.length / this.perPage)
-      return this.apiTotalPages || Math.max(1, calculated)
+      // Always use the server-returned total pages
+      return Math.max(1, this.apiTotalPages)
     },
 
     documentSections() {
@@ -177,7 +160,7 @@ export default {
         }
 
         if (this.programFilter && this.programFilter !== 'all') {
-          params.program = this.programFilter
+          params.programId = this.programFilter
         }
 
         if (this.searchQuery && this.searchQuery.trim()) {
@@ -194,11 +177,9 @@ export default {
             email: app.email,
             phone: app.phone || 'N/A',
             program: app.programName,
-            programDisplay: this.getApplicationProgramDisplay({
-              program: app.programName,
-              programTypeLabel: app.programTypeLabel,
-              programModeLabel: app.programModeLabel
-            }),
+            programDisplay: [app.programTypeLabel, app.programModeLabel, app.programName]
+              .filter(Boolean)
+              .join(' ') || 'N/A',
             status: app.status,
             currentStage: app.currentStage,
             profileImageUrl: app.profileImageUrl,
@@ -778,18 +759,18 @@ export default {
     async loadPrograms() {
       try {
         logger.info('Loading programs for filter...')
-        logger.info('API Service token:', { hasToken: !!apiService.token })
 
-        // Use the programs endpoint to get available programs
-        const response = await apiService.makeRequest('/programs')
+        const response = await apiService.getPrograms({ limit: 100 })
 
         if (response.success && response.data) {
-          this.programs = ['All Programs', ...response.data.map(program => program.name)]
+          this.programs = response.data.map(p => ({
+            label: [p.programType, p.programModeDescription, p.name].filter(Boolean).join(' '),
+            value: p.id
+          }))
           logger.info('Programs loaded successfully', { count: response.data.length })
         }
       } catch (error) {
         logger.error('Failed to load programs:', error)
-        // Keep default programs if API fails
       }
     },
 
@@ -1025,11 +1006,11 @@ export default {
                 >
                   <option value="all">All Programs</option>
                   <option
-                    v-for="program in programs.slice(1)"
-                    :key="program"
-                    :value="program"
+                    v-for="program in programs"
+                    :key="program.value"
+                    :value="program.value"
                   >
-                    {{ program }}
+                    {{ program.label }}
                   </option>
                 </select>
               </div>

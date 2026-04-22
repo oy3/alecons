@@ -255,8 +255,15 @@ export default {
 
     async loadPrograms() {
       try {
-        // This would be an API call to get programs
-        this.programs = ["Nursing Science", "Midwifery", "Public Health"];
+        const response = await apiService.getPrograms({ limit: 100 });
+        if (response.success && response.data) {
+          this.programs = response.data.map((p) => ({
+            label: [p.programType, p.programModeDescription, p.name]
+              .filter(Boolean)
+              .join(" "),
+            value: p.id,
+          }));
+        }
       } catch (error) {
         logger.error("Failed to load programs:", error);
       }
@@ -275,7 +282,7 @@ export default {
         };
 
         if (this.programFilter && this.programFilter !== "all") {
-          params.program = this.programFilter;
+          params.programId = this.programFilter;
         }
 
         if (this.searchQuery && this.searchQuery.trim()) {
@@ -291,7 +298,9 @@ export default {
             applicantName: app.applicantName,
             email: app.email,
             phone: app.phone || "N/A",
-            programName: app.programName,
+            programDisplay: [app.programTypeLabel, app.programModeLabel, app.programName]
+              .filter(Boolean)
+              .join(" ") || "N/A",
             status: app.status,
             admissionDecision: app.admissionDecision,
             currentStage: app.currentStage,
@@ -731,10 +740,10 @@ export default {
                   <option value="all">All Programs</option>
                   <option
                     v-for="program in programs"
-                    :key="program"
-                    :value="program"
+                    :key="program.value"
+                    :value="program.value"
                   >
-                    {{ program }}
+                    {{ program.label }}
                   </option>
                 </select>
               </div>
@@ -831,7 +840,7 @@ export default {
                       </div>
                     </div>
                   </td>
-                  <td>{{ application.programName }}</td>
+                  <td>{{ application.programDisplay }}</td>
                   <td>
                     <span class="badge bg-info">
                       {{
@@ -1479,7 +1488,7 @@ export default {
                     <div class="col-12">
                       <label class="form-label fw-semibold">Phone Number</label>
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.phone || "N/A" }}
+                        {{ selectedApplicationDetails.userId?.phone || "N/A" }}
                       </p>
                     </div>
                     <div class="col-12">

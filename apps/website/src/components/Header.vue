@@ -8,26 +8,26 @@ export default {
     },
     applicationPortalUrl() {
       return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
-    }
+    },
   },
   methods: {
     closeNavbar() {
       // Close the navbar collapse when a link is clicked
-      const navbarCollapse = document.getElementById('navbarText');
-      const navbarToggler = document.querySelector('.navbar-toggler');
-      
-      if (navbarCollapse && navbarCollapse.classList.contains('show')) {
+      const navbarCollapse = document.getElementById("navbarText");
+      const navbarToggler = document.querySelector(".navbar-toggler");
+
+      if (navbarCollapse && navbarCollapse.classList.contains("show")) {
         // Remove the 'show' class to close the navbar
-        navbarCollapse.classList.remove('show');
-        
+        navbarCollapse.classList.remove("show");
+
         // Update the toggler button state
         if (navbarToggler) {
-          navbarToggler.setAttribute('aria-expanded', 'false');
-          navbarToggler.classList.add('collapsed');
+          navbarToggler.setAttribute("aria-expanded", "false");
+          navbarToggler.classList.add("collapsed");
         }
       }
-    }
-  }
+    },
+  },
 };
 </script>
 
@@ -45,8 +45,7 @@ export default {
       <span class="navbar-text text-white">Omuoke, Ekiti State, Nigeria</span>
     </div>
     <div class="container-fluid bg-white py-2">
-        <router-link
-              to="/"class="navbar-brand d-flex align-items-center">
+      <router-link to="/" class="navbar-brand d-flex align-items-center">
         <img
           src="@shared/assets/logo.png"
           alt="Logo"
@@ -145,9 +144,17 @@ export default {
         >
           Apply Now
         </a>
-        <button type="button" class="btn btn-acon-secondary">
+        <a
+          href="https://wa.me/2347084601610"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="btn btn-acon-secondary me-2"
+        >
+          <i class="bi bi-whatsapp fs-6"></i> Chat on WhatsApp
+        </a>
+        <!-- <button type="button" class="btn btn-acon-secondary">
           Virtual Tour
-        </button>
+        </button> -->
       </div>
     </div>
   </nav>
@@ -155,7 +162,7 @@ export default {
 
 <style scoped>
 .nav-link.acon-active {
-  color: #C62828 !important;
+  color: #c62828 !important;
   font-weight: 600 !important;
 }
 </style>

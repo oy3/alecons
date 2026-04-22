@@ -1,18 +1,18 @@
 <script lang="js">
 export default {
-    name: "Footer",
-    components: {},
-      computed: {
+  name: "Footer",
+  components: {},
+  computed: {
     registrationUrl() {
       return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
     },
     applicationPortalUrl() {
       return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
     },
-    studentPortalUrl(){
-          return import.meta.env.VITE_APP_STUDENT_PORTAL_URL;
+    studentPortalUrl() {
+      return import.meta.env.VITE_APP_STUDENT_PORTAL_URL;
     },
-    staffPortalUrl(){
+    staffPortalUrl() {
       return import.meta.env.VITE_APP_STAFF_PORTAL_URL;
     }
   }
@@ -24,22 +24,11 @@ export default {
     <footer class="pt-5">
       <div class="row">
         <div class="col-md-4 mb-3">
-          <router-link
-            to="/"
-            class="navbar-brand d-flex align-items-center mb-3"
-          >
-            <img
-              src="@shared/assets/logo.png"
-              alt="ALECON logo"
-              class="bg-white rounded-circle p-0 me-2"
-              width="60"
-            />
+          <router-link to="/" class="navbar-brand d-flex align-items-center mb-3">
+            <img src="@shared/assets/logo.png" alt="ALECON logo" class="bg-white rounded-circle p-0 me-2" width="60" />
             <div class="text-start text-uppercase d-flex flex-column">
               <span class="fw-bold text-white">ALEBIOSU COLLEGE</span>
-              <span
-                class="fw-light text-white"
-                style="letter-spacing: 1px; font-size: smaller"
-              >
+              <span class="fw-light text-white" style="letter-spacing: 1px; font-size: smaller">
                 OF NURSING Sciences
               </span>
             </div>
@@ -68,30 +57,31 @@ export default {
 
           <ul class="list-unstyled d-flex mt-3">
             <li class="me-3">
-              <a
-                href="#"
+              <a href="#"
                 class="d-flex align-items-center justify-content-center text-white bg-white bg-opacity-25 rounded-circle social-link"
-                style="width: 40px; height: 40px"
-              >
+                style="width: 40px; height: 40px">
                 <i class="bi bi-facebook fs-5"></i>
               </a>
             </li>
             <li class="me-3">
-              <a
-                href="#"
+              <a href="#"
                 class="d-flex align-items-center justify-content-center text-white bg-white bg-opacity-25 rounded-circle social-link"
-                style="width: 40px; height: 40px"
-              >
+                style="width: 40px; height: 40px">
                 <i class="bi bi-twitter-x fs-5"></i>
               </a>
             </li>
             <li class="me-3">
-              <a
-                href="#"
+              <a href="#"
                 class="d-flex align-items-center justify-content-center text-white bg-white bg-opacity-25 rounded-circle social-link"
-                style="width: 40px; height: 40px"
-              >
+                style="width: 40px; height: 40px">
                 <i class="bi bi-instagram fs-5"></i>
+              </a>
+            </li>
+            <li class="me-3">
+              <a href="https://wa.me/2347084601610" target="_blank" rel="noopener noreferrer"
+                class="d-flex align-items-center justify-content-center text-white bg-white bg-opacity-25 rounded-circle social-link"
+                style="width: 40px; height: 40px">
+                <i class="bi bi-whatsapp fs-5"></i>
               </a>
             </li>
           </ul>
@@ -100,34 +90,22 @@ export default {
           <h5 class="mb-4">Quick Links</h5>
           <ul class="nav flex-column">
             <li class="nav-item mb-2">
-              <router-link to="/about" class="nav-link p-0 fw-light"
-                >About ALECONS</router-link
-              >
+              <router-link to="/about" class="nav-link p-0 fw-light">About ALECONS</router-link>
             </li>
             <li class="nav-item mb-2">
-              <router-link to="/programs" class="nav-link p-0 fw-light"
-                >Programs</router-link
-              >
+              <router-link to="/programs" class="nav-link p-0 fw-light">Programs</router-link>
             </li>
             <li class="nav-item mb-2">
-              <router-link to="/admissions" class="nav-link p-0 fw-light"
-                >Admissions</router-link
-              >
+              <router-link to="/admissions" class="nav-link p-0 fw-light">Admissions</router-link>
             </li>
             <li class="nav-item mb-2">
-              <router-link to="/faculty" class="nav-link p-0 fw-light"
-                >Faculty</router-link
-              >
+              <router-link to="/faculty" class="nav-link p-0 fw-light">Faculty</router-link>
             </li>
             <li class="nav-item mb-2">
-              <a href="#" class="nav-link p-0 text-body-secondary fw-light"
-                >Student Life</a
-              >
+              <a href="#" class="nav-link p-0 text-body-secondary fw-light">Student Life</a>
             </li>
             <li class="nav-item mb-2">
-              <a href="#" class="nav-link p-0 text-body-secondary fw-light"
-                >Campus Tour</a
-              >
+              <a href="#" class="nav-link p-0 text-body-secondary fw-light">Campus Tour</a>
             </li>
           </ul>
         </div>
@@ -135,34 +113,22 @@ export default {
           <h5 class="mb-4">Our Programs</h5>
           <ul class="nav flex-column">
             <li class="nav-item mb-2">
-              <router-link to="/programs" class="nav-link p-0 fw-light"
-                >Basic Nursing</router-link
-              >
+              <router-link to="/programs" class="nav-link p-0 fw-light">Basic Nursing</router-link>
             </li>
             <li class="nav-item mb-2">
-              <router-link to="/programs" class="nav-link p-0 fw-light"
-                >Post-Basic Nursing</router-link
-              >
+              <router-link to="/programs" class="nav-link p-0 fw-light">Post-Basic Nursing</router-link>
             </li>
             <li class="nav-item mb-2">
-              <router-link to="/programs" class="nav-link p-0 fw-light"
-                >Midwifery Program</router-link
-              >
+              <router-link to="/programs" class="nav-link p-0 fw-light">Midwifery Program</router-link>
             </li>
             <li class="nav-item mb-2">
-              <router-link to="/programs" class="nav-link p-0 fw-light"
-                >Continuing Education</router-link
-              >
+              <router-link to="/programs" class="nav-link p-0 fw-light">Continuing Education</router-link>
             </li>
             <li class="nav-item mb-2">
-              <router-link to="/programs" class="nav-link p-0 fw-light"
-                >Clinical Rotations</router-link
-              >
+              <router-link to="/programs" class="nav-link p-0 fw-light">Clinical Rotations</router-link>
             </li>
             <li class="nav-item mb-2">
-              <router-link to="/programs" class="nav-link p-0 fw-light"
-                >Simulation Labs</router-link
-              >
+              <router-link to="/programs" class="nav-link p-0 fw-light">Simulation Labs</router-link>
             </li>
           </ul>
         </div>
@@ -170,21 +136,12 @@ export default {
           <h5 class="mb-4">Student Resources</h5>
           <ul class="nav flex-column">
             <li class="nav-item mb-2">
-              <a
-                :href="studentPortalUrl"
-                target="_blank"
-                class="nav-link p-0 fw-light"
-              >
+              <a :href="studentPortalUrl" target="_blank" class="nav-link p-0 fw-light">
                 Student Portal
               </a>
             </li>
             <li class="nav-item mb-2">
-              <a
-                :href="staffPortalUrl"
-                target="_blank"
-                class="nav-link p-0 fw-light"
-                >Staff Portal</a
-              >
+              <a :href="staffPortalUrl" target="_blank" class="nav-link p-0 fw-light">Staff Portal</a>
             </li>
             <li class="nav-item mb-2">
               <a href="#" class="nav-link p-0 fw-light">Academic Calendar</a>
@@ -201,38 +158,24 @@ export default {
           </ul>
         </div>
       </div>
-      <div
-        class="d-flex flex-column flex-sm-row justify-content-between pt-4 mt-4 border-top"
-      >
+      <div class="d-flex flex-column flex-sm-row justify-content-between pt-4 mt-4 border-top">
         <p>
           © 2025 Alebiosu College of Nursing Sciences (ALECONS). All rights
           reserved.
         </p>
         <ul class="list-unstyled d-flex">
           <li class="ms-3">
-            <router-link
-              to="/privacy-policy"
-              class="acon-link text-white fw-light small"
-              aria-label="Privacy Policy"
-            >
+            <router-link to="/privacy-policy" class="acon-link text-white fw-light small" aria-label="Privacy Policy">
               Privacy Policy
             </router-link>
           </li>
           <li class="ms-3">
-            <router-link
-              to="/terms-of-service"
-              class="acon-link text-white fw-light small"
-              aria-label="TOS"
-            >
+            <router-link to="/terms-of-service" class="acon-link text-white fw-light small" aria-label="TOS">
               Terms of Service
             </router-link>
           </li>
           <li class="ms-3">
-            <router-link
-              to="/accessibility"
-              class="acon-link text-white fw-light small"
-              aria-label="Accessibility"
-            >
+            <router-link to="/accessibility" class="acon-link text-white fw-light small" aria-label="Accessibility">
               Accessibility
             </router-link>
           </li>
@@ -250,7 +193,7 @@ export default {
 .nav-item .nav-link.active,
 .nav-item .nav-link:hover,
 .nav-item .nav-link.active:hover {
-  color:  var(--acon-accent)!important;
+  color: var(--acon-accent) !important;
 }
 
 ul.no-bullets {

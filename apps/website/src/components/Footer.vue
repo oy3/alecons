@@ -158,10 +158,18 @@ export default {
           </ul>
         </div>
       </div>
-      <div class="d-flex flex-column flex-sm-row justify-content-between pt-4 mt-4 border-top">
+      <div class="d-flex flex-column flex-sm-row justify-content-between pt-4 mt-4 border-top small">
         <p>
-          © 2025 Alebiosu College of Nursing Sciences (ALECONS). All rights
+          © {{ new Date().getFullYear() }} ALECONS. All rights
           reserved.
+        </p>
+        <p class="text-white d-inline-flex align-items-center">
+          <img class="me-2" height="25" src="../assets/img/rootlab.svg" alt="" />
+          Powered by
+          <a href="https://rootlab.africa" target="_blank"
+            class="text-decoration-none text-decoration-underline text-white acon-link d-inline-flex align-items-center ms-1">
+            rootlab
+          </a>
         </p>
         <ul class="list-unstyled d-flex">
           <li class="ms-3">

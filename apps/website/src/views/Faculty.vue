@@ -85,7 +85,8 @@ export default {
           bio: "Mrs. Akute provides strategic leadership for the college and supports a strong academic culture grounded in student development and institutional growth.",
           email: "provost@alecons.edu.ng",
           phone: "+234 916 000 8679",
-          image: "https://placehold.co/100x100?text=IMG",
+          image: new URL("../assets/img/yewande-akute.svg", import.meta.url)
+            .href,
         },
         {
           name: "Dr. Olaopa",
@@ -111,7 +112,8 @@ export default {
           bio: "Mr. Kehinde oversees key administrative processes and supports smooth academic operations across admissions, records, and institutional coordination.",
           email: "registrar@alecons.edu.ng",
           phone: "",
-          image: "https://placehold.co/100x100?text=IMG",
+          image: new URL("../assets/img/tunji-kehinde.svg", import.meta.url)
+            .href,
         },
         {
           name: "Mr. Donatus Okoroji",
@@ -122,9 +124,23 @@ export default {
           experience: "4+ years",
           experienceYears: 4,
           bio: "Mr. Okoroji manages the college's financial administration and brings practical digital literacy support to institutional and academic processes.",
-          email: "bursar@alecons.edu.ng",
+          email: "okoroji.donatus@alecons.edu.ng",
           phone: "",
-          image: "https://placehold.co/100x100?text=IMG",
+          image: new URL("../assets/img/donatus-okoroji.svg", import.meta.url)
+            .href,
+        },
+        {
+          name: "Mrs. Osho",
+          role: "Hostel Matron",
+          qualifications: "",
+          department: "Student Affairs",
+          specialization: "Clinical Instructor",
+          experience: "10+ years",
+          experienceYears: 10,
+          bio: "Mrs. Osho supports student welfare in the hostel and guides learners through hands-on clinical expectations with a practical, student-focused approach.",
+          email: "hostel.matron@alecons.edu.ng",
+          phone: "",
+          image: new URL("../assets/img/osho.svg", import.meta.url).href,
         },
         {
           name: "Dr. Wura Owolabi",
@@ -188,20 +204,6 @@ export default {
           experienceYears: 10,
           bio: "Mr. Akilo helps students strengthen communication, writing, and comprehension skills that support academic success and professional practice.",
           email: "akilo@alecons.edu.ng",
-          phone: "",
-          image: "https://placehold.co/100x100?text=IMG",
-        },
-
-        {
-          name: "Mrs. Oso",
-          role: "Hostel Matron",
-          qualifications: "",
-          department: "Student Affairs",
-          specialization: "Clinical Instructor",
-          experience: "10+ years",
-          experienceYears: 10,
-          bio: "Mrs. Oso supports student welfare in the hostel and guides learners through hands-on clinical expectations with a practical, student-focused approach.",
-          email: "hostel.matron@alecons.edu.ng",
           phone: "",
           image: "https://placehold.co/100x100?text=IMG",
         },
@@ -367,14 +369,21 @@ export default {
           class="col-md-4"
         >
           <div class="card border-0 shadow p-2 h-100">
+            <img
+              :src="member.image"
+              class="card-img-top object-fit-cover"
+              style="object-position: 0px 0px"
+              height="200"
+              :alt="`${member.name} portrait`"
+            />
             <div class="card-body text-dark-emphasis">
-              <img
+              <!-- <img
                 :src="member.image"
                 class="rounded-circle mb-3"
                 height="100"
                 width="100"
                 :alt="`${member.name} portrait`"
-              />
+              /> -->
               <h5 class="card-title acon-text-primary fw-bold">
                 {{ member.name }}
               </h5>

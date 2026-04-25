@@ -210,7 +210,7 @@ export default {
               <h6 class="fw-bold acon-text-primary">Foundation</h6>
               <p class="text-secondary small fw-light">
                 Our academic journey in the community began with the
-                commencement of our very first building, laying the foundation
+                erection of our very first building, laying the foundation
                 for the growth of a purpose-driven learning environment.
               </p>
             </div>
@@ -236,7 +236,7 @@ export default {
               <h6 class="fw-bold acon-text-primary">Modern Facilities</h6>
               <p class="text-secondary small fw-light">
                 Constructed a solar-powered campus featuring a 1000-capacity
-                hall, modern hostel facilities, and ongoing hospital and hotel
+                hall, modern hostel facilities, ongoing hospital and hotel
                 projects, while expanding our clinical training partnerships.
               </p>
             </div>
@@ -292,7 +292,7 @@ export default {
         <div class="col">
           <div class="card border-0 shadow h-100 p-3">
             <img
-              src="https://placehold.co/200?text=IMG"
+              src="../assets/img/yewande-akute.svg"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
               style="width: 200px; height: 200px"
               alt="Dr. Adebayo Oluwaseun"
@@ -326,7 +326,7 @@ export default {
         <div class="col">
           <div class="card border-0 shadow h-100 p-3">
             <img
-              src="https://placehold.co/200?text=IMG"
+              src="../assets/img/tunji-kehinde.svg"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
               style="width: 200px; height: 200px"
               alt="Dr. Adebayo Oluwaseun"

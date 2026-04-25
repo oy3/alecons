@@ -1,7 +1,15 @@
 <script lang="js">
+import Marquee from "./Marquee.vue";
+
 export default {
   name: "Header",
-  components: {},
+  data() {
+    return {
+      announcement:
+        "Admission for 2026/2027 session is open. Apply now! Do not miss this opportunity",
+    };
+  },
+  components: { Marquee },
   computed: {
     registrationUrl() {
       return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
@@ -33,7 +41,9 @@ export default {
 
 <template>
   <nav class="navbar navbar-expand-lg d-flex flex-column fixed-top pt-0">
-    <div class="container-fluid acon-bg-primary-dark small">
+    <Marquee :announcement="announcement" v-if="announcement"/>
+    
+    <div v-else class="container-fluid acon-bg-primary-dark small">
       <div>
         <span class="navbar-text text-white me-3">
           <i class="bi bi-telephone me-1"></i> +234 916 000 8679
@@ -44,6 +54,7 @@ export default {
       </div>
       <span class="navbar-text text-white">Omuoke, Ekiti State, Nigeria</span>
     </div>
+
     <div class="container-fluid bg-white py-2">
       <router-link to="/" class="navbar-brand d-flex align-items-center">
         <img

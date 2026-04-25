@@ -1,15 +1,15 @@
 <script lang="js">
-import { useAuthStore } from '../../stores/auth.js'
-import { apiService } from '../../services/api.js'
-import { logger } from '@shared/utils/logger'
+import { useAuthStore } from "../../stores/auth.js";
+import { apiService } from "../../services/api.js";
+import { logger } from "@shared/utils/logger";
 
 export default {
-  name: 'StaffDashboard',
+  name: "StaffDashboard",
   setup() {
-    const authStore = useAuthStore()
+    const authStore = useAuthStore();
     return {
-      authStore
-    }
+      authStore,
+    };
   },
   data() {
     return {
@@ -19,49 +19,57 @@ export default {
         admittedStudents: 0,
         totalRevenue: 0,
         totalUsers: 0,
-        systemHealth: 'Good'
+        systemHealth: "Good",
       },
       recentApplications: [],
       isLoading: true,
       currentAcademicSession: null,
       chartData: null,
-      error: null
-    }
+      error: null,
+    };
   },
   async mounted() {
-    await this.loadDashboardData()
+    await this.loadDashboardData();
   },
   methods: {
     async loadDashboardData() {
       try {
-        this.isLoading = true
-        this.error = null
-        logger.info('Loading staff dashboard data...')
+        this.isLoading = true;
+        this.error = null;
+        logger.info("Loading staff dashboard data...");
 
         // Fetch all necessary data in parallel
         const [
           dashboardStatsResponse,
           recentAppsResponse,
           programTypesResponse,
-          programModesResponse
+          programModesResponse,
         ] = await Promise.all([
           apiService.getDashboardStats(),
-          apiService.getApplications({ limit: 5, sort: 'createdAt', order: 'desc' }),
+          apiService.getApplications({
+            limit: 5,
+            sort: "createdAt",
+            order: "desc",
+          }),
           apiService.getProgramTypes(),
-          apiService.getProgramModes()
-        ])
+          apiService.getProgramModes(),
+        ]);
 
         // Process dashboard summary stats
         if (dashboardStatsResponse.success) {
-          const dashboardData = dashboardStatsResponse.data?.data || dashboardStatsResponse.data || {}
+          const dashboardData =
+            dashboardStatsResponse.data?.data ||
+            dashboardStatsResponse.data ||
+            {};
 
-          this.currentAcademicSession = dashboardData.currentAcademicSession || null
+          this.currentAcademicSession =
+            dashboardData.currentAcademicSession || null;
           this.stats = {
             ...this.stats,
-            ...(dashboardData.stats || {})
-          }
+            ...(dashboardData.stats || {}),
+          };
         } else {
-          this.currentAcademicSession = null
+          this.currentAcademicSession = null;
           this.stats = {
             ...this.stats,
             totalApplications: 0,
@@ -69,117 +77,145 @@ export default {
             admittedStudents: 0,
             totalRevenue: 0,
             totalUsers: 0,
-            systemHealth: 'Good'
-          }
+            systemHealth: "Good",
+          };
         }
 
         // Get program types and modes for reference
-        let programTypesMap = new Map()
-        let programModesMap = new Map()
+        let programTypesMap = new Map();
+        let programModesMap = new Map();
 
         if (programTypesResponse.success) {
-          const typesData = programTypesResponse.data?.data || programTypesResponse.data || []
+          const typesData =
+            programTypesResponse.data?.data || programTypesResponse.data || [];
           if (Array.isArray(typesData)) {
-            typesData.forEach(type => {
-              programTypesMap.set(type.id || type._id, type.type || type.description)
-            })
+            typesData.forEach((type) => {
+              programTypesMap.set(
+                type.id || type._id,
+                type.type || type.description,
+              );
+            });
           }
         }
 
         if (programModesResponse.success) {
-          const modesData = programModesResponse.data?.data || programModesResponse.data || []
+          const modesData =
+            programModesResponse.data?.data || programModesResponse.data || [];
           if (Array.isArray(modesData)) {
-            modesData.forEach(mode => {
-              programModesMap.set(mode.id || mode._id, mode.mode || mode.description)
-            })
+            modesData.forEach((mode) => {
+              programModesMap.set(
+                mode.id || mode._id,
+                mode.mode || mode.description,
+              );
+            });
           }
         }
 
         // Process recent applications
         if (recentAppsResponse.success) {
-          const recentAppsData = recentAppsResponse.data?.applications ||
-                               recentAppsResponse.data?.data ||
-                               recentAppsResponse.data || []
-          const recentApps = Array.isArray(recentAppsData) ? recentAppsData : []
+          const recentAppsData =
+            recentAppsResponse.data?.applications ||
+            recentAppsResponse.data?.data ||
+            recentAppsResponse.data ||
+            [];
+          const recentApps = Array.isArray(recentAppsData)
+            ? recentAppsData
+            : [];
 
-          this.recentApplications = recentApps.map(app => {
-            let programDisplay = 'N/A'
+          this.recentApplications = recentApps.map((app) => {
+            let programDisplay = "N/A";
 
             if (app.programType && app.programMode && app.program) {
-              const programType = app.programType.type || app.programType.description || ''
-              const programMode = app.programMode.mode || app.programMode.description || ''
-              const programName = app.program.name || ''
-              programDisplay = `${programType} ${programMode} ${programName}`.trim()
-            } else if (app.programTypeId && app.programModeId && app.programName) {
-              const programType = programTypesMap.get(app.programTypeId) || ''
-              const programMode = programModesMap.get(app.programModeId) || ''
-              const programName = app.programName || ''
-              programDisplay = `${programType} ${programMode} ${programName}`.trim()
+              const programType =
+                app.programType.type || app.programType.description || "";
+              const programMode =
+                app.programMode.mode || app.programMode.description || "";
+              const programName = app.program.name || "";
+              programDisplay =
+                `${programType} ${programMode} ${programName}`.trim();
+            } else if (
+              app.programTypeId &&
+              app.programModeId &&
+              app.programName
+            ) {
+              const programType = programTypesMap.get(app.programTypeId) || "";
+              const programMode = programModesMap.get(app.programModeId) || "";
+              const programName = app.programName || "";
+              programDisplay =
+                `${programType} ${programMode} ${programName}`.trim();
             } else {
-              programDisplay = app.programName || 'N/A'
+              programDisplay = app.programName || "N/A";
             }
 
             return {
               id: app.id || app._id,
-              applicantName: app.applicantName || 'N/A',
+              applicantName: app.applicantName || "N/A",
               applicationNumber: app.applicationNumber,
               program: programDisplay,
               status: app.status,
-              submittedAt: app.createdAt
-            }
-          })
+              submittedAt: app.createdAt,
+            };
+          });
         } else {
-          this.recentApplications = []
+          this.recentApplications = [];
         }
 
-        logger.info('Staff dashboard data loaded successfully')
+        logger.info("Staff dashboard data loaded successfully");
       } catch (error) {
-        logger.error('Failed to load staff dashboard data:', error)
-        this.error = error.message || 'Failed to load dashboard data. Please try again.'
+        logger.error("Failed to load staff dashboard data:", error);
+        this.error =
+          error.message || "Failed to load dashboard data. Please try again.";
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
     getStatusBadgeClass(status) {
       const statusClasses = {
-        pending: 'bg-warning text-dark',
-        approved: 'bg-success text-white',
-        rejected: 'bg-danger text-white',
-        under_review: 'bg-info text-white'
-      }
-      return statusClasses[status] || 'bg-secondary text-white'
+        pending: "bg-warning text-dark",
+        approved: "bg-success text-white",
+        rejected: "bg-danger text-white",
+        under_review: "bg-info text-white",
+      };
+      return statusClasses[status] || "bg-secondary text-white";
     },
 
     formatDate(dateString) {
-      return new Date(dateString).toLocaleDateString()
+      return new Date(dateString).toLocaleDateString();
     },
 
     formatRevenue(value) {
       if (value >= 1_000_000_000) {
-        return (Math.floor(value / 10_000_000) / 100) + 'B'; // 2 decimals truncated
+        return Math.floor(value / 10_000_000) / 100 + "B"; // 2 decimals truncated
       }
       if (value >= 1_000_000) {
-        return (Math.floor(value / 10_000) / 100) + 'M'; // 2 decimals truncated
+        return Math.floor(value / 10_000) / 100 + "M"; // 2 decimals truncated
       }
       if (value >= 1_000) {
-        return (Math.floor(value / 10) / 100) + 'K'; // 2 decimals truncated
+        return Math.floor(value / 10) / 100 + "K"; // 2 decimals truncated
       }
       return value.toLocaleString(undefined, {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
       });
     },
 
     navigateToApplications() {
-      this.$router.push('/applications')
+      this.$router.push("/applications");
     },
 
     navigateToUsers() {
-      this.$router.push('/users')
-    }
-  }
-}
+      this.$router.push("/users");
+    },
+    navigateToReports() {
+      this.$router.push("/reports");
+    },
+
+    navigateToSettings() {
+      this.$router.push("/settings");
+    },
+  },
+};
 </script>
 
 <template>
@@ -415,10 +451,16 @@ export default {
             >
               <i class="bi bi-person-plus me-2"></i>Manage Users
             </button>
-            <button class="btn btn-outline-staff-primary">
+            <button
+              class="btn btn-outline-staff-primary"
+              @click="navigateToReports"
+            >
               <i class="bi bi-graph-up me-2"></i>Generate Report
             </button>
-            <button class="btn btn-outline-staff-primary">
+            <button
+              class="btn btn-outline-staff-primary"
+              @click="navigateToSettings"
+            >
               <i class="bi bi-gear me-2"></i>System Settings
             </button>
           </div>

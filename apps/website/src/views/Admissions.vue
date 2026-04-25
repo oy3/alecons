@@ -182,7 +182,7 @@ export default {
         class="bg-warning p-2 text-dark bg-opacity-25 mb-5 text-start border-start border-4 border-warning"
       >
         <b>NOTE:</b> Only Direct entry JAMB candidates and graduates from <b>Community
-        Midwifery and Nursing</b> program should go through <b>Full-Time (CM&N)</b> program
+        Midwifery and Nursing</b> program should select <b>Full-Time (CM&N)</b> program
         mode during registration. All other applicants should select the
         <b>Full-Time</b> program mode. Please ensure you select the correct
         program mode to avoid any issues with your application.

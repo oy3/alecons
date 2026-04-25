@@ -135,8 +135,8 @@ export default {
                 <div class="ms-2">
                   <h6 class="mb-0 fw-semibold text-muted">Address</h6>
                   <p class="mb-0 fw-light text-secondary">
-                    Alebiosu College of Nursing Sciences,<br />Iyamoye-Abuja Road Omuoke, Ekiti State,
-                    Nigeria
+                    Alebiosu College of Nursing Sciences,<br />Iyamoye-Abuja
+                    Road Omuoke, Ekiti State, Nigeria
                   </p>
                 </div>
               </div>
@@ -155,7 +155,9 @@ export default {
                 <i class="bi bi-envelope text-danger fs-5"></i>
                 <div class="ms-2">
                   <h6 class="mb-0 fw-semibold text-muted">Email</h6>
-                  <p class="mb-0 fw-light text-secondary">info@acon.edu.ng</p>
+                  <p class="mb-0 fw-light text-secondary">
+                    info@alecons.edu.ng
+                  </p>
                 </div>
               </div>
 
@@ -203,12 +205,12 @@ export default {
                 <h6 class="mb-0 fw-semibold acon-text-secondary">
                   Contact Person
                 </h6>
-                <p class="mb-0 fw-light text-secondary">-</p>
+                <p class="mb-0 fw-light text-secondary">Mr. Donatus Okoroji</p>
               </div>
 
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">Phone</h6>
-                <p class="mb-0 fw-light text-secondary">-</p>
+                <p class="mb-0 fw-light text-secondary">+234 708 460 1610</p>
               </div>
 
               <div class="mb-2">
@@ -238,7 +240,7 @@ export default {
                 <h6 class="mb-0 fw-semibold acon-text-secondary">
                   Contact Person
                 </h6>
-                <p class="mb-0 fw-light text-secondary">-</p>
+                <p class="mb-0 fw-light text-secondary">Mr. Tunji Kehinde</p>
               </div>
 
               <div class="mb-2">
@@ -248,7 +250,9 @@ export default {
 
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">Email</h6>
-                <p class="mb-0 fw-light text-secondary">-</p>
+                <p class="mb-0 fw-light text-secondary">
+                  support@alecons.edu.ng
+                </p>
               </div>
 
               <div class="">
@@ -271,7 +275,7 @@ export default {
                 <h6 class="mb-0 fw-semibold acon-text-secondary">
                   Contact Person
                 </h6>
-                <p class="mb-0 fw-light text-secondary">-</p>
+                <p class="mb-0 fw-light text-secondary">Mrs. Osho</p>
               </div>
 
               <div class="mb-2">
@@ -281,7 +285,9 @@ export default {
 
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">Email</h6>
-                <p class="mb-0 fw-light text-secondary">-</p>
+                <p class="mb-0 fw-light text-secondary">
+                  support@alecons.edu.ng
+                </p>
               </div>
 
               <div class="">
@@ -304,17 +310,19 @@ export default {
                 <h6 class="mb-0 fw-semibold acon-text-secondary">
                   Contact Person
                 </h6>
-                <p class="mb-0 fw-light text-secondary">-</p>
+                <p class="mb-0 fw-light text-secondary">Mr. Donatus Okoroji</p>
               </div>
 
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">Phone</h6>
-                <p class="mb-0 fw-light text-secondary">-</p>
+                <p class="mb-0 fw-light text-secondary">+234 708 460 1610</p>
               </div>
 
               <div class="mb-2">
                 <h6 class="mb-0 fw-semibold acon-text-secondary">Email</h6>
-                <p class="mb-0 fw-light text-secondary">-</p>
+                <p class="mb-0 fw-light text-secondary">
+                  payments@alecons.edu.ng
+                </p>
               </div>
 
               <div class="">

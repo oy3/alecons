@@ -1,35 +1,38 @@
 <script lang="js">
-import Hero from '../components/Hero.vue';
-import CTA from '../components/CTA.vue';
+import Hero from "../components/Hero.vue";
+import CTA from "../components/CTA.vue";
 
 // Import specific school images
-import schoolImg2 from '@shared/assets/schoolImg2.jpg';
-import schoolImg3 from '@shared/assets/schoolImg3.jpg';
-import schoolImg4 from '@shared/assets/schoolImg4.jpg';
-import schoolImg5 from '@shared/assets/schoolImg5.jpg';
-import schoolImg6 from '@shared/assets/schoolImg6.jpg';
-import schoolImg7 from '@shared/assets/schoolImg7.jpg';
-import schoolImg8 from '@shared/assets/schoolImg8.jpg';
-import schoolImg9 from '@shared/assets/schoolImg9.jpg';
-import schoolImg10 from '@shared/assets/schoolImg10.jpg';
-import schoolImg11 from '@shared/assets/schoolImg11.jpg';
-import schoolImg12 from '@shared/assets/schoolImg12.jpg';
-import schoolImg13 from '@shared/assets/schoolImg13.jpg';
-import schoolImg14 from '@shared/assets/schoolImg14.jpg';
+import schoolImg2 from "@shared/assets/schoolImg2.jpg";
+import schoolImg3 from "@shared/assets/schoolImg3.jpg";
+import schoolImg4 from "@shared/assets/schoolImg4.jpg";
+import schoolImg5 from "@shared/assets/schoolImg5.jpg";
+import schoolImg6 from "@shared/assets/schoolImg6.jpg";
+import schoolImg7 from "@shared/assets/schoolImg7.jpg";
+import schoolImg8 from "@shared/assets/schoolImg8.jpg";
+import schoolImg9 from "@shared/assets/schoolImg9.jpg";
+import schoolImg10 from "@shared/assets/schoolImg10.jpg";
+import schoolImg11 from "@shared/assets/schoolImg11.jpg";
+import schoolImg12 from "@shared/assets/schoolImg12.jpg";
+import schoolImg13 from "@shared/assets/schoolImg13.jpg";
+import schoolImg14 from "@shared/assets/schoolImg14.jpg";
 
 export default {
   metaInfo: {
-    title: 'Alecons College of Nursing Sciences - Excellence in Nursing Education',
+    title:
+      "Alecons College of Nursing Sciences - Excellence in Nursing Education",
     meta: [
       {
-        name: 'description',
-        content: 'Alecons College of Nursing Sciences offers world-class nursing education in Ekiti State, Nigeria. Join us to build a rewarding career in healthcare.'
+        name: "description",
+        content:
+          "Alecons College of Nursing Sciences offers world-class nursing education in Ekiti State, Nigeria. Join us to build a rewarding career in healthcare.",
       },
       {
-        name: 'keywords',
-        content: 'nursing school in Nigeria, Alecons College of Nursing Sciences, nursing education, healthcare careers, nursing programs, alecons'
-      }
-    ]
+        name: "keywords",
+        content:
+          "nursing school in Nigeria, Alecons College of Nursing Sciences, nursing education, healthcare careers, nursing programs, alecons",
+      },
+    ],
   },
   name: "Home",
   components: { Hero, CTA },
@@ -50,7 +53,7 @@ export default {
         schoolImg12,
         schoolImg13,
         schoolImg14,
-      ]
+      ],
     };
   },
   computed: {
@@ -59,8 +62,8 @@ export default {
     },
     applicationPortalUrl() {
       return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
-    }
-  }
+    },
+  },
 };
 </script>
 
@@ -263,7 +266,9 @@ export default {
         best foundation
       </p>
 
-      <div class="row g-4 mx-0 mx-md-5 mb-5 d-flex align-items-center justify-content-center">
+      <div
+        class="row g-4 mx-0 mx-md-5 mb-5 d-flex align-items-center justify-content-center"
+      >
         <!-- TODO: Add more stats as needed, and update the numbers and descriptions to reflect the school's strengths. -->
         <!-- <div class="col-12 col-md-6 col-lg-3">
           <div class="card border-0 shadow p-1 h-100">
@@ -350,12 +355,13 @@ export default {
                 <i class="bi bi-people h3 mb-0 text-white"></i>
               </div>
 
-                <h5 class="card-title fw-bolder acon-text-secondary">
+              <h5 class="card-title fw-bolder acon-text-secondary">
                 Public Health
-                </h5>
-                <p class="text-secondary">
-                Specialized program focusing on community health and disease prevention.
-                </p>
+              </h5>
+              <p class="text-secondary">
+                Specialized program focusing on community health and disease
+                prevention.
+              </p>
               <router-link
                 to="/programs"
                 class="icon-link icon-link-hover acon-text-primary acon-link d-inline-flex align-items-center gap-1"
@@ -401,4 +407,6 @@ export default {
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+
+</style>

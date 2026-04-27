@@ -20,6 +20,8 @@ export default {
   },
   data() {
     return {
+      nigeriaStatesEndpoint: "https://nga-states-lga.onrender.com/fetch",
+      nigeriaLgasEndpointBase: "https://nga-states-lga.onrender.com/",
       stages: ["Personal", "Academic", "Upload", "Submit"],
       currentStage: 0,
       sittings: [{ examType: "", examYear: "", examNumber: "" }],
@@ -59,6 +61,12 @@ export default {
       countries: [],
       states: [],
       cities: [],
+      isLoadingStates: false,
+      isLoadingLgas: false,
+      stateLoadError: "",
+      lgaLoadError: "",
+      statesLoadRequestId: 0,
+      lgasLoadRequestId: 0,
 
       // Religion options
       religionOptions: [
@@ -215,14 +223,17 @@ export default {
       immediate: true,
     },
     nationality() {
-      this.loadStatesForCountry();
       this.state = "";
       this.lga = "";
       this.cities = [];
+      this.lgasLoadRequestId += 1;
+      this.isLoadingLgas = false;
+      this.lgaLoadError = "";
+      this.loadStatesForCountry();
     },
     state() {
-      this.loadCitiesForState();
       this.lga = "";
+      this.loadCitiesForState();
     },
   },
   created() {
@@ -280,31 +291,214 @@ export default {
       logger.info("Loaded countries:", this.countries.length);
     },
 
-    loadStatesForCountry() {
+    isNigeriaNationality() {
+      return (this.nationality || "").trim().toLowerCase() === "nigeria";
+    },
+
+    formatNigeriaStateLabel(stateName) {
+      if (stateName === "FCT") {
+        return "Abuja Federal Capital Territory";
+      }
+
+      return stateName.replace(/([a-z])([A-Z])/g, "$1 $2").trim();
+    },
+
+    normalizeStateNameForLookup(stateName) {
+      return (stateName || "")
+        .toLowerCase()
+        .replace(/abuja\s+federal\s+capital\s+territory/g, "fct")
+        .replace(/federal\s+capital\s+territory/g, "fct")
+        .replace(/[^a-z0-9]/g, "");
+    },
+
+    getNigeriaStateQueryName(stateObject) {
+      if (!stateObject) {
+        return "";
+      }
+
+      if (stateObject.nigerianQueryName) {
+        return stateObject.nigerianQueryName;
+      }
+
+      const stateName = stateObject.name || "";
+      const normalized = this.normalizeStateNameForLookup(stateName);
+
+      if (normalized === "fct") {
+        return "FCT";
+      }
+
+      if (normalized === "akwaibom") {
+        return "AkwaIbom";
+      }
+
+      return stateName;
+    },
+
+    getLibraryStateMatch(stateName) {
+      if (!this.selectedCountry || !stateName) {
+        return null;
+      }
+
+      const allCountryStates = State.getStatesOfCountry(this.selectedCountry.isoCode);
+      const normalizedTarget = this.normalizeStateNameForLookup(stateName);
+
+      return (
+        allCountryStates.find(
+          (countryState) =>
+            this.normalizeStateNameForLookup(countryState.name) ===
+            normalizedTarget,
+        ) || null
+      );
+    },
+
+    async fetchNigeriaStates() {
+      const response = await fetch(this.nigeriaStatesEndpoint);
+
+      if (!response.ok) {
+        throw new Error(`Failed to load Nigeria states: ${response.status}`);
+      }
+
+      const payload = await response.json();
+
+      if (!Array.isArray(payload)) {
+        throw new Error("Invalid Nigeria states response");
+      }
+
+      return payload;
+    },
+
+    async fetchNigeriaLgas(stateQueryName) {
+      const response = await fetch(
+        `${this.nigeriaLgasEndpointBase}?state=${encodeURIComponent(stateQueryName)}`,
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to load Nigeria LGAs: ${response.status}`);
+      }
+
+      const payload = await response.json();
+
+      if (!Array.isArray(payload)) {
+        throw new Error("Invalid Nigeria LGA response");
+      }
+
+      return payload;
+    },
+
+    async loadStatesForCountry() {
+      const requestId = ++this.statesLoadRequestId;
+      this.stateLoadError = "";
+
       if (this.selectedCountry) {
-        this.states = State.getStatesOfCountry(this.selectedCountry.isoCode);
-        logger.info(
-          "Loaded states for country:",
-          this.selectedCountry.name,
-          this.states.length,
-        );
+        if (this.isNigeriaNationality()) {
+          this.isLoadingStates = true;
+
+          try {
+            const nigeriaStates = await this.fetchNigeriaStates();
+
+            if (requestId !== this.statesLoadRequestId) {
+              return;
+            }
+
+            this.states = nigeriaStates.map((stateName) => ({
+              name: this.formatNigeriaStateLabel(stateName),
+              nigerianQueryName: stateName,
+            }));
+
+            logger.info("Loaded Nigeria states from API:", this.states.length);
+          } catch (error) {
+            logger.warn(
+              "Failed to load Nigeria states from API. Falling back to country-state-city.",
+              error,
+            );
+
+            if (requestId !== this.statesLoadRequestId) {
+              return;
+            }
+
+            this.stateLoadError =
+              "Could not load full Nigeria states list. Showing fallback list.";
+            this.states = State.getStatesOfCountry(this.selectedCountry.isoCode);
+          } finally {
+            if (requestId === this.statesLoadRequestId) {
+              this.isLoadingStates = false;
+            }
+          }
+        } else {
+          this.isLoadingStates = false;
+          this.states = State.getStatesOfCountry(this.selectedCountry.isoCode);
+          logger.info(
+            "Loaded states for country:",
+            this.selectedCountry.name,
+            this.states.length,
+          );
+        }
       } else {
+        this.isLoadingStates = false;
         this.states = [];
       }
     },
 
-    loadCitiesForState() {
+    async loadCitiesForState() {
+      const requestId = ++this.lgasLoadRequestId;
+      this.lgaLoadError = "";
+
       if (this.selectedState && this.selectedCountry) {
-        this.cities = City.getCitiesOfState(
-          this.selectedCountry.isoCode,
-          this.selectedState.isoCode,
-        );
-        logger.info(
-          "Loaded cities for state:",
-          this.selectedState.name,
-          this.cities.length,
-        );
+        if (this.isNigeriaNationality()) {
+          this.isLoadingLgas = true;
+
+          try {
+            const stateQueryName = this.getNigeriaStateQueryName(this.selectedState);
+            const nigeriaLgas = await this.fetchNigeriaLgas(stateQueryName);
+
+            if (requestId !== this.lgasLoadRequestId) {
+              return;
+            }
+
+            this.cities = nigeriaLgas.map((lgaName) => ({ name: lgaName }));
+            logger.info("Loaded Nigeria LGAs from API:", {
+              state: this.selectedState.name,
+              lgaCount: this.cities.length,
+            });
+          } catch (error) {
+            logger.warn(
+              "Failed to load Nigeria LGAs from API. Falling back to country-state-city.",
+              error,
+            );
+
+            if (requestId !== this.lgasLoadRequestId) {
+              return;
+            }
+
+            this.lgaLoadError =
+              "Could not load full LGA list. Showing fallback list.";
+
+            const fallbackState = this.getLibraryStateMatch(this.selectedState.name);
+            this.cities = fallbackState
+              ? City.getCitiesOfState(
+                  this.selectedCountry.isoCode,
+                  fallbackState.isoCode,
+                )
+              : [];
+          } finally {
+            if (requestId === this.lgasLoadRequestId) {
+              this.isLoadingLgas = false;
+            }
+          }
+        } else {
+          this.isLoadingLgas = false;
+          this.cities = City.getCitiesOfState(
+            this.selectedCountry.isoCode,
+            this.selectedState.isoCode,
+          );
+          logger.info(
+            "Loaded cities for state:",
+            this.selectedState.name,
+            this.cities.length,
+          );
+        }
       } else {
+        this.isLoadingLgas = false;
         this.cities = [];
       }
     },
@@ -1086,13 +1280,11 @@ export default {
       this.nationality = selectedCountry ? selectedCountry.name : "";
       this.state = "";
       this.lga = "";
-      this.loadStatesForCountry();
     },
 
     onStateChange(selectedState) {
       this.state = selectedState ? selectedState.name : "";
       this.lga = "";
-      this.loadCitiesForState();
     },
 
     onLgaChange(selectedCity) {
@@ -1917,14 +2109,24 @@ export default {
                 label="name"
                 :searchable="true"
                 :clearable="false"
-                :disabled="!nationality"
+                :disabled="!nationality || isLoadingStates"
                 :placeholder="
-                  nationality ? '--Select State--' : 'Select nationality first'
+                  !nationality
+                    ? 'Select nationality first'
+                    : isLoadingStates
+                      ? 'Loading states...'
+                      : '--Select State--'
                 "
                 :class="{ 'is-invalid': validationErrors.state }"
                 class="vue-select-custom"
                 @update:modelValue="onStateChange"
               />
+              <div v-if="isLoadingStates" class="small text-muted mt-1">
+                Loading states...
+              </div>
+              <div v-if="stateLoadError" class="small text-warning mt-1">
+                {{ stateLoadError }}
+              </div>
               <div v-if="validationErrors.state" class="invalid-feedback">
                 {{ validationErrors.state }}
               </div>
@@ -1940,12 +2142,24 @@ export default {
                 label="name"
                 :searchable="true"
                 :clearable="false"
-                :disabled="!state"
-                :placeholder="state ? '--Select LGA--' : 'Select state first'"
+                :disabled="!state || isLoadingLgas"
+                :placeholder="
+                  !state
+                    ? 'Select state first'
+                    : isLoadingLgas
+                      ? 'Loading LGAs...'
+                      : '--Select LGA--'
+                "
                 :class="{ 'is-invalid': validationErrors.lga }"
                 class="vue-select-custom"
                 @update:modelValue="onLgaChange"
               />
+              <div v-if="isLoadingLgas" class="small text-muted mt-1">
+                Loading LGAs...
+              </div>
+              <div v-if="lgaLoadError" class="small text-warning mt-1">
+                {{ lgaLoadError }}
+              </div>
               <div v-if="validationErrors.lga" class="invalid-feedback">
                 {{ validationErrors.lga }}
               </div>

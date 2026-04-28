@@ -134,6 +134,7 @@ export class UserManagementController {
                 lastName: userData.lastName,
                 otherName: userData.otherName,
                 email: userData.email,
+                phone: userData.phone,
                 department: userData.department,
                 position: userData.position,
                 roleId: userData.roleId,

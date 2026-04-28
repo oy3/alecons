@@ -17,61 +17,61 @@ const routes = [
         path: '/dashboard',
         name: 'Dashboard',
         component: () => import('../views/dashboard/Dashboard.vue'),
-        meta: { requiresAuth: true, permissions: ['view', 'dashboard:view'] }
+        meta: { requiresAuth: true }
     },
     {
         path: '/settings',
         name: 'Settings',
         component: () => import('../views/settings/Settings.vue'),
-        meta: { requiresAuth: true, permissions: ['view', 'settings:view'] }
+        meta: { requiresAuth: true, module: 'settings' }
     },
     {
         path: '/applications',
         name: 'Applications',
         component: () => import('../views/applications/Applications.vue'),
-        meta: { requiresAuth: true, permissions: ['view', 'applications:view'] }
+        meta: { requiresAuth: true, module: 'applications' }
     },
     {
         path: '/admission',
         name: 'Admission',
         component: () => import('../views/applications/Admission.vue'),
-        meta: { requiresAuth: true, permissions: ['staff', 'admin', 'applications:manage'] }
+        meta: { requiresAuth: true, module: 'admissions' }
     },
     {
         path: '/academics',
         name: 'Academics',
         component: () => import('../views/academics/Academics.vue'),
-        meta: { requiresAuth: true, permissions: ['staff', 'admin', 'academics:manage'] }
+        meta: { requiresAuth: true, module: 'academics' }
     },
     {
         path: '/exams',
         name: 'ExamManagement',
         component: () => import('../views/exams/ExamManagement.vue'),
-        meta: { requiresAuth: true, permissions: ['staff', 'admin', 'exams:manage'] }
+        meta: { requiresAuth: true, module: 'exams' }
     },
     {
         path: '/exams/:id',
         name: 'ExamView',
         component: () => import('../views/exams/ExamView.vue'),
-        meta: { requiresAuth: true, permissions: ['staff', 'admin', 'exams:manage'] }
+        meta: { requiresAuth: true, module: 'exams' }
     },
     {
         path: '/users',
         name: 'Users',
         component: () => import('../views/users/Users.vue'),
-        meta: { requiresAuth: true, permissions: ['view', 'users:view'] }
+        meta: { requiresAuth: true, module: 'users' }
     },
     {
         path: '/payments',
         name: 'Payments',
         component: () => import('../views/payments/Payments.vue'),
-        meta: { requiresAuth: true, permissions: ['view', 'read', 'payments:view', 'payments:read'] }
+        meta: { requiresAuth: true, module: 'payments' }
     },
     {
         path: '/utilities',
         name: 'Utilities',
         component: () => import('../views/utilities/Utilities.vue'),
-        meta: { requiresAuth: true, permissions: ['view', 'settings:view'] }
+        meta: { requiresAuth: true, module: 'utilities' }
     },
     //   {
     //     path: '/reports',
@@ -103,15 +103,11 @@ router.beforeEach(async (to, from, next) => {
 
     const requiresAuth = to.meta.requiresAuth !== false
     const isAuthenticated = authStore.isAuthenticated
-    const userPermissions = authStore.user?.permissions || []
-    const requiredPermissions = to.meta.permissions || []
-
     logger.info('Navigation guard:', {
         to: to.path,
         requiresAuth,
         isAuthenticated,
-        userPermissions,
-        requiredPermissions
+        requiredModule: to.meta.module
     })
 
     if (requiresAuth && !isAuthenticated) {
@@ -126,30 +122,19 @@ router.beforeEach(async (to, from, next) => {
         return
     }
 
-    // Check permissions - more flexible permission checking
-    if (requiredPermissions.length > 0) {
-        const hasPermission = requiredPermissions.some(permission => {
-            // Check for exact match or admin permissions
-            return userPermissions.includes(permission) ||
-                userPermissions.includes('admin:all') ||
-                userPermissions.includes('manage') ||
-                userPermissions.includes('all')
+    // Check module access
+    const requiredModule = to.meta.module
+    if (requiredModule && !authStore.hasModuleAccess(requiredModule)) {
+        logger.warn('Access denied: Insufficient module access', {
+            requiredModule,
+            userModules: authStore.userModules
         })
-
-        if (!hasPermission) {
-            logger.warn('Access denied: Insufficient permissions', {
-                required: requiredPermissions,
-                user: userPermissions
-            })
-            // Don't redirect to dashboard if we're already trying to access dashboard
-            if (to.name !== 'Dashboard') {
-                next({ path: '/dashboard' })
-            } else {
-                // If user doesn't have dashboard access, redirect to login
-                next({ path: '/login' })
-            }
-            return
+        if (to.name !== 'Dashboard') {
+            next({ path: '/dashboard' })
+        } else {
+            next({ path: '/login' })
         }
+        return
     }
 
     next()

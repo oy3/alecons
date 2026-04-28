@@ -2,6 +2,7 @@
 import { apiService } from '../../../services/api.js'
 import { logger } from '@shared/utils/logger'
 import Swal from 'sweetalert2'
+import { MODULE_DEFINITIONS, MODULE_LIST } from '../../../services/roleDefinitions.js'
 
 export default {
   name: 'Roles',
@@ -13,26 +14,7 @@ export default {
       currentPage: 1,
       perPage: 10,
       availableModules: [
-        { value: 'applications', label: 'Applications' },
-        { value: 'admissions', label: 'Admissions' },
-        { value: 'academics', label: 'Academics' },
-        { value: 'users', label: 'Users' },
-        { value: 'reports', label: 'Reports' },
-        { value: 'settings', label: 'Settings' },
-        { value: 'students', label: 'Students' },
-        { value: 'staffs', label: 'Staffs' },
-        { value: 'payments', label: 'Payments' },
-        { value: 'dashboard', label: 'Dashboard' }
-      ],
-      availablePermissions: [
-        { value: 'create', label: 'Create' },
-        { value: 'read', label: 'Read/View' },
-        { value: 'update', label: 'Update/Edit' },
-        { value: 'delete', label: 'Delete' },
-        { value: 'manage', label: 'Manage All' },
-        { value: 'approve', label: 'Approve' },
-        { value: 'review', label: 'Review' },
-        { value: 'export', label: 'Export' }
+        ...MODULE_LIST,
       ]
     }
   },
@@ -312,10 +294,11 @@ export default {
         }
 
         const permissionsHTML = selectedModules.map(moduleValue => {
-          const module = this.availableModules.find(m => m.value === moduleValue)
+          const moduleDef = MODULE_DEFINITIONS[moduleValue]
+          if (!moduleDef) return ''
           const modulePerms = existingPermissions[moduleValue] || []
           
-          const permissionCheckboxes = this.availablePermissions.map(permission => `
+          const permissionCheckboxes = moduleDef.permissions.map(permission => `
             <div class="col-6 col-lg-4 mb-1">
               <div class="form-check form-check-sm">
                 <input 
@@ -324,7 +307,7 @@ export default {
                   name="permissions-${moduleValue}"
                   value="${permission.value}" 
                   id="perm-${moduleValue}-${permission.value}"
-                  ${modulePerms.includes(permission.value) ? 'checked' : ''}
+                  ${modulePerms.includes(permission.value) || (modulePerms.includes('manage') && permission.value !== 'manage') ? 'checked' : ''}
                 >
                 <label class="form-check-label small" for="perm-${moduleValue}-${permission.value}">
                   ${permission.label}
@@ -335,7 +318,7 @@ export default {
 
           return `
             <div class="border-bottom pb-2 mb-3">
-              <h6 class="mb-2">${module.label}</h6>
+              <h6 class="mb-2">${moduleDef.label}</h6>
               <div class="row">
                 ${permissionCheckboxes}
               </div>
@@ -344,6 +327,18 @@ export default {
         }).join('')
 
         permissionsContainer.innerHTML = permissionsHTML
+
+              // Wire manage checkbox: checking it auto-checks all siblings; unchecking clears them
+              selectedModules.forEach(moduleValue => {
+                const manageCheckbox = document.getElementById(`perm-${moduleValue}-manage`)
+                if (!manageCheckbox) return
+                const siblingCheckboxes = document.querySelectorAll(
+                  `input[name="permissions-${moduleValue}"]:not([value="manage"])`
+                )
+                manageCheckbox.addEventListener('change', () => {
+                  siblingCheckboxes.forEach(cb => { cb.checked = manageCheckbox.checked })
+                })
+              })
       }
 
       moduleCheckboxes.forEach(checkbox => {
@@ -472,13 +467,13 @@ export default {
     },
 
     formatModuleName(moduleValue) {
-      const module = this.availableModules.find(m => m.value === moduleValue)
-      return module ? module.label : moduleValue
+      return MODULE_DEFINITIONS[moduleValue]?.label || moduleValue
     },
 
     formatPermissionName(permissionValue) {
-      const permission = this.availablePermissions.find(p => p.value === permissionValue)
-      return permission ? permission.label : permissionValue
+      const allPerms = Object.values(MODULE_DEFINITIONS).flatMap(m => m.permissions)
+      const found = allPerms.find(p => p.value === permissionValue)
+      return found ? found.label : permissionValue
     },
 
     getUniquePermissions(permissions) {

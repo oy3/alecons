@@ -70,7 +70,7 @@ export default {
   async mounted() {
     await this.authStore.initialize()
 
-    if (!this.authStore.hasAnyPermission(['applications:view', 'view'])) {
+    if (!this.authStore.hasModuleAccess('applications')) {
       this.$swal.fire({
         icon: 'error',
         title: 'Access Denied',
@@ -539,7 +539,7 @@ export default {
 
     async verifyManualTransferPayment(payment) {
       try {
-        if (!this.authStore.hasAnyPermission(['applications:update', 'update'])) {
+        if (!this.authStore.hasPermission('applications', 'edit')) {
           this.$swal.fire({
             icon: 'error',
             title: 'Access Denied',
@@ -598,7 +598,7 @@ export default {
 
     async rejectManualTransferPayment(payment) {
       try {
-        if (!this.authStore.hasAnyPermission(['applications:update', 'update'])) {
+        if (!this.authStore.hasPermission('applications', 'edit')) {
           this.$swal.fire({
             icon: 'error',
             title: 'Access Denied',
@@ -664,7 +664,7 @@ export default {
     async updateApplicationStatus(application, newStatus) {
       try {
         // Check permissions
-        if (!this.authStore.hasAnyPermission(['applications:update', 'update'])) {
+        if (!this.authStore.hasPermission('applications', 'edit')) {
           this.$swal.fire({
             icon: 'error',
             title: 'Access Denied',
@@ -738,7 +738,7 @@ export default {
 
     exportApplications() {
       // Check permissions
-      if (!this.authStore.hasAnyPermission(['applications:export', 'export'])) {
+      if (!this.authStore.hasPermission('applications', 'export')) {
         this.$swal.fire({
           icon: 'error',
           title: 'Access Denied',

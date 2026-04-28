@@ -1,18 +1,18 @@
 <script lang="js">
 import { useAuthStore } from "../../stores/auth.js";
-import { logger } from '@shared/utils/logger';
+import { logger } from "@shared/utils/logger";
 import TodoList from "./components/TodoList.vue";
 import BiodataCard from "./components/BiodataCard.vue";
 import ProgressCard from "./components/ProgressCard.vue";
 import EmailVerificationAlert from "./components/EmailVerificationAlert.vue";
-import Swal from 'sweetalert2';
+import Swal from "sweetalert2";
 
 export default {
   name: "Dashboard",
   setup() {
     const authStore = useAuthStore();
     return {
-      authStore
+      authStore,
     };
   },
   data() {
@@ -20,41 +20,52 @@ export default {
   },
   mounted() {
     // Log dashboard access
-    logger.info('Dashboard accessed by user:', {
+    logger.info("Dashboard accessed by user:", {
       userData: this.authStore.user,
       applicationData: this.authStore.application,
     });
 
     // Note: General data refresh is now handled by App.vue
     // Only add email verification specific listener
-    window.addEventListener('focus', this.onEmailVerificationFocus);
+    window.addEventListener("focus", this.onEmailVerificationFocus);
   },
-  
+
   beforeUnmount() {
     // Clean up event listener
-    window.removeEventListener('focus', this.onEmailVerificationFocus);
+    window.removeEventListener("focus", this.onEmailVerificationFocus);
   },
 
   methods: {
     async onEmailVerificationFocus() {
       // Refresh user data when window regains focus specifically to check email verification status
-      if (this.authStore.isAuthenticated && this.user && this.user.isEmailVerified === false) {
-        logger.info('Window focused, checking for email verification updates...');
+      if (
+        this.authStore.isAuthenticated &&
+        this.user &&
+        this.user.isEmailVerified === false
+      ) {
+        logger.info(
+          "Window focused, checking for email verification updates...",
+        );
         try {
           await this.authStore.refreshUserData();
-          logger.info('Email verification status refreshed');
+          logger.info("Email verification status refreshed");
         } catch (error) {
-          logger.error('Failed to refresh email verification status on focus:', error);
+          logger.error(
+            "Failed to refresh email verification status on focus:",
+            error,
+          );
         }
       }
-    }
+    },
   },
   computed: {
     admissionFlow() {
-      return this.application?.admissionFlow || {
-        entranceExamEnabled: true,
-        screeningEnabled: true,
-      };
+      return (
+        this.application?.admissionFlow || {
+          entranceExamEnabled: true,
+          screeningEnabled: true,
+        }
+      );
     },
     allStageDefinitions() {
       return [
@@ -125,7 +136,8 @@ export default {
           stage: 10,
           label: "Completed",
           title: "Application Complete",
-          description: "Welcome! Check your email for matriculation number and portal access details",
+          description:
+            "Welcome! Check your email for matriculation number and portal access details",
           paymentStage: false,
         },
       ];
@@ -172,29 +184,33 @@ export default {
         return 0;
       }
 
-      return this.visibleStageDefinitions.filter(
-        (definition) => definition.stage < this.currentStage,
-      ).length + 1;
+      return (
+        this.visibleStageDefinitions.filter(
+          (definition) => definition.stage < this.currentStage,
+        ).length + 1
+      );
     },
 
     // Computed properties for BiodataCard data
     userDisplayName() {
-      return this.user?.fullName || 
-             `${this.user?.firstName || ''} ${this.user?.lastName || ''}`.trim() || 
-             'Loading...';
+      return (
+        this.user?.fullName ||
+        `${this.user?.firstName || ""} ${this.user?.lastName || ""}`.trim() ||
+        "Loading..."
+      );
     },
 
     userPhone() {
       const profilePhone = this.user?.phone;
-      
-      logger.info('Phone data check:', {
+
+      logger.info("Phone data check:", {
         profilePhone,
         userPhone: this.user?.phone,
         hasApplication: !!this.application,
-        applicationKeys: this.application ? Object.keys(this.application) : []
+        applicationKeys: this.application ? Object.keys(this.application) : [],
       });
-      
-      return profilePhone || 'N/A';
+
+      return profilePhone || "N/A";
     },
 
     userLocation() {
@@ -202,26 +218,30 @@ export default {
       const nationality = this.application?.nationality;
       const stateOfOrigin = this.application?.stateOfOrigin;
       const location = nationality || stateOfOrigin;
-      
-      logger.info('Location data check:', {
+
+      logger.info("Location data check:", {
         applicationNationality: nationality,
         applicationStateOfOrigin: stateOfOrigin,
         finalLocation: location,
-        applicationKeys: this.application ? Object.keys(this.application) : []
+        applicationKeys: this.application ? Object.keys(this.application) : [],
       });
-      
-      return location || 'N/A';
+
+      return location || "N/A";
     },
 
     todos() {
       const currentStage = this.currentStage;
-      return this.visibleStageDefinitions.map(def => ({
+      return this.visibleStageDefinitions.map((def) => ({
         stage: def.stage,
         title: def.title,
         description: def.description,
         paymentStage: def.paymentStage,
-        status: def.stage < currentStage ? 'completed' :
-                def.stage === currentStage ? 'active' : 'inactive'
+        status:
+          def.stage < currentStage
+            ? "completed"
+            : def.stage === currentStage
+              ? "active"
+              : "inactive",
       }));
     },
 
@@ -231,85 +251,94 @@ export default {
       // Payment stages: 2, 7, 8, 9
       if ([2, 7, 8, 9].includes(stage)) {
         return {
-          text: 'Make Payment',
-          route: '/payment',
+          text: "Make Payment",
+          route: "/payment",
           disabled: false,
-          variant: 'btn-acon-secondary'
+          variant: "btn-acon-secondary",
         };
       }
 
       // Application form stage: 3
       if (stage === 3) {
         return {
-          text: 'Complete Application',
-          route: '/application-form',
+          text: "Complete Application",
+          route: "/application-form",
           disabled: false,
-          variant: 'btn-acon-secondary'
+          variant: "btn-acon-secondary",
         };
       }
 
       // Stages with exam/screening info available
       if ([4, 6].includes(stage) && this.hasExamOrScreeningInfo) {
         return {
-          text: 'View Details',
+          text: "View Details",
           route: null,
           disabled: false,
-          variant: 'btn-acon-secondary',
-          showModal: true
+          variant: "btn-acon-secondary",
+          showModal: true,
         };
       }
 
       // Waiting stages: 1, 4, 5, 6
       if ([1, 4, 5, 6].includes(stage)) {
         const waitingMessages = {
-          1: 'Check Your Email',
-          4: 'Awaiting Exam Scheduling',
-          5: 'Awaiting Admission Decision',
-          6: 'Awaiting Screening Schedule'
+          1: "Check Your Email",
+          4: "Awaiting Exam Scheduling",
+          5: "Awaiting Admission Decision",
+          6: "Awaiting Screening Schedule",
         };
 
         return {
           text: waitingMessages[stage],
           route: null,
           disabled: true,
-          variant: 'btn-secondary'
+          variant: "btn-secondary",
         };
       }
 
       // Stage 10: Application Complete - Redirect to Student Portal
       if (stage === 10) {
         return {
-          text: 'Access Student Portal',
+          text: "Access Student Portal",
           route: null,
           disabled: false,
-          variant: 'btn-acon-primary',
-          action: 'redirectToStudentPortal'
+          variant: "btn-acon-primary",
+          action: "redirectToStudentPortal",
         };
       }
 
       // Default
       return {
-        text: 'Continue',
-        route: '/dashboard',
+        text: "Continue",
+        route: "/dashboard",
         disabled: false,
-        variant: 'btn-acon-secondary'
+        variant: "btn-acon-secondary",
       };
     },
 
     hasExamOrScreeningInfo() {
       return !!(this.application?.entranceExam || this.application?.screening);
-    }
+    },
   },
   methods: {
     async onEmailVerificationFocus() {
       // Refresh user data when window regains focus specifically to check email verification status
-      if (this.authStore.isAuthenticated && this.user && this.user.isEmailVerified === false) {
-        logger.info('Window focused, checking for email verification updates...');
+      if (
+        this.authStore.isAuthenticated &&
+        this.user &&
+        this.user.isEmailVerified === false
+      ) {
+        logger.info(
+          "Window focused, checking for email verification updates...",
+        );
         try {
           await this.authStore.refreshUserData();
-          logger.info('Email verification status refreshed');
+          logger.info("Email verification status refreshed");
         } catch (error) {
-          logger.error('Failed to refresh email verification status on focus:', error);
+          logger.error(
+            "Failed to refresh email verification status on focus:",
+            error,
+          );
         }
       }
     },
@@ -318,69 +347,79 @@ export default {
       // Show modal with exam/screening details
       const application = this.application;
       let modalContent = '<div class="text-start">';
-      
+
       if (application?.entranceExam) {
         const exam = application.entranceExam;
         modalContent += `
           <h6 class="text-primary mb-3"><i class="bi bi-laptop me-2"></i>Entrance Exam Details</h6>
           <div class="mb-3 p-3 bg-light rounded">
-            <p class="mb-2"><strong>Date:</strong> ${new Date(exam.date).toLocaleDateString('en-US', { 
-              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+            <p class="mb-2"><strong>Date:</strong> ${new Date(
+              exam.date,
+            ).toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
             })}</p>
             <p class="mb-2"><strong>Time:</strong> ${exam.time}</p>
-            ${exam.link ? `<p class="mb-2"><strong>Exam Link:</strong> <a href="${exam.link}" target="_blank" class="text-decoration-none">${exam.link}</a></p>` : ''}
-            ${exam.score !== undefined ? `<p class="mb-0"><strong>Score:</strong> <span class="badge bg-success">${exam.score}%</span></p>` : ''}
+            ${exam.link ? `<p class="mb-2"><strong>Exam Link:</strong> <a href="${exam.link}" target="_blank" class="text-decoration-none">${exam.link}</a></p>` : ""}
+            ${exam.score !== undefined ? `<p class="mb-0"><strong>Score:</strong> <span class="badge bg-success">${exam.score}%</span></p>` : ""}
           </div>
         `;
       }
-      
+
       if (application?.screening) {
         const screening = application.screening;
         modalContent += `
           <h6 class="text-info mb-3"><i class="bi bi-people me-2"></i>Screening & Interview Details</h6>
           <div class="mb-3 p-3 bg-light rounded">
-            <p class="mb-2"><strong>Date:</strong> ${new Date(screening.date).toLocaleDateString('en-US', { 
-              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+            <p class="mb-2"><strong>Date:</strong> ${new Date(
+              screening.date,
+            ).toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
             })}</p>
             <p class="mb-2"><strong>Time:</strong> ${screening.time}</p>
             <p class="mb-2"><strong>Venue:</strong> ${screening.venue}</p>
             <p class="mb-0"><strong>Status:</strong> 
-              <span class="badge ${screening.completed ? 'bg-success' : 'bg-warning'}">${screening.completed ? 'Completed' : 'Scheduled'}</span>
+              <span class="badge ${screening.completed ? "bg-success" : "bg-warning"}">${screening.completed ? "Completed" : "Scheduled"}</span>
             </p>
           </div>
         `;
       }
-      
-      modalContent += '</div>';
-      
+
+      modalContent += "</div>";
+
       Swal.fire({
-        title: 'Exam & Screening Information',
+        title: "Exam & Screening Information",
         html: modalContent,
-        confirmButtonText: 'Close',
-        confirmButtonColor: '#1a5f5f',
-        width: '600px'
+        confirmButtonText: "Close",
+        confirmButtonColor: "#1a5f5f",
+        width: "600px",
       });
     },
 
     redirectToStudentPortal() {
       // Show confirmation before redirecting
       Swal.fire({
-        icon: 'info',
-        title: 'Access Student Portal',
-        text: 'You will be redirected to the student portal. Make sure you have received your matriculation number via email.',
+        icon: "info",
+        title: "Access Student Portal",
+        text: "You will be redirected to the student portal. Make sure you have received your matriculation number via email.",
         showCancelButton: true,
-        confirmButtonText: 'Continue to Student Portal',
-        cancelButtonText: 'Stay Here',
-        confirmButtonColor: '#8B2C2C',
-        cancelButtonColor: '#6c757d'
+        confirmButtonText: "Continue to Student Portal",
+        cancelButtonText: "Stay Here",
+        confirmButtonColor: "#8B2C2C",
+        cancelButtonColor: "#6c757d",
       }).then((result) => {
         if (result.isConfirmed) {
           // Get student portal URL from environment or use default
           const studentPortalUrl = import.meta.env.VITE_APP_STUDENT_PORTAL_URL;
-          window.open(studentPortalUrl, '_blank');
+          window.open(studentPortalUrl, "_blank");
         }
       });
-    }
+    },
   },
   components: { TodoList, BiodataCard, ProgressCard, EmailVerificationAlert },
 };
@@ -391,8 +430,11 @@ export default {
     <div class="row gy-5">
       <div class="col-md-8">
         <!-- Email Verification Alert -->
-        <EmailVerificationAlert v-if="user && user.isEmailVerified === false" :user="user" />
-        
+        <EmailVerificationAlert
+          v-if="user && user.isEmailVerified === false"
+          :user="user"
+        />
+
         <ProgressCard
           class="mb-4"
           :stages="stages"
@@ -404,15 +446,17 @@ export default {
         />
 
         <!-- To-do List -->
-         <div class="">
+        <div class="">
           <TodoList :todos="todos" />
-         </div>
+        </div>
       </div>
 
       <!-- Bio Data Card -->
       <div class="col-md-4">
         <BiodataCard
-          :profileImage="application?.profileImageUrl || 'https://placehold.co/100?text=IMG'"
+          :profileImage="
+            application?.profileImageUrl || 'https://placehold.co/100?text=IMG'
+          "
           :name="userDisplayName"
           :appNo="application?.applicationNumber || 'Not Started'"
           :email="user?.email || 'Loading...'"

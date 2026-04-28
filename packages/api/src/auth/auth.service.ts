@@ -953,7 +953,8 @@ export class AuthService {
             // Role and permissions
             roleId: role._id,
             roleName: role.name,
-            permissions: this.extractPermissions(role.modules || [])
+            permissions: this.extractPermissions(role.modules || []),
+            modules: (role.modules || []).map((m: any) => m.module)
         };
 
         this.logger.log('Staff login successful:', {
@@ -1022,7 +1023,8 @@ export class AuthService {
                 position: staff.position,
                 roleId: role._id,
                 roleName: role.name,
-                permissions: this.extractPermissions(role.modules || [])
+                permissions: this.extractPermissions(role.modules || []),
+                modules: (role.modules || []).map((m: any) => m.module)
             };
 
             return {

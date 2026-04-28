@@ -17,37 +17,36 @@ export default {
           title: 'Dashboard',
           icon: 'bi-house-door',
           route: '/dashboard',
-          permissions: ['view', 'dashboard:view']
+          module: null,
         },
         {
           title: 'Applications',
           icon: 'bi-file-earmark-text',
           route: '/applications',
-          permissions: ['view', 'applications:view']
+          module: 'applications',
         },
         {
           title: 'Users',
           icon: 'bi-people',
           route: '/users',
-          permissions: ['view', 'users:view']
+          module: 'users',
         },
         {
           title: 'Reports',
           icon: 'bi-graph-up',
           route: '/reports',
-          permissions: ['view', 'reports:view']
+          module: 'reports',
         },
         {
           title: 'Settings',
           icon: 'bi-gear',
           route: '/settings',
-          permissions: ['view', 'settings:view']
+          module: 'settings',
         }
       ]
 
-      // Filter menu items based on user permissions
-      return items.filter(item => 
-        this.authStore.hasAnyPermission(item.permissions)
+      return items.filter(item =>
+        !item.module || this.authStore.hasModuleAccess(item.module)
       )
     }
   },

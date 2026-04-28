@@ -39,7 +39,7 @@ export default {
     await this.authStore.initialize()
 
     // Check permissions
-    if (!this.authStore.hasAnyPermission(['exams:manage', 'staff', 'admin'])) {
+    if (!this.authStore.hasModuleAccess('exams')) {
       this.$swal.fire({
         icon: 'error',
         title: 'Access Denied',
@@ -126,7 +126,7 @@ export default {
         <button 
           class="btn btn-acon-primary"
           @click="showCreateExamModal = true"
-          v-if="authStore.hasAnyPermission(['staff', 'admin', 'exams:create'])"
+          v-if="authStore.hasPermission('exams', 'create')"
         >
           <i class="bi bi-plus-circle me-1"></i>
           Create Exam

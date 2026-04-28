@@ -18,53 +18,23 @@ export const useAuthStore = defineStore('auth', () => {
     const isAdmin = computed(() => userRole.value === 'admin')
     const isStaff = computed(() => ['admin', 'staff', 'manager'].includes(userRole.value))
 
-    // Permission checker
-    const hasPermission = computed(() => (permission) => {
+    const userModules = computed(() => user.value?.modules || [])
+
+    // Check if user has access to a module at all (used by sidebar, router guard)
+    const hasModuleAccess = computed(() => (moduleName) => {
         if (!user.value) return false
-        const permissions = userPermissions.value
-
-        // Check for admin/all permissions
-        if (permissions.includes('admin:all') || permissions.includes('manage') || permissions.includes('all')) {
-            return true
-        }
-
-        // Check for exact permission match
-        if (permissions.includes(permission)) {
-            return true
-        }
-
-        // Check for module-specific permissions (e.g., 'view' matches 'dashboard:view')
-        if (permission.includes(':')) {
-            const [module, action] = permission.split(':')
-            return permissions.includes(action) || permissions.includes(`${module}:${action}`)
-        }
-
-        // Check for action-based permissions (e.g., 'dashboard:view' includes 'view')
-        return permissions.some(p => p.includes(permission))
+        if (isAdmin.value) return true
+        return userModules.value.includes(moduleName)
     })
 
-    const hasAnyPermission = computed(() => (permissions) => {
+    // Check a specific action within a module, e.g. hasPermission('applications', 'approve')
+    // manage on a module implies all actions on that module
+    const hasPermission = computed(() => (module, action) => {
         if (!user.value) return false
-        const userPerms = userPermissions.value
-
-        // Check for admin/all permissions
-        if (userPerms.includes('admin:all') || userPerms.includes('manage') || userPerms.includes('all')) {
-            return true
-        }
-
-        return permissions.some(permission => {
-            // Check for exact match
-            if (userPerms.includes(permission)) return true
-
-            // Check for module-specific permissions
-            if (permission.includes(':')) {
-                const [module, action] = permission.split(':')
-                return userPerms.includes(action) || userPerms.includes(`${module}:${action}`)
-            }
-
-            // Check for action-based permissions
-            return userPerms.some(p => p.includes(permission))
-        })
+        if (isAdmin.value) return true
+        const permissions = userPermissions.value
+        if (permissions.includes(`${module}:manage`)) return true
+        return permissions.includes(`${module}:${action}`)
     })
 
     // Actions
@@ -256,10 +226,11 @@ export const useAuthStore = defineStore('auth', () => {
         isAuthenticated,
         userRole,
         userPermissions,
+        userModules,
         isAdmin,
         isStaff,
+        hasModuleAccess,
         hasPermission,
-        hasAnyPermission,
 
         // Actions
         initialize,

@@ -3,60 +3,60 @@ export const staffNavigationItems = [
         title: 'Dashboard',
         icon: 'bi-house-door',
         route: '/dashboard',
-        permissions: ['view', 'dashboard:view']
+        module: null,
     },
     {
         title: 'Applications',
         icon: 'bi-file-earmark-text',
         route: '/applications',
-        permissions: ['view', 'applications:view']
+        module: 'applications',
     },
     {
         title: 'Admission',
         icon: 'bi-clipboard-check',
         route: '/admission',
-        permissions: ['staff', 'admin', 'applications:manage']
+        module: 'admissions',
     },
     {
         title: 'Academics',
         icon: 'bi-mortarboard',
         route: '/academics',
-        permissions: ['staff', 'admin', 'academics:manage']
+        module: 'academics',
     },
     {
         title: 'Exams',
         icon: 'bi-file-text',
         route: '/exams',
-        permissions: ['staff', 'admin', 'exams:manage']
+        module: 'exams',
     },
     {
         title: 'Users',
         icon: 'bi-people',
         route: '/users',
-        permissions: ['view', 'users:view']
+        module: 'users',
     },
     {
         title: 'Payments',
         icon: 'bi-credit-card-2-front',
         route: '/payments',
-        permissions: ['view', 'read', 'payments:view', 'payments:read']
+        module: 'payments',
     },
     {
         title: 'Utilities',
         icon: 'bi-tools',
         route: '/utilities',
-        permissions: ['view', 'settings:view']
+        module: 'utilities',
     },
     {
         title: 'Reports',
         icon: 'bi-graph-up',
         route: '/reports',
-        permissions: ['view', 'reports:view']
+        module: 'reports',
     },
     {
         title: 'Settings',
         icon: 'bi-gear',
         route: '/settings',
-        permissions: ['view', 'settings:view']
+        module: 'settings',
     }
 ]

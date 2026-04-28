@@ -141,13 +141,7 @@ export default {
   async mounted() {
     await this.authStore.initialize();
 
-    if (
-      !this.authStore.hasAnyPermission([
-        "applications:manage",
-        "staff",
-        "admin",
-      ])
-    ) {
+    if (!this.authStore.hasModuleAccess("admissions")) {
       this.$swal.fire({
         icon: "error",
         title: "Access Denied",

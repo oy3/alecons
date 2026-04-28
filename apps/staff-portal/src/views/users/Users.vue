@@ -3,6 +3,7 @@ import { useAuthStore } from "../../stores/auth.js";
 import { apiService } from "../../services/api.js";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
+import { MODULE_DEFINITIONS, MODULE_LIST } from "../../services/roleDefinitions.js";
 
 export default {
   name: "UsersManagement",
@@ -80,27 +81,7 @@ export default {
 
       // Role Management Configuration
       availableModules: [
-        { value: "dashboard", label: "Dashboard" },
-        { value: "applications", label: "Applications" },
-        { value: "payments", label: "Payments" },
-        { value: "admissions", label: "Admissions" },
-        { value: "academics", label: "Academics" },
-        { value: "exams", label: "Exams" },
-        { value: "users", label: "Users" },
-        { value: "utilities", label: "Utilities" },
-        { value: "reports", label: "Reports" },
-        { value: "settings", label: "Settings" },
-      ],
-      availablePermissions: [
-        { value: "view", label: "View" },
-        { value: "create", label: "Create" },
-        { value: "read", label: "Read/View" },
-        { value: "update", label: "Update/Edit" },
-        { value: "delete", label: "Delete" },
-        { value: "manage", label: "Manage All" },
-        { value: "approve", label: "Approve" },
-        { value: "review", label: "Review" },
-        { value: "export", label: "Export" },
+        ...MODULE_LIST,
       ],
     };
   },
@@ -464,10 +445,41 @@ export default {
 
         let response;
         if (this.isEditMode && this.selectedUser) {
-          response = await apiService.updateUser(
-            this.selectedUser._id,
-            this.userForm,
-          );
+          const isStaffUser =
+            this.userForm.type === "staff" || this.userForm.type === "admin";
+
+          if (isStaffUser) {
+            // Keep payload aligned with UpdateStaffDto to satisfy strict whitelist validation.
+            const staffUpdatePayload = {
+              firstName: this.userForm.firstName,
+              lastName: this.userForm.lastName,
+              otherName: this.userForm.otherName || undefined,
+              phone: this.userForm.phone || undefined,
+              department: this.userForm.department,
+              position: this.userForm.position,
+              roleId: this.userForm.roleId,
+              isActive: this.userForm.isActive,
+            };
+
+            response = await apiService.updateStaff(
+              this.selectedUser._id,
+              staffUpdatePayload,
+            );
+          } else {
+            // Keep payload aligned with UpdateUserDto to satisfy strict whitelist validation.
+            const userUpdatePayload = {
+              firstName: this.userForm.firstName,
+              lastName: this.userForm.lastName,
+              otherName: this.userForm.otherName || undefined,
+              phone: this.userForm.phone || undefined,
+              isActive: this.userForm.isActive,
+            };
+
+            response = await apiService.updateUser(
+              this.selectedUser._id,
+              userUpdatePayload,
+            );
+          }
         } else {
           // Use unified creation method for both admin and staff
           response = await apiService.createStaffUser(this.userForm);
@@ -531,9 +543,20 @@ export default {
 
         let response;
         if (this.isEditMode && this.selectedUser) {
+          const staffUpdatePayload = {
+            firstName: this.staffForm.firstName,
+            lastName: this.staffForm.lastName,
+            otherName: this.staffForm.otherName || undefined,
+            phone: this.staffForm.phone || undefined,
+            department: this.staffForm.department,
+            position: this.staffForm.position,
+            roleId: this.staffForm.roleId,
+            isActive: this.staffForm.isActive,
+          };
+
           response = await apiService.updateStaff(
             this.selectedUser._id,
-            this.staffForm,
+            staffUpdatePayload,
           );
         } else {
           response = await apiService.createStaffUser(this.staffForm);
@@ -979,11 +1002,11 @@ export default {
         const permissionsHtml = checkedModules
           .map((module) => {
             const moduleLabel =
-              this.availableModules.find((m) => m.value === module)?.label ||
-              module;
+              MODULE_DEFINITIONS[module]?.label || module;
             const modulePerms = rolePermissions[module] || [];
 
-            const permissionCheckboxes = this.availablePermissions
+            const moduleDef = MODULE_DEFINITIONS[module];
+            const permissionCheckboxes = (moduleDef?.permissions || [])
               .map(
                 (perm) => `
             <div class="form-check form-check-inline">
@@ -993,7 +1016,7 @@ export default {
                 value="${perm.value}" 
                 id="perm-${module}-${perm.value}"
                 data-module="${module}"
-                ${modulePerms.includes(perm.value) ? "checked" : ""}
+                ${modulePerms.includes(perm.value) || (modulePerms.includes('manage') && perm.value !== 'manage') ? "checked" : ""}
               >
               <label class="form-check-label" for="perm-${module}-${perm.value}">
                 ${perm.label}
@@ -1015,6 +1038,18 @@ export default {
           .join("");
 
         permissionsContainer.innerHTML = permissionsHtml;
+
+              // Wire manage checkbox: checking it auto-checks all siblings; unchecking clears them
+              checkedModules.forEach((module) => {
+                const manageCheckbox = document.getElementById(`perm-${module}-manage`);
+                if (!manageCheckbox) return;
+                const siblingCheckboxes = document.querySelectorAll(
+                  `.permission-checkbox[data-module="${module}"]:not([value="manage"])`,
+                );
+                manageCheckbox.addEventListener('change', () => {
+                  siblingCheckboxes.forEach((cb) => { cb.checked = manageCheckbox.checked; });
+                });
+              });
       };
 
       // Initial permissions display
@@ -1250,10 +1285,18 @@ export default {
             >
               <i class="bi bi-download me-2"></i>Export
             </button>
-            <button class="btn btn-staff-primary btn-sm" @click="addNewUser">
+            <button
+              v-if="authStore.hasPermission('users', 'create')"
+              class="btn btn-staff-primary btn-sm"
+              @click="addNewUser"
+            >
               <i class="bi bi-plus me-2"></i>Add User
             </button>
-            <button class="btn btn-success btn-sm" @click="showRolesManagement">
+            <button
+              v-if="authStore.hasPermission('users', 'manage')"
+              class="btn btn-success btn-sm"
+              @click="showRolesManagement"
+            >
               <i class="bi bi-gear me-2"></i>Roles
             </button>
             <button class="btn btn-outline-secondary btn-sm" @click="loadUsers">
@@ -1489,10 +1532,7 @@ export default {
                         class="btn btn-outline-secondary btn-sm"
                         @click="editUser(user)"
                         title="Edit User"
-                        v-if="
-                          authStore.hasPermission('edit') ||
-                          authStore.hasPermission('users:edit')
-                        "
+                        v-if="authStore.hasPermission('users', 'edit')"
                       >
                         <i class="bi bi-pencil"></i>
                       </button>
@@ -1502,10 +1542,7 @@ export default {
                           class="btn btn-outline-warning btn-sm dropdown-toggle"
                           data-bs-toggle="dropdown"
                           title="More Actions"
-                          v-if="
-                            authStore.hasPermission('manage') ||
-                            authStore.hasPermission('users:manage')
-                          "
+                          v-if="authStore.hasPermission('users', 'manage')"
                         >
                           <i class="bi bi-gear"></i>
                         </button>

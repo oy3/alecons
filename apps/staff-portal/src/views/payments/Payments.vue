@@ -55,7 +55,7 @@ export default {
   async mounted() {
     await this.authStore.initialize()
 
-    if (!this.authStore.hasAnyPermission(['view', 'read', 'payments:view', 'payments:read'])) {
+      if (!this.authStore.hasModuleAccess('payments')) {
       await this.$swal.fire({
         icon: 'error',
         title: 'Access Denied',
@@ -336,7 +336,7 @@ export default {
 
     async verifyManualTransferPayment(payment) {
       try {
-        if (!this.authStore.hasAnyPermission(['update', 'manage', 'payments:update', 'payments:manage'])) {
+          if (!this.authStore.hasPermission('payments', 'manage') && !this.authStore.hasPermission('payments', 'edit')) {
           await this.$swal.fire({
             icon: 'error',
             title: 'Access Denied',
@@ -395,7 +395,7 @@ export default {
 
     async rejectManualTransferPayment(payment) {
       try {
-        if (!this.authStore.hasAnyPermission(['update', 'manage', 'payments:update', 'payments:manage'])) {
+          if (!this.authStore.hasPermission('payments', 'manage') && !this.authStore.hasPermission('payments', 'edit')) {
           await this.$swal.fire({
             icon: 'error',
             title: 'Access Denied',

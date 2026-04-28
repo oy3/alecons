@@ -30,23 +30,23 @@ export class RoleSeederService implements OnModuleInit {
                     modules: [
                         {
                             module: 'users',
-                            permissions: ['create', 'read', 'update', 'delete', 'manage']
+                            permissions: ['view', 'create', 'read', 'update', 'delete', 'manage']
                         },
                         {
                             module: 'applications',
-                            permissions: ['create', 'read', 'update', 'delete', 'process', 'approve', 'reject']
+                            permissions: ['view', 'create', 'read', 'update', 'delete', 'approve', 'export', 'manage']
                         },
                         {
                             module: 'exams',
-                            permissions: ['create', 'read', 'update', 'delete', 'schedule', 'grade']
+                            permissions: ['view', 'create', 'edit', 'delete', 'publish', 'manage']
                         },
                         {
                             module: 'reports',
-                            permissions: ['read', 'export', 'analytics']
+                            permissions: ['view', 'export']
                         },
                         {
                             module: 'settings',
-                            permissions: ['read', 'update', 'configure']
+                            permissions: ['view', 'manage']
                         }
                     ],
                     active: true
@@ -57,11 +57,11 @@ export class RoleSeederService implements OnModuleInit {
                     modules: [
                         {
                             module: 'applications',
-                            permissions: ['create', 'read', 'update', 'process', 'approve', 'reject']
+                            permissions: ['view', 'create', 'read', 'edit', 'approve', 'export']
                         },
                         {
                             module: 'reports',
-                            permissions: ['read', 'export']
+                            permissions: ['view', 'export']
                         }
                     ],
                     active: true
@@ -72,15 +72,15 @@ export class RoleSeederService implements OnModuleInit {
                     modules: [
                         {
                             module: 'exams',
-                            permissions: ['create', 'read', 'update', 'schedule', 'grade']
+                            permissions: ['view', 'create', 'edit', 'publish']
                         },
                         {
                             module: 'applications',
-                            permissions: ['read']
+                            permissions: ['view', 'read']
                         },
                         {
                             module: 'reports',
-                            permissions: ['read']
+                            permissions: ['view']
                         }
                     ],
                     active: true
@@ -91,11 +91,11 @@ export class RoleSeederService implements OnModuleInit {
                     modules: [
                         {
                             module: 'applications',
-                            permissions: ['read', 'update', 'process']
+                            permissions: ['view', 'read', 'edit']
                         },
                         {
                             module: 'reports',
-                            permissions: ['read']
+                            permissions: ['view']
                         }
                     ],
                     active: true
@@ -110,11 +110,11 @@ export class RoleSeederService implements OnModuleInit {
                         },
                         {
                             module: 'applications',
-                            permissions: ['read', 'update']
+                            permissions: ['view', 'read', 'edit']
                         },
                         {
                             module: 'reports',
-                            permissions: ['read', 'export']
+                            permissions: ['view', 'export']
                         }
                     ],
                     active: true
@@ -125,15 +125,15 @@ export class RoleSeederService implements OnModuleInit {
                     modules: [
                         {
                             module: 'users',
-                            permissions: ['read', 'update']
+                            permissions: ['view', 'edit']
                         },
                         {
                             module: 'settings',
-                            permissions: ['read', 'update']
+                            permissions: ['view', 'manage']
                         },
                         {
                             module: 'reports',
-                            permissions: ['read']
+                            permissions: ['view']
                         }
                     ],
                     active: true

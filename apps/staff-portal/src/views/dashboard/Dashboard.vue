@@ -273,8 +273,19 @@ export default {
     <!-- Dashboard Content -->
     <div v-else>
       <!-- Stats Cards Row -->
-      <div class="row mb-4">
-        <div class="col-lg-3 col-md-6 mb-3">
+      <div
+        class="row mb-4"
+        v-if="
+          authStore.hasModuleAccess('applications') ||
+          authStore.hasModuleAccess('payments') ||
+          authStore.hasModuleAccess('users')
+        "
+      >
+        <!-- Pending Applications -->
+        <div
+          class="col-lg-3 col-md-6 mb-3"
+          v-if="authStore.hasModuleAccess('applications')"
+        >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
               <div class="d-flex align-items-center justify-content-center">
@@ -297,7 +308,11 @@ export default {
           </div>
         </div>
 
-        <div class="col-lg-3 col-md-6 mb-3">
+        <!-- Admitted Students -->
+        <div
+          class="col-lg-3 col-md-6 mb-3"
+          v-if="authStore.hasModuleAccess('applications')"
+        >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
               <div class="d-flex align-items-center justify-content-center">
@@ -305,7 +320,7 @@ export default {
                   class="bg-success-subtle text-success rounded-circle d-flex align-items-center justify-content-center"
                   style="width: 60px; height: 60px"
                 >
-                  <i class="bi bi bi-person-check fs-4"></i>
+                  <i class="bi bi-person-check fs-4"></i>
                 </div>
                 <div class="ms-3">
                   <h6 class="card-title text-body-secondary">
@@ -320,7 +335,11 @@ export default {
           </div>
         </div>
 
-        <div class="col-lg-3 col-md-6 mb-3">
+        <!-- Total Revenue -->
+        <div
+          class="col-lg-3 col-md-6 mb-3"
+          v-if="authStore.isAdmin && authStore.hasModuleAccess('payments')"
+        >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
               <div class="d-flex align-items-center justify-content-center">
@@ -342,7 +361,11 @@ export default {
           </div>
         </div>
 
-        <div class="col-lg-3 col-md-6 mb-3">
+        <!-- Total Users -->
+        <div
+          class="col-lg-3 col-md-6 mb-3"
+          v-if="authStore.isAdmin || authStore.hasModuleAccess('users')"
+        >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
               <div class="d-flex align-items-center justify-content-center">
@@ -368,7 +391,10 @@ export default {
       <!-- Main Content Row -->
       <div class="row">
         <!-- Recent Applications -->
-        <div class="col-lg-8 mb-4">
+        <div
+          class="col-lg-8 mb-4"
+          v-if="authStore.hasModuleAccess('applications')"
+        >
           <div class="card border-0 shadow-sm p-0">
             <div class="card-header bg-transparent border-bottom-0">
               <div class="d-flex justify-content-between align-items-center">
@@ -440,24 +466,28 @@ export default {
 
           <div class="d-grid gap-2">
             <button
+              v-if="authStore.hasModuleAccess('applications')"
               class="btn btn-staff-primary"
               @click="navigateToApplications"
             >
               <i class="bi bi-plus-circle me-2"></i>Review Applications
             </button>
             <button
+              v-if="authStore.hasModuleAccess('users')"
               class="btn btn-outline-staff-primary"
               @click="navigateToUsers"
             >
               <i class="bi bi-person-plus me-2"></i>Manage Users
             </button>
             <button
+              v-if="authStore.hasModuleAccess('reports')"
               class="btn btn-outline-staff-primary"
               @click="navigateToReports"
             >
               <i class="bi bi-graph-up me-2"></i>Generate Report
             </button>
             <button
+              v-if="authStore.hasModuleAccess('settings')"
               class="btn btn-outline-staff-primary"
               @click="navigateToSettings"
             >

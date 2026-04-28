@@ -31,7 +31,7 @@ export default {
     await this.authStore.initialize()
 
     // Check permissions
-    if (!this.authStore.hasAnyPermission(['academics:manage', 'admin', 'staff'])) {
+    if (!this.authStore.hasModuleAccess('academics')) {
       this.$swal.fire({
         icon: 'error',
         title: 'Access Denied',

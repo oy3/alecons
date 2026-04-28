@@ -331,7 +331,7 @@ export default {
                   <i class="bi bi-shield-lock me-2"></i>Security
                 </button>
               </li>
-              <li class="nav-item" v-if="authStore.hasPermission('manage') || authStore.hasPermission('system:manage')">
+              <li class="nav-item" v-if="authStore.hasPermission('settings', 'manage')">
                 <button 
                   class="nav-link" 
                   :class="{ active: activeTab === 'system' }"
@@ -340,7 +340,7 @@ export default {
                   <i class="bi bi-gear me-2"></i>System
                 </button>
               </li>
-              <li class="nav-item" v-if="authStore.hasPermission('manage') || authStore.hasPermission('applications:manage')">
+              <li class="nav-item" v-if="authStore.hasPermission('settings', 'manage') || authStore.hasPermission('applications', 'manage')">
                 <button 
                   class="nav-link" 
                   :class="{ active: activeTab === 'applications' }"
@@ -523,7 +523,7 @@ export default {
             </div>
 
             <!-- System Tab -->
-            <div v-if="activeTab === 'system' && (authStore.hasPermission('manage') || authStore.hasPermission('system:manage'))" class="tab-content">
+            <div v-if="activeTab === 'system' && authStore.hasPermission('settings', 'manage')" class="tab-content">
               <h5 class="fw-bold mb-4">System Settings</h5>
               <form @submit.prevent="saveSystemSettings">
                 <div class="row">
@@ -612,7 +612,7 @@ export default {
             </div>
 
             <!-- Applications Tab -->
-            <div v-if="activeTab === 'applications' && (authStore.hasPermission('manage') || authStore.hasPermission('applications:manage'))" class="tab-content">
+            <div v-if="activeTab === 'applications' && (authStore.hasPermission('settings', 'manage') || authStore.hasPermission('applications', 'manage'))" class="tab-content">
               <h5 class="fw-bold mb-4">Application Settings</h5>
               <form @submit.prevent="saveApplicationSettings">
                 <div class="row">

@@ -10,7 +10,7 @@ export default {
   computed: {
     menuItems() {
       return staffNavigationItems.filter(item =>
-        this.authStore.hasAnyPermission(item.permissions)
+        !item.module || this.authStore.hasModuleAccess(item.module)
       )
     }
   },

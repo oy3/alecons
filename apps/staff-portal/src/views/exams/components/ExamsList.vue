@@ -623,21 +623,21 @@ export default {
     canEditExam(exam) {
       return (
         ["draft", "scheduled"].includes(exam.status) &&
-        this.authStore.hasAnyPermission(["exams:edit", "staff", "admin"])
+        this.authStore.hasPermission("exams", "edit")
       );
     },
 
     canDeleteExam(exam) {
       return (
         exam.status === "draft" &&
-        this.authStore.hasAnyPermission(["exams:delete", "admin"])
+        this.authStore.hasPermission("exams", "delete")
       );
     },
 
     canRegeneratePassword(exam) {
       return (
         ["draft", "scheduled", "in-progress"].includes(exam.status) &&
-        this.authStore.hasAnyPermission(["exams:manage", "staff", "admin"])
+        this.authStore.hasPermission("exams", "manage")
       );
     },
   },

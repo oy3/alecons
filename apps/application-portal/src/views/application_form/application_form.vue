@@ -53,7 +53,7 @@ export default {
         "Islamic Religious Studies",
       ],
       maxSubjects: 9,
-      grades: ["A1", "A2", "B2", "B3", "C4", "C5", "C6", "D7", "E8", "F9"],
+      grades: ["A1", "A2", "A3", "B2", "B3", "C4", "C5", "C6", "D7", "E8", "F9"],
       referenceLetters: [null, null],
       declaration: false,
 

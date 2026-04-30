@@ -3,6 +3,8 @@ import { createPinia } from 'pinia'
 import Swal from 'sweetalert2'
 import App from './App.vue'
 import router from './router'
+import 'bootstrap/dist/css/bootstrap.min.css'
+import 'bootstrap'
 import '@shared/styles/style.css'
 import './style.css'
 

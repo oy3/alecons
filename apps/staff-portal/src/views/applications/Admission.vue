@@ -2,7 +2,7 @@
 import { useAuthStore } from "../../stores/auth.js";
 import { apiService } from "../../services/api.js";
 import { logger } from "@shared/utils/logger";
-import { Modal, Dropdown } from "bootstrap";
+import { Modal } from "bootstrap";
 
 export default {
   name: "AdmissionManagement",
@@ -66,16 +66,10 @@ export default {
       },
       decisionFormProcessing: false,
 
-      // Modal instances
-      scheduleExamModal: null,
-      scheduleScreeningModal: null,
-      examScoreModal: null,
-      admissionDecisionModal: null,
-      applicationDetailsModal: null,
-
       // Application details
       selectedApplicationDetails: null,
       detailsLoading: false,
+      detailsExporting: false,
     };
   },
   computed: {
@@ -121,14 +115,11 @@ export default {
       }
 
       return rangeWithDots.filter(
-        (item, index, array) => array.indexOf(item) === index
+        (item, index, array) => array.indexOf(item) === index,
       );
     },
   },
-  updated() {
-    // Reinitialize dropdowns when component updates (like when applications load)
-    this.initializeDropdowns();
-  },
+
   watch: {
     programFilter() {
       this.currentPage = 1;
@@ -151,100 +142,111 @@ export default {
       return;
     }
 
-    // Initialize modals
-    this.initializeModals();
+    this.registerModalA11yHandlers();
 
     // Load data
     await Promise.all([this.loadPrograms(), this.loadApplications()]);
   },
+  beforeUnmount() {
+    this.unregisterModalA11yHandlers();
+  },
   methods: {
-    initializeModals() {
-      this.$nextTick(() => {
-        this.scheduleExamModal = new Modal(
-          document.getElementById("scheduleExamModal")
-        );
-        this.scheduleScreeningModal = new Modal(
-          document.getElementById("scheduleScreeningModal")
-        );
-        this.examScoreModal = new Modal(
-          document.getElementById("examScoreModal")
-        );
-        this.admissionDecisionModal = new Modal(
-          document.getElementById("admissionDecisionModal")
-        );
-        this.applicationDetailsModal = new Modal(
-          document.getElementById("applicationDetailsModal")
-        );
+    registerModalA11yHandlers() {
+      this._modalLastFocusedElements = new WeakMap();
 
-        // Initialize dropdowns
-        this.initializeDropdowns();
-      });
+      this._onModalShow = (event) => {
+        const modalElement = event.target;
+        if (!modalElement?.classList?.contains("modal")) {
+          return;
+        }
+
+        this._modalLastFocusedElements.set(
+          modalElement,
+          event.relatedTarget || document.activeElement,
+        );
+      };
+
+      this._onModalHide = (event) => {
+        const modalElement = event.target;
+        if (!modalElement?.classList?.contains("modal")) {
+          return;
+        }
+
+        const activeElement = document.activeElement;
+        if (
+          activeElement &&
+          modalElement.contains(activeElement) &&
+          typeof activeElement.blur === "function"
+        ) {
+          activeElement.blur();
+        }
+      };
+
+      this._onModalHidden = (event) => {
+        const modalElement = event.target;
+        if (!modalElement?.classList?.contains("modal")) {
+          return;
+        }
+
+        const lastFocusedElement =
+          this._modalLastFocusedElements.get(modalElement);
+        if (
+          lastFocusedElement &&
+          typeof lastFocusedElement.focus === "function" &&
+          document.contains(lastFocusedElement)
+        ) {
+          lastFocusedElement.focus();
+        }
+      };
+
+      document.addEventListener("show.bs.modal", this._onModalShow);
+      document.addEventListener("hide.bs.modal", this._onModalHide);
+      document.addEventListener("hidden.bs.modal", this._onModalHidden);
     },
 
-    initializeDropdowns() {
-      this.$nextTick(() => {
-        try {
-          // Check if Bootstrap is available
-          if (
-            typeof window.bootstrap === "undefined" ||
-            typeof Dropdown === "undefined"
-          ) {
-            logger.warn(
-              "Bootstrap not fully loaded, retrying dropdown initialization..."
-            );
-            setTimeout(() => this.initializeDropdowns(), 100);
-            return;
-          }
-
-          // Initialize all dropdown toggles
-          const dropdownElementList =
-            document.querySelectorAll(".dropdown-toggle");
-          dropdownElementList.forEach((dropdownToggleEl) => {
-            // Dispose any existing dropdown instance first
-            const existingDropdown = Dropdown.getInstance(dropdownToggleEl);
-            if (existingDropdown) {
-              existingDropdown.dispose();
-            }
-            // Create new dropdown instance
-            new Dropdown(dropdownToggleEl);
-          });
-
-          logger.info("Dropdowns initialized successfully", {
-            count: dropdownElementList.length,
-          });
-        } catch (error) {
-          logger.error("Failed to initialize dropdowns:", error);
-        }
-      });
-    },
-
-    // Manual dropdown toggle as fallback
-    toggleDropdown(event) {
-      try {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const dropdownToggle = event.currentTarget;
-        logger.info("Dropdown toggle clicked:", dropdownToggle);
-
-        // Try using Bootstrap's Dropdown class
-        if (typeof Dropdown !== "undefined") {
-          const dropdown = Dropdown.getOrCreateInstance(dropdownToggle);
-          dropdown.toggle();
-        } else {
-          // Fallback: manually toggle the dropdown
-          const dropdownMenu = dropdownToggle.nextElementSibling;
-          if (dropdownMenu) {
-            dropdownMenu.classList.toggle("show");
-            dropdownToggle.setAttribute(
-              "aria-expanded",
-              dropdownMenu.classList.contains("show")
-            );
-          }
-        }
-      } catch (error) {
-        logger.error("Failed to toggle dropdown manually:", error);
+    unregisterModalA11yHandlers() {
+      if (this._onModalShow) {
+        document.removeEventListener("show.bs.modal", this._onModalShow);
       }
+      if (this._onModalHide) {
+        document.removeEventListener("hide.bs.modal", this._onModalHide);
+      }
+      if (this._onModalHidden) {
+        document.removeEventListener("hidden.bs.modal", this._onModalHidden);
+      }
+
+      this._onModalShow = null;
+      this._onModalHide = null;
+      this._onModalHidden = null;
+      this._modalLastFocusedElements = null;
+    },
+
+    showModal(modalId) {
+      const modalElement = document.getElementById(modalId);
+      if (!modalElement) {
+        logger.warn("Modal element not found", { modalId });
+        return;
+      }
+
+      Modal.getOrCreateInstance(modalElement).show();
+    },
+
+    hideModal(modalId) {
+      const modalElement = document.getElementById(modalId);
+      if (!modalElement) {
+        return;
+      }
+
+      const activeElement = document.activeElement;
+      if (
+        activeElement &&
+        modalElement.contains(activeElement) &&
+        typeof activeElement.blur === "function"
+      ) {
+        activeElement.blur();
+      }
+
+      Modal.getOrCreateInstance(modalElement).hide();
     },
 
     async loadPrograms() {
@@ -292,9 +294,12 @@ export default {
             applicantName: app.applicantName,
             email: app.email,
             phone: app.phone || "N/A",
-            programDisplay: [app.programTypeLabel, app.programModeLabel, app.programName]
-              .filter(Boolean)
-              .join(" ") || "N/A",
+            programDisplay:
+              app.programDisplay ||
+              [app.programTypeLabel, app.programModeLabel, app.programName]
+                .filter(Boolean)
+                .join(" ") ||
+              "N/A",
             status: app.status,
             admissionDecision: app.admissionDecision,
             currentStage: app.currentStage,
@@ -427,6 +432,24 @@ export default {
       return session.sessionYear || session.name || "N/A";
     },
 
+    getProgramDisplayLabel(applicationDetails) {
+      if (applicationDetails?.programDisplay) {
+        return applicationDetails.programDisplay;
+      }
+
+      const program = applicationDetails?.programId;
+
+      return (
+        [
+          program?.programTypeId?.type,
+          program?.programModeId?.description || program?.programModeId?.mode,
+          program?.name,
+        ]
+          .filter(Boolean)
+          .join(" ") || "N/A"
+      );
+    },
+
     getDocumentUrl(document) {
       if (!document) {
         return null;
@@ -439,11 +462,25 @@ export default {
       return document.url || null;
     },
 
+    getSittingLabel(examIndex) {
+      const sittingNumber = examIndex + 1;
+      if (sittingNumber <= 2) {
+        return `Sitting ${sittingNumber}`;
+      }
+
+      return `Additional Sitting ${sittingNumber}`;
+    },
+
+    getExamBySitting(sittingNumber) {
+      const exams = this.selectedApplicationDetails?.examinations || [];
+      return exams[sittingNumber - 1] || null;
+    },
+
     async viewApplication(application) {
       try {
         this.detailsLoading = true;
         this.selectedApplicationDetails = null;
-        this.applicationDetailsModal.show();
+        this.showModal("applicationDetailsModal");
 
         const response = await apiService.getApplication(application.id);
 
@@ -451,7 +488,7 @@ export default {
           this.selectedApplicationDetails = response.data.application;
           logger.info(
             "Application details loaded:",
-            this.selectedApplicationDetails
+            this.selectedApplicationDetails,
           );
         } else {
           this.$swal.fire({
@@ -460,7 +497,7 @@ export default {
             text: "Could not load application details. Please try again.",
             confirmButtonColor: "#1a5f5f",
           });
-          this.applicationDetailsModal.hide();
+          this.hideModal("applicationDetailsModal");
         }
       } catch (error) {
         logger.error("Failed to load application details:", error);
@@ -470,7 +507,7 @@ export default {
           text: "An error occurred while loading application details.",
           confirmButtonColor: "#1a5f5f",
         });
-        this.applicationDetailsModal.hide();
+        this.hideModal("applicationDetailsModal");
       } finally {
         this.detailsLoading = false;
       }
@@ -483,7 +520,7 @@ export default {
         examTime: "",
         examLink: "",
       };
-      this.scheduleExamModal.show();
+      this.showModal("scheduleExamModal");
     },
 
     async submitExamSchedule() {
@@ -496,7 +533,7 @@ export default {
             examDate: this.examForm.examDate,
             examTime: this.examForm.examTime,
             examLink: this.examForm.examLink,
-          }
+          },
         );
 
         if (response.success) {
@@ -507,7 +544,7 @@ export default {
             confirmButtonColor: "#1a5f5f",
           });
 
-          this.scheduleExamModal.hide();
+          this.hideModal("scheduleExamModal");
           await this.loadApplications();
         }
       } catch (error) {
@@ -529,7 +566,7 @@ export default {
         score: "",
         passed: false,
       };
-      this.examScoreModal.show();
+      this.showModal("examScoreModal");
     },
 
     async submitExamScore() {
@@ -541,7 +578,7 @@ export default {
           {
             score: parseInt(this.scoreForm.score),
             passed: this.scoreForm.passed,
-          }
+          },
         );
 
         if (response.success) {
@@ -552,7 +589,7 @@ export default {
             confirmButtonColor: "#1a5f5f",
           });
 
-          this.examScoreModal.hide();
+          this.hideModal("examScoreModal");
           await this.loadApplications();
         }
       } catch (error) {
@@ -575,7 +612,7 @@ export default {
         screeningTime: "",
         venue: "",
       };
-      this.scheduleScreeningModal.show();
+      this.showModal("scheduleScreeningModal");
     },
 
     async submitScreeningSchedule() {
@@ -588,7 +625,7 @@ export default {
             screeningDate: this.screeningForm.screeningDate,
             screeningTime: this.screeningForm.screeningTime,
             venue: this.screeningForm.venue,
-          }
+          },
         );
 
         if (response.success) {
@@ -599,7 +636,7 @@ export default {
             confirmButtonColor: "#1a5f5f",
           });
 
-          this.scheduleScreeningModal.hide();
+          this.hideModal("scheduleScreeningModal");
           await this.loadApplications();
         }
       } catch (error) {
@@ -647,7 +684,7 @@ export default {
         sendProvisionalOffer: false,
         reason: "",
       };
-      this.admissionDecisionModal.show();
+      this.showModal("admissionDecisionModal");
     },
 
     async submitAdmissionDecision() {
@@ -660,7 +697,7 @@ export default {
             decision: this.decisionForm.decision,
             sendProvisionalOffer: this.decisionForm.sendProvisionalOffer,
             reason: this.decisionForm.reason,
-          }
+          },
         );
 
         if (response.success) {
@@ -676,7 +713,7 @@ export default {
             confirmButtonColor: "#1a5f5f",
           });
 
-          this.admissionDecisionModal.hide();
+          this.hideModal("admissionDecisionModal");
           await this.loadApplications();
         }
       } catch (error) {
@@ -689,6 +726,41 @@ export default {
         });
       } finally {
         this.decisionFormProcessing = false;
+      }
+    },
+
+    async exportApplicationDetailsPdf() {
+      if (!this.selectedApplicationDetails || this.detailsExporting) {
+        return;
+      }
+
+      this.detailsExporting = true;
+
+      try {
+        const applicationId = this.selectedApplicationDetails.id || this.selectedApplicationDetails._id;
+
+        if (!applicationId) {
+          throw new Error("Application identifier is missing for export");
+        }
+
+        await apiService.exportApplicationDetailsPDF(applicationId);
+
+        this.$swal.fire({
+          icon: "success",
+          title: "Export Ready",
+          text: "Application details PDF has been exported and downloaded.",
+          confirmButtonColor: "#1a5f5f",
+        });
+      } catch (error) {
+        logger.error("Failed to export application details PDF", error);
+        this.$swal.fire({
+          icon: "error",
+          title: "Export Failed",
+          text: "Could not export application details. Please try again.",
+          confirmButtonColor: "#1a5f5f",
+        });
+      } finally {
+        this.detailsExporting = false;
       }
     },
   },
@@ -791,187 +863,405 @@ export default {
       <div class="col-12">
         <div class="card rounded-3 border-0 p-0 shadow-sm">
           <div class="card-body p-0">
-            <table class="table table-hover mb-0">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Applicant</th>
-                  <th>Program</th>
-                  <th>Current Stage</th>
-                  <th>Status</th>
-                  <th>Exam Status</th>
-                  <th>Screening Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="application in paginatedApplications"
-                  :key="application.id"
-                >
-                  <td>
-                    <strong>{{ application.applicationNumber }}</strong>
-                  </td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <img
-                        :src="
-                          application.profileImageUrl ||
-                          'https://placehold.co/40'
-                        "
-                        class="rounded-circle me-2"
-                        width="40"
-                        height="40"
-                        alt="Profile"
-                      />
-                      <div>
-                        <div class="fw-semibold">
-                          {{ application.applicantName }}
+            <div class="table-responsive-lg d-none d-lg-block">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th class="text-center">#</th>
+                    <th class="text-center">Applicant</th>
+                    <th>Program</th>
+                    <th>Current Stage</th>
+                    <th>Status</th>
+                    <th>Exam Status</th>
+                    <th>Screening Status</th>
+                    <th class="text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="application in paginatedApplications"
+                    :key="application.id"
+                  >
+                    <td>
+                      <strong>{{ application.applicationNumber }}</strong>
+                    </td>
+                    <td>
+                      <div class="d-flex align-items-center">
+                        <img
+                          :src="
+                            application.profileImageUrl ||
+                            'https://placehold.co/40'
+                          "
+                          class="rounded-circle me-2"
+                          width="40"
+                          height="40"
+                          alt="Profile"
+                        />
+                        <div>
+                          <div class="fw-semibold">
+                            {{ application.applicantName }}
+                          </div>
+                          <small class="text-muted">{{
+                            application.email
+                          }}</small>
+                          <br />
+                          <small class="text-muted">{{
+                            application.phone
+                          }}</small>
                         </div>
-                        <small class="text-muted">{{
-                          application.email
-                        }}</small>
                       </div>
-                    </div>
-                  </td>
-                  <td>{{ application.programDisplay }}</td>
-                  <td>
-                    <span class="badge bg-info">
-                      {{
-                        application.currentStage
-                          ? `Stage ${application.currentStage} - ${getStageName(
-                              application.currentStage
-                            )}`
-                          : "N/A"
-                      }}
-                    </span>
-                  </td>
-                  <td>
-                    <span :class="getStatusBadgeClass(application.status)">
-                      {{ application.status.toUpperCase() }}
-                    </span>
-                  </td>
-                  <td>
-                    <div v-if="application.entranceExam">
-                      <small class="text-success">
-                        <i class="bi bi-check-circle me-1"></i>
-                        Scheduled
-                      </small>
-                      <div
-                        v-if="application.entranceExam.score !== undefined"
-                        class="small"
-                      >
-                        Score: {{ application.entranceExam.score }}
+                    </td>
+                    <td>{{ application.programDisplay }}</td>
+                    <td>
+                      <span class="badge bg-info">
+                        {{
+                          application.currentStage
+                            ? `Stage ${application.currentStage} - ${getStageName(
+                                application.currentStage,
+                              )}`
+                            : "N/A"
+                        }}
+                      </span>
+                    </td>
+                    <td>
+                      <span :class="getStatusBadgeClass(application.status)">
+                        {{ application.status.toUpperCase() }}
+                      </span>
+                    </td>
+                    <td>
+                      <div v-if="application.entranceExam">
+                        <small class="text-success">
+                          <i class="bi bi-check-circle me-1"></i>
+                          Scheduled
+                        </small>
+                        <div
+                          v-if="application.entranceExam.score !== undefined"
+                          class="small"
+                        >
+                          Score: {{ application.entranceExam.score }}
+                        </div>
                       </div>
-                    </div>
-                    <small
-                      v-else-if="!isEntranceExamEnabled(application)"
-                      class="text-muted"
-                    >Skipped (Disabled)</small>
-                    <small v-else class="text-muted">Not Scheduled</small>
-                  </td>
-                  <td>
-                    <div v-if="application.screening">
-                      <small class="text-success">
-                        <i class="bi bi-check-circle me-1"></i>
-                        Scheduled
-                      </small>
-                      <div
-                        v-if="application.screening.completed"
-                        class="small text-primary"
+                      <small
+                        v-else-if="!isEntranceExamEnabled(application)"
+                        class="text-muted"
+                        >Skipped (Disabled)</small
                       >
-                        Completed
+                      <small v-else class="text-muted">Not Scheduled</small>
+                    </td>
+                    <td>
+                      <div v-if="application.screening">
+                        <small class="text-success">
+                          <i class="bi bi-check-circle me-1"></i>
+                          Scheduled
+                        </small>
+                        <div
+                          v-if="application.screening.completed"
+                          class="small text-primary"
+                        >
+                          Completed
+                        </div>
                       </div>
-                    </div>
-                    <small
-                      v-else-if="!isScreeningEnabled(application)"
-                      class="text-muted"
-                    >Skipped (Disabled)</small>
-                    <small v-else class="text-muted">Not Scheduled</small>
-                  </td>
-                  <td>
-                    <div class="dropdown">
-                      <button
-                        :id="`dropdownMenuButton-${application.id}`"
-                        type="button"
-                        class="btn btn-outline-primary btn-sm dropdown-toggle"
-                        data-bs-toggle="dropdown"
-                        aria-expanded="false"
-                        aria-haspopup="true"
-                        @click="toggleDropdown"
+                      <small
+                        v-else-if="!isScreeningEnabled(application)"
+                        class="text-muted"
+                        >Skipped (Disabled)</small
                       >
-                        Actions
-                      </button>
-                      <ul
-                        class="dropdown-menu"
-                        :aria-labelledby="`dropdownMenuButton-${application.id}`"
-                      >
-                        <li>
-                          <a
-                            class="dropdown-item"
-                            href="#"
-                            @click.prevent="viewApplication(application)"
-                          >
-                            <i class="bi bi-eye me-2"></i>View Details
-                          </a>
-                        </li>
-                        <li v-if="canScheduleExam(application)">
-                          <a
-                            class="dropdown-item"
-                            href="#"
-                            @click.prevent="scheduleExam(application)"
-                          >
-                            <i class="bi bi-calendar-plus me-2"></i>Schedule
-                            Exam
-                          </a>
-                        </li>
-                        <li v-if="canInputExamScore(application)">
-                          <a
-                            class="dropdown-item"
-                            href="#"
-                            @click.prevent="inputExamScore(application)"
-                          >
-                            <i class="bi bi-pencil-square me-2"></i>Input Exam
-                            Score
-                          </a>
-                        </li>
-                        <li v-if="canScheduleScreening(application)">
-                          <a
-                            class="dropdown-item"
-                            href="#"
-                            @click.prevent="scheduleScreening(application)"
-                          >
-                            <i class="bi bi-calendar-check me-2"></i>Schedule
-                            Screening
-                          </a>
-                        </li>
-                        <li v-if="canCompleteScreening(application)">
-                          <a
-                            class="dropdown-item"
-                            href="#"
-                            @click.prevent="completeScreening(application)"
-                          >
-                            <i class="bi bi-check-circle me-2"></i>Mark
-                            Screening Complete
-                          </a>
-                        </li>
-                        <li v-if="canMakeAdmissionDecision(application)">
-                          <a
-                            class="dropdown-item"
-                            href="#"
-                            @click.prevent="makeAdmissionDecision(application)"
-                          >
-                            <i class="bi bi-award me-2"></i>Make Admission
-                            Decision
-                          </a>
-                        </li>
-                      </ul>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                      <small v-else class="text-muted">Not Scheduled</small>
+                    </td>
+                    <td>
+                      <div class="dropdown">
+                        <button
+                          :id="`dropdownMenuButton-${application.id}`"
+                          type="button"
+                          class="btn p-0 border-0 bg-transparent dropdown-toggle no-caret"
+                          data-bs-toggle="dropdown"
+                          aria-expanded="false"
+                          aria-haspopup="true"
+                        >
+                          <i class="bi bi-three-dots-vertical fs-5"></i>
+                        </button>
 
+                        <ul
+                          class="dropdown-menu"
+                          :aria-labelledby="`dropdownMenuButton-${application.id}`"
+                        >
+                          <li>
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="viewApplication(application)"
+                            >
+                              <i class="bi bi-eye me-2"></i>View Details
+                            </a>
+                          </li>
+                          <li v-if="canScheduleExam(application)">
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="scheduleExam(application)"
+                            >
+                              <i class="bi bi-calendar-plus me-2"></i>Schedule
+                              Exam
+                            </a>
+                          </li>
+                          <li v-if="canInputExamScore(application)">
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="inputExamScore(application)"
+                            >
+                              <i class="bi bi-pencil-square me-2"></i>Input Exam
+                              Score
+                            </a>
+                          </li>
+                          <li v-if="canScheduleScreening(application)">
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="scheduleScreening(application)"
+                            >
+                              <i class="bi bi-calendar-check me-2"></i>Schedule
+                              Screening
+                            </a>
+                          </li>
+                          <li v-if="canCompleteScreening(application)">
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="completeScreening(application)"
+                            >
+                              <i class="bi bi-check-circle me-2"></i>Mark
+                              Screening Complete
+                            </a>
+                          </li>
+                          <li v-if="canMakeAdmissionDecision(application)">
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="
+                                makeAdmissionDecision(application)
+                              "
+                            >
+                              <i class="bi bi-award me-2"></i>Admission Decision
+                            </a>
+                          </li>
+                        </ul>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="d-lg-none p-3">
+              <div class="row g-3">
+                <div
+                  v-for="application in paginatedApplications"
+                  :key="`mobile-${application.id}`"
+                  class="col-12"
+                >
+                  <div class="admission-mobile-card h-100">
+                    <div
+                      class="d-flex justify-content-between align-items-start gap-3 mb-3"
+                    >
+                      <div class="d-flex align-items-center gap-2">
+                        <div>
+                          <div class="fw-semibold text-staff-primary">
+                            {{ application.applicantName }}
+                          </div>
+                          <div class="fw-semibold">
+                            {{ application.applicationNumber }}
+                          </div>
+
+                          <div class="d-flex flex-wrap gap-2 mt-2">
+                            <span
+                              :class="getStatusBadgeClass(application.status)"
+                            >
+                              {{ application.status.toUpperCase() }}
+                            </span>
+                            <span class="badge bg-info">
+                              {{
+                                application.currentStage
+                                  ? `Stage ${application.currentStage}`
+                                  : "N/A"
+                              }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="text-end flex-shrink-0">
+                        <div
+                          class="d-flex align-items-center flex-wrap gap-2 text-light-emphasis bg-light-subtle border border-light-subtle rounded-pill ps-3 pe-2 py-1"
+                        >
+                          <!-- <button
+                            type="button"
+                            class="btn btn-sm btn-dark rounded-circle"
+                            style="width: 32px; height: 32px; padding: 0"
+                            @click="viewApplication(application)"
+                          >
+                            <i class="bi bi-eye"></i>
+                          </button> -->
+
+                          <span @click="viewApplication(application)">
+                            view
+                          </span>
+
+                          <div class="dropdown">
+                            <button
+                              type="button"
+                              class="btn p-0 border-0 bg-transparent dropdown-toggle no-caret text-dark-emphasis"
+                              data-bs-toggle="dropdown"
+                              aria-expanded="false"
+                            >
+                              <i class="bi bi-three-dots-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                              <li v-if="canScheduleExam(application)">
+                                <a
+                                  class="dropdown-item"
+                                  href="#"
+                                  @click.prevent="scheduleExam(application)"
+                                >
+                                  <i class="bi bi-calendar-plus me-1"></i
+                                  >Schedule Exam
+                                </a>
+                              </li>
+                              <li v-if="canInputExamScore(application)">
+                                <a
+                                  class="dropdown-item"
+                                  href="#"
+                                  @click.prevent="inputExamScore(application)"
+                                >
+                                  <i class="bi bi-pencil-square me-1"></i>Exam
+                                  Score
+                                </a>
+                              </li>
+                              <li v-if="canScheduleScreening(application)">
+                                <a
+                                  class="dropdown-item"
+                                  href="#"
+                                  @click.prevent="
+                                    scheduleScreening(application)
+                                  "
+                                >
+                                  <i class="bi bi-calendar-check me-1"></i
+                                  >Screening
+                                </a>
+                              </li>
+                              <li v-if="canCompleteScreening(application)">
+                                <a
+                                  class="dropdown-item"
+                                  href="#"
+                                  @click.prevent="
+                                    completeScreening(application)
+                                  "
+                                >
+                                  <i class="bi bi-check-circle me-1"></i
+                                  >Complete Screening
+                                </a>
+                              </li>
+                              <li v-if="canMakeAdmissionDecision(application)">
+                                <a
+                                  class="dropdown-item"
+                                  href="#"
+                                  @click.prevent="
+                                    makeAdmissionDecision(application)
+                                  "
+                                >
+                                  <i class="bi bi-award me-1"></i>Admission
+                                  Decision
+                                </a>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="admission-mobile-meta d-grid gap-2 mb-3">
+                      <div>
+                        <div
+                          class="small text-uppercase text-muted fw-semibold"
+                        >
+                          Program
+                        </div>
+                        <div>{{ application.programDisplay }}</div>
+                      </div>
+                      <div>
+                        <div
+                          class="small text-uppercase text-muted fw-semibold"
+                        >
+                          Current Stage
+                        </div>
+                        <div>
+                          {{
+                            application.currentStage
+                              ? `Stage ${application.currentStage} - ${getStageName(
+                                  application.currentStage,
+                                )}`
+                              : "N/A"
+                          }}
+                        </div>
+                      </div>
+                      <div class="row g-2">
+                        <div class="col-12 col-sm-6">
+                          <div
+                            class="small text-uppercase text-muted fw-semibold"
+                          >
+                            Exam Status
+                          </div>
+                          <div v-if="application.entranceExam">
+                            <span class="text-success fw-semibold"
+                              >Scheduled</span
+                            >
+                            <div
+                              v-if="
+                                application.entranceExam.score !== undefined
+                              "
+                              class="small text-muted"
+                            >
+                              Score: {{ application.entranceExam.score }}
+                            </div>
+                          </div>
+                          <div
+                            v-else-if="!isEntranceExamEnabled(application)"
+                            class="text-muted"
+                          >
+                            Skipped (Disabled)
+                          </div>
+                          <div v-else class="text-muted">Not Scheduled</div>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                          <div
+                            class="small text-uppercase text-muted fw-semibold"
+                          >
+                            Screening Status
+                          </div>
+                          <div v-if="application.screening">
+                            <span class="text-success fw-semibold"
+                              >Scheduled</span
+                            >
+                            <div
+                              v-if="application.screening.completed"
+                              class="small text-primary"
+                            >
+                              Completed
+                            </div>
+                          </div>
+                          <div
+                            v-else-if="!isScreeningEnabled(application)"
+                            class="text-muted"
+                          >
+                            Skipped (Disabled)
+                          </div>
+                          <div v-else class="text-muted">Not Scheduled</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <!-- Empty State -->
             <div v-if="applications.length === 0" class="text-center py-5">
               <i class="bi bi-inbox display-1 text-muted"></i>
@@ -1345,11 +1635,14 @@ export default {
                   type="checkbox"
                 />
                 <label class="form-check-label" for="sendProvisionalOffer">
-                  Generate and send <strong>PROVISIONAL OFFER OF ADMISSION</strong>
+                  Generate and send
+                  <strong>PROVISIONAL OFFER OF ADMISSION</strong>
                 </label>
               </div>
               <small class="text-muted d-block mt-2">
-                If unchecked, the student will still receive the admission email, but without the provisional offer PDF attachment. JAMB will send the official admission letter directly.
+                If unchecked, the student will still receive the admission
+                email, but without the provisional offer PDF attachment. JAMB
+                will send the official admission letter directly.
               </small>
             </div>
             <div v-if="decisionForm.decision === 'rejected'" class="mb-3">
@@ -1379,7 +1672,8 @@ export default {
             v-if="decisionForm.decision === 'admitted'"
             type="button"
             class="btn btn-success"
-             :disabled="decisionFormProcessing" @click="submitAdmissionDecision"
+            :disabled="decisionFormProcessing"
+            @click="submitAdmissionDecision"
           >
             <span
               v-if="decisionFormProcessing"
@@ -1392,7 +1686,8 @@ export default {
             v-if="decisionForm.decision === 'rejected'"
             type="button"
             class="btn btn-danger"
-             :disabled="decisionFormProcessing" @click="submitAdmissionDecision"
+            :disabled="decisionFormProcessing"
+            @click="submitAdmissionDecision"
           >
             <span
               v-if="decisionFormProcessing"
@@ -1493,7 +1788,7 @@ export default {
                         {{
                           selectedApplicationDetails.dob
                             ? new Date(
-                                selectedApplicationDetails.dob
+                                selectedApplicationDetails.dob,
                               ).toLocaleDateString()
                             : "N/A"
                         }}
@@ -1534,7 +1829,7 @@ export default {
                         >Program Applied For</label
                       >
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.programId?.name || "N/A" }}
+                        {{ getProgramDisplayLabel(selectedApplicationDetails) }}
                       </p>
                     </div>
                     <div class="col-12">
@@ -1549,7 +1844,7 @@ export default {
                                   selectedApplicationDetails.currentStage
                                 } -
                           ${getStageName(
-                            selectedApplicationDetails.currentStage
+                            selectedApplicationDetails.currentStage,
                           )}`
                               : "N/A"
                           }}
@@ -1564,7 +1859,7 @@ export default {
                         <span
                           :class="
                             getStatusBadgeClass(
-                              selectedApplicationDetails.status
+                              selectedApplicationDetails.status,
                             )
                           "
                         >
@@ -1580,7 +1875,9 @@ export default {
                         >Academic Session</label
                       >
                       <p class="form-control-plaintext">
-                        {{ getAcademicSessionLabel(selectedApplicationDetails) }}
+                        {{
+                          getAcademicSessionLabel(selectedApplicationDetails)
+                        }}
                       </p>
                     </div>
                     <!-- <div class="col-6">
@@ -1614,7 +1911,7 @@ export default {
                         {{
                           selectedApplicationDetails.isJambExempt
                             ? "Not applicable"
-                            : selectedApplicationDetails.jambScore ?? "N/A"
+                            : (selectedApplicationDetails.jambScore ?? "N/A")
                         }}
                       </p>
                     </div>
@@ -1626,7 +1923,7 @@ export default {
                         {{
                           selectedApplicationDetails.createdAt
                             ? new Date(
-                                selectedApplicationDetails.createdAt
+                                selectedApplicationDetails.createdAt,
                               ).toLocaleString()
                             : "N/A"
                         }}
@@ -1638,13 +1935,188 @@ export default {
                         {{
                           selectedApplicationDetails.updatedAt
                             ? new Date(
-                                selectedApplicationDetails.updatedAt
+                                selectedApplicationDetails.updatedAt,
                               ).toLocaleString()
                             : "N/A"
                         }}
                       </p>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Examination Records -->
+            <div class="col-md-12">
+              <div class="card p-0">
+                <div
+                  class="card-header d-flex justify-content-between align-items-center"
+                >
+                  <h6 class="card-title mb-0">
+                    <i class="bi bi-journal-check me-2"></i>Examination Records
+                  </h6>
+                  <span class="badge bg-light text-dark">
+                    {{ selectedApplicationDetails.examinations?.length || 0 }}
+                    {{
+                      (selectedApplicationDetails.examinations?.length || 0) ===
+                      1
+                        ? "sitting"
+                        : "sittings"
+                    }}
+                  </span>
+                </div>
+                <div class="card-body">
+                  <div
+                    v-if="selectedApplicationDetails.examinations?.length"
+                    class="row g-3"
+                  >
+                    <div class="col-md-6">
+                      <div
+                        v-if="getExamBySitting(1)"
+                        class="border rounded p-3 h-100"
+                      >
+                        <div
+                          class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"
+                        >
+                          <div>
+                            <h6 class="fw-semibold mb-1">
+                              {{
+                                getExamBySitting(1).examType || "Exam Record"
+                              }}
+                            </h6>
+                            <small class="text-muted">Sitting 1</small>
+                          </div>
+                          <div class="text-md-end">
+                            <div>
+                              <small class="text-muted me-1">Year:</small>
+                              <span class="fw-semibold">{{
+                                getExamBySitting(1).examYear || "N/A"
+                              }}</span>
+                            </div>
+                            <div>
+                              <small class="text-muted me-1">Number:</small>
+                              <span class="fw-semibold">{{
+                                getExamBySitting(1).examNumber || "N/A"
+                              }}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          v-if="getExamBySitting(1).subjects?.length"
+                          class="table-responsive"
+                        >
+                          <table class="table table-sm align-middle mb-0">
+                            <thead>
+                              <tr>
+                                <th scope="col">Subject</th>
+                                <th scope="col" class="text-end">Grade</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr
+                                v-for="(
+                                  subject, subjectIndex
+                                ) in getExamBySitting(1).subjects"
+                                :key="`${subject.subject || 'subject'}-${subjectIndex}`"
+                              >
+                                <td>{{ subject.subject || "N/A" }}</td>
+                                <td class="text-end fw-semibold">
+                                  {{ subject.grade || "N/A" }}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                        <p v-else class="text-muted mb-0">
+                          No subject breakdown submitted for this sitting.
+                        </p>
+                      </div>
+                      <div
+                        v-else
+                        class="border rounded p-3 h-100 d-flex align-items-center"
+                      >
+                        <p class="text-muted mb-0">
+                          No Sitting 1 result submitted.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="col-md-6">
+                      <div
+                        v-if="getExamBySitting(2)"
+                        class="border rounded p-3 h-100"
+                      >
+                        <div
+                          class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"
+                        >
+                          <div>
+                            <h6 class="fw-semibold mb-1">
+                              {{
+                                getExamBySitting(2).examType || "Exam Record"
+                              }}
+                            </h6>
+                            <small class="text-muted">Sitting 2</small>
+                          </div>
+                          <div class="text-md-end">
+                            <div>
+                              <small class="text-muted me-1">Year:</small>
+                              <span class="fw-semibold">{{
+                                getExamBySitting(2).examYear || "N/A"
+                              }}</span>
+                            </div>
+                            <div>
+                              <small class="text-muted me-1">Number:</small>
+                              <span class="fw-semibold">{{
+                                getExamBySitting(2).examNumber || "N/A"
+                              }}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          v-if="getExamBySitting(2).subjects?.length"
+                          class="table-responsive"
+                        >
+                          <table class="table table-sm align-middle mb-0">
+                            <thead>
+                              <tr>
+                                <th scope="col">Subject</th>
+                                <th scope="col" class="text-end">Grade</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr
+                                v-for="(
+                                  subject, subjectIndex
+                                ) in getExamBySitting(2).subjects"
+                                :key="`${subject.subject || 'subject'}-${subjectIndex}`"
+                              >
+                                <td>{{ subject.subject || "N/A" }}</td>
+                                <td class="text-end fw-semibold">
+                                  {{ subject.grade || "N/A" }}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                        <p v-else class="text-muted mb-0">
+                          No subject breakdown submitted for this sitting.
+                        </p>
+                      </div>
+                      <div
+                        v-else
+                        class="border rounded p-3 h-100 d-flex align-items-center"
+                      >
+                        <p class="text-muted mb-0">
+                          No Sitting 2 result submitted.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <p v-else class="text-muted mb-0">
+                    No examination records submitted.
+                  </p>
                 </div>
               </div>
             </div>
@@ -1682,7 +2154,9 @@ export default {
                         >Emergency Contact Name</label
                       >
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.nextOfKin?.name || "N/A" }}
+                        {{
+                          selectedApplicationDetails.nextOfKin?.name || "N/A"
+                        }}
                       </p>
                     </div>
                     <div class="col-12">
@@ -1690,7 +2164,9 @@ export default {
                         >Emergency Contact Phone</label
                       >
                       <p class="form-control-plaintext">
-                        {{ selectedApplicationDetails.nextOfKin?.phone || "N/A" }}
+                        {{
+                          selectedApplicationDetails.nextOfKin?.phone || "N/A"
+                        }}
                       </p>
                     </div>
                     <div class="col-12">
@@ -1729,7 +2205,8 @@ export default {
                             {{
                               selectedApplicationDetails.entranceExam.date
                                 ? new Date(
-                                    selectedApplicationDetails.entranceExam.date
+                                    selectedApplicationDetails.entranceExam
+                                      .date,
                                   ).toLocaleDateString()
                                 : "N/A"
                             }}
@@ -1788,9 +2265,13 @@ export default {
                       </div>
                     </div>
                     <p
-                      v-else-if="!isEntranceExamEnabled(selectedApplicationDetails)"
+                      v-else-if="
+                        !isEntranceExamEnabled(selectedApplicationDetails)
+                      "
                       class="text-muted"
-                    >Skipped for this session</p>
+                    >
+                      Skipped for this session
+                    </p>
                     <p v-else class="text-muted">Not scheduled</p>
                   </div>
 
@@ -1807,7 +2288,7 @@ export default {
                             {{
                               selectedApplicationDetails.screening.date
                                 ? new Date(
-                                    selectedApplicationDetails.screening.date
+                                    selectedApplicationDetails.screening.date,
                                   ).toLocaleDateString()
                                 : "N/A"
                             }}
@@ -1851,9 +2332,13 @@ export default {
                       </div>
                     </div>
                     <p
-                      v-else-if="!isScreeningEnabled(selectedApplicationDetails)"
+                      v-else-if="
+                        !isScreeningEnabled(selectedApplicationDetails)
+                      "
                       class="text-muted"
-                    >Skipped for this session</p>
+                    >
+                      Skipped for this session
+                    </p>
                     <p v-else class="text-muted">Not scheduled</p>
                   </div>
                 </div>
@@ -1985,7 +2470,7 @@ export default {
                         {{
                           selectedApplicationDetails.admissionDecisionDate
                             ? new Date(
-                                selectedApplicationDetails.admissionDecisionDate
+                                selectedApplicationDetails.admissionDecisionDate,
                               ).toLocaleDateString()
                             : "N/A"
                         }}
@@ -2046,9 +2531,14 @@ export default {
             v-if="selectedApplicationDetails"
             type="button"
             class="btn btn-primary"
-            @click="window.print()"
+            :disabled="detailsExporting"
+            @click="exportApplicationDetailsPdf"
           >
-            <i class="bi bi-printer me-2"></i>Print Details
+            <span
+              v-if="detailsExporting"
+              class="spinner-border spinner-border-sm me-2"
+            ></span>
+            <i v-else class="bi bi-download me-2"></i>Export Details PDF
           </button>
         </div>
       </div>
@@ -2091,5 +2581,26 @@ export default {
 .badge {
   font-size: 0.75rem;
   font-weight: 500;
+}
+
+.admission-mobile-card {
+  border: 1px solid rgba(26, 95, 95, 0.1);
+  border-radius: 16px;
+  padding: 1rem;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+}
+
+.admission-mobile-meta {
+  border-top: 1px solid rgba(26, 95, 95, 0.08);
+  /* border-bottom: 1px solid rgba(26, 95, 95, 0.08); */
+  padding-top: 0.85rem;
+  /* padding-bottom: 0.85rem; */
+}
+
+@media (max-width: 767.98px) {
+  .admission-mobile-card {
+    padding: 0.9rem;
+  }
 }
 </style>

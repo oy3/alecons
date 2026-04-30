@@ -1048,6 +1048,7 @@ export default {
             </div>
           </div> -->
           <div class="card-body p-0">
+            <div class="table-responsive d-none d-lg-block">
               <table class="table table-hover mb-0">
                 <thead class="">
                   <tr>
@@ -1242,6 +1243,124 @@ export default {
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            <div class="d-lg-none p-3">
+              <div v-if="paginatedApplications.length === 0" class="text-center py-4">
+                <div class="text-muted">
+                  <i class="bi bi-inbox fs-1 mb-3 d-block"></i>
+                  <h5 class="mb-2">No Applications Found</h5>
+                  <p
+                    class="mb-0"
+                    v-if="
+                      searchQuery ||
+                      statusFilter !== 'all' ||
+                      programFilter !== 'all'
+                    "
+                  >
+                    No applications match your current filters.
+                    <button
+                      class="btn btn-link p-0 text-staff-primary"
+                      @click="resetFilters"
+                    >
+                      Reset filters
+                    </button>
+                    to see all applications.
+                  </p>
+                  <p class="mb-0" v-else>
+                    No applications have been submitted yet.
+                  </p>
+                </div>
+              </div>
+
+              <div v-else class="row g-3">
+                <div
+                  v-for="app in paginatedApplications"
+                  :key="`mobile-${app.id}`"
+                  class="col-12"
+                >
+                  <div class="applications-mobile-card h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                      <div class="d-flex align-items-center gap-2">
+                        <div
+                          class="border border-staff-primary bg-staff-light rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                          style="height: 40px; width: 40px"
+                        >
+                          <img
+                            v-if="app.profileImageUrl"
+                            :src="app.profileImageUrl"
+                            alt=""
+                            class="rounded-circle"
+                            style="height: 100%; width: 100%"
+                          />
+
+                          <i
+                            v-else
+                            class="bi bi-person text-staff-primary fs-4"
+                          ></i>
+                        </div>
+                        <div>
+                          <div class="fw-semibold text-staff-primary">
+                            {{ app.applicantName }}
+                          </div>
+                          <div class="small text-muted text-break">{{ app.email }}</div>
+                          <div class="small text-muted">{{ app.phone }}</div>
+                        </div>
+                      </div>
+
+                      <div class="text-end flex-shrink-0">
+                        <div class="small text-muted">Application No.</div>
+                        <code class="text-staff-primary">{{ app.applicationNumber }}</code>
+                      </div>
+                    </div>
+
+                    <div class="applications-mobile-meta d-grid gap-2 mb-3">
+                      <div>
+                        <div class="small text-uppercase text-muted fw-semibold">Program</div>
+                        <div>{{ app.programDisplay }}</div>
+                      </div>
+                      <div class="row g-2">
+                        <div class="col-12 col-sm-6">
+                          <div class="small text-uppercase text-muted fw-semibold">Stage</div>
+                          <div>{{ getStageLabel(app.currentStage) }}</div>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                          <div class="small text-uppercase text-muted fw-semibold">Submitted</div>
+                          <div>{{ formatDate(app.submittedAt) }}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                      <span class="badge rounded-pill" :class="getStatusBadgeClass(app.status)">
+                        {{ app.status.replace("_", " ").toUpperCase() }}
+                      </span>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline-staff-primary"
+                        @click="viewApplication(app)"
+                        title="View Details"
+                      >
+                        <i class="bi bi-eye me-1"></i>Details
+                      </button>
+                      <button
+                        v-if="app.status === 'completed'"
+                        type="button"
+                        class="btn btn-sm btn-outline-success"
+                        @click="handleMatriculationAction(app)"
+                      >
+                        <i class="bi bi-envelope me-1" v-if="app.matriculationNumber"></i>
+                        <i class="bi bi-arrow-repeat me-1" v-else></i>
+                        {{ app.matriculationNumber ? 'Send matric no.' : 'Recover matric no.' }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Pagination -->
@@ -2078,6 +2197,21 @@ code {
   color: var(--staff-primary);
 }
 
+.applications-mobile-card {
+  border: 1px solid rgba(26, 95, 95, 0.1);
+  border-radius: 16px;
+  padding: 1rem;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+}
+
+.applications-mobile-meta {
+  border-top: 1px solid rgba(26, 95, 95, 0.08);
+  border-bottom: 1px solid rgba(26, 95, 95, 0.08);
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
 .compact-link {
   padding: 0.5rem 0.75rem;
   justify-content: flex-start;
@@ -2144,6 +2278,10 @@ code {
 }
 
 @media (max-width: 575.98px) {
+  .applications-mobile-card {
+    padding: 0.9rem;
+  }
+
   .receipt-preview-dialog {
     max-width: none;
     margin: 0.5rem;

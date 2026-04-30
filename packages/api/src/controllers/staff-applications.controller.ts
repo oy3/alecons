@@ -8,8 +8,10 @@ import {
     UseGuards,
     HttpStatus,
     HttpException,
-    Logger
+    Logger,
+    Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { InjectModel } from '@nestjs/mongoose';
@@ -27,6 +29,7 @@ import { AdmissionLetterPdfService } from '../services/admission-letter-pdf.serv
 import { UploadService } from '../services/upload.service';
 import { SessionControlsService } from '../services/session-controls.service';
 import { PaymentsService } from '../payments/payments.service';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 @ApiTags('Staff Applications')
 @Controller('staff/applications')
@@ -78,6 +81,216 @@ export class StaffApplicationsController {
         markModified?: (path: string) => void;
     }) {
         return this.sessionControlsService.syncApplicationStageWithControls(application);
+    }
+
+    private stageNames: Record<number, string> = {
+        1: 'Email Verification',
+        2: 'Form Fee Payment',
+        3: 'Application Form',
+        4: 'Entrance Exam',
+        5: 'Admission Decision',
+        6: 'Screening & Interview',
+        7: 'Acceptance Fee Payment',
+        8: 'Sundry Fees Payment',
+        9: 'School Fees Payment',
+        10: 'Submission Complete',
+    };
+
+    private getApplicationStageName(stageNumber?: number): string {
+        if (!stageNumber) {
+            return 'N/A';
+        }
+        return this.stageNames[stageNumber] || 'Unknown Stage';
+    }
+
+    private getDocumentUrl(document: unknown): string | null {
+        if (!document) {
+            return null;
+        }
+
+        if (typeof document === 'string') {
+            return document;
+        }
+
+        if (typeof document === 'object' && document !== null && 'url' in document) {
+            return (document as any).url || null;
+        }
+
+        return null;
+    }
+
+    private getAssetKind(url: string, contentType: string): 'pdf' | 'png' | 'jpg' | 'unknown' {
+        const normalizedUrl = (url || '').toLowerCase();
+        const normalizedType = (contentType || '').toLowerCase();
+
+        if (normalizedType.includes('application/pdf') || normalizedUrl.endsWith('.pdf')) {
+            return 'pdf';
+        }
+
+        if (normalizedType.includes('image/png') || normalizedUrl.endsWith('.png')) {
+            return 'png';
+        }
+
+        if (
+            normalizedType.includes('image/jpeg') ||
+            normalizedType.includes('image/jpg') ||
+            normalizedUrl.endsWith('.jpg') ||
+            normalizedUrl.endsWith('.jpeg')
+        ) {
+            return 'jpg';
+        }
+
+        return 'unknown';
+    }
+
+    private async fetchRemoteAsset(url: string): Promise<{ buffer: Buffer; contentType: string }> {
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch asset (${response.status})`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        return {
+            buffer: Buffer.from(arrayBuffer),
+            contentType: (response.headers.get('content-type') || '').toLowerCase(),
+        };
+    }
+
+    private formatAcademicSession(session: unknown): string {
+        if (!session) {
+            return 'N/A';
+        }
+
+        if (typeof session === 'string') {
+            return session;
+        }
+
+        if (typeof session === 'object' && session !== null) {
+            const sessionYear = (session as any).sessionYear;
+            const name = (session as any).name;
+            return sessionYear || name || 'N/A';
+        }
+
+        return 'N/A';
+    }
+
+    private formatApplicantName(application: any): string {
+        const firstName = application?.userId?.firstName || '';
+        const lastName = application?.userId?.lastName || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        return fullName || 'N/A';
+    }
+
+    private formatProgramDisplay(application: any): string {
+        const program = application?.programId;
+        if (!program) {
+            return 'N/A';
+        }
+
+        return [
+            program?.programTypeId?.type,
+            program?.programModeId?.description || program?.programModeId?.mode,
+            program?.name,
+        ]
+            .filter(Boolean)
+            .join(' ') || 'N/A';
+    }
+
+    private buildExportFilename(application: any): string {
+        const name = this.formatApplicantName(application)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        const appNumber = application?.applicationNumber || 'application';
+        return `application-details-${name || 'applicant'}-${appNumber}.pdf`;
+    }
+
+    private addFallbackDocumentPage(pdfDoc: PDFDocument, title: string, sourceUrl: string) {
+        const pageWidth = 595.28;
+        const pageHeight = 841.89;
+        const margin = 40;
+
+        const page = pdfDoc.addPage([pageWidth, pageHeight]);
+        page.drawText(`${title} (Could not embed)`, {
+            x: margin,
+            y: pageHeight - margin,
+            size: 12,
+            color: rgb(0.55, 0.12, 0.12),
+        });
+
+        page.drawText(`Source: ${sourceUrl}`, {
+            x: margin,
+            y: pageHeight - margin - 20,
+            size: 9,
+            color: rgb(0.3, 0.3, 0.3),
+        });
+    }
+
+    private async appendSupportingDocument(pdfDoc: PDFDocument, documentUrl: string, title: string) {
+        const pageWidth = 595.28;
+        const pageHeight = 841.89;
+        const margin = 40;
+
+        const { buffer, contentType } = await this.fetchRemoteAsset(documentUrl);
+        const assetKind = this.getAssetKind(documentUrl, contentType);
+
+        if (assetKind === 'pdf') {
+            const sourcePdf = await PDFDocument.load(buffer, { ignoreEncryption: true });
+            const sourcePages = await pdfDoc.copyPages(sourcePdf, sourcePdf.getPageIndices());
+
+            sourcePages.forEach((copiedPage, index) => {
+                const page = pdfDoc.addPage(copiedPage);
+                if (index === 0) {
+                    page.drawRectangle({
+                        x: 0,
+                        y: page.getHeight() - 26,
+                        width: page.getWidth(),
+                        height: 26,
+                        color: rgb(1, 1, 1),
+                        opacity: 0.85,
+                    });
+                    page.drawText(title, {
+                        x: margin,
+                        y: page.getHeight() - 17,
+                        size: 10,
+                        color: rgb(0.22, 0.22, 0.22),
+                    });
+                }
+            });
+            return;
+        }
+
+        if (assetKind === 'png' || assetKind === 'jpg') {
+            const page = pdfDoc.addPage([pageWidth, pageHeight]);
+            const image = assetKind === 'png'
+                ? await pdfDoc.embedPng(buffer)
+                : await pdfDoc.embedJpg(buffer);
+
+            const imageDims = image.scale(1);
+            const maxWidth = pageWidth - margin * 2;
+            const maxHeight = pageHeight - margin * 2 - 24;
+            const scale = Math.min(maxWidth / imageDims.width, maxHeight / imageDims.height, 1);
+            const width = imageDims.width * scale;
+            const height = imageDims.height * scale;
+
+            page.drawText(title, {
+                x: margin,
+                y: pageHeight - margin,
+                size: 12,
+                color: rgb(0.15, 0.15, 0.15),
+            });
+
+            page.drawImage(image, {
+                x: (pageWidth - width) / 2,
+                y: Math.max(margin, (pageHeight - height) / 2 - 12),
+                width,
+                height,
+            });
+            return;
+        }
+
+        this.addFallbackDocumentPage(pdfDoc, title, documentUrl);
     }
 
     @Get()
@@ -252,9 +465,17 @@ export class StaffApplicationsController {
             const enrichedApplications = await Promise.all(
                 applications.map(async application => {
                     const { currentStage, admissionFlow } = await this.getApplicationAdmissionFlow(application);
+                    const programDisplay = [
+                        application?.programTypeLabel,
+                        application?.programModeLabel,
+                        application?.programName,
+                    ]
+                        .filter(Boolean)
+                        .join(' ') || 'N/A';
 
                     return {
                         ...application,
+                        programDisplay,
                         currentStage,
                         admissionFlow,
                     };
@@ -317,7 +538,14 @@ export class StaffApplicationsController {
             const application = await this.applicationModel
                 .findById(id)
                 .populate('userId', 'firstName lastName otherName email phone role')
-                .populate('programId', 'name code')
+                .populate({
+                    path: 'programId',
+                    select: 'name code programTypeId programModeId',
+                    populate: [
+                        { path: 'programTypeId', select: 'type description' },
+                        { path: 'programModeId', select: 'mode description' },
+                    ],
+                })
                 .populate('programTypeId', 'name type description')
                 .populate('programModeId', 'name mode description')
                 .populate('entryAcademicSession', 'sessionYear')
@@ -359,6 +587,7 @@ export class StaffApplicationsController {
                 data: {
                     application: {
                         ...application.toObject(),
+                        programDisplay: this.formatProgramDisplay(application),
                         currentStage,
                         admissionFlow,
                     },
@@ -380,6 +609,334 @@ export class StaffApplicationsController {
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Get(':id/export-details-pdf')
+    @ApiOperation({ summary: 'Export full application details as PDF with embedded documents' })
+    @ApiResponse({ status: 200, description: 'Application details PDF generated successfully' })
+    async exportApplicationDetailsPdf(
+        @Param('id') id: string,
+        @Res() res: Response,
+    ) {
+        try {
+            if (!Types.ObjectId.isValid(id)) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Invalid application ID format',
+                    },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const application = await this.applicationModel
+                .findById(id)
+                .populate('userId', 'firstName lastName email phone')
+                .populate({
+                    path: 'programId',
+                    select: 'name code programTypeId programModeId',
+                    populate: [
+                        { path: 'programTypeId', select: 'type description' },
+                        { path: 'programModeId', select: 'mode description' },
+                    ],
+                })
+                .populate('entryAcademicSession', 'sessionYear')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Application not found',
+                    },
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            const appObj: any = application.toObject();
+            appObj.programDisplay = this.formatProgramDisplay(appObj);
+            const pageWidth = 595.28;
+            const pageHeight = 841.89;
+            const margin = 40;
+            const lineGap = 15;
+
+            const pdfDoc = await PDFDocument.create();
+            const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+            let page = pdfDoc.addPage([pageWidth, pageHeight]);
+            let y = pageHeight - margin;
+
+            const writeWrappedLine = (text: string, options: { size?: number; bold?: boolean; color?: [number, number, number] } = {}) => {
+                const size = options.size ?? 11;
+                const font = options.bold ? fontBold : fontRegular;
+                const colorTuple = options.color ?? [0.1, 0.1, 0.1];
+                const color = rgb(colorTuple[0], colorTuple[1], colorTuple[2]);
+                const maxWidth = pageWidth - margin * 2;
+                const words = String(text || '').split(/\s+/);
+                let currentLine = '';
+
+                words.forEach((word) => {
+                    const trial = currentLine ? `${currentLine} ${word}` : word;
+                    const trialWidth = font.widthOfTextAtSize(trial, size);
+
+                    if (trialWidth > maxWidth && currentLine) {
+                        if (y < margin + lineGap) {
+                            page = pdfDoc.addPage([pageWidth, pageHeight]);
+                            y = pageHeight - margin;
+                        }
+                        page.drawText(currentLine, { x: margin, y, size, font, color });
+                        y -= lineGap;
+                        currentLine = word;
+                    } else {
+                        currentLine = trial;
+                    }
+                });
+
+                if (currentLine) {
+                    if (y < margin + lineGap) {
+                        page = pdfDoc.addPage([pageWidth, pageHeight]);
+                        y = pageHeight - margin;
+                    }
+                    page.drawText(currentLine, { x: margin, y, size, font, color });
+                    y -= lineGap;
+                }
+            };
+
+            const writeSectionTitle = (title: string) => {
+                if (y < margin + 38) {
+                    page = pdfDoc.addPage([pageWidth, pageHeight]);
+                    y = pageHeight - margin;
+                }
+                y -= 5;
+                page.drawText(title, {
+                    x: margin,
+                    y,
+                    size: 13,
+                    font: fontBold,
+                    color: rgb(0.05, 0.3, 0.3),
+                });
+                y -= lineGap;
+            };
+
+            const writeField = (label: string, value: string) => {
+                writeWrappedLine(`${label}: ${value || 'N/A'}`);
+            };
+
+            writeWrappedLine('Alebiosu College of Nursing Sciences', {
+                size: 16,
+                bold: true,
+                color: [0.05, 0.25, 0.25],
+            });
+            writeWrappedLine('Applicant Full Details Export', { size: 13, bold: true });
+            writeWrappedLine(
+                `Generated: ${new Date().toLocaleString()} | Application Number: ${appObj.applicationNumber || 'N/A'}`,
+                { size: 10, color: [0.35, 0.35, 0.35] },
+            );
+
+            y -= 6;
+            if (appObj?.profileImageUrl) {
+                try {
+                    const { buffer, contentType } = await this.fetchRemoteAsset(appObj.profileImageUrl);
+                    const kind = this.getAssetKind(appObj.profileImageUrl, contentType);
+
+                    if (kind === 'png' || kind === 'jpg') {
+                        const image = kind === 'png'
+                            ? await pdfDoc.embedPng(buffer)
+                            : await pdfDoc.embedJpg(buffer);
+                        const squareSize = 96;
+                        const titleGap = 14;
+                        const blockHeight = squareSize + titleGap + 10;
+
+                        if (y < margin + blockHeight + 24) {
+                            page = pdfDoc.addPage([pageWidth, pageHeight]);
+                            y = pageHeight - margin;
+                        }
+
+                        const blockX = margin;
+                        const blockY = y - squareSize - titleGap;
+                        const dims = image.scale(1);
+                        const fitScale = Math.min(squareSize / dims.width, squareSize / dims.height, 1);
+                        const width = dims.width * fitScale;
+                        const height = dims.height * fitScale;
+
+                        page.drawText('Profile Photograph', {
+                            x: blockX,
+                            y,
+                            size: 11,
+                            font: fontBold,
+                            color: rgb(0.1, 0.1, 0.1),
+                        });
+
+                        page.drawRectangle({
+                            x: blockX,
+                            y: blockY,
+                            width: squareSize,
+                            height: squareSize,
+                            borderColor: rgb(0.82, 0.84, 0.86),
+                            borderWidth: 1,
+                            color: rgb(0.99, 0.99, 0.99),
+                        });
+
+                        page.drawImage(image, {
+                            x: blockX + (squareSize - width) / 2,
+                            y: blockY + (squareSize - height) / 2,
+                            width,
+                            height,
+                        });
+
+                        y = blockY - 18;
+                    }
+                } catch (error) {
+                    this.logger.warn('Failed to embed profile image in export PDF', {
+                        url: appObj.profileImageUrl,
+                        error: error.message,
+                    });
+                }
+            }
+
+            writeSectionTitle('Personal Information');
+            writeField('Full Name', this.formatApplicantName(appObj));
+            writeField('Email', appObj?.userId?.email || 'N/A');
+            writeField('Phone', appObj?.userId?.phone || 'N/A');
+            writeField('Date of Birth', appObj?.dob ? new Date(appObj.dob).toLocaleDateString() : 'N/A');
+            writeField('Gender', appObj?.gender || 'N/A');
+            writeField('Marital Status', appObj?.maritalStatus || 'N/A');
+
+            writeSectionTitle('Contact Information');
+            writeField('Address', appObj?.address || 'N/A');
+            writeField('State', appObj?.stateOfOrigin || 'N/A');
+            writeField('LGA', appObj?.lga || 'N/A');
+            writeField('Emergency Contact Name', appObj?.nextOfKin?.name || 'N/A');
+            writeField('Emergency Contact Phone', appObj?.nextOfKin?.phone || 'N/A');
+            writeField('Emergency Contact Relationship', appObj?.nextOfKin?.relationship || 'N/A');
+
+            writeSectionTitle('Application Information');
+            writeField('Program', appObj?.programDisplay || this.formatProgramDisplay(appObj));
+            // writeField('Current Stage', appObj?.currentStage ? `Stage ${appObj.currentStage} - ${this.getApplicationStageName(appObj.currentStage)}` : 'N/A');
+            // writeField('Status', appObj?.status || 'N/A');
+            writeField('Academic Session', this.formatAcademicSession(appObj?.entryAcademicSession));
+            writeField('JAMB Registration Number', appObj?.isJambExempt ? 'Not applicable' : (appObj?.jambRegistrationNumber || 'N/A'));
+            writeField('JAMB Score', appObj?.isJambExempt ? 'Not applicable' : (appObj?.jambScore?.toString() || 'N/A'));
+            writeField('Submitted Date', appObj?.createdAt ? new Date(appObj.createdAt).toLocaleString() : 'N/A');
+            writeField('Last Updated', appObj?.updatedAt ? new Date(appObj.updatedAt).toLocaleString() : 'N/A');
+
+            writeSectionTitle('Examination Records');
+            if (Array.isArray(appObj?.examinations) && appObj.examinations.length > 0) {
+                appObj.examinations.forEach((exam: any, index: number) => {
+                    const sittingNumber = index + 1;
+                    const sittingLabel = sittingNumber <= 2
+                        ? `Sitting ${sittingNumber}`
+                        : `Additional Sitting ${sittingNumber}`;
+
+                    writeWrappedLine(sittingLabel, {
+                        size: 11,
+                        bold: true,
+                        color: [0.12, 0.12, 0.12],
+                    });
+                    writeField('Exam Type', exam?.examType || 'N/A');
+                    writeField('Exam Year', exam?.examYear || 'N/A');
+                    writeField('Exam Number', exam?.examNumber || 'N/A');
+
+                    if (Array.isArray(exam?.subjects) && exam.subjects.length > 0) {
+                        writeWrappedLine('Subjects and Grades:', {
+                            size: 10,
+                            bold: true,
+                            color: [0.25, 0.25, 0.25],
+                        });
+
+                        exam.subjects.forEach((subject: any) => {
+                            writeWrappedLine(
+                                `- ${subject?.subject || 'N/A'}: ${subject?.grade || 'N/A'}`,
+                                {
+                                    size: 10,
+                                    color: [0.15, 0.15, 0.15],
+                                },
+                            );
+                        });
+                    } else {
+                        writeField('Subjects', 'No subject breakdown submitted');
+                    }
+
+                    y -= 4;
+                });
+            } else {
+                writeField('Examinations', 'No examination records submitted');
+            }
+
+            writeSectionTitle('Exam and Screening');
+            if (appObj?.entranceExam) {
+                // writeField('Entrance Exam Date', appObj.entranceExam.date ? new Date(appObj.entranceExam.date).toLocaleDateString() : 'N/A');
+                // writeField('Entrance Exam Time', appObj.entranceExam.time || 'N/A');
+                // writeField('Entrance Exam Link', appObj.entranceExam.link || 'N/A');
+                writeField(
+                    'Entrance Exam Score',
+                    appObj.entranceExam.score !== undefined ? `${appObj.entranceExam.score}%` : 'Not Available',
+                );
+            } else {
+                writeField('Entrance Exam', 'Not scheduled');
+            }
+
+            if (appObj?.screening) {
+                // writeField('Screening Date', appObj.screening.date ? new Date(appObj.screening.date).toLocaleDateString() : 'N/A');
+                // writeField('Screening Time', appObj.screening.time || 'N/A');
+                // writeField('Screening Venue', appObj.screening.venue || 'N/A');
+                writeField('Screening Status', appObj.screening.completed ? 'Completed' : 'Pending');
+            } else {
+                writeField('Screening', 'Not scheduled');
+            }
+
+            const supportingDocuments: Array<{ title: string; url: string }> = [];
+            (appObj?.documents?.olevelResults || []).forEach((result: unknown, index: number) => {
+                const url = this.getDocumentUrl(result);
+                if (url) {
+                    supportingDocuments.push({ title: `O'Level Result ${index + 1}`, url });
+                }
+            });
+
+            (appObj?.documents?.referenceLetters || []).forEach((letter: unknown, index: number) => {
+                const url = this.getDocumentUrl(letter);
+                if (url) {
+                    supportingDocuments.push({ title: `Reference Letter ${index + 1}`, url });
+                }
+            });
+
+            for (const documentItem of supportingDocuments) {
+                try {
+                    await this.appendSupportingDocument(pdfDoc, documentItem.url, documentItem.title);
+                } catch (error) {
+                    this.logger.warn('Failed to append supporting document to export PDF', {
+                        title: documentItem.title,
+                        url: documentItem.url,
+                        error: error.message,
+                    });
+                    this.addFallbackDocumentPage(pdfDoc, documentItem.title, documentItem.url);
+                }
+            }
+
+            const pdfBuffer = Buffer.from(await pdfDoc.save());
+            const fileName = this.buildExportFilename(appObj);
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+            res.setHeader('Content-Length', pdfBuffer.length.toString());
+            return res.send(pdfBuffer);
+        } catch (error) {
+            this.logger.error('Error exporting application details PDF:', error.message);
+
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to export application details PDF',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
     }

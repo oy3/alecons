@@ -143,6 +143,74 @@ class StaffApiService {
         return this.makeRequest(`/staff/applications/${id}`)
     }
 
+    async exportApplicationDetailsPDF(id) {
+        const url = `${this.baseURL}/staff/applications/${id}/export-details-pdf`
+
+        const config = {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        }
+
+        if (this.token) {
+            config.headers.Authorization = `Bearer ${this.token}`
+        }
+
+        try {
+            logger.info('Staff API request (Application details export PDF):', {
+                method: config.method,
+                url,
+                hasAuth: !!this.token,
+            })
+
+            const response = await fetch(url, config)
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    this.handleTokenExpiration()
+                    throw new Error('Authentication required for PDF export')
+                }
+
+                const errorData = await response.json().catch(() => ({}))
+                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
+            }
+
+            const blob = await response.blob()
+
+            if (blob.size === 0) {
+                throw new Error('Export file is empty')
+            }
+
+            const contentDisposition = response.headers.get('content-disposition') || ''
+            const fileNameMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)|filename=\"?([^\";]+)\"?/i)
+            const fileName = decodeURIComponent(fileNameMatch?.[1] || fileNameMatch?.[2] || `application-details-${id}.pdf`)
+
+            const downloadUrl = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = downloadUrl
+            link.download = fileName
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            window.URL.revokeObjectURL(downloadUrl)
+
+            logger.info('Application details export PDF download successful:', {
+                id,
+                fileSize: blob.size,
+                fileName,
+            })
+
+            return { success: true, message: 'Application details exported successfully' }
+        } catch (error) {
+            logger.error('Application details export PDF failed:', {
+                id,
+                error: error.message,
+            })
+            throw error
+        }
+    }
+
     async getApplicationsStats() {
         return this.makeRequest('/staff/applications/stats/summary')
     }

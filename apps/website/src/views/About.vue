@@ -43,7 +43,7 @@ export default {
       <p class="fw-light mb-5">
         Alebiosu College of Nursing Sciences (ALECONS) is a beacon of nursing
         education in Ekiti State. We are committed to developing competent,
-        caring, and ethical nursing professionals who will serve their
+        caring and ethical nursing professionals who will serve their
         communities with distinction.
       </p>
 

@@ -303,7 +303,7 @@ export default {
         <div class="col-md-3">
           <div class="card border-0 shadow p-0 h-100">
             <img
-              src="https://placehold.co/200?text=IMG"
+              src="../assets/img/clinc-lab.jpg"
               class="card-img-top"
               style="height: 200px; object-fit: cover"
             />
@@ -322,7 +322,7 @@ export default {
         <div class="col-md-3">
           <div class="card border-0 shadow p-0 h-100">
             <img
-              src="https://placehold.co/200?text=IMG"
+              src="../assets/img/skills-lab.jpg"
               class="card-img-top"
               style="height: 200px; object-fit: cover"
             />
@@ -339,7 +339,7 @@ export default {
         <div class="col-md-3">
           <div class="card border-0 shadow p-0 h-100">
             <img
-              src="https://placehold.co/200?text=IMG"
+              src="../assets/img/e-library.jpeg"
               class="card-img-top"
               style="height: 200px; object-fit: cover"
             />
@@ -358,7 +358,7 @@ export default {
         <div class="col-md-3">
           <div class="card border-0 shadow p-0 h-100">
             <img
-              src="https://placehold.co/200?text=IMG"
+              src="../assets/img/ict-lab.jpg"
               class="card-img-top"
               style="height: 200px; object-fit: cover"
             />

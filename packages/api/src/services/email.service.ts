@@ -579,7 +579,7 @@ export class EmailService {
                             <h3>📋 Next Steps:</h3>
                             <ol>
                               <li><strong>Download and keep your provisional offer</strong> (attached to this email)</li>
-                                <li><strong>Pay Acceptance Fee</strong> - Confirm your acceptance within 4 days</li>
+                                <li><strong>Pay Acceptance Fee</strong> - Confirm your acceptance within 14 days</li>
                                 <li><strong>Pay Sundry Fees</strong> - Administrative charges</li>
                                 <li><strong>Pay School Fees</strong> - Tuition and accommodation</li>
                                 <li><strong>Complete Registration</strong> - Finalize your enrollment</li>
@@ -662,7 +662,7 @@ export class EmailService {
                         <div class="next-steps">
                             <h3>📋 Next Steps:</h3>
                             <ol>
-                                <li><strong>Pay Acceptance Fee</strong> - Confirm your acceptance within 4 days</li>
+                                <li><strong>Pay Acceptance Fee</strong> - Confirm your acceptance within 14 days</li>
                                 <li><strong>Pay Sundry Fees</strong> - Administrative charges</li>
                                 <li><strong>Pay School Fees</strong> - Tuition and accommodation</li>
                                 <li><strong>Complete Registration</strong> - Finalize your enrollment</li>

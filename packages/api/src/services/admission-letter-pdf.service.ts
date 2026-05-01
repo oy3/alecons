@@ -319,7 +319,7 @@ export class AdmissionLetterPdfService {
         </div>
 
         <div class="body-text">
-            Sequel to your success at the examination conducted for admission into this institution, you are hereby
+            Following a review of your application for admission into this institution, you are hereby
             offered <strong>provisional admission</strong> into the <strong>${academicSession}</strong> Academic session 
             for the <strong>${programName}</strong> programme.
         </div>
@@ -342,7 +342,7 @@ export class AdmissionLetterPdfService {
                 Satisfactory verification of your credentials
             </li>
             <li>
-                Acceptance of the offer of admission within <strong>four (4) days</strong>
+                Acceptance of the offer of admission within <strong>four (14) days</strong>
             </li>
             <li>
                 Payment for school accommodation via school student portal (compulsory for all students)
@@ -351,8 +351,8 @@ export class AdmissionLetterPdfService {
                 Submission of the following on resumption:
                 <ol class="sub-requirements" type="i">
                     <li>
-                        A letter of good conduct from a clergy, a legal practitioner or a senior official 
-                        (not lower than Grade Level 13 officer in public service)
+                        A letter of good conduct from your referee (for example, a clergy member,
+                        legal practitioner, or a senior public officer not below Grade Level 13)
                     </li>
                     <li>
                         Birth certificate/declaration of age and eight (8) passport photographs

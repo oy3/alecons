@@ -1398,6 +1398,7 @@ export class StaffApplicationsController {
 
                     const pdfBuffer = await this.admissionLetterPdfService.generateAdmissionLetter({
                         studentFirstName: user.firstName || '',
+                        studentLastName: user.lastName || '',
                         studentFullName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
                         programName: programName,
                         programType: programTypeCode,

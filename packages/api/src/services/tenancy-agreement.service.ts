@@ -16,7 +16,6 @@ import {
   ApplicationDocument,
 } from "../schemas/application.schema";
 import { UploadService } from "./upload.service";
-import * as pdf from "html-pdf";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -334,42 +333,38 @@ export class TenancyAgreementService {
   }
 
   /**
-   * Generate PDF buffer for tenancy agreement using html-pdf library
+   * Generate PDF buffer for tenancy agreement using Puppeteer
    */
   private async generateTenancyAgreementPDFBuffer(
     agreement: TenancyAgreementDocument
   ): Promise<Buffer> {
     try {
+      const puppeteer = await import("puppeteer");
       const html = this.createTenancyAgreementHTML(agreement);
 
-      const options: pdf.CreateOptions = {
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
+
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "networkidle0" });
+
+      const pdfData = await page.pdf({
         format: "A4",
-        border: {
+        margin: {
           top: "0.5in",
           right: "0.5in",
           bottom: "0.5in",
           left: "0.5in",
         },
-        footer: {
-          height: "15mm",
-          contents: {
-            default:
-              '<div style="text-align: center; font-size: 10px; color: #666;">Alebiosu College of Nursing Sciences - Tenancy Agreement - Page {{page}} of {{pages}}</div>',
-          },
-        },
-      };
-
-      return new Promise((resolve, reject) => {
-        pdf.create(html, options).toBuffer((err, buffer) => {
-          if (err) {
-            this.logger.error("Error generating tenancy agreement PDF:", err);
-            reject(err);
-          } else {
-            this.logger.log("Tenancy agreement PDF generated successfully");
-            resolve(buffer);
-          }
-        });
+        printBackground: true,
       });
+
+      await browser.close();
+
+      this.logger.log("Tenancy agreement PDF generated successfully");
+      return Buffer.from(pdfData);
     } catch (error) {
       this.logger.error("Failed to generate tenancy agreement PDF:", error);
       throw error;

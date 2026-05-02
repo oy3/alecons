@@ -18,6 +18,7 @@ PM2_APP_NAME="${PM2_APP_NAME:-alecons-api}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
 PORT="${PORT:-8000}"
 API_BUILD_NODE_OPTIONS="${API_BUILD_NODE_OPTIONS:---max-old-space-size=2048}"
+BROWSER_CANDIDATES=()
 
 REMOTE_PAYLOAD_DIR="$TMP_ROOT/$RELEASE_ID"
 FRONTEND_TARBALL="$REMOTE_PAYLOAD_DIR/frontend-dist.tar.gz"
@@ -63,6 +64,91 @@ cleanup_releases() {
     fi
 }
 
+add_browser_candidate() {
+    local candidate_path="$1"
+    if [[ -z "$candidate_path" ]]; then
+        return
+    fi
+
+    if [[ ! -x "$candidate_path" ]]; then
+        return
+    fi
+
+    local existing_candidate
+    for existing_candidate in "${BROWSER_CANDIDATES[@]:-}"; do
+        if [[ "$existing_candidate" == "$candidate_path" ]]; then
+            return
+        fi
+    done
+
+    BROWSER_CANDIDATES+=("$candidate_path")
+}
+
+is_snap_browser() {
+    local browser_path="$1"
+    local resolved_path=""
+
+    if [[ -z "$browser_path" || ! -e "$browser_path" ]]; then
+        return 1
+    fi
+
+    resolved_path="$(readlink -f "$browser_path" 2>/dev/null || printf '%s' "$browser_path")"
+    if [[ "$resolved_path" == *"/snap/"* || "$resolved_path" == /var/lib/snapd/* ]]; then
+        return 0
+    fi
+
+    if head -c 4096 "$browser_path" 2>/dev/null | grep -qE 'snap\.chromium\.chromium|/snap/bin/chromium|xdg-settings'; then
+        return 0
+    fi
+
+    return 1
+}
+
+smoke_test_browser() {
+    local browser_path="$1"
+
+    (
+        cd "$API_RELEASE_DIR"
+        PUPPETEER_EXECUTABLE_PATH="$browser_path" node <<'NODE'
+const puppeteer = require('puppeteer');
+
+(async () => {
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  });
+  await browser.close();
+})();
+NODE
+    )
+}
+
+resolve_browser_path() {
+    local candidate_path
+
+    for candidate_path in "${BROWSER_CANDIDATES[@]}"; do
+        if is_snap_browser "$candidate_path"; then
+            echo "Skipping snap-wrapped browser candidate: $candidate_path"
+            continue
+        fi
+
+        if ! "$candidate_path" --version >/dev/null 2>&1; then
+            echo "Skipping non-runnable browser candidate: $candidate_path"
+            continue
+        fi
+
+        if smoke_test_browser "$candidate_path" >/dev/null 2>&1; then
+            printf '%s\n' "$candidate_path"
+            return 0
+        fi
+
+        echo "Skipping browser candidate that failed Puppeteer launch test: $candidate_path"
+    done
+
+    return 1
+}
+
 command -v pm2 >/dev/null 2>&1 || {
     echo "pm2 is required on the droplet" >&2
     exit 1
@@ -75,6 +161,12 @@ command -v curl >/dev/null 2>&1 || {
 require_file "$FRONTEND_TARBALL"
 require_file "$API_TARBALL"
 require_file "$API_ENV_FILE"
+
+set -a
+source "$API_ENV_FILE"
+set +a
+export NODE_ENV=production
+export PM2_APP_NAME
 
 mkdir -p "$FRONTEND_RELEASES_ROOT" "$API_RELEASES_ROOT" "$FRONTEND_LIVE_ROOT" "$API_ROOT"
 rm -rf "$FRONTEND_RELEASE_DIR" "$API_RELEASE_DIR"
@@ -111,27 +203,30 @@ fi
 
 ln -sfn "$API_RELEASE_DIR" "$API_CURRENT_LINK"
 
-# Ensure system Chromium is present. This is the preferred browser on the
-# droplet because apt manages all required shared libraries automatically.
-if ! command -v chromium-browser >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then
-    echo "System Chromium not found, installing..."
+# Ensure a non-snap browser is present. Google Chrome is preferred because the
+# Ubuntu chromium-browser package often resolves to a snap wrapper that fails
+# from PM2/system service contexts.
+if ! command -v google-chrome-stable >/dev/null 2>&1 && ! command -v google-chrome >/dev/null 2>&1; then
+    echo "Google Chrome not found, attempting installation..."
     sudo -n apt-get update -qq
-    sudo -n apt-get install -y -q --no-install-recommends chromium-browser 2>/dev/null \
-        || sudo -n apt-get install -y -q --no-install-recommends chromium
+    sudo -n apt-get install -y -q --no-install-recommends google-chrome-stable || true
 fi
 
-CHROMIUM_BIN="$(command -v chromium-browser || command -v chromium || true)"
-if [[ -z "$CHROMIUM_BIN" ]]; then
-    echo "Chromium is not available and could not be installed. Run scripts/deploy/prepare-droplet.sh as root." >&2
+add_browser_candidate "${PUPPETEER_EXECUTABLE_PATH:-}"
+add_browser_candidate "${CHROME_PATH:-}"
+add_browser_candidate "$(command -v google-chrome-stable || true)"
+add_browser_candidate "$(command -v google-chrome || true)"
+add_browser_candidate "$(command -v chromium || true)"
+add_browser_candidate "$(command -v chromium-browser || true)"
+
+BROWSER_BIN="$(resolve_browser_path || true)"
+if [[ -z "$BROWSER_BIN" ]]; then
+    echo "No launchable non-snap browser is available for Puppeteer." >&2
+    echo "Run scripts/deploy/prepare-droplet.sh as root to install Google Chrome and configure the droplet." >&2
     exit 1
 fi
 
-if ! "$CHROMIUM_BIN" --version >/dev/null 2>&1; then
-    echo "Detected Chromium binary at $CHROMIUM_BIN but it is not runnable." >&2
-    exit 1
-fi
-
-echo "Using Chromium binary: $CHROMIUM_BIN"
+echo "Using browser binary: $BROWSER_BIN"
 
 # Optional fallback: keep a Puppeteer-managed Chrome cache copy.
 # Disabled by default to avoid storing extra browser binaries on the droplet.
@@ -143,15 +238,8 @@ if [[ "${ENABLE_PUPPETEER_BUNDLED_FALLBACK:-false}" == "true" ]]; then
             || echo "Warning: could not prepare Puppeteer Chrome fallback. System Chromium remains primary."
 fi
 
-set -a
-source "$API_ENV_FILE"
-set +a
-export NODE_ENV=production
-export PM2_APP_NAME
 export ALECONS_API_CWD="$API_CURRENT_LINK"
-if [[ -z "${PUPPETEER_EXECUTABLE_PATH:-}" && -n "$CHROMIUM_BIN" ]]; then
-    export PUPPETEER_EXECUTABLE_PATH="$CHROMIUM_BIN"
-fi
+export PUPPETEER_EXECUTABLE_PATH="$BROWSER_BIN"
 
 pm2 startOrReload "$API_CURRENT_LINK/ecosystem.config.cjs" --update-env
 pm2 save

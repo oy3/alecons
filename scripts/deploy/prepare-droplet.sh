@@ -8,6 +8,8 @@ APPS_ROOT="${APPS_ROOT:-/home/apps}"
 API_ROOT="${API_ROOT:-/home/api}"
 API_ENV_DIR="${API_ENV_DIR:-/etc/alecons}"
 PM2_LOG_DIR="${PM2_LOG_DIR:-/var/log/pm2}"
+BROWSER_APT_SOURCE="/etc/apt/sources.list.d/google-chrome.list"
+BROWSER_APT_KEYRING="/etc/apt/keyrings/google-linux-signing.gpg"
 
 if [[ "$(uname -s)" != "Linux" ]]; then
     echo "This script must be run on the Linux production droplet, not on $(uname -s)." >&2
@@ -49,21 +51,31 @@ install -d -m 775 -o "$DEPLOY_USER" -g "$DEPLOY_GROUP" "$PM2_LOG_DIR"
 chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$APPS_ROOT" "$API_ROOT" "$DEPLOY_HOME/tmp" "$DEPLOY_HOME/releases"
 chmod -R 755 "$APPS_ROOT" "$API_ROOT"
 
-# Install system Chromium. Using the distro package is the most reliable
-# approach — apt resolves all transitive .so dependencies automatically,
-# avoiding the 'libatk-1.0.so.0: No such file' errors seen with the
-# Puppeteer-bundled Chrome binary.
+# Install a non-snap Chrome build. The Ubuntu chromium-browser package often
+# resolves to a snap wrapper, which fails when launched from PM2 with Puppeteer.
 if command -v apt-get >/dev/null 2>&1; then
-    echo "Installing system Chromium browser..."
+    echo "Installing Google Chrome browser..."
     apt-get update -qq
-    # Ubuntu 24+ uses 'chromium'; earlier Ubuntu/Debian uses 'chromium-browser'
-    apt-get install -y -q --no-install-recommends chromium-browser 2>/dev/null \
-        || apt-get install -y -q --no-install-recommends chromium
-    echo "System Chromium installed."
+    apt-get install -y -q --no-install-recommends ca-certificates curl gnupg
+    install -d -m 755 /etc/apt/keyrings
+
+    if [[ ! -f "$BROWSER_APT_KEYRING" ]]; then
+        curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+            | gpg --dearmor -o "$BROWSER_APT_KEYRING"
+        chmod 644 "$BROWSER_APT_KEYRING"
+    fi
+
+    cat > "$BROWSER_APT_SOURCE" <<EOF
+deb [arch=amd64 signed-by=$BROWSER_APT_KEYRING] https://dl.google.com/linux/chrome/deb/ stable main
+EOF
+
+    apt-get update -qq
+    apt-get install -y -q --no-install-recommends google-chrome-stable
+    echo "Google Chrome installed."
 fi
 
 # Allow the deploy user to run apt-get without a password so that
-# remote-deploy.sh can ensure Chromium is present on every deployment.
+# remote-deploy.sh can ensure Google Chrome stays present on every deployment.
 DEPLOY_SUDOERS="/etc/sudoers.d/deploy-apt"
 echo "$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get" > "$DEPLOY_SUDOERS"
 chmod 440 "$DEPLOY_SUDOERS"

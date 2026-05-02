@@ -302,7 +302,7 @@ Keep production backend secrets only on the droplet in `/etc/alecons/api.env`.
 
 ### Process Ownership Rules
 
-- `root` is only for one-time machine preparation: users, directories, sudoers, Chromium, nginx, certbot, and system packages.
+- `root` is only for one-time machine preparation: users, directories, sudoers, Google Chrome, nginx, certbot, and system packages.
 - The live API process is owned by the `deploy` user through PM2.
 - `pm2 status` will show different process lists for `root` and `deploy` because they use different PM2 homes.
 - The workflow deploys and reloads PM2 as `deploy`, not as `root`.
@@ -312,6 +312,8 @@ That means this is expected:
 ```bash
 sudo -iu deploy
 pm2 status
+
+pm2 logs alecons-api --err --lines 200
 ```
 
 and this may show nothing useful for the app:
@@ -321,12 +323,13 @@ sudo -i
 pm2 status
 ```
 
-### Chromium and PDF Generation
+### Browser and PDF Generation
 
 - Server-side PDFs use Puppeteer.
-- Production prefers system-installed Chromium from the droplet package manager.
-- [`scripts/deploy/prepare-droplet.sh`](scripts/deploy/prepare-droplet.sh) installs Chromium and grants the deploy user passwordless `apt-get` so the deploy script can self-heal if Chromium is missing on a future release.
-- [`packages/api/src/utils/puppeteer-launch.util.ts`](packages/api/src/utils/puppeteer-launch.util.ts) auto-detects the system browser path and exports it into the PM2 environment during deploy.
+- Production prefers a non-snap Google Chrome binary on the droplet.
+- [`scripts/deploy/prepare-droplet.sh`](scripts/deploy/prepare-droplet.sh) installs Google Chrome and grants the deploy user passwordless `apt-get` so the deploy script can keep that browser present on future releases.
+- [`packages/api/src/utils/puppeteer-launch.util.ts`](packages/api/src/utils/puppeteer-launch.util.ts) rejects snap-wrapped browser launchers and only falls back to non-snap system paths.
+- [`scripts/deploy/remote-deploy.sh`](scripts/deploy/remote-deploy.sh) smoke-tests Puppeteer against the selected browser before PM2 reload.
 - Optional bundled Puppeteer browser fallback is disabled by default to avoid extra storage on the droplet.
 
 ### Production Sanity Checks
@@ -340,9 +343,9 @@ sudo lsof -i :8000 -P -n
 # the live PM2 app should exist under the deploy user
 sudo -u deploy pm2 list
 
-# chromium should be installed and runnable
-sudo -u deploy bash -lc 'command -v chromium-browser || command -v chromium'
-sudo -u deploy bash -lc 'chromium-browser --version 2>/dev/null || chromium --version'
+# Google Chrome should be installed and runnable
+sudo -u deploy bash -lc 'command -v google-chrome-stable || command -v google-chrome'
+sudo -u deploy bash -lc 'google-chrome-stable --version 2>/dev/null || google-chrome --version'
 
 # deploy user should have passwordless apt-get if prepare-droplet.sh was run correctly
 sudo -u deploy sudo -n /usr/bin/apt-get --version
@@ -366,11 +369,14 @@ curl -i -X OPTIONS 'https://api.alecons.edu.ng/api/v1/auth/staff/login' \
 
 ### Common Production Failures
 
-- `Chromium is missing and deploy user cannot run apt-get without password`
+- `No launchable non-snap browser is available for Puppeteer`
    Copy [`scripts/deploy/prepare-droplet.sh`](scripts/deploy/prepare-droplet.sh) to the droplet and run it as `root`.
 
 - `libatk-1.0.so.0` or similar shared-library errors from Puppeteer
-   Chromium is missing or was not installed on the droplet yet. Install system Chromium, then redeploy.
+   The production browser or its shared libraries are missing. Run the droplet bootstrap again to install Google Chrome cleanly, then redeploy.
+
+- `... is not a snap cgroup for tag snap.chromium.chromium`
+   The server is trying to launch a snap Chromium wrapper from PM2. Re-run the droplet bootstrap so production uses Google Chrome instead.
 
 - `pm2 status` is empty as `root` but app is online as `deploy`
    This is normal. Check PM2 under the deploy user instead.

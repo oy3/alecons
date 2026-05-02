@@ -159,20 +159,20 @@ jobs:
           ssh -p "${DROPLET_PORT:-22}" "$DROPLET_USER@$DROPLET_HOST" '
             set -euo pipefail
 
-            # If Chromium already exists, deploy can proceed without apt privileges.
-            if command -v chromium-browser >/dev/null 2>&1 || command -v chromium >/dev/null 2>&1; then
+            # If Google Chrome already exists, deploy can proceed without apt privileges.
+            if command -v google-chrome-stable >/dev/null 2>&1 || command -v google-chrome >/dev/null 2>&1; then
               exit 0
             fi
 
             if ! command -v sudo >/dev/null 2>&1; then
-              echo "Chromium is missing and sudo is not available for install." >&2
+              echo "No browser is available for Puppeteer and sudo is not available for install." >&2
               echo "Run scripts/deploy/prepare-droplet.sh as root on the droplet." >&2
               exit 1
             fi
 
             if ! sudo -n /usr/bin/apt-get --version >/dev/null 2>&1; then
-              echo "Chromium is missing and deploy user cannot run apt-get without password." >&2
-              echo "Run scripts/deploy/prepare-droplet.sh as root on the droplet to configure sudoers and Chromium." >&2
+              echo "No browser is available for Puppeteer and deploy user cannot run apt-get without password." >&2
+              echo "Run scripts/deploy/prepare-droplet.sh as root on the droplet to configure sudoers and Google Chrome." >&2
               echo "In the current production setup, GitHub Actions connects as deploy." >&2
               echo "Bootstrap the droplet as root, then re-run the workflow." >&2
               exit 1

@@ -14,6 +14,8 @@ const SYSTEM_CHROME_PATHS = [
     "/usr/bin/chromium-browser",
 ];
 
+const PRODUCTION_DEFAULT_BROWSER_PATH = "/usr/bin/google-chrome-stable";
+
 function isProductionEnvironment(): boolean {
     return process.env.NODE_ENV === "production";
 }
@@ -114,9 +116,16 @@ export async function launchPuppeteerBrowser(): Promise<Browser> {
             logger.log(`Using system Chrome at: ${systemPath}`);
             launchOptions.executablePath = systemPath;
         } else if (isProductionEnvironment()) {
-            throw new Error(
-                "No non-snap system browser is available for Puppeteer in production. Install Google Chrome and set PUPPETEER_EXECUTABLE_PATH if needed.",
-            );
+            if (existsSync(PRODUCTION_DEFAULT_BROWSER_PATH)) {
+                logger.log(
+                    `Using production default Chrome at: ${PRODUCTION_DEFAULT_BROWSER_PATH}`,
+                );
+                launchOptions.executablePath = PRODUCTION_DEFAULT_BROWSER_PATH;
+            } else {
+                throw new Error(
+                    "No non-snap system browser is available for Puppeteer in production. Install Google Chrome and set PUPPETEER_EXECUTABLE_PATH if needed.",
+                );
+            }
         }
     }
 

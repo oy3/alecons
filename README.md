@@ -303,7 +303,7 @@ Keep production backend secrets only on the droplet in `/etc/alecons/api.env`.
 For PDF generation, pin the browser explicitly in that file:
 
 ```bash
-PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+PUPPETEER_EXECUTABLE_PATH=/opt/google/chrome/google-chrome
 ```
 
 ### Process Ownership Rules
@@ -334,7 +334,7 @@ pm2 status
 - Server-side PDFs use Puppeteer.
 - Production prefers a non-snap Google Chrome binary on the droplet.
 - [`scripts/deploy/prepare-droplet.sh`](scripts/deploy/prepare-droplet.sh) installs Google Chrome and grants the deploy user passwordless `apt-get` so the deploy script can keep that browser present on future releases.
-- Production should pin `PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable` in `/etc/alecons/api.env` so PM2 reloads do not depend on browser auto-detection.
+- Production should pin `PUPPETEER_EXECUTABLE_PATH=/opt/google/chrome/google-chrome` in `/etc/alecons/api.env` so PM2 reloads do not depend on browser auto-detection.
 - [`packages/api/src/utils/puppeteer-launch.util.ts`](packages/api/src/utils/puppeteer-launch.util.ts) rejects snap-wrapped browser launchers and refuses to use Puppeteer's cache in production.
 - [`scripts/deploy/remote-deploy.sh`](scripts/deploy/remote-deploy.sh) smoke-tests Puppeteer against the selected browser before PM2 reload, clears stale Puppeteer cache by default, and exports the validated browser path into PM2.
 - Optional bundled Puppeteer browser fallback is disabled by default and should remain off in production.

@@ -15,7 +15,7 @@ module.exports = {
                 NODE_ENV: 'production',
                 PORT: process.env.PORT || 8000,
                 PUPPETEER_EXECUTABLE_PATH:
-                    process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
+                    process.env.PUPPETEER_EXECUTABLE_PATH || '/opt/google/chrome/google-chrome',
                 CHROME_PATH: process.env.CHROME_PATH,
             },
         },

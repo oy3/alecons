@@ -8,13 +8,14 @@ const logger = new Logger("PuppeteerLaunch");
 // wrapper often points to snap Chromium, which is unreliable from PM2/system
 // service contexts and fails with snap cgroup errors.
 const SYSTEM_CHROME_PATHS = [
+    "/opt/google/chrome/google-chrome",
     "/usr/bin/google-chrome-stable",
     "/usr/bin/google-chrome",
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
 ];
 
-const PRODUCTION_DEFAULT_BROWSER_PATH = "/usr/bin/google-chrome-stable";
+const PRODUCTION_DEFAULT_BROWSER_PATH = "/opt/google/chrome/google-chrome";
 
 function isProductionEnvironment(): boolean {
     return process.env.NODE_ENV === "production";
@@ -42,8 +43,7 @@ function isSnapWrappedBrowser(executablePath: string): boolean {
         const fileContents = readFileSync(executablePath, "utf8");
         return (
             fileContents.includes("snap.chromium.chromium") ||
-            fileContents.includes("/snap/bin/chromium") ||
-            fileContents.includes("xdg-settings")
+            fileContents.includes("/snap/bin/chromium")
         );
     } catch {
         return false;

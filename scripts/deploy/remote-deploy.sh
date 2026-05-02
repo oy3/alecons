@@ -87,6 +87,7 @@ add_browser_candidate() {
 is_snap_browser() {
     local browser_path="$1"
     local resolved_path=""
+    local file_head=""
 
     if [[ -z "$browser_path" || ! -e "$browser_path" ]]; then
         return 1
@@ -97,7 +98,8 @@ is_snap_browser() {
         return 0
     fi
 
-    if head -c 4096 "$browser_path" 2>/dev/null | grep -qE 'snap\.chromium\.chromium|/snap/bin/chromium|xdg-settings'; then
+    file_head="$(head -c 4096 "$browser_path" 2>/dev/null || true)"
+    if [[ "$file_head" == *"snap.chromium.chromium"* || "$file_head" == *"/snap/bin/chromium"* ]]; then
         return 0
     fi
 
@@ -135,17 +137,17 @@ resolve_browser_path() {
 
     for candidate_path in "${BROWSER_CANDIDATES[@]}"; do
         if is_puppeteer_cache_browser "$candidate_path"; then
-            echo "Skipping Puppeteer cache browser candidate: $candidate_path"
+            echo "Skipping Puppeteer cache browser candidate: $candidate_path" >&2
             continue
         fi
 
         if is_snap_browser "$candidate_path"; then
-            echo "Skipping snap-wrapped browser candidate: $candidate_path"
+            echo "Skipping snap-wrapped browser candidate: $candidate_path" >&2
             continue
         fi
 
         if ! "$candidate_path" --version >/dev/null 2>&1; then
-            echo "Skipping non-runnable browser candidate: $candidate_path"
+            echo "Skipping non-runnable browser candidate: $candidate_path" >&2
             continue
         fi
 
@@ -154,7 +156,7 @@ resolve_browser_path() {
             return 0
         fi
 
-        echo "Skipping browser candidate that failed Puppeteer launch test: $candidate_path"
+        echo "Skipping browser candidate that failed Puppeteer launch test: $candidate_path" >&2
     done
 
     return 1
@@ -225,6 +227,7 @@ fi
 
 add_browser_candidate "${PUPPETEER_EXECUTABLE_PATH:-}"
 add_browser_candidate "${CHROME_PATH:-}"
+add_browser_candidate "/opt/google/chrome/google-chrome"
 add_browser_candidate "$(command -v google-chrome-stable || true)"
 add_browser_candidate "$(command -v google-chrome || true)"
 add_browser_candidate "$(command -v chromium || true)"

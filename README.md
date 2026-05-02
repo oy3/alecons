@@ -328,9 +328,9 @@ pm2 status
 - Server-side PDFs use Puppeteer.
 - Production prefers a non-snap Google Chrome binary on the droplet.
 - [`scripts/deploy/prepare-droplet.sh`](scripts/deploy/prepare-droplet.sh) installs Google Chrome and grants the deploy user passwordless `apt-get` so the deploy script can keep that browser present on future releases.
-- [`packages/api/src/utils/puppeteer-launch.util.ts`](packages/api/src/utils/puppeteer-launch.util.ts) rejects snap-wrapped browser launchers and only falls back to non-snap system paths.
-- [`scripts/deploy/remote-deploy.sh`](scripts/deploy/remote-deploy.sh) smoke-tests Puppeteer against the selected browser before PM2 reload.
-- Optional bundled Puppeteer browser fallback is disabled by default to avoid extra storage on the droplet.
+- [`packages/api/src/utils/puppeteer-launch.util.ts`](packages/api/src/utils/puppeteer-launch.util.ts) rejects snap-wrapped browser launchers and refuses to use Puppeteer's cache in production.
+- [`scripts/deploy/remote-deploy.sh`](scripts/deploy/remote-deploy.sh) smoke-tests Puppeteer against the selected browser before PM2 reload, clears stale Puppeteer cache by default, and exports the validated browser path into PM2.
+- Optional bundled Puppeteer browser fallback is disabled by default and should remain off in production.
 
 ### Production Sanity Checks
 
@@ -373,7 +373,7 @@ curl -i -X OPTIONS 'https://api.alecons.edu.ng/api/v1/auth/staff/login' \
    Copy [`scripts/deploy/prepare-droplet.sh`](scripts/deploy/prepare-droplet.sh) to the droplet and run it as `root`.
 
 - `libatk-1.0.so.0` or similar shared-library errors from Puppeteer
-   The production browser or its shared libraries are missing. Run the droplet bootstrap again to install Google Chrome cleanly, then redeploy.
+   Production is trying to use Puppeteer's cached browser instead of system Chrome, or the system browser installation is incomplete. Re-run the droplet bootstrap and redeploy.
 
 - `... is not a snap cgroup for tag snap.chromium.chromium`
    The server is trying to launch a snap Chromium wrapper from PM2. Re-run the droplet bootstrap so production uses Google Chrome instead.

@@ -104,6 +104,12 @@ is_snap_browser() {
     return 1
 }
 
+is_puppeteer_cache_browser() {
+    local browser_path="$1"
+
+    [[ "$browser_path" == *"/.cache/puppeteer/"* ]]
+}
+
 smoke_test_browser() {
     local browser_path="$1"
 
@@ -128,6 +134,11 @@ resolve_browser_path() {
     local candidate_path
 
     for candidate_path in "${BROWSER_CANDIDATES[@]}"; do
+        if is_puppeteer_cache_browser "$candidate_path"; then
+            echo "Skipping Puppeteer cache browser candidate: $candidate_path"
+            continue
+        fi
+
         if is_snap_browser "$candidate_path"; then
             echo "Skipping snap-wrapped browser candidate: $candidate_path"
             continue
@@ -228,17 +239,23 @@ fi
 
 echo "Using browser binary: $BROWSER_BIN"
 
-# Optional fallback: keep a Puppeteer-managed Chrome cache copy.
-# Disabled by default to avoid storing extra browser binaries on the droplet.
+# Production should not keep or use a Puppeteer-managed browser cache. The
+# runtime is locked to the validated system browser above.
+if [[ "${ENABLE_PUPPETEER_BUNDLED_FALLBACK:-false}" != "true" ]]; then
+    rm -rf "$HOME/.cache/puppeteer"
+fi
+
+# Optional fallback remains available only when explicitly enabled.
 if [[ "${ENABLE_PUPPETEER_BUNDLED_FALLBACK:-false}" == "true" ]]; then
         echo "Setting up optional Puppeteer Chrome browser fallback..."
         PUPPETEER_CACHE_DIR="$HOME/.cache/puppeteer" \
             node "$API_RELEASE_DIR/node_modules/puppeteer/install.mjs" \
             && echo "Puppeteer Chrome fallback ready." \
-            || echo "Warning: could not prepare Puppeteer Chrome fallback. System Chromium remains primary."
+            || echo "Warning: could not prepare Puppeteer Chrome fallback. System browser remains primary."
 fi
 
 export ALECONS_API_CWD="$API_CURRENT_LINK"
+unset CHROME_PATH
 export PUPPETEER_EXECUTABLE_PATH="$BROWSER_BIN"
 
 pm2 startOrReload "$API_CURRENT_LINK/ecosystem.config.cjs" --update-env

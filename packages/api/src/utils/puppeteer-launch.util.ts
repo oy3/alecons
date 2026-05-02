@@ -14,6 +14,10 @@ const SYSTEM_CHROME_PATHS = [
     "/usr/bin/chromium-browser",
 ];
 
+function isProductionEnvironment(): boolean {
+    return process.env.NODE_ENV === "production";
+}
+
 function isSnapWrappedBrowser(executablePath: string): boolean {
     try {
         const resolvedPath = realpathSync(executablePath);
@@ -44,6 +48,10 @@ function isSnapWrappedBrowser(executablePath: string): boolean {
     }
 }
 
+function isPuppeteerCacheBrowser(executablePath: string): boolean {
+    return executablePath.includes("/.cache/puppeteer/");
+}
+
 function resolveSystemBrowserPath(): string | undefined {
     for (const candidatePath of SYSTEM_CHROME_PATHS) {
         if (!existsSync(candidatePath)) {
@@ -68,8 +76,7 @@ function resolveSystemBrowserPath(): string | undefined {
  *   1. PUPPETEER_EXECUTABLE_PATH env var (explicit override in api.env)
  *   2. CHROME_PATH env var (legacy alias)
  *   3. First non-snap path from SYSTEM_CHROME_PATHS (system chromium/chrome)
- *   4. Puppeteer's own downloaded Chrome (requires ~/.cache/puppeteer populated
- *      by the install.mjs step in remote-deploy.sh)
+ *   4. In non-production environments only, Puppeteer's own downloaded Chrome
  */
 export async function launchPuppeteerBrowser(): Promise<Browser> {
     const puppeteer = await import("puppeteer");
@@ -93,6 +100,12 @@ export async function launchPuppeteerBrowser(): Promise<Browser> {
             );
         }
 
+        if (isProductionEnvironment() && isPuppeteerCacheBrowser(explicitPath)) {
+            throw new Error(
+                `Configured browser path points to Puppeteer's cache and is not allowed in production: ${explicitPath}`,
+            );
+        }
+
         logger.log(`Using Chrome from env: ${explicitPath}`);
         launchOptions.executablePath = explicitPath;
     } else {
@@ -100,8 +113,11 @@ export async function launchPuppeteerBrowser(): Promise<Browser> {
         if (systemPath) {
             logger.log(`Using system Chrome at: ${systemPath}`);
             launchOptions.executablePath = systemPath;
+        } else if (isProductionEnvironment()) {
+            throw new Error(
+                "No non-snap system browser is available for Puppeteer in production. Install Google Chrome and set PUPPETEER_EXECUTABLE_PATH if needed.",
+            );
         }
-        // else: fall through to Puppeteer's bundled Chrome
     }
 
     return puppeteer.launch(launchOptions);

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { launchPuppeteerBrowser } from "../utils/puppeteer-launch.util";
+import { toTitleCase } from "../utils/string.util";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -116,8 +117,8 @@ export class AdmissionLetterPdfService {
      */
     private createAdmissionLetterHTML(data: AdmissionLetterData): string {
         // Validate and sanitize data
-        const studentFirstName = data.studentFirstName || "";
-        const studentLastName = data.studentLastName || "";
+        const studentFirstName = toTitleCase(data.studentFirstName || "");
+        const studentLastName = toTitleCase(data.studentLastName || "");
         const studentFullName = data.studentFullName || "";
         const programName = data.programName || "";
         const programType = data.programType || "";

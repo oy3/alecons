@@ -111,6 +111,15 @@ fi
 
 ln -sfn "$API_RELEASE_DIR" "$API_CURRENT_LINK"
 
+# Install the Puppeteer-managed Chrome browser into the deploy user's cache.
+# This is a no-op when the correct Chrome version is already cached, so it
+# adds only a few seconds on subsequent deploys.
+echo "Setting up Puppeteer Chrome browser..."
+PUPPETEER_CACHE_DIR="$HOME/.cache/puppeteer" \
+  node "$API_RELEASE_DIR/node_modules/puppeteer/install.mjs" \
+  && echo "Puppeteer Chrome ready." \
+  || echo "Warning: Puppeteer Chrome install failed. Set PUPPETEER_EXECUTABLE_PATH in api.env to use system Chrome."
+
 set -a
 source "$API_ENV_FILE"
 set +a

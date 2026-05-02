@@ -338,14 +338,12 @@ export class TenancyAgreementService {
   private async generateTenancyAgreementPDFBuffer(
     agreement: TenancyAgreementDocument
   ): Promise<Buffer> {
+    let browser = null;
     try {
-      const puppeteer = await import("puppeteer");
+      const { launchPuppeteerBrowser } = await import("../utils/puppeteer-launch.util");
       const html = this.createTenancyAgreementHTML(agreement);
 
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      });
+      browser = await launchPuppeteerBrowser();
 
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: "networkidle0" });
@@ -361,13 +359,13 @@ export class TenancyAgreementService {
         printBackground: true,
       });
 
-      await browser.close();
-
       this.logger.log("Tenancy agreement PDF generated successfully");
       return Buffer.from(pdfData);
     } catch (error) {
       this.logger.error("Failed to generate tenancy agreement PDF:", error);
       throw error;
+    } finally {
+      if (browser) await browser.close();
     }
   }
 

@@ -328,6 +328,9 @@ pm2 startup
 # Verify API is running and environment variables are loaded
 pm2 logs alecons-api --lines 20
 
+sudo -iu deploy
+pm2 logs alecons-api --err --lines 150
+
 # Test API health endpoint
 curl http://localhost:8000/api/v1/health
 curl https://api.alecons.com.ng/api/v1/health

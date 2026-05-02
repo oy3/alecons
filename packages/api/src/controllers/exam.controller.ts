@@ -1426,11 +1426,8 @@ export class ExamController {
             let browser;
             try {
                 this.logger.log('Launching Puppeteer browser for exam results export...');
-                const puppeteer = await import('puppeteer');
-                browser = await puppeteer.launch({
-                    headless: true,
-                    args: ['--no-sandbox', '--disable-setuid-sandbox']
-                });
+                const { launchPuppeteerBrowser } = await import('../utils/puppeteer-launch.util');
+                browser = await launchPuppeteerBrowser();
 
                 const page = await browser.newPage();
                 await page.setContent(htmlContent, { waitUntil: 'networkidle0' });

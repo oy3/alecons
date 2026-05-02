@@ -167,18 +167,32 @@ When running `npm run dev:all`, access applications at:
 - **Staff Portal**: Administrative functions and management
 - **Student Portal**: Learning resources and progress tracking
 
+### Application Lifecycle
+- The applicant journey is organized as a staged workflow from registration through application form, entrance exam, screening, admission decision, acceptance fee, sundry fee, school fee, and final completion.
+- Admission and screening steps are staff-driven, while payment steps and document submission are applicant-driven.
+- The admissions flow is tightly coupled to payment progression and student creation after completion.
+
 ### Payments
 - **Dual payment flow**: Supports both Paystack and manual bank transfer for applicant and student charges
 - **Manual transfer fallback**: Users can upload a receipt after transfer and keep moving while Paystack approval or gateway availability is pending
 - **Receipt validation**: Manual transfer receipts accept PNG, JPG, or PDF files up to 1MB and are stored in DigitalOcean Spaces
 - **Staff verification**: Staff review uploaded receipts from linked payment history and can verify or reject with remarks
 - **Session-aware controls**: Academic session controls can enable or disable Paystack and manual transfer separately for applicants and students
+- **Audience targeting**: Payments can be targeted by audience so applicants, students, academic staff, and admin staff only see the charges intended for them
 
 ### Examination System
 - PDF question import and parsing
 - Automatic exam scheduling and password generation
+- Background jobs with Redis/Bull for reminders, grading, and result processing
+- Timed exam reminders and automatic submission handling for expired attempts
 - Real-time exam monitoring and auto-submission
 - Comprehensive result analysis and reporting
+
+### File Handling
+- Applicant profile pictures are limited to 2MB
+- Applicant PDF documents such as results and reference files are limited to 3MB
+- Manual transfer payment receipts are limited to 1MB
+- Production file storage uses DigitalOcean Spaces with optional CDN delivery
 
 ### Security Features
 - JWT-based authentication
@@ -206,6 +220,17 @@ apps/cbt/.env.example
 Notes:
 - Frontend `VITE_*` values are public build-time values and may live in GitHub Actions environment variables.
 - Backend production secrets should not be committed; keep them on the droplet in `/etc/alecons/api.env`.
+- The exam and background-job features also require Redis configuration in the API environment.
+- Production file uploads require valid DigitalOcean Spaces configuration in the API environment.
+
+### External Services
+
+The API depends on these external services in production:
+
+- MongoDB
+- Redis for Bull queues and background jobs
+- SMTP or equivalent mail transport for notifications
+- DigitalOcean Spaces for uploaded files and payment receipts
 
 ### Payment Configuration
 Manual transfer and Paystack visibility are now controlled in two layers:
@@ -241,22 +266,93 @@ npm run dev:all
 ```
 
 ### Production Deployment
-- Production deploys are handled by [`.github/workflows/deploy-production.yml`](.github/workflows/deploy-production.yml).
-- A push or merge to the `production` branch builds the frontends in GitHub Actions, uploads the artifacts to the droplet, deploys the API release, and reloads PM2.
-- The local [`deploy-production.sh`](deploy-production.sh) script is now just a local production-style build helper, not the primary deployment path.
 
-### Production Runtime Notes
-- The live ALECONS API should be managed by the `deploy` user via PM2, not by `root`.
-- After migrating from an older manual deployment, do a one-time PM2 cutover so port `8000` is owned by `deploy` and points to `/home/api/current`.
-- Keep production API secrets only in `/etc/alecons/api.env` and ensure that file can be sourced safely by bash.
+Production deploys are handled by [`.github/workflows/deploy-production.yml`](.github/workflows/deploy-production.yml).
 
-### Post-Deploy Sanity Checks
+The production branch flow is:
+
+1. GitHub Actions installs workspace dependencies and builds all frontend apps.
+2. GitHub Actions builds the API and prepares a runtime artifact containing only `dist`, `package.json`, `ecosystem.config.cjs`, and production `node_modules`.
+3. The workflow uploads `frontend-dist.tar.gz` and `api-release.tar.gz` to the droplet.
+4. [`scripts/deploy/remote-deploy.sh`](scripts/deploy/remote-deploy.sh) extracts the release, updates `/home/api/current`, syncs the frontend `dist` folders into `/home/apps/*`, ensures Chromium is available, and reloads PM2.
+
+The local [`deploy-production.sh`](deploy-production.sh) script is only a local production-style build helper. It is not the primary live deployment path.
+
+### Production Setup Checklist
+
+The current production droplet does not keep a full checkout of this repository. GitHub Actions uploads release artifacts only.
+
+Run the one-time droplet preparation as `root`, not as the deploy user, by copying the bootstrap script onto the droplet first:
+
 ```bash
-# Port 8000 should be owned by deploy
+scp scripts/deploy/prepare-droplet.sh root@your_droplet_ip:/root/
+ssh root@your_droplet_ip
+bash /root/prepare-droplet.sh
+```
+
+Required GitHub production environment values:
+
+- `DROPLET_HOST`
+- `DROPLET_USER=deploy`
+- `DROPLET_PORT`
+- `DROPLET_SSH_KEY`
+- frontend `VITE_*` variables used by [`.github/workflows/deploy-production.yml`](.github/workflows/deploy-production.yml)
+
+Keep production backend secrets only on the droplet in `/etc/alecons/api.env`.
+
+### Process Ownership Rules
+
+- `root` is only for one-time machine preparation: users, directories, sudoers, Chromium, nginx, certbot, and system packages.
+- The live API process is owned by the `deploy` user through PM2.
+- `pm2 status` will show different process lists for `root` and `deploy` because they use different PM2 homes.
+- The workflow deploys and reloads PM2 as `deploy`, not as `root`.
+
+That means this is expected:
+
+```bash
+sudo -iu deploy
+pm2 status
+```
+
+and this may show nothing useful for the app:
+
+```bash
+sudo -i
+pm2 status
+```
+
+### Chromium and PDF Generation
+
+- Server-side PDFs use Puppeteer.
+- Production prefers system-installed Chromium from the droplet package manager.
+- [`scripts/deploy/prepare-droplet.sh`](scripts/deploy/prepare-droplet.sh) installs Chromium and grants the deploy user passwordless `apt-get` so the deploy script can self-heal if Chromium is missing on a future release.
+- [`packages/api/src/utils/puppeteer-launch.util.ts`](packages/api/src/utils/puppeteer-launch.util.ts) auto-detects the system browser path and exports it into the PM2 environment during deploy.
+- Optional bundled Puppeteer browser fallback is disabled by default to avoid extra storage on the droplet.
+
+### Production Sanity Checks
+
+Verify the live API owner and browser setup:
+
+```bash
+# port 8000 should be owned by the deploy user
 sudo lsof -i :8000 -P -n
 
-# deploy user's PM2 should own the live API
+# the live PM2 app should exist under the deploy user
 sudo -u deploy pm2 list
+
+# chromium should be installed and runnable
+sudo -u deploy bash -lc 'command -v chromium-browser || command -v chromium'
+sudo -u deploy bash -lc 'chromium-browser --version 2>/dev/null || chromium --version'
+
+# deploy user should have passwordless apt-get if prepare-droplet.sh was run correctly
+sudo -u deploy sudo -n /usr/bin/apt-get --version
+```
+
+Verify the API and CORS:
+
+```bash
+# API health
+curl -fsS https://api.alecons.edu.ng/api/v1/health
 
 # CORS preflight should allow the frontend origins
 curl -i -X OPTIONS 'https://api.alecons.edu.ng/api/v1/auth/check-eligibility' \
@@ -267,6 +363,20 @@ curl -i -X OPTIONS 'https://api.alecons.edu.ng/api/v1/auth/staff/login' \
    -H 'Origin: https://staff.alecons.edu.ng' \
    -H 'Access-Control-Request-Method: POST'
 ```
+
+### Common Production Failures
+
+- `Chromium is missing and deploy user cannot run apt-get without password`
+   Copy [`scripts/deploy/prepare-droplet.sh`](scripts/deploy/prepare-droplet.sh) to the droplet and run it as `root`.
+
+- `libatk-1.0.so.0` or similar shared-library errors from Puppeteer
+   Chromium is missing or was not installed on the droplet yet. Install system Chromium, then redeploy.
+
+- `pm2 status` is empty as `root` but app is online as `deploy`
+   This is normal. Check PM2 under the deploy user instead.
+
+- `Failed to make admission decision` with a PDF generation stack trace
+   This is server-side. Check deploy-user PM2 logs, Chromium availability, and `/etc/alecons/api.env`.
 
 ### Payment Flow Sanity Checks
 - Confirm the application portal and student portal can both load their payment pages successfully.
@@ -292,10 +402,7 @@ docker-compose up -d
 ## 📖 Documentation
 
 Additional documentation available in:
-- [Automated Deployment Guide](DEPLOYMENT_AUTOMATION.md)
-- [Production Deployment Guide](PRODUCTION_DEPLOYMENT_GUIDE.md)
 - [API Documentation](packages/api/README.md)
-- [Environment Setup Notes](zmd/ENVIRONMENT_SETUP.md)
 
 ## 🤝 Contributing
 

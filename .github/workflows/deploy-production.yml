@@ -173,6 +173,8 @@ jobs:
             if ! sudo -n /usr/bin/apt-get --version >/dev/null 2>&1; then
               echo "Chromium is missing and deploy user cannot run apt-get without password." >&2
               echo "Run scripts/deploy/prepare-droplet.sh as root on the droplet to configure sudoers and Chromium." >&2
+              echo "In the current production setup, GitHub Actions connects as deploy." >&2
+              echo "Bootstrap the droplet as root, then re-run the workflow." >&2
               exit 1
             fi
           '

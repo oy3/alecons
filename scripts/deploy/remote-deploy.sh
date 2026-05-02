@@ -120,6 +120,29 @@ PUPPETEER_CACHE_DIR="$HOME/.cache/puppeteer" \
   && echo "Puppeteer Chrome ready." \
   || echo "Warning: Puppeteer Chrome install failed. Set PUPPETEER_EXECUTABLE_PATH in api.env to use system Chrome."
 
+# Ensure the OS-level shared libraries that Chrome requires are present.
+# prepare-droplet.sh installs these as root on first setup; this step handles
+# cases where the droplet was provisioned before this requirement was added.
+if command -v apt-get >/dev/null 2>&1; then
+    echo "Ensuring Chrome system dependencies are installed..."
+    sudo -n apt-get install -y -q --no-install-recommends \
+        ca-certificates fonts-liberation \
+        libatk1.0-0 libatk-bridge2.0-0 \
+        libcairo2 libcups2 libdbus-1-3 libdrm2 \
+        libexpat1 libfontconfig1 libgbm1 \
+        libglib2.0-0 libgtk-3-0 \
+        libnspr4 libnss3 \
+        libpango-1.0-0 libpangocairo-1.0-0 \
+        libx11-6 libx11-xcb1 libxcb1 \
+        libxcomposite1 libxcursor1 libxdamage1 \
+        libxext6 libxfixes3 libxi6 \
+        libxkbcommon0 libxrandr2 libxrender1 \
+        libxshmfence1 libxtst6 \
+        libasound2 2>/dev/null \
+        || sudo -n apt-get install -y -q --no-install-recommends libasound2t64 2>/dev/null \
+        || true
+fi
+
 set -a
 source "$API_ENV_FILE"
 set +a

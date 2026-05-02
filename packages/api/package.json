@@ -58,7 +58,6 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "puppeteer": "^24.26.1",
-    "puppeteer-core": "^24.26.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "turndown": "^7.2.2",

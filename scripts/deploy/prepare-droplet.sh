@@ -49,27 +49,28 @@ install -d -m 775 -o "$DEPLOY_USER" -g "$DEPLOY_GROUP" "$PM2_LOG_DIR"
 chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$APPS_ROOT" "$API_ROOT" "$DEPLOY_HOME/tmp" "$DEPLOY_HOME/releases"
 chmod -R 755 "$APPS_ROOT" "$API_ROOT"
 
-# Install system libraries required by the Puppeteer-managed Chromium binary.
-# Without these the chrome process exits with code 127 (missing .so files).
+# Install system Chromium. Using the distro package is the most reliable
+# approach — apt resolves all transitive .so dependencies automatically,
+# avoiding the 'libatk-1.0.so.0: No such file' errors seen with the
+# Puppeteer-bundled Chrome binary.
 if command -v apt-get >/dev/null 2>&1; then
-    echo "Installing Chrome/Puppeteer system dependencies..."
+    echo "Installing system Chromium browser..."
     apt-get update -qq
-    apt-get install -y -q --no-install-recommends \
-        ca-certificates fonts-liberation \
-        libatk1.0-0 libatk-bridge2.0-0 \
-        libcairo2 libcups2 libdbus-1-3 libdrm2 \
-        libexpat1 libfontconfig1 libgbm1 \
-        libglib2.0-0 libgtk-3-0 \
-        libnspr4 libnss3 \
-        libpango-1.0-0 libpangocairo-1.0-0 \
-        libx11-6 libx11-xcb1 libxcb1 \
-        libxcomposite1 libxcursor1 libxdamage1 \
-        libxext6 libxfixes3 libxi6 \
-        libxkbcommon0 libxrandr2 libxrender1 \
-        libxshmfence1 libxtst6 \
-        libasound2 || apt-get install -y -q --no-install-recommends libasound2t64 2>/dev/null || true
-    echo "Chrome system dependencies installed."
+    # Ubuntu 24+ uses 'chromium'; earlier Ubuntu/Debian uses 'chromium-browser'
+    apt-get install -y -q --no-install-recommends chromium-browser 2>/dev/null \
+        || apt-get install -y -q --no-install-recommends chromium
+    echo "System Chromium installed."
 fi
+
+# Allow the deploy user to run apt-get without a password so that
+# remote-deploy.sh can ensure Chromium is present on every deployment.
+DEPLOY_SUDOERS="/etc/sudoers.d/deploy-apt"
+echo "$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get" > "$DEPLOY_SUDOERS"
+chmod 440 "$DEPLOY_SUDOERS"
+if command -v visudo >/dev/null 2>&1; then
+    visudo -cf "$DEPLOY_SUDOERS" >/dev/null
+fi
+echo "Sudoers entry created: $DEPLOY_SUDOERS"
 echo "Next steps:"
 echo "  1. Add the GitHub Actions public key to $DEPLOY_HOME/.ssh/authorized_keys"
 echo "  2. Create $API_ENV_DIR/api.env with production API secrets"

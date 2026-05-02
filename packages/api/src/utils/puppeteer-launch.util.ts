@@ -1,18 +1,28 @@
 import { Logger } from "@nestjs/common";
 import type { Browser, LaunchOptions } from "puppeteer";
+import { existsSync } from "fs";
 
 const logger = new Logger("PuppeteerLaunch");
+
+// Common paths for system-installed Chromium/Chrome on Linux.
+// Used as fallback when PUPPETEER_EXECUTABLE_PATH is not set and the
+// Puppeteer-bundled Chrome is missing its system library dependencies.
+const SYSTEM_CHROME_PATHS = [
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/google-chrome",
+];
 
 /**
  * Launch a Puppeteer browser with production-safe defaults.
  *
- * On the production droplet the `puppeteer` npm package ships only the JS
- * code; Chrome itself lives in the user's Puppeteer cache directory
- * (~/.cache/puppeteer) and must have been installed separately (the
- * remote-deploy.sh script does this via `node install.mjs`).
- *
- * As an escape hatch, set PUPPETEER_EXECUTABLE_PATH (or CHROME_PATH) in
- * /etc/alecons/api.env to point at a system-installed Chromium binary.
+ * Resolution order for the Chrome binary:
+ *   1. PUPPETEER_EXECUTABLE_PATH env var (explicit override in api.env)
+ *   2. CHROME_PATH env var (legacy alias)
+ *   3. First existing path from SYSTEM_CHROME_PATHS (system chromium/chrome)
+ *   4. Puppeteer's own downloaded Chrome (requires ~/.cache/puppeteer populated
+ *      by the install.mjs step in remote-deploy.sh)
  */
 export async function launchPuppeteerBrowser(): Promise<Browser> {
     const puppeteer = await import("puppeteer");
@@ -26,11 +36,19 @@ export async function launchPuppeteerBrowser(): Promise<Browser> {
         ],
     };
 
-    const executablePath =
+    const explicitPath =
         process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH;
-    if (executablePath) {
-        logger.log(`Using Chrome at: ${executablePath}`);
-        launchOptions.executablePath = executablePath;
+
+    if (explicitPath) {
+        logger.log(`Using Chrome from env: ${explicitPath}`);
+        launchOptions.executablePath = explicitPath;
+    } else {
+        const systemPath = SYSTEM_CHROME_PATHS.find((p) => existsSync(p));
+        if (systemPath) {
+            logger.log(`Using system Chrome at: ${systemPath}`);
+            launchOptions.executablePath = systemPath;
+        }
+        // else: fall through to Puppeteer's bundled Chrome
     }
 
     return puppeteer.launch(launchOptions);

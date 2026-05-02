@@ -118,7 +118,7 @@ jobs:
           cp -R packages/api/dist release-artifacts/api-runtime/dist
 
           pushd release-artifacts/api-runtime >/dev/null
-          npm install --omit=dev
+          PUPPETEER_SKIP_DOWNLOAD=1 npm install --omit=dev
           popd >/dev/null
 
       - name: Package deployment artifacts
@@ -151,6 +151,25 @@ jobs:
           set -euo pipefail
           mkdir -p ~/.ssh
           ssh-keyscan -p "${DROPLET_PORT:-22}" -H "$DROPLET_HOST" >> ~/.ssh/known_hosts
+
+      - name: Validate droplet deploy prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "${DROPLET_PORT:-22}" "$DROPLET_USER@$DROPLET_HOST" '
+            set -euo pipefail
+
+            if ! command -v sudo >/dev/null 2>&1; then
+              echo "sudo is required on droplet" >&2
+              exit 1
+            fi
+
+            if ! sudo -n /usr/bin/apt-get --version >/dev/null 2>&1; then
+              echo "Deploy user cannot run apt-get without password." >&2
+              echo "Run scripts/deploy/prepare-droplet.sh as root on the droplet to configure sudoers and Chromium." >&2
+              exit 1
+            fi
+          '
 
       - name: Create remote staging directory
         shell: bash

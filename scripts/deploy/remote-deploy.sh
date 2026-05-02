@@ -111,36 +111,36 @@ fi
 
 ln -sfn "$API_RELEASE_DIR" "$API_CURRENT_LINK"
 
-# Install the Puppeteer-managed Chrome browser into the deploy user's cache.
-# This is a no-op when the correct Chrome version is already cached, so it
-# adds only a few seconds on subsequent deploys.
-echo "Setting up Puppeteer Chrome browser..."
-PUPPETEER_CACHE_DIR="$HOME/.cache/puppeteer" \
-  node "$API_RELEASE_DIR/node_modules/puppeteer/install.mjs" \
-  && echo "Puppeteer Chrome ready." \
-  || echo "Warning: Puppeteer Chrome install failed. Set PUPPETEER_EXECUTABLE_PATH in api.env to use system Chrome."
+# Ensure system Chromium is present. This is the preferred browser on the
+# droplet because apt manages all required shared libraries automatically.
+if ! command -v chromium-browser >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then
+    echo "System Chromium not found, installing..."
+    sudo -n apt-get update -qq
+    sudo -n apt-get install -y -q --no-install-recommends chromium-browser 2>/dev/null \
+        || sudo -n apt-get install -y -q --no-install-recommends chromium
+fi
 
-# Ensure the OS-level shared libraries that Chrome requires are present.
-# prepare-droplet.sh installs these as root on first setup; this step handles
-# cases where the droplet was provisioned before this requirement was added.
-if command -v apt-get >/dev/null 2>&1; then
-    echo "Ensuring Chrome system dependencies are installed..."
-    sudo -n apt-get install -y -q --no-install-recommends \
-        ca-certificates fonts-liberation \
-        libatk1.0-0 libatk-bridge2.0-0 \
-        libcairo2 libcups2 libdbus-1-3 libdrm2 \
-        libexpat1 libfontconfig1 libgbm1 \
-        libglib2.0-0 libgtk-3-0 \
-        libnspr4 libnss3 \
-        libpango-1.0-0 libpangocairo-1.0-0 \
-        libx11-6 libx11-xcb1 libxcb1 \
-        libxcomposite1 libxcursor1 libxdamage1 \
-        libxext6 libxfixes3 libxi6 \
-        libxkbcommon0 libxrandr2 libxrender1 \
-        libxshmfence1 libxtst6 \
-        libasound2 2>/dev/null \
-        || sudo -n apt-get install -y -q --no-install-recommends libasound2t64 2>/dev/null \
-        || true
+CHROMIUM_BIN="$(command -v chromium-browser || command -v chromium || true)"
+if [[ -z "$CHROMIUM_BIN" ]]; then
+    echo "Chromium is not available and could not be installed. Run scripts/deploy/prepare-droplet.sh as root." >&2
+    exit 1
+fi
+
+if ! "$CHROMIUM_BIN" --version >/dev/null 2>&1; then
+    echo "Detected Chromium binary at $CHROMIUM_BIN but it is not runnable." >&2
+    exit 1
+fi
+
+echo "Using Chromium binary: $CHROMIUM_BIN"
+
+# Optional fallback: keep a Puppeteer-managed Chrome cache copy.
+# Disabled by default to avoid storing extra browser binaries on the droplet.
+if [[ "${ENABLE_PUPPETEER_BUNDLED_FALLBACK:-false}" == "true" ]]; then
+        echo "Setting up optional Puppeteer Chrome browser fallback..."
+        PUPPETEER_CACHE_DIR="$HOME/.cache/puppeteer" \
+            node "$API_RELEASE_DIR/node_modules/puppeteer/install.mjs" \
+            && echo "Puppeteer Chrome fallback ready." \
+            || echo "Warning: could not prepare Puppeteer Chrome fallback. System Chromium remains primary."
 fi
 
 set -a
@@ -149,6 +149,9 @@ set +a
 export NODE_ENV=production
 export PM2_APP_NAME
 export ALECONS_API_CWD="$API_CURRENT_LINK"
+if [[ -z "${PUPPETEER_EXECUTABLE_PATH:-}" && -n "$CHROMIUM_BIN" ]]; then
+    export PUPPETEER_EXECUTABLE_PATH="$CHROMIUM_BIN"
+fi
 
 pm2 startOrReload "$API_CURRENT_LINK/ecosystem.config.cjs" --update-env
 pm2 save

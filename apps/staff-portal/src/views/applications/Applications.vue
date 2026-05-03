@@ -510,7 +510,7 @@ export default {
 
         this.showDetailsModal = true
         this.isLoadingDetails = true
-  this.selectedApplicationId = application.id
+        this.selectedApplicationId = application.id
         this.selectedApplication = null
         this.selectedPaymentHistory = createEmptyPaymentHistory()
 
@@ -846,7 +846,7 @@ export default {
 
       } catch (error) {
         logger.error('Error sending matriculation email:', error)
-        
+
         this.$swal.fire({
           icon: 'error',
           title: 'Failed to Send Email',
@@ -920,7 +920,7 @@ export default {
 
       } catch (error) {
         logger.error('Error generating matriculation number:', error)
-        
+
         this.$swal.fire({
           icon: 'error',
           title: 'Failed to Recover Matriculation Number',
@@ -948,16 +948,10 @@ export default {
             </p>
           </div>
           <div class="d-flex gap-2">
-            <button
-              class="btn btn-outline-staff-primary btn-sm"
-              @click="exportApplications"
-            >
+            <button class="btn btn-outline-staff-primary btn-sm" @click="exportApplications">
               <i class="bi bi-download me-2"></i>Export
             </button>
-            <button
-              class="btn btn-staff-primary btn-sm"
-              @click="loadApplications"
-            >
+            <button class="btn btn-staff-primary btn-sm" @click="loadApplications">
               <i class="bi bi-arrow-clockwise me-2"></i>Refresh
             </button>
           </div>
@@ -973,52 +967,28 @@ export default {
             <div class="row g-3">
               <div class="col-md-4">
                 <label for="searchQuery" class="form-label">Search</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  id="searchQuery"
-                  placeholder="Search by name, email, or application number..."
-                  v-model="searchQuery"
-                />
+                <input type="text" class="form-control" id="searchQuery"
+                  placeholder="Search by name, email, or application number..." v-model="searchQuery" />
               </div>
               <div class="col-md-3">
                 <label for="statusFilter" class="form-label">Status</label>
-                <select
-                  class="form-select"
-                  id="statusFilter"
-                  v-model="statusFilter"
-                >
-                  <option
-                    v-for="status in statusOptions"
-                    :key="status.value"
-                    :value="status.value"
-                  >
+                <select class="form-select" id="statusFilter" v-model="statusFilter">
+                  <option v-for="status in statusOptions" :key="status.value" :value="status.value">
                     {{ status.label }}
                   </option>
                 </select>
               </div>
               <div class="col-md-3">
                 <label for="programFilter" class="form-label">Program</label>
-                <select
-                  class="form-select"
-                  id="programFilter"
-                  v-model="programFilter"
-                >
+                <select class="form-select" id="programFilter" v-model="programFilter">
                   <option value="all">All Programs</option>
-                  <option
-                    v-for="program in programs"
-                    :key="program.value"
-                    :value="program.value"
-                  >
+                  <option v-for="program in programs" :key="program.value" :value="program.value">
                     {{ program.label }}
                   </option>
                 </select>
               </div>
               <div class="col-md-2 d-flex align-items-end">
-                <button
-                  class="btn btn-outline-staff-primary w-100"
-                  @click="resetFilters"
-                >
+                <button class="btn btn-outline-staff-primary w-100" @click="resetFilters">
                   <i class="bi bi-funnel-fill me-2"></i>Reset
                 </button>
               </div>
@@ -1069,19 +1039,13 @@ export default {
                       <div class="text-muted">
                         <i class="bi bi-inbox fs-1 mb-3 d-block"></i>
                         <h5 class="mb-2">No Applications Found</h5>
-                        <p
-                          class="mb-0"
-                          v-if="
-                            searchQuery ||
-                            statusFilter !== 'all' ||
-                            programFilter !== 'all'
-                          "
-                        >
+                        <p class="mb-0" v-if="
+                          searchQuery ||
+                          statusFilter !== 'all' ||
+                          programFilter !== 'all'
+                        ">
                           No applications match your current filters.
-                          <button
-                            class="btn btn-link p-0 text-staff-primary"
-                            @click="resetFilters"
-                          >
+                          <button class="btn btn-link p-0 text-staff-primary" @click="resetFilters">
                             Reset filters
                           </button>
                           to see all applications.
@@ -1102,23 +1066,15 @@ export default {
                     </td>
                     <td>
                       <div class="d-flex align-items-center">
-                        <div
-                          class="border border-staff-primary bg-staff-light rounded-circle me-2 d-flex align-items-center justify-content-center"
-                          style="height: 40px; width: 40px"
-                        >
-                          <img
-                            v-if="app.profileImageUrl"
-                            :src="app.profileImageUrl"
-                            alt=""
-                            class="rounded-circle"
-                            style="height: 100%; width: 100%"
-                          />
-
-                          <i
-                            v-else
-                            class="bi bi-person text-staff-primary fs-4"
-                          ></i>
+                        <div v-if="app.profileImageUrl"
+                          class="border border-staff-primary bg-staff-light rounded-circle me-2 d-flex align-items-center justify-content-center">
+                          <img :src="app.profileImageUrl" alt="" class="rounded-circle" width="40" height="40" />
                         </div>
+                        <div v-else style="height: 40px; width: 40px"
+                          class="border border-staff-primary bg-staff-light rounded-circle me-2 d-flex align-items-center justify-content-center">
+                          <i class="bi bi-person text-staff-primary fs-4"></i>
+                        </div>
+
                         <span class="fw-medium">{{ app.applicantName }}</span>
                       </div>
                     </td>
@@ -1131,10 +1087,7 @@ export default {
                     <td>{{ app.programDisplay }}</td>
                     <td class="text-center">{{ getStageLabel(app.currentStage) }}</td>
                     <td class="text-center">
-                      <span
-                        class="badge rounded-pill"
-                        :class="getStatusBadgeClass(app.status)"
-                      >
+                      <span class="badge rounded-pill" :class="getStatusBadgeClass(app.status)">
                         {{ app.status.replace("_", " ").toUpperCase() }}
                       </span>
                     </td>
@@ -1143,35 +1096,24 @@ export default {
                     </td>
                     <td>
                       <div class="btn-group btn-group-sm">
-                        <button
-                          class="btn btn-outline-staff-primary btn-sm"
-                          @click="viewApplication(app)"
-                          title="View Details"
-                        >
+                        <button class="btn btn-outline-staff-primary btn-sm" @click="viewApplication(app)"
+                          title="View Details">
                           <i class="bi bi-eye"></i>
                         </button>
                         <div class="btn-group" role="group">
-                          <button
-                            type="button"
-                            class="btn btn-outline-success btn-sm dropdown-toggle"
-                            data-bs-toggle="dropdown"
-                            title="Update Status"
-                          >
+                          <button type="button" class="btn btn-outline-success btn-sm dropdown-toggle"
+                            data-bs-toggle="dropdown" title="Update Status">
                             <i class="bi bi-three-dots-vertical"></i>
                           </button>
                           <ul class="dropdown-menu">
                             <li v-if="app.status === 'completed'" class="">
-                                <a
-                                class="dropdown-item"
-                                href="#"
-                                @click.prevent="handleMatriculationAction(app)"
-                              >
-                              <i class="bi bi-envelope text-success me-2" v-if="app.matriculationNumber"></i>
+                              <a class="dropdown-item" href="#" @click.prevent="handleMatriculationAction(app)">
+                                <i class="bi bi-envelope text-success me-2" v-if="app.matriculationNumber"></i>
                                 <i class="bi bi-arrow-repeat text-primary me-2" v-else></i>
-                                 {{ app.matriculationNumber ? 'Send matric no.' : 'Recover matric no.' }}
-                            </a>                      
+                                {{ app.matriculationNumber ? 'Send matric no.' : 'Recover matric no.' }}
+                              </a>
                             </li>
-<!-- 
+                            <!-- 
                             <li>
                               <a
                                 class="dropdown-item"
@@ -1250,19 +1192,13 @@ export default {
                 <div class="text-muted">
                   <i class="bi bi-inbox fs-1 mb-3 d-block"></i>
                   <h5 class="mb-2">No Applications Found</h5>
-                  <p
-                    class="mb-0"
-                    v-if="
-                      searchQuery ||
-                      statusFilter !== 'all' ||
-                      programFilter !== 'all'
-                    "
-                  >
+                  <p class="mb-0" v-if="
+                    searchQuery ||
+                    statusFilter !== 'all' ||
+                    programFilter !== 'all'
+                  ">
                     No applications match your current filters.
-                    <button
-                      class="btn btn-link p-0 text-staff-primary"
-                      @click="resetFilters"
-                    >
+                    <button class="btn btn-link p-0 text-staff-primary" @click="resetFilters">
                       Reset filters
                     </button>
                     to see all applications.
@@ -1274,30 +1210,19 @@ export default {
               </div>
 
               <div v-else class="row g-3">
-                <div
-                  v-for="app in paginatedApplications"
-                  :key="`mobile-${app.id}`"
-                  class="col-12"
-                >
+                <div v-for="app in paginatedApplications" :key="`mobile-${app.id}`" class="col-12">
                   <div class="applications-mobile-card h-100">
                     <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                       <div class="d-flex align-items-center gap-2">
-                        <div
+                        <div v-if="app.profileImageUrl"
+                          class="border border-staff-primary bg-staff-light rounded-circle d-flex align-items-center justify-content-center flex-shrink-0">
+                          <img :src="app.profileImageUrl" alt="" class="rounded-circle"
+                            style="height: 40px; width: 40px"/>
+                        </div>
+                        <div v-else
                           class="border border-staff-primary bg-staff-light rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-                          style="height: 40px; width: 40px"
-                        >
-                          <img
-                            v-if="app.profileImageUrl"
-                            :src="app.profileImageUrl"
-                            alt=""
-                            class="rounded-circle"
-                            style="height: 100%; width: 100%"
-                          />
-
-                          <i
-                            v-else
-                            class="bi bi-person text-staff-primary fs-4"
-                          ></i>
+                          style="height: 40px; width: 40px">
+                          <i class="bi bi-person text-staff-primary fs-4"></i>
                         </div>
                         <div>
                           <div class="fw-semibold text-staff-primary">
@@ -1338,20 +1263,12 @@ export default {
                     </div>
 
                     <div class="d-flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline-staff-primary"
-                        @click="viewApplication(app)"
-                        title="View Details"
-                      >
+                      <button type="button" class="btn btn-sm btn-outline-staff-primary" @click="viewApplication(app)"
+                        title="View Details">
                         <i class="bi bi-eye me-1"></i>Details
                       </button>
-                      <button
-                        v-if="app.status === 'completed'"
-                        type="button"
-                        class="btn btn-sm btn-outline-success"
-                        @click="handleMatriculationAction(app)"
-                      >
+                      <button v-if="app.status === 'completed'" type="button" class="btn btn-sm btn-outline-success"
+                        @click="handleMatriculationAction(app)">
                         <i class="bi bi-envelope me-1" v-if="app.matriculationNumber"></i>
                         <i class="bi bi-arrow-repeat me-1" v-else></i>
                         {{ app.matriculationNumber ? 'Send matric no.' : 'Recover matric no.' }}
@@ -1368,33 +1285,19 @@ export default {
             <nav>
               <ul class="pagination pagination-sm mb-0 justify-content-center">
                 <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                  <button
-                    class="page-link"
-                    @click="currentPage = currentPage - 1"
-                    :disabled="currentPage === 1"
-                  >
+                  <button class="page-link" @click="currentPage = currentPage - 1" :disabled="currentPage === 1">
                     Previous
                   </button>
                 </li>
-                <li
-                  class="page-item"
-                  :class="{ active: currentPage === page }"
-                  v-for="page in totalPages"
-                  :key="page"
-                >
+                <li class="page-item" :class="{ active: currentPage === page }" v-for="page in totalPages" :key="page">
                   <button class="page-link" @click="currentPage = page">
                     {{ page }}
                   </button>
                 </li>
-                <li
-                  class="page-item"
-                  :class="{ disabled: currentPage >= totalPages || filteredApplications.length === 0 }"
-                >
-                  <button
-                    class="page-link"
-                    @click="currentPage = currentPage + 1"
-                    :disabled="currentPage >= totalPages || filteredApplications.length === 0"
-                  >
+                <li class="page-item"
+                  :class="{ disabled: currentPage >= totalPages || filteredApplications.length === 0 }">
+                  <button class="page-link" @click="currentPage = currentPage + 1"
+                    :disabled="currentPage >= totalPages || filteredApplications.length === 0">
                     Next
                   </button>
                 </li>
@@ -1405,12 +1308,8 @@ export default {
       </div>
     </div>
 
-    <div
-      class="modal fade"
-      :class="{ show: showDetailsModal }"
-      :style="{ display: showDetailsModal ? 'block' : 'none' }"
-      tabindex="-1"
-    >
+    <div class="modal fade" :class="{ show: showDetailsModal }"
+      :style="{ display: showDetailsModal ? 'block' : 'none' }" tabindex="-1">
       <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content application-details-modal">
           <div class="modal-header border-0 pb-0">
@@ -1437,21 +1336,16 @@ export default {
                   <div class="row g-4 align-items-start">
                     <div class="col-lg-8">
                       <div class="d-flex flex-column flex-md-row align-items-md-start gap-3">
-                        <img
-                          :src="getProfileImage(selectedApplication)"
-                          alt="Applicant profile"
-                          class="application-avatar"
-                        />
+                        <img :src="getProfileImage(selectedApplication)" alt="Applicant profile"
+                          class="application-avatar" />
                         <div class="flex-grow-1">
                           <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                             <h4 class="fw-bold mb-0">{{ getApplicantFullName(selectedApplication) }}</h4>
                             <span class="badge rounded-pill" :class="getStatusBadgeClass(selectedApplication.status)">
                               {{ getApplicationStatusLabel(selectedApplication) }}
                             </span>
-                            <span
-                              class="badge rounded-pill"
-                              :class="getDecisionBadgeClass(selectedApplication.admissionDecision)"
-                            >
+                            <span class="badge rounded-pill"
+                              :class="getDecisionBadgeClass(selectedApplication.admissionDecision)">
                               {{ getAdmissionDecisionLabel(selectedApplication) }}
                             </span>
                           </div>
@@ -1582,20 +1476,29 @@ export default {
                           <div class="info-block h-100">
                             <h6 class="info-block-title">Guardian</h6>
                             <p class="mb-1"><strong>Name:</strong> {{ selectedApplication.guardian?.name || 'N/A' }}</p>
-                            <p class="mb-1"><strong>Phone:</strong> {{ selectedApplication.guardian?.phone || 'N/A' }}</p>
-                            <p class="mb-1"><strong>Email:</strong> {{ selectedApplication.guardian?.email || 'N/A' }}</p>
-                            <p class="mb-1"><strong>Relationship:</strong> {{ selectedApplication.guardian?.relationship || 'N/A' }}</p>
-                            <p class="mb-0"><strong>Address:</strong> {{ selectedApplication.guardian?.address || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Phone:</strong> {{ selectedApplication.guardian?.phone || 'N/A' }}
+                            </p>
+                            <p class="mb-1"><strong>Email:</strong> {{ selectedApplication.guardian?.email || 'N/A' }}
+                            </p>
+                            <p class="mb-1"><strong>Relationship:</strong> {{ selectedApplication.guardian?.relationship
+                              || 'N/A' }}</p>
+                            <p class="mb-0"><strong>Address:</strong> {{ selectedApplication.guardian?.address || 'N/A'
+                            }}</p>
                           </div>
                         </div>
                         <div class="col-md-6">
                           <div class="info-block h-100">
                             <h6 class="info-block-title">Next of Kin</h6>
-                            <p class="mb-1"><strong>Name:</strong> {{ selectedApplication.nextOfKin?.name || 'N/A' }}</p>
-                            <p class="mb-1"><strong>Phone:</strong> {{ selectedApplication.nextOfKin?.phone || 'N/A' }}</p>
-                            <p class="mb-1"><strong>Email:</strong> {{ selectedApplication.nextOfKin?.email || 'N/A' }}</p>
-                            <p class="mb-1"><strong>Relationship:</strong> {{ selectedApplication.nextOfKin?.relationship || 'N/A' }}</p>
-                            <p class="mb-0"><strong>Address:</strong> {{ selectedApplication.nextOfKin?.address || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Name:</strong> {{ selectedApplication.nextOfKin?.name || 'N/A' }}
+                            </p>
+                            <p class="mb-1"><strong>Phone:</strong> {{ selectedApplication.nextOfKin?.phone || 'N/A' }}
+                            </p>
+                            <p class="mb-1"><strong>Email:</strong> {{ selectedApplication.nextOfKin?.email || 'N/A' }}
+                            </p>
+                            <p class="mb-1"><strong>Relationship:</strong> {{
+                              selectedApplication.nextOfKin?.relationship || 'N/A' }}</p>
+                            <p class="mb-0"><strong>Address:</strong> {{ selectedApplication.nextOfKin?.address || 'N/A'
+                            }}</p>
                           </div>
                         </div>
                       </div>
@@ -1609,17 +1512,23 @@ export default {
                         <div class="col-md-6">
                           <div class="info-block h-100">
                             <h6 class="info-block-title">Primary Education</h6>
-                            <p class="mb-1"><strong>School:</strong> {{ selectedApplication.academicBackground?.primary?.name || 'N/A' }}</p>
-                            <p class="mb-1"><strong>Start:</strong> {{ selectedApplication.academicBackground?.primary?.startDate || 'N/A' }}</p>
-                            <p class="mb-0"><strong>End:</strong> {{ selectedApplication.academicBackground?.primary?.endDate || 'N/A' }}</p>
+                            <p class="mb-1"><strong>School:</strong> {{
+                              selectedApplication.academicBackground?.primary?.name || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Start:</strong> {{
+                              selectedApplication.academicBackground?.primary?.startDate || 'N/A' }}</p>
+                            <p class="mb-0"><strong>End:</strong> {{
+                              selectedApplication.academicBackground?.primary?.endDate || 'N/A' }}</p>
                           </div>
                         </div>
                         <div class="col-md-6">
                           <div class="info-block h-100">
                             <h6 class="info-block-title">Secondary Education</h6>
-                            <p class="mb-1"><strong>School:</strong> {{ selectedApplication.academicBackground?.secondary?.name || 'N/A' }}</p>
-                            <p class="mb-1"><strong>Start:</strong> {{ selectedApplication.academicBackground?.secondary?.startDate || 'N/A' }}</p>
-                            <p class="mb-0"><strong>End:</strong> {{ selectedApplication.academicBackground?.secondary?.endDate || 'N/A' }}</p>
+                            <p class="mb-1"><strong>School:</strong> {{
+                              selectedApplication.academicBackground?.secondary?.name || 'N/A' }}</p>
+                            <p class="mb-1"><strong>Start:</strong> {{
+                              selectedApplication.academicBackground?.secondary?.startDate || 'N/A' }}</p>
+                            <p class="mb-0"><strong>End:</strong> {{
+                              selectedApplication.academicBackground?.secondary?.endDate || 'N/A' }}</p>
                           </div>
                         </div>
                       </div>
@@ -1630,17 +1539,20 @@ export default {
                     <div class="card-body">
                       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                         <h6 class="section-title mb-0">Examination Records</h6>
-                        <span class="badge bg-light text-dark">{{ selectedApplication.examinations?.length || 0 }} records</span>
+                        <span class="badge bg-light text-dark">{{ selectedApplication.examinations?.length || 0 }}
+                          records</span>
                       </div>
 
                       <div v-if="selectedApplication.examinations?.length" class="d-flex flex-column gap-3">
-                        <div v-for="(exam, examIndex) in selectedApplication.examinations" :key="`${exam.examType}-${examIndex}`" class="info-block">
+                        <div v-for="(exam, examIndex) in selectedApplication.examinations"
+                          :key="`${exam.examType}-${examIndex}`" class="info-block">
                           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
                             <h6 class="info-block-title mb-0">{{ exam.examType || 'Exam Record' }}</h6>
                             <span class="text-muted small">{{ exam.examYear || 'N/A' }} · {{ exam.examNumber || 'No Number' }}</span>
                           </div>
                           <div v-if="exam.subjects?.length" class="d-flex flex-wrap gap-2">
-                            <span v-for="(subject, subjectIndex) in exam.subjects" :key="`${subject.subject}-${subjectIndex}`" class="detail-chip soft-chip">
+                            <span v-for="(subject, subjectIndex) in exam.subjects"
+                              :key="`${subject.subject}-${subjectIndex}`" class="detail-chip soft-chip">
                               {{ subject.subject || 'Subject' }}: {{ subject.grade || 'N/A' }}
                             </span>
                           </div>
@@ -1655,10 +1567,12 @@ export default {
                     <div class="card-body">
                       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                         <h6 class="section-title mb-0">Referees</h6>
-                        <span class="badge bg-light text-dark">{{ selectedApplication.referees?.length || 0 }} listed</span>
+                        <span class="badge bg-light text-dark">{{ selectedApplication.referees?.length || 0 }}
+                          listed</span>
                       </div>
                       <div v-if="selectedApplication.referees?.length" class="row g-3">
-                        <div v-for="(referee, refereeIndex) in selectedApplication.referees" :key="`${referee.email}-${refereeIndex}`" class="col-md-6">
+                        <div v-for="(referee, refereeIndex) in selectedApplication.referees"
+                          :key="`${referee.email}-${refereeIndex}`" class="col-md-6">
                           <div class="info-block h-100">
                             <h6 class="info-block-title">{{ referee.name || `Referee ${refereeIndex + 1}` }}</h6>
                             <p class="mb-1"><strong>Email:</strong> {{ referee.email || 'N/A' }}</p>
@@ -1674,7 +1588,8 @@ export default {
                     <div class="card-body">
                       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                         <h6 class="section-title mb-0">Documents</h6>
-                        <span class="badge bg-light text-dark">{{ getDocumentCount(selectedApplication) }} uploaded</span>
+                        <span class="badge bg-light text-dark">{{ getDocumentCount(selectedApplication) }}
+                          uploaded</span>
                       </div>
 
                       <div v-if="documentSections.length" class="row g-3">
@@ -1682,14 +1597,8 @@ export default {
                           <div class="info-block h-100">
                             <h6 class="info-block-title">{{ section.title }}</h6>
                             <div class="d-flex flex-column gap-2">
-                              <a
-                                v-for="document in section.documents"
-                                :key="`${section.title}-${document.url}`"
-                                :href="document.url"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="document-link"
-                              >
+                              <a v-for="document in section.documents" :key="`${section.title}-${document.url}`"
+                                :href="document.url" target="_blank" rel="noopener noreferrer" class="document-link">
                                 <span>
                                   <i class="bi bi-box-arrow-up-right me-2"></i>{{ document.label }}
                                 </span>
@@ -1716,13 +1625,15 @@ export default {
                         <div>
                           <span class="details-label">Entrance Exam</span>
                           <span class="details-value">
-                            {{ selectedApplication.admissionFlow?.entranceExamEnabled === false ? 'Skipped for session' : 'Required' }}
+                            {{ selectedApplication.admissionFlow?.entranceExamEnabled === false ? 'Skipped for session'
+                              : 'Required' }}
                           </span>
                         </div>
                         <div>
                           <span class="details-label">Screening</span>
                           <span class="details-value">
-                            {{ selectedApplication.admissionFlow?.screeningEnabled === false ? 'Skipped for session' : 'Required' }}
+                            {{ selectedApplication.admissionFlow?.screeningEnabled === false ? 'Skipped for session' :
+                              'Required' }}
                           </span>
                         </div>
                       </div>
@@ -1747,13 +1658,8 @@ export default {
                         </div>
                         <div>
                           <span class="details-label">Link</span>
-                          <a
-                            v-if="selectedApplication.entranceExam?.link"
-                            :href="selectedApplication.entranceExam.link"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="document-link compact-link"
-                          >
+                          <a v-if="selectedApplication.entranceExam?.link" :href="selectedApplication.entranceExam.link"
+                            target="_blank" rel="noopener noreferrer" class="document-link compact-link">
                             Open exam link
                           </a>
                           <span v-else class="details-value">N/A</span>
@@ -1780,7 +1686,8 @@ export default {
                         </div>
                         <div>
                           <span class="details-label">Completed</span>
-                          <span class="details-value">{{ selectedApplication.screening?.completed ? 'Yes' : 'No' }}</span>
+                          <span class="details-value">{{ selectedApplication.screening?.completed ? 'Yes' : 'No'
+                          }}</span>
                         </div>
                       </div>
                     </div>
@@ -1800,13 +1707,8 @@ export default {
                         </div>
                         <div>
                           <span class="details-label">Provisional Offer</span>
-                          <a
-                            v-if="selectedApplication.admissionLetter"
-                            :href="selectedApplication.admissionLetter"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="document-link compact-link"
-                          >
+                          <a v-if="selectedApplication.admissionLetter" :href="selectedApplication.admissionLetter"
+                            target="_blank" rel="noopener noreferrer" class="document-link compact-link">
                             Open document
                           </a>
                           <span v-else class="details-value">Not generated</span>
@@ -1882,56 +1784,45 @@ export default {
                           </td>
                           <td>
                             <div class="fw-semibold">{{ formatCurrency(payment.amount) }}</div>
-                            <div class="small text-muted" v-if="payment.fee">Fee: {{ formatCurrency(payment.fee) }}</div>
+                            <div class="small text-muted" v-if="payment.fee">Fee: {{ formatCurrency(payment.fee) }}
+                            </div>
                           </td>
                           <td>{{ getPaymentAcademicSessionLabel(payment) }}</td>
                           <td>
                             <div>{{ formatDateTime(payment.paidAt || payment.createdAt) }}</div>
                             <div class="small text-muted" v-if="payment.remarks">{{ payment.remarks }}</div>
-                            <div class="small text-muted" v-if="payment.verificationRemarks">{{ payment.verificationRemarks }}</div>
+                            <div class="small text-muted" v-if="payment.verificationRemarks">{{
+                              payment.verificationRemarks }}</div>
                           </td>
                           <td>
                             <div class="d-flex flex-wrap gap-2 justify-content-end">
-                              <button
-                                v-if="payment.receiptUrl"
-                                 type="button"
-                                class="btn btn-sm btn-outline-secondary"
-                                @click="openPaymentReceipt(payment)"
-                              >
+                              <button v-if="payment.receiptUrl" type="button" class="btn btn-sm btn-outline-secondary"
+                                @click="openPaymentReceipt(payment)">
                                 <i class="bi bi-receipt me-1"></i>Receipt
                               </button>
 
                               <template v-if="canReviewManualTransfer(payment)">
-                                <button
-                                  type="button"
-                                  class="btn btn-sm btn-success"
+                                <button type="button" class="btn btn-sm btn-success"
                                   :disabled="isProcessingPayment(payment.id)"
-                                  @click="verifyManualTransferPayment(payment)"
-                                >
-                                  <span v-if="isProcessingPayment(payment.id)" class="spinner-border spinner-border-sm me-1"></span>
+                                  @click="verifyManualTransferPayment(payment)">
+                                  <span v-if="isProcessingPayment(payment.id)"
+                                    class="spinner-border spinner-border-sm me-1"></span>
                                   <i v-else class="bi bi-check-circle me-1"></i>Verify
                                 </button>
-                                <button
-                                  type="button"
-                                  class="btn btn-sm btn-outline-danger"
+                                <button type="button" class="btn btn-sm btn-outline-danger"
                                   :disabled="isProcessingPayment(payment.id)"
-                                  @click="rejectManualTransferPayment(payment)"
-                                >
+                                  @click="rejectManualTransferPayment(payment)">
                                   <i class="bi bi-x-circle me-1"></i>Reject
                                 </button>
                               </template>
 
-                              <span
-                                v-else-if="payment.method === 'manual_transfer' && payment.status === 'successful'"
-                                class="badge bg-success-subtle text-success-emphasis align-self-center"
-                              >
+                              <span v-else-if="payment.method === 'manual_transfer' && payment.status === 'successful'"
+                                class="badge bg-success-subtle text-success-emphasis align-self-center">
                                 Verified
                               </span>
 
-                              <span
-                                v-else-if="payment.method === 'manual_transfer' && payment.status === 'failed'"
-                                class="badge bg-danger-subtle text-danger-emphasis align-self-center"
-                              >
+                              <span v-else-if="payment.method === 'manual_transfer' && payment.status === 'failed'"
+                                class="badge bg-danger-subtle text-danger-emphasis align-self-center">
                                 Rejected
                               </span>
                             </div>
@@ -1953,13 +1844,8 @@ export default {
       </div>
     </div>
 
-    <div
-      class="modal fade receipt-preview-layer"
-      :class="{ show: showPaymentReceiptModal }"
-      :style="{ display: showPaymentReceiptModal ? 'block' : 'none' }"
-      tabindex="-1"
-      aria-hidden="true"
-    >
+    <div class="modal fade receipt-preview-layer" :class="{ show: showPaymentReceiptModal }"
+      :style="{ display: showPaymentReceiptModal ? 'block' : 'none' }" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-xl modal-dialog-centered receipt-preview-dialog">
         <div class="modal-content receipt-preview-modal">
           <div class="modal-header border-0 pb-0">
@@ -1974,19 +1860,11 @@ export default {
 
           <div class="modal-body pt-3" v-if="selectedPaymentReceipt">
             <div class="receipt-preview-shell">
-              <img
-                v-if="isImageReceipt()"
-                :src="getReceiptSource()"
-                :alt="getReceiptFilename()"
-                class="receipt-preview-image"
-              />
+              <img v-if="isImageReceipt()" :src="getReceiptSource()" :alt="getReceiptFilename()"
+                class="receipt-preview-image" />
 
-              <iframe
-                v-else-if="isPdfReceipt()"
-                :src="getReceiptSource()"
-                title="Uploaded receipt preview"
-                class="receipt-preview-frame"
-              ></iframe>
+              <iframe v-else-if="isPdfReceipt()" :src="getReceiptSource()" title="Uploaded receipt preview"
+                class="receipt-preview-frame"></iframe>
 
               <div v-else class="receipt-preview-fallback text-center">
                 <i class="bi bi-file-earmark-text fs-1 mb-3 d-block text-muted"></i>
@@ -2003,8 +1881,10 @@ export default {
       </div>
     </div>
 
-    <div class="modal-backdrop fade" :class="{ show: showDetailsModal }" v-if="showDetailsModal && !showPaymentReceiptModal"></div>
-    <div class="modal-backdrop fade receipt-preview-backdrop" :class="{ show: showPaymentReceiptModal }" v-if="showPaymentReceiptModal" @click="closePaymentReceiptModal"></div>
+    <div class="modal-backdrop fade" :class="{ show: showDetailsModal }"
+      v-if="showDetailsModal && !showPaymentReceiptModal"></div>
+    <div class="modal-backdrop fade receipt-preview-backdrop" :class="{ show: showPaymentReceiptModal }"
+      v-if="showPaymentReceiptModal" @click="closePaymentReceiptModal"></div>
   </div>
 </template>
 
@@ -2270,6 +2150,7 @@ code {
 }
 
 @media (max-width: 991.98px) {
+
   .details-grid,
   .summary-panel,
   .payment-summary-grid {

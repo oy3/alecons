@@ -901,10 +901,9 @@ export default {
                           <div class="fw-semibold">
                             {{ application.applicantName }}
                           </div>
-                          <small class="text-muted">{{
+                          <!-- <small class="text-muted">{{
                             application.email
-                          }}</small>
-                          <br />
+                          }}</small> <br /> -->
                           <small class="text-muted">{{
                             application.phone
                           }}</small>

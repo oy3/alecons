@@ -326,17 +326,17 @@ export default {
     },
 
     getProgramTypeLabel(application) {
-      const programType = application?.programTypeId
+      const programType = application?.programId?.programTypeId || application?.programTypeId
       if (!programType) return 'N/A'
-      if (typeof programType === 'string') return programType
-      return programType.type || programType.name || programType.description || 'N/A'
+      if (typeof programType === 'string') return application?.programTypeLabel || 'N/A'
+      return programType.type || programType.name || programType.description || application?.programTypeLabel || 'N/A'
     },
 
     getStudyModeLabel(application) {
-      const studyMode = application?.programModeId
+      const studyMode = application?.programId?.programModeId || application?.programModeId
       if (!studyMode) return 'N/A'
-      if (typeof studyMode === 'string') return studyMode
-      return studyMode.description || studyMode.name || studyMode.mode || 'N/A'
+      if (typeof studyMode === 'string') return application?.programModeLabel || 'N/A'
+      return studyMode.description || studyMode.name || studyMode.mode || application?.programModeLabel || 'N/A'
     },
 
     getApplicationStatusLabel(application) {

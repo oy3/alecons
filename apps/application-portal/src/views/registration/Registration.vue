@@ -309,8 +309,6 @@ export default {
           phone: this.formData.phone,
           dateOfBirth: this.formData.dateOfBirth,
           gender: this.formData.gender,
-          programTypeId: this.formData.programTypeId,
-          programModeId: this.formData.programModeId,
           programId: this.formData.programId,
           password: this.formData.password,
         });

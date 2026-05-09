@@ -53,6 +53,7 @@
     "lint:all": "npm-run-all lint:api lint:frontend",
     "lint:api": "npm run format --workspace=packages/api",
     "lint:frontend": "echo \"Frontend linting setup needed\"",
+    "util:repair-program-drift": "npm run util:repair-program-drift --workspace=packages/api",
     
     "clean:all": "npm-run-all clean:workspaces clean:root",
     "clean:workspaces": "npm run clean --workspace=packages/api && npm run clean --workspace=apps/cbt && npm run clean --workspace=apps/application-portal && npm run clean --workspace=apps/staff-portal && npm run clean --workspace=apps/student-portal && npm run clean --workspace=apps/website",

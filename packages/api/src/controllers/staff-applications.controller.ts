@@ -546,8 +546,6 @@ export class StaffApplicationsController {
                         { path: 'programModeId', select: 'mode description' },
                     ],
                 })
-                .populate('programTypeId', 'name type description')
-                .populate('programModeId', 'name mode description')
                 .populate('entryAcademicSession', 'sessionYear')
                 .exec();
 
@@ -1271,8 +1269,14 @@ export class StaffApplicationsController {
 
             const application = await this.applicationModel.findById(id)
                 .populate('userId')
-                .populate('programId')
-                .populate('programTypeId')
+                .populate({
+                    path: 'programId',
+                    select: 'name code programTypeId programModeId',
+                    populate: [
+                        { path: 'programTypeId', select: 'type description' },
+                        { path: 'programModeId', select: 'mode description' },
+                    ],
+                })
                 .populate('entryAcademicSession')
                 .exec();
 
@@ -1311,7 +1315,7 @@ export class StaffApplicationsController {
 
                 const user = application.userId as any;
                 const program = application.programId as any;
-                const programType = application.programTypeId as any;
+                const programType = program?.programTypeId as any;
                 const academicSession = application.entryAcademicSession as any;
 
                 // Validate required data
@@ -1725,8 +1729,6 @@ export class StaffApplicationsController {
                     applicationId,
                     matriculationNumber: matriculationNumber,
                     programId: application.programId,
-                    programTypeId: application.programTypeId,
-                    programModeId: application.programModeId,
                     admissionYear: admissionYear,
                     academicSession: studentAcademicSessionId, // Store ObjectId reference
                     status: 'active',
@@ -1744,8 +1746,6 @@ export class StaffApplicationsController {
                 existingStudent.applicationId = applicationId;
                 existingStudent.matriculationNumber = matriculationNumber;
                 existingStudent.programId = application.programId;
-                existingStudent.programTypeId = application.programTypeId;
-                existingStudent.programModeId = application.programModeId;
                 existingStudent.admissionYear = admissionYear;
                 existingStudent.academicSession = studentAcademicSessionId;
                 existingStudent.profileImageUrl = application.profileImageUrl;

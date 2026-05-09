@@ -10,9 +10,11 @@ export default {
       academicSessions: [],
       selectedAcademicSessionId: '',
       isLoading: false,
-      isRepairing: false,
+      isRepairingCounter: false,
+      isRepairingProgramDrift: false,
       counterStats: null,
       counterRecord: null,
+      programDriftSummary: null,
       utilityCards: [
         {
           id: 'application-counter-repair',
@@ -21,6 +23,14 @@ export default {
           variant: 'primary',
           description: 'Inspect the application counter for the selected year and repair it when the stored sequence falls behind the highest issued application number.',
           actionLabel: 'Repair Counter'
+        },
+        {
+          id: 'program-drift-repair',
+          title: 'Program Drift Repair',
+          icon: 'bi-diagram-3',
+          variant: 'warning',
+          description: 'Remove legacy program type/mode fields from Application and Student records and report broken program links so programId remains the only source of truth.',
+          actionLabel: 'Inspect & Repair Drift'
         },
         {
           id: 'future-utilities',
@@ -87,6 +97,35 @@ export default {
       if (!this.counterStats.totalApplications) return false
       if (!this.counterStats.counter) return true
       return this.counterStats.counter.status !== 'healthy'
+    },
+    programDriftHealth() {
+      if (!this.programDriftSummary) {
+        return {
+          label: 'Unknown',
+          className: 'bg-secondary-subtle text-secondary',
+          icon: 'bi-question-circle'
+        }
+      }
+
+      const hasIssues = Boolean(
+        this.programDriftSummary.drifted ||
+        this.programDriftSummary.missingProgram ||
+        this.programDriftSummary.missingProgramConfig
+      )
+
+      if (!hasIssues) {
+        return {
+          label: 'Healthy',
+          className: 'bg-success-subtle text-success',
+          icon: 'bi-check-circle'
+        }
+      }
+
+      return {
+        label: 'Needs Repair',
+        className: 'bg-warning-subtle text-warning-emphasis',
+        icon: 'bi-exclamation-triangle'
+      }
     }
   },
   methods: {
@@ -125,9 +164,10 @@ export default {
           year: this.selectedYear
         })
 
-        const [statsResponse, counterResponse] = await Promise.all([
+        const [statsResponse, counterResponse, driftResponse] = await Promise.all([
           apiService.getApplicationNumberStats(this.selectedYear),
-          apiService.getApplicationCounterStatus({ academicSessionId: this.selectedAcademicSessionId })
+          apiService.getApplicationCounterStatus({ academicSessionId: this.selectedAcademicSessionId }),
+          apiService.getProgramDriftSummary(10)
         ])
 
         if (!statsResponse.success) {
@@ -138,8 +178,13 @@ export default {
           throw new Error(counterResponse.error || 'Failed to load counter status')
         }
 
+        if (!driftResponse.success) {
+          throw new Error(driftResponse.error || 'Failed to load program drift summary')
+        }
+
         this.counterStats = statsResponse.data
         this.counterRecord = counterResponse.data
+        this.programDriftSummary = driftResponse.data
 
         logger.info('Utility dashboard state loaded', {
           academicSessionId: this.selectedAcademicSessionId,
@@ -211,7 +256,7 @@ export default {
       }
 
       try {
-        this.isRepairing = true
+        this.isRepairingCounter = true
         logger.info('Running application counter repair utility', {
           academicSessionId: this.selectedAcademicSessionId,
           sessionYear: this.selectedSessionYear,
@@ -244,7 +289,113 @@ export default {
           text: error.message || 'Unable to complete counter repair.'
         })
       } finally {
-        this.isRepairing = false
+        this.isRepairingCounter = false
+      }
+    },
+    formatDriftSampleRows(sample = []) {
+      if (!sample.length) {
+        return '<li>No drifted records found in the sample.</li>'
+      }
+
+      return sample
+        .map(item => {
+          if (item.issueType === 'legacy-fields-present') {
+            return `<li><strong>${item.entityType}</strong> ${item.recordLabel}: remove legacy type ${item.currentProgramTypeId || 'null'} and mode ${item.currentProgramModeId || 'null'} fields. Program expects ${item.expectedProgramTypeId || 'n/a'} / ${item.expectedProgramModeId || 'n/a'}.</li>`
+          }
+
+          if (item.issueType === 'missing-program-config') {
+            return `<li><strong>${item.entityType}</strong> ${item.recordLabel}: linked program ${item.programId || 'null'} is missing type or mode configuration.</li>`
+          }
+
+          return `<li><strong>${item.entityType}</strong> ${item.recordLabel}: missing or invalid program link.</li>`
+        })
+        .join('')
+    },
+    async runProgramDriftRepair() {
+      try {
+        this.isRepairingProgramDrift = true
+
+        const previewResponse = await apiService.repairProgramDrift({ apply: false, sampleLimit: 10 })
+        if (!previewResponse.success) {
+          throw new Error(previewResponse.error || 'Program drift preview failed')
+        }
+
+        const preview = previewResponse.data || {}
+        const result = await Swal.fire({
+          title: 'Run Program Drift Repair?',
+          icon: (preview.drifted || preview.missingProgram || preview.missingProgramConfig) ? 'warning' : 'info',
+          html: `
+            <div class="text-start utility-confirmation">
+              <p class="small text-muted mb-2">This utility removes legacy top-level program type/mode fields from Application and Student records and reports broken program relations that still need manual cleanup.</p>
+              <ul class="small mb-3">
+                <li>Scanned: <strong>${preview.scanned || 0}</strong></li>
+                <li>Application records scanned: <strong>${preview.applications?.scanned || 0}</strong></li>
+                <li>Student records scanned: <strong>${preview.students?.scanned || 0}</strong></li>
+                <li>Legacy fields found: <strong>${preview.drifted || 0}</strong></li>
+                <li>Missing Program: <strong>${preview.missingProgram || 0}</strong></li>
+                <li>Missing Program Config: <strong>${preview.missingProgramConfig || 0}</strong></li>
+              </ul>
+              <div class="small text-muted mb-1">Sample drifted records</div>
+              <ul class="small mb-0 text-break">${this.formatDriftSampleRows(preview.sample || [])}</ul>
+            </div>
+          `,
+          showCancelButton: true,
+          confirmButtonText: preview.drifted ? 'Apply Repair' : 'Run Check Again',
+          cancelButtonText: 'Cancel',
+          confirmButtonColor: '#1a5f5f',
+          customClass: { popup: 'utility-swal-popup' }
+        })
+
+        if (!result.isConfirmed) {
+          return
+        }
+
+        if (!preview.drifted) {
+          await Swal.fire({
+            icon: preview.missingProgram || preview.missingProgramConfig ? 'warning' : 'info',
+            title: preview.missingProgram || preview.missingProgramConfig ? 'Manual Cleanup Required' : 'Already Healthy',
+            text: preview.missingProgram || preview.missingProgramConfig
+              ? 'No legacy fields needed removal, but some records still reference missing or incomplete programs.'
+              : 'No drifted records were detected, so no repair was applied.',
+            confirmButtonColor: '#1a5f5f'
+          })
+          await this.loadUtilityState()
+          return
+        }
+
+        const applyResponse = await apiService.repairProgramDrift({ apply: true, sampleLimit: 10 })
+        if (!applyResponse.success) {
+          throw new Error(applyResponse.error || 'Program drift repair failed')
+        }
+
+        const summary = applyResponse.data || {}
+        await Swal.fire({
+          icon: summary.modified ? 'success' : 'info',
+          title: summary.modified ? 'Program Drift Repaired' : 'No Repair Needed',
+          html: `
+            <ul class="text-start mb-0">
+              <li>Scanned: <strong>${summary.scanned || 0}</strong></li>
+              <li>Records with legacy fields targeted: <strong>${summary.drifted || 0}</strong></li>
+              <li>Matched: <strong>${summary.matched || 0}</strong></li>
+              <li>Modified: <strong>${summary.modified || 0}</strong></li>
+              <li>Missing Program: <strong>${summary.missingProgram || 0}</strong></li>
+              <li>Missing Program Config: <strong>${summary.missingProgramConfig || 0}</strong></li>
+              <li>Legacy records still remaining: <strong>${summary.remainingLegacyRecords || 0}</strong></li>
+            </ul>
+          `,
+          confirmButtonColor: '#1a5f5f'
+        })
+
+        await this.loadUtilityState()
+      } catch (error) {
+        logger.error('Program drift repair utility failed:', error)
+        await Swal.fire({
+          icon: 'error',
+          title: 'Repair Failed',
+          text: error.message || 'Unable to complete program drift repair.'
+        })
+      } finally {
+        this.isRepairingProgramDrift = false
       }
     }
   }
@@ -272,7 +423,7 @@ export default {
             {{ session.sessionYear }}
           </option>
         </select>
-        <button class="btn btn-outline-secondary" :disabled="isLoading || isRepairing" @click="loadUtilityState">
+        <button class="btn btn-outline-secondary" :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift" @click="loadUtilityState">
           <i class="bi bi-arrow-clockwise me-2"></i>
           Refresh
         </button>
@@ -344,6 +495,9 @@ export default {
               <span v-if="utility.id === 'application-counter-repair'" class="badge rounded-pill" :class="counterHealth.className">
                 {{ counterHealth.label }}
               </span>
+              <span v-else-if="utility.id === 'program-drift-repair'" class="badge rounded-pill" :class="programDriftHealth.className">
+                <i :class="programDriftHealth.icon" class="me-1"></i>{{ programDriftHealth.label }}
+              </span>
             </div>
 
             <div v-if="utility.id === 'application-counter-repair'" class="utility-details mb-4">
@@ -363,16 +517,44 @@ export default {
               </div>
             </div>
 
+            <div v-else-if="utility.id === 'program-drift-repair'" class="utility-details mb-4">
+              <div class="row g-3">
+                <div class="col-sm-6">
+                  <div class="detail-box">
+                    <div class="small text-muted">Application Drift</div>
+                    <div class="fw-semibold">{{ programDriftSummary?.applications?.drifted || 0 }}</div>
+                  </div>
+                </div>
+                <div class="col-sm-6">
+                  <div class="detail-box">
+                    <div class="small text-muted">Student Drift</div>
+                    <div class="fw-semibold">{{ programDriftSummary?.students?.drifted || 0 }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="mt-auto d-flex flex-wrap gap-2">
               <button
                 v-if="utility.id === 'application-counter-repair'"
                 class="btn btn-primary"
-                :disabled="isLoading || isRepairing"
+                :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift"
                 @click="runCounterRepair"
               >
-                <span v-if="isRepairing" class="spinner-border spinner-border-sm me-2"></span>
+                <span v-if="isRepairingCounter" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-wrench-adjustable-circle me-2"></i>
-                {{ isRepairing ? 'Repairing...' : utility.actionLabel }}
+                {{ isRepairingCounter ? 'Repairing...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'program-drift-repair'"
+                class="btn btn-warning"
+                :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift"
+                @click="runProgramDriftRepair"
+              >
+                <span v-if="isRepairingProgramDrift" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-diagram-3 me-2"></i>
+                {{ isRepairingProgramDrift ? 'Repairing...' : utility.actionLabel }}
               </button>
 
               <button v-else class="btn btn-outline-secondary" disabled>

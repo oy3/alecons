@@ -10,6 +10,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EmailService } from '../services/email.service';
 import { ApplicationNumberService } from '../services/application-number.service';
+import { ProgramDriftService } from '../services/program-drift.service';
 import { ApplicationEligibilityService } from '../services/application-eligibility.service';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
@@ -52,7 +53,15 @@ import { AcademicSessionsModule } from '../modules/academic-sessions.module';
         }),
     ],
     controllers: [AuthController, ApplicationNumberController],
-    providers: [AuthService, JwtStrategy, EmailService, ApplicationNumberService, ApplicationEligibilityService, StudentService],
+    providers: [
+        AuthService,
+        JwtStrategy,
+        EmailService,
+        ApplicationNumberService,
+        ProgramDriftService,
+        ApplicationEligibilityService,
+        StudentService,
+    ],
     exports: [AuthService, JwtStrategy],
 })
 export class AuthModule { }

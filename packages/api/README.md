@@ -161,6 +161,24 @@ npm run build        # Build for production
 npm run start:prod   # Run production build
 ```
 
+## Utilities
+
+### Repair Program Drift
+
+Use this utility to remove legacy top-level `programTypeId` and `programModeId` fields from
+`Application` and `Student` records and report any broken `programId` relations.
+
+```bash
+# Dry run (no writes)
+npm run util:repair-program-drift
+
+# Apply changes
+npm run util:repair-program-drift -- --apply
+```
+
+The command prints a summary including scanned records, legacy-field drift counts, and anomaly counts
+(e.g., missing programs or missing program configuration).
+
 ## 🔄 User Flow
 
 1. **Registration:** User registers → Auto-creates application record

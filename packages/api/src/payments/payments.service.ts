@@ -1286,8 +1286,6 @@ export class PaymentsService {
                         applicationId: normalizedApplicationId,
                         matriculationNumber: matriculationNumber,
                         programId: fullApplication.programId,
-                        programTypeId: fullApplication.programTypeId,
-                        programModeId: fullApplication.programModeId,
                         admissionYear: admissionYear,
                         academicSession: academicSessionId
                     });
@@ -1297,8 +1295,6 @@ export class PaymentsService {
                         applicationId: normalizedApplicationId,
                         matriculationNumber: matriculationNumber,
                         programId: fullApplication.programId,
-                        programTypeId: fullApplication.programTypeId,
-                        programModeId: fullApplication.programModeId,
                         admissionYear: admissionYear,
                         academicSession: academicSessionId, // Store ObjectId reference
                         status: 'active',
@@ -1316,8 +1312,6 @@ export class PaymentsService {
                     existingStudent.applicationId = normalizedApplicationId;
                     existingStudent.matriculationNumber = matriculationNumber;
                     existingStudent.programId = fullApplication.programId;
-                    existingStudent.programTypeId = fullApplication.programTypeId;
-                    existingStudent.programModeId = fullApplication.programModeId;
                     existingStudent.admissionYear = admissionYear;
                     existingStudent.academicSession = academicSessionId;
                     existingStudent.profileImageUrl = fullApplication.profileImageUrl;
@@ -1980,22 +1974,6 @@ export class PaymentsService {
                             },
                         ],
                     },
-                    resolvedProgramTypeId: {
-                        $ifNull: [
-                            '$student.programTypeId',
-                            {
-                                $ifNull: ['$application.programTypeId', '$studentApplication.programTypeId'],
-                            },
-                        ],
-                    },
-                    resolvedProgramModeId: {
-                        $ifNull: [
-                            '$student.programModeId',
-                            {
-                                $ifNull: ['$application.programModeId', '$studentApplication.programModeId'],
-                            },
-                        ],
-                    },
                     resolvedAcademicSessionId: {
                         $ifNull: [
                             '$academicSessionId',
@@ -2043,22 +2021,6 @@ export class PaymentsService {
             },
             {
                 $lookup: {
-                    from: 'programtypes',
-                    localField: 'resolvedProgramTypeId',
-                    foreignField: '_id',
-                    as: 'programType',
-                },
-            },
-            {
-                $lookup: {
-                    from: 'programmodes',
-                    localField: 'resolvedProgramModeId',
-                    foreignField: '_id',
-                    as: 'programMode',
-                },
-            },
-            {
-                $lookup: {
                     from: 'payments',
                     localField: 'paymentId',
                     foreignField: '_id',
@@ -2077,6 +2039,22 @@ export class PaymentsService {
                 $unwind: {
                     path: '$program',
                     preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $lookup: {
+                    from: 'programtypes',
+                    localField: 'program.programTypeId',
+                    foreignField: '_id',
+                    as: 'programType',
+                },
+            },
+            {
+                $lookup: {
+                    from: 'programmodes',
+                    localField: 'program.programModeId',
+                    foreignField: '_id',
+                    as: 'programMode',
                 },
             },
             {

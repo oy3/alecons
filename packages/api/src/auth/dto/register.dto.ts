@@ -75,13 +75,13 @@ export class RegisterDto {
 
     @ApiProperty({ example: '507f1f77bcf86cd799439011' })
     @IsMongoId()
-    @IsNotEmpty()
-    programTypeId: string;
+    @IsOptional()
+    programTypeId?: string;
 
     @ApiProperty({ example: '507f1f77bcf86cd799439012' })
     @IsMongoId()
-    @IsNotEmpty()
-    programModeId: string;
+    @IsOptional()
+    programModeId?: string;
 
     @ApiProperty({ example: '507f1f77bcf86cd799439013' })
     @IsMongoId()

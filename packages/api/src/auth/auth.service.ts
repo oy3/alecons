@@ -19,6 +19,7 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { StudentService } from '../services/student.service';
 import { SessionControlsService } from '../services/session-controls.service';
+import { getNestedProgramRelation, resolveProgramSelection } from '../utils/program-relation.util';
 
 @Injectable()
 export class AuthService {
@@ -54,9 +55,9 @@ export class AuthService {
             currentStage,
             status: application.status,
             admissionDecision: application.admissionDecision,
-            program: application.programId,
-            programType: application.programTypeId,
-            programMode: application.programModeId,
+            program: getNestedProgramRelation(application).program,
+            programType: getNestedProgramRelation(application).programType,
+            programMode: getNestedProgramRelation(application).programMode,
             dob: application.dob,
             gender: application.gender,
             religion: application.religion,
@@ -109,8 +110,6 @@ export class AuthService {
     private async createApplicantApplication(data: {
         userId: Types.ObjectId;
         programId: string;
-        programTypeId: string;
-        programModeId: string;
         activeSessionId: Types.ObjectId;
         dateOfBirth?: string;
         gender?: string;
@@ -120,8 +119,6 @@ export class AuthService {
             userId: data.userId,
             applicationNumber: data.applicationNumber,
             programId: new Types.ObjectId(data.programId),
-            programTypeId: new Types.ObjectId(data.programTypeId),
-            programModeId: new Types.ObjectId(data.programModeId),
             entryAcademicSession: data.activeSessionId,
             status: 'pending',
             currentStage: 1,
@@ -157,8 +154,6 @@ export class AuthService {
     private async buildApplicantApplicationWithNumber(data: {
         userId: Types.ObjectId;
         programId: string;
-        programTypeId: string;
-        programModeId: string;
         activeSessionId: Types.ObjectId;
         dateOfBirth?: string;
         gender?: string;
@@ -210,20 +205,14 @@ export class AuthService {
         }
 
         // Validate that the program combination exists
-        const program = await this.programModel.findById(programId);
-        if (!program || !program.active) {
-            throw new BadRequestException('Invalid program selected');
-        }
-
-        const programType = await this.programTypeModel.findById(programTypeId);
-        if (!programType || !programType.active) {
-            throw new BadRequestException('Invalid program type selected');
-        }
-
-        const programMode = await this.programModeModel.findById(programModeId);
-        if (!programMode || !programMode.active) {
-            throw new BadRequestException('Invalid program mode selected');
-        }
+        const resolvedProgram = await resolveProgramSelection({
+            programModel: this.programModel,
+            programId,
+            providedProgramTypeId: programTypeId,
+            providedProgramModeId: programModeId,
+            logger: this.logger,
+            logContext: { email },
+        });
 
         // Generate email verification token
         const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -254,9 +243,7 @@ export class AuthService {
                     try {
                         application = await this.buildApplicantApplicationWithNumber({
                             userId: user._id,
-                            programId,
-                            programTypeId,
-                            programModeId,
+                            programId: resolvedProgram.programId,
                             activeSessionId: activeSession._id,
                             dateOfBirth,
                             gender,
@@ -329,9 +316,7 @@ export class AuthService {
 
                     application = await this.buildApplicantApplicationWithNumber({
                         userId: user._id,
-                        programId,
-                        programTypeId,
-                        programModeId,
+                        programId: resolvedProgram.programId,
                         activeSessionId: activeSession._id,
                         dateOfBirth,
                         gender,
@@ -497,9 +482,14 @@ export class AuthService {
         if (user.role === UserRole.APPLICANT || user.role === UserRole.STUDENT) {
             const application = await this.applicationModel
                 .findOne({ userId: user._id })
-                .populate('programId', 'name code')
-                .populate('programTypeId', 'type')
-                .populate('programModeId', 'mode')
+                .populate({
+                    path: 'programId',
+                    select: 'name code programTypeId programModeId',
+                    populate: [
+                        { path: 'programTypeId', select: 'type description' },
+                        { path: 'programModeId', select: 'mode description' },
+                    ],
+                })
                 .exec();
 
             if (application) {
@@ -540,9 +530,14 @@ export class AuthService {
         try {
             const application = await this.applicationModel
                 .findById(applicationId)
-                .populate('programId', 'name code')
-                .populate('programTypeId', 'type')
-                .populate('programModeId', 'mode')
+                .populate({
+                    path: 'programId',
+                    select: 'name code programTypeId programModeId',
+                    populate: [
+                        { path: 'programTypeId', select: 'type description' },
+                        { path: 'programModeId', select: 'mode description' },
+                    ],
+                })
                 .exec();
 
             if (!application) {
@@ -657,9 +652,14 @@ export class AuthService {
             if (user.role === UserRole.APPLICANT || user.role === UserRole.STUDENT) {
                 application = await this.applicationModel
                     .findOne({ userId: user._id })
-                    .populate('programId', 'name code')
-                    .populate('programTypeId', 'type')
-                    .populate('programModeId', 'mode')
+                    .populate({
+                        path: 'programId',
+                        select: 'name code programTypeId programModeId',
+                        populate: [
+                            { path: 'programTypeId', select: 'type description' },
+                            { path: 'programModeId', select: 'mode description' },
+                        ],
+                    })
                     .exec();
 
                 this.logger.log('Application data found for user profile:', {

@@ -336,6 +336,18 @@ class StaffApiService {
         })
     }
 
+    async getProgramDriftSummary(sampleLimit = 20) {
+        const query = sampleLimit ? `?sampleLimit=${encodeURIComponent(sampleLimit)}` : ''
+        return this.makeRequest(`/admin/application-numbers/program-drift${query}`)
+    }
+
+    async repairProgramDrift({ apply = false, sampleLimit = 20 } = {}) {
+        return this.makeRequest('/admin/application-numbers/program-drift/repair', {
+            method: 'POST',
+            body: JSON.stringify({ apply, sampleLimit }),
+        })
+    }
+
     // Health check
     async healthCheck() {
         return this.makeRequest('/health')

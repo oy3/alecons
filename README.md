@@ -172,6 +172,19 @@ When running `npm run dev:all`, access applications at:
 - Admission and screening steps are staff-driven, while payment steps and document submission are applicant-driven.
 - The admissions flow is tightly coupled to payment progression and student creation after completion.
 
+### Academic Program Model
+- `Program` is the only source of truth for academic type and mode through `Program.programTypeId` and `Program.programModeId`.
+- `Application` stores only `programId` for academic selection.
+- `Student` stores only `programId` for academic selection.
+- The applicant frontend still uses program type and mode as selection filters, but the persisted academic identity is the chosen `programId`.
+- Any API or UI that needs type or mode resolves them through the linked program relation, not from top-level application or student fields.
+
+### Program Relation Integrity
+- `programTypeId + programModeId` is not a unique academic identity. Multiple programs can share the same combination.
+- `programId` is the only persisted academic identity for applications and students.
+- `Program Drift Repair` removes legacy top-level `programTypeId` and `programModeId` fields from `Application` and `Student` documents and reports broken `programId` relations.
+- After a successful repair, `applications` and `students` in MongoDB should no longer contain top-level `programTypeId` or `programModeId` fields.
+
 ### Payments
 - **Dual payment flow**: Supports both Paystack and manual bank transfer for applicant and student charges
 - **Manual transfer fallback**: Users can upload a receipt after transfer and keep moving while Paystack approval or gateway availability is pending
@@ -199,6 +212,20 @@ When running `npm run dev:all`, access applications at:
 - Password hashing with bcrypt
 - Rate limiting and throttling
 - File upload validation and scanning
+
+### Maintenance
+```bash
+# Repair program relation drift (staff portal + CLI utility)
+# In Staff Portal Utilities page: select session, then click "Program Drift Repair"
+# Or via CLI for dry-run + apply:
+npm run util:repair-program-drift          # Dry run
+npm run util:repair-program-drift --apply  # Apply
+```
+
+Expected repair outcome:
+- `programId` remains on `Application` and `Student`.
+- Top-level `programTypeId` and `programModeId` are removed from `Application` and `Student`.
+- Type and mode continue to resolve through the linked `Program` document.
 
 ## 🔧 Configuration
 

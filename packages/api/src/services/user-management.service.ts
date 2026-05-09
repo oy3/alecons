@@ -32,8 +32,8 @@ export class UserManagementService {
     ) { }
 
     private buildStudentProgramLabel(application: any): string | undefined {
-        const programType = application?.programTypeId?.type;
-        const programMode = application?.programModeId?.mode;
+        const programType = application?.programId?.programTypeId?.type;
+        const programMode = application?.programId?.programModeId?.mode;
         const programName = application?.programId?.name;
 
         return [programType, programMode, programName].filter(Boolean).join(' ') || undefined;
@@ -49,12 +49,14 @@ export class UserManagementService {
                 .findById(applicationId)
                 .populate({
                     path: 'programId',
-                    select: 'name departmentId',
-                    populate: { path: 'departmentId', select: 'name' },
+                    select: 'name departmentId programTypeId programModeId',
+                    populate: [
+                        { path: 'departmentId', select: 'name' },
+                        { path: 'programTypeId', select: 'type description' },
+                        { path: 'programModeId', select: 'mode description' },
+                    ],
                 })
-                .populate('programTypeId', 'type')
-                .populate('programModeId', 'mode')
-                .select('applicationNumber matriculationNumber programId programTypeId programModeId')
+                .select('applicationNumber matriculationNumber programId')
                 .lean();
 
             if (applicationById) {
@@ -66,12 +68,14 @@ export class UserManagementService {
             .findOne({ userId })
             .populate({
                 path: 'programId',
-                select: 'name departmentId',
-                populate: { path: 'departmentId', select: 'name' },
+                select: 'name departmentId programTypeId programModeId',
+                populate: [
+                    { path: 'departmentId', select: 'name' },
+                    { path: 'programTypeId', select: 'type description' },
+                    { path: 'programModeId', select: 'mode description' },
+                ],
             })
-            .populate('programTypeId', 'type')
-            .populate('programModeId', 'mode')
-            .select('applicationNumber matriculationNumber programId programTypeId programModeId')
+            .select('applicationNumber matriculationNumber programId')
             .lean();
     }
 

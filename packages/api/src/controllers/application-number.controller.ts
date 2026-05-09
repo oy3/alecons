@@ -1,11 +1,15 @@
 import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { ApplicationNumberService } from '../services/application-number.service';
+import { ProgramDriftService } from '../services/program-drift.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('admin/application-numbers')
 @UseGuards(JwtAuthGuard)
 export class ApplicationNumberController {
-    constructor(private readonly appNumberService: ApplicationNumberService) { }
+    constructor(
+        private readonly appNumberService: ApplicationNumberService,
+        private readonly programDriftService: ProgramDriftService,
+    ) { }
 
     /**
         * Generate a test application number for a program in an academic session
@@ -116,6 +120,53 @@ export class ApplicationNumberController {
             return {
                 success: false,
                 error: error.message
+            };
+        }
+    }
+
+    /**
+     * Preview program relation drift without mutating records.
+     */
+    @Get('program-drift')
+    async getProgramDrift(@Query('sampleLimit') sampleLimit?: string) {
+        try {
+            const parsedSampleLimit = sampleLimit ? parseInt(sampleLimit, 10) : undefined;
+            const result = await this.programDriftService.inspectAndRepair({
+                apply: false,
+                sampleLimit: Number.isFinite(parsedSampleLimit) ? parsedSampleLimit : undefined,
+            });
+
+            return {
+                success: true,
+                data: result,
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    }
+
+    /**
+     * Repair program relation drift by removing legacy top-level fields and validating linked programs.
+     */
+    @Post('program-drift/repair')
+    async repairProgramDrift(@Body('apply') apply?: boolean, @Body('sampleLimit') sampleLimit?: number) {
+        try {
+            const result = await this.programDriftService.inspectAndRepair({
+                apply: Boolean(apply),
+                sampleLimit,
+            });
+
+            return {
+                success: true,
+                data: result,
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message,
             };
         }
     }

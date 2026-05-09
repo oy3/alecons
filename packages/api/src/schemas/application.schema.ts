@@ -113,12 +113,6 @@ export class Application {
     @Prop({ type: Types.ObjectId, ref: 'Program', required: true })
     programId: Types.ObjectId;
 
-    @Prop({ type: Types.ObjectId, ref: 'ProgramType', required: true })
-    programTypeId: Types.ObjectId;
-
-    @Prop({ type: Types.ObjectId, ref: 'ProgramMode', required: true })
-    programModeId: Types.ObjectId;
-
     @Prop({ type: Types.ObjectId, ref: 'AcademicSession', required: true })
     entryAcademicSession: Types.ObjectId;
 

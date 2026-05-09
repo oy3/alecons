@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Student, StudentDocument } from '../schemas/student.schema';
 import { User, UserDocument } from '../schemas/user.schema';
 import { Application, ApplicationDocument } from '../schemas/application.schema';
+import { getNestedProgramRelation } from '../utils/program-relation.util';
 
 @Injectable()
 export class StudentService {
@@ -34,23 +35,22 @@ export class StudentService {
                 .populate({
                     path: 'applicationId',
                     model: 'Application',
-                    populate: [
-                        { path: 'programId', select: 'name code' },
-                        { path: 'programTypeId', select: 'type' },
-                        { path: 'programModeId', select: 'mode description' }
-                    ]
+                    populate: {
+                        path: 'programId',
+                        select: 'name code programTypeId programModeId',
+                        populate: [
+                            { path: 'programTypeId', select: 'type description' },
+                            { path: 'programModeId', select: 'mode description' },
+                        ],
+                    }
                 })
                 .populate({
                     path: 'programId',
-                    select: 'name code'
-                })
-                .populate({
-                    path: 'programTypeId',
-                    select: 'type'
-                })
-                .populate({
-                    path: 'programModeId',
-                    select: 'mode description'
+                    select: 'name code programTypeId programModeId',
+                    populate: [
+                        { path: 'programTypeId', select: 'type description' },
+                        { path: 'programModeId', select: 'mode description' },
+                    ]
                 })
                 .populate({
                     path: 'academicSession',
@@ -89,8 +89,8 @@ export class StudentService {
                         updatedAt: (student as any).updatedAt,
                         // Academic program info
                         program: student.programId,
-                        programType: student.programTypeId,
-                        programMode: student.programModeId,
+                        programType: getNestedProgramRelation(student).programType,
+                        programMode: getNestedProgramRelation(student).programMode,
                         academicSession: student.academicSession
                     },
                     user: student.userId ? {
@@ -131,9 +131,9 @@ export class StudentService {
                         jambScore: (student.applicationId as any).jambScore,
                         documents: (student.applicationId as any).documents,
                         // Program references from application
-                        program: (student.applicationId as any).programId,
-                        programType: (student.applicationId as any).programTypeId,
-                        programMode: (student.applicationId as any).programModeId,
+                        program: getNestedProgramRelation(student.applicationId as any).program,
+                        programType: getNestedProgramRelation(student.applicationId as any).programType,
+                        programMode: getNestedProgramRelation(student.applicationId as any).programMode,
                         createdAt: (student.applicationId as any).createdAt,
                         updatedAt: (student.applicationId as any).updatedAt
                     } : null
@@ -169,10 +169,25 @@ export class StudentService {
         const students = await this.studentModel
             .find(filters)
             .populate('userId', '-passwordHash')
-            .populate('applicationId')
-            .populate('programId', 'name code')
-            .populate('programTypeId', 'type')
-            .populate('programModeId', 'mode description')
+            .populate({
+                path: 'applicationId',
+                populate: {
+                    path: 'programId',
+                    select: 'name code programTypeId programModeId',
+                    populate: [
+                        { path: 'programTypeId', select: 'type description' },
+                        { path: 'programModeId', select: 'mode description' },
+                    ],
+                },
+            })
+            .populate({
+                path: 'programId',
+                select: 'name code programTypeId programModeId',
+                populate: [
+                    { path: 'programTypeId', select: 'type description' },
+                    { path: 'programModeId', select: 'mode description' },
+                ],
+            })
             .populate('academicSession', 'name year isActive')
             .skip(skip)
             .limit(limit)

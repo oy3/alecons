@@ -22,6 +22,7 @@ import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
 import { SessionControlsService } from '../services/session-controls.service';
 import { User, UserDocument } from '../schemas/user.schema';
+import { resolveProgramSelection } from '../utils/program-relation.util';
 
 interface UploadFileDto {
     fileType: 'profile_picture' | 'olevel_result' | 'reference_letter';
@@ -154,8 +155,8 @@ export class ApplicationUploadController {
         @Body() applicationData: {
             // Application form data
             programId: string;
-            programTypeId: string;
-            programModeId: string;
+            programTypeId?: string;
+            programModeId?: string;
             personalInfo: {
                 firstName?: string;
                 middleName?: string;
@@ -336,10 +337,20 @@ export class ApplicationUploadController {
                     gender: applicationData.personalInfo.gender
                 });
 
+                const resolvedProgram = await resolveProgramSelection({
+                    programModel: this.programModel,
+                    programId: applicationData.programId,
+                    providedProgramTypeId: applicationData.programTypeId,
+                    providedProgramModeId: applicationData.programModeId,
+                    logger: this.logger,
+                    logContext: {
+                        userId: req.user?._id?.toString(),
+                        applicationId: application._id?.toString(),
+                    },
+                });
+
                 // Update all application fields with form data
-                application.programId = new Types.ObjectId(applicationData.programId);
-                application.programTypeId = new Types.ObjectId(applicationData.programTypeId);
-                application.programModeId = new Types.ObjectId(applicationData.programModeId);
+                application.programId = resolvedProgram.programObjectId;
 
                 // Personal information
                 application.dob = applicationData.personalInfo.dob ? new Date(applicationData.personalInfo.dob) : undefined;

@@ -1659,8 +1659,6 @@ export default {
         // Prepare application data
         const applicationData = {
           programId: programId,
-          programTypeId: programTypeId,
-          programModeId: programModeId,
           personalInfo: {
             firstName: this.firstName,
             middleName: this.middleName,

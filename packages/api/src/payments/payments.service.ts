@@ -2,7 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Payment, PaymentDocument, PaymentAudience } from '../schemas/payment.schema';
-import { StudentPayment, StudentPaymentDocument, PaymentMethod, PaymentStatus, PaymentChannel } from '../schemas/student-payment.schema';
+import {
+    StudentPayment,
+    StudentPaymentDocument,
+    PaymentMethod,
+    PaymentStatus,
+    PaymentChannel,
+    RemittanceStatus,
+} from '../schemas/student-payment.schema';
 import {
     PaymentDestinationAccount,
     PaymentDestinationAccountDocument,
@@ -909,6 +916,7 @@ export class PaymentsService {
                             existingAttempt.channel = verifyData.data.channel;
                             existingAttempt.gatewayId = verifyData.data.id;
                             existingAttempt.authorizationCode = verifyData.data.authorization?.authorization_code;
+                            this.markSuccessfulPaystackPaymentAwaitingRemittance(existingAttempt, existingAttempt.amount);
                             await existingAttempt.save();
 
                             throw new Error('Payment has already been completed successfully');
@@ -1050,8 +1058,23 @@ export class PaymentsService {
         studentPayment.channel = transactionData.channel;
         studentPayment.gatewayId = transactionData.id;
         studentPayment.authorizationCode = transactionData.authorization?.authorization_code;
+        this.markSuccessfulPaystackPaymentAwaitingRemittance(studentPayment, studentPayment.amount);
         await studentPayment.save();
-    } async verifyPayment(reference: string): Promise<any> {
+    }
+
+    private markSuccessfulPaystackPaymentAwaitingRemittance(studentPayment: any, amount?: number) {
+        if ((studentPayment.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
+            return;
+        }
+
+        studentPayment.remittanceStatus = RemittanceStatus.PENDING;
+        studentPayment.remittanceAmount = Number(amount ?? studentPayment.amount ?? 0);
+        studentPayment.remittanceSettlementId = undefined;
+        studentPayment.remittanceSettledAt = undefined;
+        studentPayment.remittanceLastSyncedAt = undefined;
+    }
+
+    async verifyPayment(reference: string): Promise<any> {
         // Verify with Paystack
         const response = await fetch(`${this.paystackBaseUrl}/transaction/verify/${reference}`, {
             headers: {
@@ -1083,6 +1106,10 @@ export class PaymentsService {
             studentPayment.fee = transaction.fees ? (transaction.fees / 100) : 0; // Convert from kobo to naira
             studentPayment.gatewayId = transaction.id;
             studentPayment.authorizationCode = transaction.authorization?.authorization_code;
+            this.markSuccessfulPaystackPaymentAwaitingRemittance(
+                studentPayment,
+                transaction.amount ? (transaction.amount / 100) : studentPayment.amount,
+            );
 
             await studentPayment.save();
 
@@ -1807,61 +1834,137 @@ export class PaymentsService {
      */
     async getStudentPaymentsStats(filters: {
         academicSessionId?: string;
-        status?: PaymentStatus;
-        page?: number;
-        limit?: number;
     } = {}) {
         try {
-            const {
-                academicSessionId,
-                status = PaymentStatus.SUCCESSFUL,
-                page = 1,
-                limit = 1000
-            } = filters;
+            const match: any = {};
 
-            // Build query for successful payments
-            const query: any = { status };
+            if (filters.academicSessionId) {
+                if (!Types.ObjectId.isValid(filters.academicSessionId)) {
+                    throw new Error('Invalid academic session filter');
+                }
 
-            // If academic session is specified, filter by users in that session
-            let userIds: Types.ObjectId[] = [];
-            if (academicSessionId) {
-                const applications = await this.applicationModel
-                    .find({ academicSessionId: new Types.ObjectId(academicSessionId) })
-                    .select('userId')
-                    .lean();
-
-                userIds = applications.map(app => app.userId);
-                query.userId = { $in: userIds };
+                match.academicSessionId = new Types.ObjectId(filters.academicSessionId);
             }
 
-            // Get student payments with pagination
-            const studentPayments = await this.studentPaymentModel
-                .find(query)
-                .populate('paymentId', 'name description amount')
-                .populate('userId', 'firstName lastName email')
-                .sort({ paidAt: -1 })
-                .limit(limit)
-                .skip((page - 1) * limit)
-                .lean();
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
 
-            // Calculate total revenue
-            const totalRevenue = await this.studentPaymentModel.aggregate([
-                { $match: query },
-                { $group: { _id: null, total: { $sum: '$amount' } } }
+            const endOfToday = new Date(startOfToday);
+            endOfToday.setDate(endOfToday.getDate() + 1);
+
+            const [summary] = await this.studentPaymentModel.aggregate([
+                { $match: match },
+                {
+                    $addFields: {
+                        successfulAt: {
+                            $ifNull: [
+                                '$paidAt',
+                                {
+                                    $ifNull: ['$verifiedAt', '$createdAt'],
+                                },
+                            ],
+                        },
+                        isPendingRemittance: {
+                            $and: [
+                                { $eq: ['$status', PaymentStatus.SUCCESSFUL] },
+                                { $eq: ['$method', PaymentMethod.PAYSTACK] },
+                                {
+                                    $ne: [
+                                        { $ifNull: ['$remittanceStatus', null] },
+                                        RemittanceStatus.SUCCESS,
+                                    ],
+                                },
+                            ],
+                        },
+                    },
+                },
+                {
+                    $facet: {
+                        totals: [
+                            {
+                                $group: {
+                                    _id: null,
+                                    totalRevenue: {
+                                        $sum: {
+                                            $cond: [
+                                                { $eq: ['$status', PaymentStatus.SUCCESSFUL] },
+                                                '$amount',
+                                                0,
+                                            ],
+                                        },
+                                    },
+                                    awaitingVerification: {
+                                        $sum: {
+                                            $cond: [
+                                                { $eq: ['$status', PaymentStatus.PENDING] },
+                                                '$amount',
+                                                0,
+                                            ],
+                                        },
+                                    },
+                                    pendingRemittance: {
+                                        $sum: {
+                                            $cond: [
+                                                '$isPendingRemittance',
+                                                '$amount',
+                                                0,
+                                            ],
+                                        },
+                                    },
+                                    successfulCount: {
+                                        $sum: {
+                                            $cond: [
+                                                { $eq: ['$status', PaymentStatus.SUCCESSFUL] },
+                                                1,
+                                                0,
+                                            ],
+                                        },
+                                    },
+                                    pendingCount: {
+                                        $sum: {
+                                            $cond: [
+                                                { $eq: ['$status', PaymentStatus.PENDING] },
+                                                1,
+                                                0,
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                        ],
+                        todaysRevenue: [
+                            {
+                                $match: {
+                                    status: PaymentStatus.SUCCESSFUL,
+                                    successfulAt: {
+                                        $gte: startOfToday,
+                                        $lt: endOfToday,
+                                    },
+                                },
+                            },
+                            {
+                                $group: {
+                                    _id: null,
+                                    total: { $sum: '$amount' },
+                                    count: { $sum: 1 },
+                                },
+                            },
+                        ],
+                    },
+                },
             ]);
 
-            // Get count for pagination
-            const totalCount = await this.studentPaymentModel.countDocuments(query);
-
-            const revenue = totalRevenue.length > 0 ? totalRevenue[0].total : 0;
+            const totals = summary?.totals?.[0] || {};
+            const todaysRevenue = summary?.todaysRevenue?.[0] || {};
 
             return {
-                payments: studentPayments,
-                totalRevenue: revenue,
-                totalCount,
-                page,
-                limit,
-                totalPages: Math.ceil(totalCount / limit)
+                totalRevenue: Number(totals.totalRevenue || 0),
+                awaitingVerification: Number(totals.awaitingVerification || 0),
+                todaysRevenue: Number(todaysRevenue.total || 0),
+                pendingRemittance: Number(totals.pendingRemittance || 0),
+                successfulCount: Number(totals.successfulCount || 0),
+                pendingCount: Number(totals.pendingCount || 0),
+                todaysSuccessfulCount: Number(todaysRevenue.count || 0),
             };
         } catch (error) {
             this.logger.error('Error getting student payments stats:', error);
@@ -1873,7 +1976,8 @@ export class PaymentsService {
         page?: number;
         limit?: number;
         search?: string;
-        date?: string;
+        dateFrom?: string;
+        dateTo?: string;
         status?: PaymentStatus;
         paymentId?: string;
         method?: PaymentMethod;
@@ -2120,22 +2224,36 @@ export class PaymentsService {
             });
         }
 
-        if (filters.date) {
-            const start = new Date(filters.date);
-            if (Number.isNaN(start.getTime())) {
-                throw new Error('Invalid date filter');
+        if (filters.dateFrom || filters.dateTo) {
+            const dateRangeMatch: Record<string, Date> = {};
+
+            if (filters.dateFrom) {
+                const start = new Date(filters.dateFrom);
+                if (Number.isNaN(start.getTime())) {
+                    throw new Error('Invalid from date filter');
+                }
+
+                start.setHours(0, 0, 0, 0);
+                dateRangeMatch.$gte = start;
             }
 
-            start.setHours(0, 0, 0, 0);
-            const end = new Date(start);
-            end.setDate(end.getDate() + 1);
+            if (filters.dateTo) {
+                const end = new Date(filters.dateTo);
+                if (Number.isNaN(end.getTime())) {
+                    throw new Error('Invalid to date filter');
+                }
+
+                end.setHours(23, 59, 59, 999);
+                dateRangeMatch.$lte = end;
+            }
+
+            if (dateRangeMatch.$gte && dateRangeMatch.$lte && dateRangeMatch.$gte > dateRangeMatch.$lte) {
+                throw new Error('From date cannot be later than to date');
+            }
 
             pipeline.push({
                 $match: {
-                    effectivePaidAt: {
-                        $gte: start,
-                        $lt: end,
-                    },
+                    effectivePaidAt: dateRangeMatch,
                 },
             });
         }

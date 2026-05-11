@@ -24,6 +24,13 @@ export enum PaymentChannel {
     MANUAL_TRANSFER = 'manual_transfer',
 }
 
+export enum RemittanceStatus {
+    SUCCESS = 'success',
+    PROCESSING = 'processing',
+    PENDING = 'pending',
+    FAILED = 'failed',
+}
+
 @Schema({ timestamps: true })
 export class StudentPayment {
     @Prop({ type: Types.ObjectId, ref: 'User', required: true })
@@ -108,6 +115,21 @@ export class StudentPayment {
     @Prop()
     accessCode?: string;
 
+    @Prop({ enum: RemittanceStatus })
+    remittanceStatus?: RemittanceStatus;
+
+    @Prop()
+    remittanceSettlementId?: string;
+
+    @Prop()
+    remittanceSettledAt?: Date;
+
+    @Prop()
+    remittanceLastSyncedAt?: Date;
+
+    @Prop()
+    remittanceAmount?: number;
+
     @Prop({ type: Types.ObjectId, ref: 'User' })
     verifiedBy?: Types.ObjectId;
 
@@ -129,3 +151,28 @@ export class StudentPayment {
 }
 
 export const StudentPaymentSchema = SchemaFactory.createForClass(StudentPayment);
+
+StudentPaymentSchema.index({
+    method: 1,
+    status: 1,
+    academicSessionId: 1,
+    remittanceStatus: 1,
+    paidAt: -1,
+}, {
+    partialFilterExpression: {
+        method: PaymentMethod.PAYSTACK,
+        status: PaymentStatus.SUCCESSFUL,
+    },
+});
+
+StudentPaymentSchema.index({
+    method: 1,
+    status: 1,
+    remittanceStatus: 1,
+    remittanceLastSyncedAt: 1,
+}, {
+    partialFilterExpression: {
+        method: PaymentMethod.PAYSTACK,
+        status: PaymentStatus.SUCCESSFUL,
+    },
+});

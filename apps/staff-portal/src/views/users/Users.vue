@@ -68,7 +68,7 @@ export default {
         "Exams Officer",
         "Clerical Officer",
         "Hostel Matron",
-         "Dean",
+        "Dean",
         "Head of Department",
         "Senior Lecturer",
         "Lecturer I",
@@ -209,17 +209,17 @@ export default {
       if (type === "email") {
         return isVerified
           ? {
-              badgeClass: "badge text-bg-success rounded-pill",
-              iconClass: "bi bi-patch-check-fill",
-              label: "Verified",
-              srLabel: "Email verified",
-            }
+            badgeClass: "badge text-bg-success rounded-pill",
+            iconClass: "bi bi-patch-check-fill",
+            label: "Verified",
+            srLabel: "Email verified",
+          }
           : {
-              badgeClass: "badge text-bg-warning rounded-pill",
-              iconClass: "bi bi-hourglass-split",
-              label: "Pending",
-              srLabel: "Email pending verification",
-            };
+            badgeClass: "badge text-bg-warning rounded-pill",
+            iconClass: "bi bi-hourglass-split",
+            label: "Pending",
+            srLabel: "Email pending verification",
+          };
       }
 
       return {
@@ -280,64 +280,61 @@ export default {
             <div class="col-sm-4"><strong>Role:</strong></div>
             <div class="col-sm-8">${roleName}</div>
           </div>
-          ${
-            user.staffId
-              ? `
+          ${user.staffId
+          ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Staff ID:</strong></div>
             <div class="col-sm-8">${user.staffId}</div>
           </div>
           `
-              : user.matriculationNumber
-                ? `
+          : user.matriculationNumber
+            ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Matric No:</strong></div>
             <div class="col-sm-8">${user.matriculationNumber}</div>
           </div>
           `
-                : user.applicationNumber
-                  ? `
+            : user.applicationNumber
+              ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Application No:</strong></div>
             <div class="col-sm-8">${user.applicationNumber}</div>
           </div>
           `
-                  : ""
-          }
-          ${
-            user.department
-              ? `
+              : ""
+        }
+          ${user.department
+          ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Department:</strong></div>
             <div class="col-sm-8">${user.department}</div>
           </div>
           `
-              : user.studentDepartment
-                ? `
+          : user.studentDepartment
+            ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Department:</strong></div>
             <div class="col-sm-8">${user.studentDepartment}</div>
           </div>
           `
-                : ""
-          }
-          ${
-            user.position
-              ? `
+            : ""
+        }
+          ${user.position
+          ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Position:</strong></div>
             <div class="col-sm-8">${user.position}</div>
           </div>
           `
-              : user.studentProgram
-                ? `
+          : user.studentProgram
+            ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Program:</strong></div>
             <div class="col-sm-8">${user.studentProgram}</div>
           </div>
           `
-                : ""
-          }
+            : ""
+        }
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Status:</strong></div>
             <div class="col-sm-8">
@@ -350,26 +347,24 @@ export default {
             <div class="col-sm-4"><strong>Created:</strong></div>
             <div class="col-sm-8">${this.formatDateTime(user.createdAt)}</div>
           </div>
-          ${
-            user.updatedAt
-              ? `
+          ${user.updatedAt
+          ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Last Updated:</strong></div>
             <div class="col-sm-8">${this.formatDateTime(user.updatedAt)}</div>
           </div>
           `
-              : ""
-          }
-          ${
-            user.lastLogin
-              ? `
+          : ""
+        }
+          ${user.lastLogin
+          ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Last Login:</strong></div>
             <div class="col-sm-8">${this.formatDateTime(user.lastLogin)}</div>
           </div>
           `
-              : ""
-          }
+          : ""
+        }
         </div>
       `;
 
@@ -451,6 +446,7 @@ export default {
           if (isStaffUser) {
             // Keep payload aligned with UpdateStaffDto to satisfy strict whitelist validation.
             const staffUpdatePayload = {
+              type: this.userForm.type,
               firstName: this.userForm.firstName,
               lastName: this.userForm.lastName,
               otherName: this.userForm.otherName || undefined,
@@ -613,11 +609,10 @@ export default {
         // Show confirmation modal
         const result = await this.$swal.fire({
           title: `${action.charAt(0).toUpperCase() + action.slice(1)} User?`,
-          text: `Are you sure you want to ${action} ${user.firstName} ${user.lastName}? ${
-            user.isActive
+          text: `Are you sure you want to ${action} ${user.firstName} ${user.lastName}? ${user.isActive
               ? "They will no longer be able to access the system."
               : "They will regain access to the system."
-          }`,
+            }`,
           icon: "warning",
           showCancelButton: true,
           confirmButtonText: `Yes, ${action.charAt(0).toUpperCase() + action.slice(1)}`,
@@ -1039,17 +1034,17 @@ export default {
 
         permissionsContainer.innerHTML = permissionsHtml;
 
-              // Wire manage checkbox: checking it auto-checks all siblings; unchecking clears them
-              checkedModules.forEach((module) => {
-                const manageCheckbox = document.getElementById(`perm-${module}-manage`);
-                if (!manageCheckbox) return;
-                const siblingCheckboxes = document.querySelectorAll(
-                  `.permission-checkbox[data-module="${module}"]:not([value="manage"])`,
-                );
-                manageCheckbox.addEventListener('change', () => {
-                  siblingCheckboxes.forEach((cb) => { cb.checked = manageCheckbox.checked; });
-                });
-              });
+        // Wire manage checkbox: checking it auto-checks all siblings; unchecking clears them
+        checkedModules.forEach((module) => {
+          const manageCheckbox = document.getElementById(`perm-${module}-manage`);
+          if (!manageCheckbox) return;
+          const siblingCheckboxes = document.querySelectorAll(
+            `.permission-checkbox[data-module="${module}"]:not([value="manage"])`,
+          );
+          manageCheckbox.addEventListener('change', () => {
+            siblingCheckboxes.forEach((cb) => { cb.checked = manageCheckbox.checked; });
+          });
+        });
       };
 
       // Initial permissions display
@@ -1279,24 +1274,16 @@ export default {
             <p class="text-muted mb-0">Manage system users and permissions</p>
           </div>
           <div class="d-flex gap-2">
-            <button
-              class="btn btn-outline-staff-primary btn-sm"
-              @click="exportUsers"
-            >
+            <button v-if="authStore.hasPermission('users', 'view')" class="btn btn-outline-staff-primary btn-sm"
+              @click="exportUsers">
               <i class="bi bi-download me-2"></i>Export
             </button>
-            <button
-              v-if="authStore.hasPermission('users', 'create')"
-              class="btn btn-staff-primary btn-sm"
-              @click="addNewUser"
-            >
+            <button v-if="authStore.hasPermission('users', 'create')" class="btn btn-staff-primary btn-sm"
+              @click="addNewUser">
               <i class="bi bi-plus me-2"></i>Add User
             </button>
-            <button
-              v-if="authStore.hasPermission('users', 'manage')"
-              class="btn btn-success btn-sm"
-              @click="showRolesManagement"
-            >
+            <button v-if="authStore.hasPermission('users', 'manage')" class="btn btn-success btn-sm"
+              @click="showRolesManagement">
               <i class="bi bi-gear me-2"></i>Roles
             </button>
             <button class="btn btn-outline-secondary btn-sm" @click="loadUsers">
@@ -1315,54 +1302,27 @@ export default {
             <div class="row g-3">
               <div class="col-md-4">
                 <label for="searchQuery" class="form-label">Search</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  id="searchQuery"
-                  placeholder="Search by name or email..."
-                  v-model="searchQuery"
-                  @input="onSearch"
-                />
+                <input type="text" class="form-control" id="searchQuery" placeholder="Search by name or email..."
+                  v-model="searchQuery" @input="onSearch" />
               </div>
               <div class="col-md-3">
                 <label for="roleFilter" class="form-label">Role</label>
-                <select
-                  class="form-select"
-                  id="roleFilter"
-                  v-model="roleFilter"
-                  @change="onFilterChange"
-                >
-                  <option
-                    v-for="role in roleOptions"
-                    :key="role.value"
-                    :value="role.value"
-                  >
+                <select class="form-select" id="roleFilter" v-model="roleFilter" @change="onFilterChange">
+                  <option v-for="role in roleOptions" :key="role.value" :value="role.value">
                     {{ role.label }}
                   </option>
                 </select>
               </div>
               <div class="col-md-3">
                 <label for="statusFilter" class="form-label">Status</label>
-                <select
-                  class="form-select"
-                  id="statusFilter"
-                  v-model="statusFilter"
-                  @change="onFilterChange"
-                >
-                  <option
-                    v-for="status in statusOptions"
-                    :key="status.value"
-                    :value="status.value"
-                  >
+                <select class="form-select" id="statusFilter" v-model="statusFilter" @change="onFilterChange">
+                  <option v-for="status in statusOptions" :key="status.value" :value="status.value">
                     {{ status.label }}
                   </option>
                 </select>
               </div>
               <div class="col-md-2 d-flex align-items-end">
-                <button
-                  class="btn btn-outline-staff-primary btn-sm w-100"
-                  @click="onFilterChange"
-                >
+                <button class="btn btn-outline-staff-primary btn-sm w-100" @click="onFilterChange">
                   <i class="bi bi-funnel me-2"></i>Apply Filters
                 </button>
               </div>
@@ -1411,15 +1371,9 @@ export default {
                     <div class="d-flex align-items-center">
                       <div
                         class="bg-staff-light rounded-circle overflow-hidden d-flex align-items-center justify-content-center me-2"
-                        style="width: 40px; height: 40px"
-                      >
-                        <img
-                          v-if="hasStudentProfileImage(user)"
-                          :src="user.profileImageUrl"
-                          :alt="`${user.firstName} ${user.lastName}`"
-                          class="w-100 h-100"
-                          style="object-fit: cover"
-                        />
+                        style="width: 40px; height: 40px">
+                        <img v-if="hasStudentProfileImage(user)" :src="user.profileImageUrl"
+                          :alt="`${user.firstName} ${user.lastName}`" class="w-100 h-100" style="object-fit: cover" />
                         <i v-else class="bi bi-person text-staff-primary"></i>
                       </div>
                       <div>
@@ -1430,16 +1384,10 @@ export default {
                         <div class="small text-muted" v-if="user.staffId">
                           Staff ID: {{ user.staffId }}
                         </div>
-                        <div
-                          class="small text-muted"
-                          v-else-if="user.matriculationNumber"
-                        >
+                        <div class="small text-muted" v-else-if="user.matriculationNumber">
                           Matric No: {{ user.matriculationNumber }}
                         </div>
-                        <div
-                          class="small text-muted"
-                          v-else-if="user.applicationNumber"
-                        >
+                        <div class="small text-muted" v-else-if="user.applicationNumber">
                           Application No: {{ user.applicationNumber }}
                         </div>
                         <div class="small text-muted" v-else>
@@ -1453,14 +1401,10 @@ export default {
                       <div class="small contact-details">
                         <div class="d-flex align-items-center gap-2 flex-wrap">
                           <span>{{ user.email ?? "-" }}</span>
-                          <span
-                            :class="getVerificationMeta(user.isEmailVerified, 'email').badgeClass"
+                          <span :class="getVerificationMeta(user.isEmailVerified, 'email').badgeClass"
                             :title="getVerificationMeta(user.isEmailVerified, 'email').srLabel"
-                            :aria-label="getVerificationMeta(user.isEmailVerified, 'email').srLabel"
-                          >
-                            <i
-                              :class="getVerificationMeta(user.isEmailVerified, 'email').iconClass"
-                            ></i>
+                            :aria-label="getVerificationMeta(user.isEmailVerified, 'email').srLabel">
+                            <i :class="getVerificationMeta(user.isEmailVerified, 'email').iconClass"></i>
                           </span>
                         </div>
                         <div class="mt-1 text-muted">{{ user.phone ?? "-" }}</div>
@@ -1468,10 +1412,7 @@ export default {
                     </div>
                   </td>
                   <td>
-                    <span
-                      class="badge rounded-pill"
-                      :class="getRoleBadgeClass(user.role)"
-                    >
+                    <span class="badge rounded-pill" :class="getRoleBadgeClass(user.role)">
                       {{ user.role.toUpperCase() }}
                     </span>
                     <div class="small text-muted" v-if="user.roleName">
@@ -1486,11 +1427,9 @@ export default {
                           {{ user.position || "-" }}
                         </div>
                       </template>
-                      <template
-                        v-else-if="
-                          user.studentDepartment || user.studentProgram
-                        "
-                      >
+                      <template v-else-if="
+                        user.studentDepartment || user.studentProgram
+                      ">
                         <div class="small">
                           {{ user.studentDepartment || "-" }}
                         </div>
@@ -1507,10 +1446,7 @@ export default {
                     </div>
                   </td>
                   <td>
-                    <span
-                      class="badge rounded-pill"
-                      :class="getStatusBadgeClass(user.isActive)"
-                    >
+                    <span class="badge rounded-pill" :class="getStatusBadgeClass(user.isActive)">
                       {{ user.isActive ? "ACTIVE" : "INACTIVE" }}
                     </span>
                   </td>
@@ -1521,61 +1457,37 @@ export default {
                   </td>
                   <td>
                     <div class="btn-group btn-group-sm">
-                      <button
-                        class="btn btn-outline-staff-primary btn-sm"
-                        @click="viewUser(user)"
-                        title="View Details"
-                      >
+                      <button class="btn btn-outline-staff-primary btn-sm" @click="viewUser(user)" title="View Details">
                         <i class="bi bi-eye"></i>
                       </button>
-                      <button
-                        class="btn btn-outline-secondary btn-sm"
-                        @click="editUser(user)"
-                        title="Edit User"
-                        v-if="authStore.hasPermission('users', 'edit')"
-                      >
+                      <button class="btn btn-outline-secondary btn-sm" @click="editUser(user)" title="Edit User"
+                        v-if="authStore.hasPermission('users', 'edit')">
                         <i class="bi bi-pencil"></i>
                       </button>
                       <div class="btn-group" role="group">
-                        <button
-                          type="button"
-                          class="btn btn-outline-warning btn-sm dropdown-toggle"
-                          data-bs-toggle="dropdown"
-                          title="More Actions"
-                          v-if="authStore.hasPermission('users', 'manage')"
-                        >
+                        <button type="button" class="btn btn-outline-warning btn-sm dropdown-toggle"
+                          data-bs-toggle="dropdown" title="More Actions"
+                          v-if="authStore.hasPermission('users', 'manage')">
                           <i class="bi bi-gear"></i>
                         </button>
                         <ul class="dropdown-menu">
                           <li>
-                            <a
-                              class="dropdown-item"
-                              href="#"
-                              @click.prevent="updateUserStatus(user)"
-                            >
-                              <i
-                                class="bi bi-arrow-repeat text-primary me-2"
-                              ></i
-                              >{{ user.isActive ? "Deactivate" : "Activate" }}
+                            <a class="dropdown-item" href="#" @click.prevent="updateUserStatus(user)">
+                              <i class="bi bi-arrow-repeat text-primary me-2"></i>{{ user.isActive ? "Deactivate" :
+                              "Activate" }}
                             </a>
                           </li>
                           <li>
-                            <a
-                              class="dropdown-item"
-                              href="#"
-                              @click.prevent="resetPassword(user)"
-                            >
+                            <a class="dropdown-item" href="#" @click.prevent="resetPassword(user)">
                               <i class="bi bi-key text-warning me-2"></i>Reset
                               Password
                             </a>
                           </li>
-                          <li><hr class="dropdown-divider" /></li>
                           <li>
-                            <a
-                              class="dropdown-item text-danger"
-                              href="#"
-                              @click.prevent="deleteUser(user)"
-                            >
+                            <hr class="dropdown-divider" />
+                          </li>
+                          <li>
+                            <a class="dropdown-item text-danger" href="#" @click.prevent="deleteUser(user)">
                               <i class="bi bi-trash me-2"></i>Delete User
                             </a>
                           </li>
@@ -1593,33 +1505,19 @@ export default {
             <nav>
               <ul class="pagination pagination-sm mb-0 justify-content-center">
                 <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                  <button
-                    class="page-link"
-                    @click="onPageChange(currentPage - 1)"
-                    :disabled="currentPage === 1"
-                  >
+                  <button class="page-link" @click="onPageChange(currentPage - 1)" :disabled="currentPage === 1">
                     Previous
                   </button>
                 </li>
-                <li
-                  class="page-item"
-                  :class="{ active: currentPage === page }"
-                  v-for="page in Math.min(totalPages, 10)"
-                  :key="page"
-                >
+                <li class="page-item" :class="{ active: currentPage === page }" v-for="page in Math.min(totalPages, 10)"
+                  :key="page">
                   <button class="page-link" @click="onPageChange(page)">
                     {{ page }}
                   </button>
                 </li>
-                <li
-                  class="page-item"
-                  :class="{ disabled: currentPage === totalPages }"
-                >
-                  <button
-                    class="page-link"
-                    @click="onPageChange(currentPage + 1)"
-                    :disabled="currentPage === totalPages"
-                  >
+                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                  <button class="page-link" @click="onPageChange(currentPage + 1)"
+                    :disabled="currentPage === totalPages">
                     Next
                   </button>
                 </li>
@@ -1631,12 +1529,8 @@ export default {
     </div>
 
     <!-- User Modal (Unified for all user types) -->
-    <div
-      class="modal fade"
-      :class="{ show: showUserModal }"
-      :style="{ display: showUserModal ? 'block' : 'none' }"
-      tabindex="-1"
-    >
+    <div class="modal fade" :class="{ show: showUserModal }" :style="{ display: showUserModal ? 'block' : 'none' }"
+      tabindex="-1">
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
@@ -1644,17 +1538,10 @@ export default {
               <i class="bi bi-person-plus me-2 text-primary"></i>
               {{ isEditMode ? "Edit User" : "Add New User" }}
             </h5>
-            <button
-              type="button"
-              class="btn-close"
-              @click="closeUserModal"
-            ></button>
+            <button type="button" class="btn-close" @click="closeUserModal"></button>
           </div>
           <div class="modal-body">
-            <div
-              class="alert alert-info d-flex align-items-center"
-              role="alert"
-            >
+            <div class="alert alert-info d-flex align-items-center" role="alert">
               <i class="bi bi-info-circle me-2"></i>
               <div>
                 Login credentials will be automatically generated and emailed to
@@ -1671,67 +1558,31 @@ export default {
               <!-- Basic Information -->
               <div class="row">
                 <div class="col-md-6 mb-3">
-                  <label for="userFirstName" class="form-label"
-                    >First Name *</label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="userFirstName"
-                    v-model="userForm.firstName"
-                    required
-                  />
+                  <label for="userFirstName" class="form-label">First Name *</label>
+                  <input type="text" class="form-control" id="userFirstName" v-model="userForm.firstName" required />
                 </div>
                 <div class="col-md-6 mb-3">
-                  <label for="userLastName" class="form-label"
-                    >Last Name *</label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="userLastName"
-                    v-model="userForm.lastName"
-                    required
-                  />
+                  <label for="userLastName" class="form-label">Last Name *</label>
+                  <input type="text" class="form-control" id="userLastName" v-model="userForm.lastName" required />
                 </div>
               </div>
 
               <div class="row">
                 <div class="col-md-6 mb-3">
-                  <label for="userOtherName" class="form-label"
-                    >Other Name</label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="userOtherName"
-                    v-model="userForm.otherName"
-                  />
+                  <label for="userOtherName" class="form-label">Other Name</label>
+                  <input type="text" class="form-control" id="userOtherName" v-model="userForm.otherName" />
                 </div>
                 <div class="col-md-6 mb-3">
-                  <label for="userEmail" class="form-label"
-                    >Email Address *</label
-                  >
-                  <input
-                    type="email"
-                    class="form-control"
-                    id="userEmail"
-                    v-model="userForm.email"
-                    required
-                  />
+                  <label for="userEmail" class="form-label">Email Address *</label>
+                  <input type="email" class="form-control" id="userEmail" v-model="userForm.email" required />
                 </div>
               </div>
 
               <div class="row">
                 <div class="col-md-6 mb-3">
                   <label for="userPhone" class="form-label">Phone Number</label>
-                  <input
-                    type="tel"
-                    class="form-control"
-                    id="userPhone"
-                    v-model="userForm.phone"
-                    placeholder="e.g. 08012345678"
-                  />
+                  <input type="tel" class="form-control" id="userPhone" v-model="userForm.phone"
+                    placeholder="e.g. 08012345678" />
                 </div>
               </div>
 
@@ -1739,18 +1590,8 @@ export default {
               <div class="row">
                 <div class="col-md-6 mb-3">
                   <label for="userType" class="form-label">User Type *</label>
-                  <select
-                    class="form-select"
-                    id="userType"
-                    v-model="userForm.type"
-                    required
-                  >
-                    <option
-                      v-for="type in userTypes"
-                      :key="type.value"
-                      :value="type.value"
-                      :disabled="!type.enabled"
-                    >
+                  <select class="form-select" id="userType" v-model="userForm.type" required>
+                    <option v-for="type in userTypes" :key="type.value" :value="type.value" :disabled="!type.enabled">
                       {{ type.label }}
                       {{ !type.enabled ? "(Coming Soon)" : "" }}
                     </option>
@@ -1758,12 +1599,7 @@ export default {
                 </div>
                 <div class="col-md-6 mb-3">
                   <div class="form-check mt-4">
-                    <input
-                      class="form-check-input"
-                      type="checkbox"
-                      id="isActive"
-                      v-model="userForm.isActive"
-                    />
+                    <input class="form-check-input" type="checkbox" id="isActive" v-model="userForm.isActive" />
                     <label class="form-check-label" for="isActive">
                       Active User
                     </label>
@@ -1776,8 +1612,7 @@ export default {
                 <hr class="my-4" />
                 <h6 class="fw-bold mb-3">Staff Information</h6>
                 <div class="alert alert-info">
-                  <small
-                    ><i class="bi bi-info-circle me-1"></i>
+                  <small><i class="bi bi-info-circle me-1"></i>
                     Both administrators and staff are considered staff members
                     and require department, position, and role assignments.
                   </small>
@@ -1785,21 +1620,10 @@ export default {
 
                 <div class="row">
                   <div class="col-md-6 mb-3">
-                    <label for="userDepartment" class="form-label"
-                      >Department *</label
-                    >
-                    <select
-                      class="form-select"
-                      id="userDepartment"
-                      v-model="userForm.department"
-                      required
-                    >
+                    <label for="userDepartment" class="form-label">Department *</label>
+                    <select class="form-select" id="userDepartment" v-model="userForm.department" required>
                       <option value="">Select Department</option>
-                      <option
-                        v-for="dept in departments"
-                        :key="dept.value"
-                        :value="dept.value"
-                      >
+                      <option v-for="dept in departments" :key="dept.value" :value="dept.value">
                         {{ dept.label }}
                       </option>
                     </select>
@@ -1809,15 +1633,8 @@ export default {
                     </small>
                   </div>
                   <div class="col-md-6 mb-3">
-                    <label for="userPosition" class="form-label"
-                      >Position *</label
-                    >
-                    <select
-                      class="form-select"
-                      id="userPosition"
-                      v-model="userForm.position"
-                      required
-                    >
+                    <label for="userPosition" class="form-label">Position *</label>
+                    <select class="form-select" id="userPosition" v-model="userForm.position" required>
                       <option value="">Select Position</option>
                       <option v-for="pos in positions" :key="pos" :value="pos">
                         {{ pos }}
@@ -1828,25 +1645,13 @@ export default {
 
                 <div class="row">
                   <div class="col-md-6 mb-3">
-                    <label for="userRole" class="form-label"
-                      >Role/Permissions *</label
-                    >
-                    <select
-                      class="form-select"
-                      id="userRole"
-                      v-model="userForm.roleId"
-                      required
-                    >
+                    <label for="userRole" class="form-label">Role/Permissions *</label>
+                    <select class="form-select" id="userRole" v-model="userForm.roleId" required>
                       <option value="">Select Role</option>
-                      <option
-                        v-for="role in roles"
-                        :key="role._id"
-                        :value="role._id"
-                      >
+                      <option v-for="role in roles" :key="role._id" :value="role._id">
                         {{ role.name }}
                         <span v-if="role.description" class="text-muted">
-                          - {{ role.description }}</span
-                        >
+                          - {{ role.description }}</span>
                       </option>
                     </select>
                   </div>
@@ -1854,9 +1659,7 @@ export default {
                     <label class="form-label">Generated Staff ID Preview</label>
                     <div class="form-control-plaintext bg-light p-2 rounded">
                       <strong>{{ staffIdPrefix }}###</strong>
-                      <small class="d-block text-muted"
-                        >Final number will be auto-generated</small
-                      >
+                      <small class="d-block text-muted">Final number will be auto-generated</small>
                     </div>
                   </div>
                 </div>
@@ -1864,25 +1667,12 @@ export default {
             </form>
           </div>
           <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="closeUserModal"
-            >
+            <button type="button" class="btn btn-secondary" @click="closeUserModal">
               Cancel
             </button>
-            <button
-              type="button"
-              class="btn btn-primary"
-              @click="saveUser"
-              :disabled="isSavingUser"
-            >
-              <span
-                v-if="isSavingUser"
-                class="spinner-border spinner-border-sm me-2"
-                role="status"
-                aria-hidden="true"
-              ></span>
+            <button type="button" class="btn btn-primary" @click="saveUser" :disabled="isSavingUser">
+              <span v-if="isSavingUser" class="spinner-border spinner-border-sm me-2" role="status"
+                aria-hidden="true"></span>
               <i v-else class="bi bi-person-plus me-2"></i>
               {{
                 isSavingUser
@@ -1898,11 +1688,7 @@ export default {
     </div>
 
     <!-- Modal Backdrop -->
-    <div
-      class="modal-backdrop fade"
-      :class="{ show: showUserModal }"
-      v-if="showUserModal"
-    ></div>
+    <div class="modal-backdrop fade" :class="{ show: showUserModal }" v-if="showUserModal"></div>
   </div>
 </template>
 
@@ -2011,6 +1797,7 @@ export default {
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);

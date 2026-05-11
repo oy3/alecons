@@ -32,6 +32,27 @@ export default {
     await this.loadDashboardData();
   },
   methods: {
+    getRecentApplicationProgramDisplay(application) {
+      if (application?.programDisplay) {
+        return application.programDisplay;
+      }
+
+      const programType =
+        application?.programTypeLabel ||
+        application?.programId?.programTypeId?.type ||
+        application?.programId?.programTypeId?.description ||
+        "";
+      const programMode =
+        application?.programModeLabel ||
+        application?.programId?.programModeId?.description ||
+        application?.programId?.programModeId?.mode ||
+        "";
+      const programName =
+        application?.programName || application?.programId?.name || "";
+
+      return `${programType} ${programMode} ${programName}`.trim() || "N/A";
+    },
+
     async loadDashboardData() {
       try {
         this.isLoading = true;
@@ -39,20 +60,13 @@ export default {
         logger.info("Loading staff dashboard data...");
 
         // Fetch all necessary data in parallel
-        const [
-          dashboardStatsResponse,
-          recentAppsResponse,
-          programTypesResponse,
-          programModesResponse,
-        ] = await Promise.all([
+        const [dashboardStatsResponse, recentAppsResponse] = await Promise.all([
           apiService.getDashboardStats(),
           apiService.getApplications({
             limit: 5,
             sort: "createdAt",
             order: "desc",
           }),
-          apiService.getProgramTypes(),
-          apiService.getProgramModes(),
         ]);
 
         // Process dashboard summary stats
@@ -81,36 +95,6 @@ export default {
           };
         }
 
-        // Get program types and modes for reference
-        let programTypesMap = new Map();
-        let programModesMap = new Map();
-
-        if (programTypesResponse.success) {
-          const typesData =
-            programTypesResponse.data?.data || programTypesResponse.data || [];
-          if (Array.isArray(typesData)) {
-            typesData.forEach((type) => {
-              programTypesMap.set(
-                type.id || type._id,
-                type.type || type.description,
-              );
-            });
-          }
-        }
-
-        if (programModesResponse.success) {
-          const modesData =
-            programModesResponse.data?.data || programModesResponse.data || [];
-          if (Array.isArray(modesData)) {
-            modesData.forEach((mode) => {
-              programModesMap.set(
-                mode.id || mode._id,
-                mode.mode || mode.description,
-              );
-            });
-          }
-        }
-
         // Process recent applications
         if (recentAppsResponse.success) {
           const recentAppsData =
@@ -123,35 +107,11 @@ export default {
             : [];
 
           this.recentApplications = recentApps.map((app) => {
-            let programDisplay = "N/A";
-
-            if (app.programType && app.programMode && app.program) {
-              const programType =
-                app.programType.type || app.programType.description || "";
-              const programMode =
-                app.programMode.mode || app.programMode.description || "";
-              const programName = app.program.name || "";
-              programDisplay =
-                `${programType} ${programMode} ${programName}`.trim();
-            } else if (
-              app.programTypeId &&
-              app.programModeId &&
-              app.programName
-            ) {
-              const programType = programTypesMap.get(app.programTypeId) || "";
-              const programMode = programModesMap.get(app.programModeId) || "";
-              const programName = app.programName || "";
-              programDisplay =
-                `${programType} ${programMode} ${programName}`.trim();
-            } else {
-              programDisplay = app.programName || "N/A";
-            }
-
             return {
               id: app.id || app._id,
               applicantName: app.applicantName || "N/A",
               applicationNumber: app.applicationNumber,
-              program: programDisplay,
+              program: this.getRecentApplicationProgramDisplay(app),
               status: app.status,
               submittedAt: app.createdAt,
             };

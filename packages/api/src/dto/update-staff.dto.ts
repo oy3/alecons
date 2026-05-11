@@ -1,6 +1,12 @@
 import { IsString, IsOptional, IsMongoId, IsBoolean } from 'class-validator';
+import { UserRole } from '../schemas/user.schema';
+import { IsEnum } from 'class-validator';
 
 export class UpdateStaffDto {
+    @IsEnum([UserRole.ADMIN, UserRole.STAFF])
+    @IsOptional()
+    type?: UserRole.ADMIN | UserRole.STAFF;
+
     @IsString()
     @IsOptional()
     firstName?: string;

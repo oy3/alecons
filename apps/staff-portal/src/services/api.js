@@ -419,10 +419,91 @@ class StaffApiService {
         return this.makeRequest(`/staff/payments/student-payments${queryParams ? `?${queryParams}` : ''}`)
     }
 
+    async exportStudentPaymentsPDF(filters = {}) {
+        const queryParams = new URLSearchParams(filters).toString()
+        const url = queryParams
+            ? `${this.baseURL}/staff/payments/student-payments/export-pdf?${queryParams}`
+            : `${this.baseURL}/staff/payments/student-payments/export-pdf`
+
+        const config = {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        }
+
+        if (this.token) {
+            config.headers.Authorization = `Bearer ${this.token}`
+        }
+
+        try {
+            logger.info('Staff API request (Student payments PDF export):', {
+                method: config.method,
+                url,
+                hasAuth: !!this.token,
+            })
+
+            const response = await fetch(url, config)
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    this.handleTokenExpiration()
+                    throw new Error('Authentication required for PDF export')
+                }
+
+                const errorData = await response.json().catch(() => ({}))
+                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
+            }
+
+            const blob = await response.blob()
+
+            if (blob.size === 0) {
+                throw new Error('Export file is empty')
+            }
+
+            const contentDisposition = response.headers.get('content-disposition') || ''
+            const fileNameMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i)
+            const fileName = decodeURIComponent(fileNameMatch?.[1] || fileNameMatch?.[2] || 'student-payments.pdf')
+
+            const downloadUrl = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = downloadUrl
+            link.download = fileName
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            window.URL.revokeObjectURL(downloadUrl)
+
+            logger.info('Student payments PDF export download successful:', {
+                fileSize: blob.size,
+                fileName,
+            })
+
+            return { success: true, message: 'Student payments PDF exported successfully' }
+        } catch (error) {
+            logger.error('Student payments PDF export failed:', {
+                error: error.message,
+            })
+            throw error
+        }
+    }
+
     // Student Payments Statistics
     async getStudentPaymentsStats(filters = {}) {
         const queryParams = new URLSearchParams(filters).toString()
         return this.makeRequest(`/staff/payments/student-payments/stats${queryParams ? `?${queryParams}` : ''}`)
+    }
+
+    async syncStudentPaymentRemittance(payload = {}) {
+        return this.makeRequest('/staff/payments/remittance/sync', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        })
+    }
+
+    async getStudentPaymentRemittanceRecords(filters = {}) {
+        const queryParams = new URLSearchParams(filters).toString()
+        return this.makeRequest(`/staff/payments/remittance-records${queryParams ? `?${queryParams}` : ''}`)
     }
 
     async verifyManualTransferPayment(id, data = {}) {

@@ -15,6 +15,7 @@ import { PaymentDestinationAccount, PaymentDestinationAccountSchema } from '../s
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
 import { UploadModule } from '../modules/upload.module';
+import { PaymentRemittanceService } from './payment-remittance.service';
 
 @Module({
     imports: [
@@ -32,7 +33,7 @@ import { UploadModule } from '../modules/upload.module';
         ]),
     ],
     controllers: [PaymentsController, StaffPaymentsController, StudentPaymentsController],
-    providers: [PaymentsService, MatriculationService, EmailService],
-    exports: [PaymentsService],
+    providers: [PaymentsService, PaymentRemittanceService, MatriculationService, EmailService],
+    exports: [PaymentsService, PaymentRemittanceService],
 })
 export class PaymentsModule { }

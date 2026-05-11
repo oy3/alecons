@@ -519,7 +519,12 @@ export class UserManagementService {
             throw new NotFoundException("Invalid user ID");
         }
 
-        const { roleId, department, position, ...userUpdates } = updateStaffDto;
+        const { roleId, department, position, type, ...remainingUserUpdates } = updateStaffDto;
+        const userUpdates: any = { ...remainingUserUpdates };
+
+        if (type) {
+            userUpdates.role = type === UserRole.ADMIN ? UserRole.ADMIN : UserRole.STAFF;
+        }
 
         // Update user record
         const user = await this.userModel

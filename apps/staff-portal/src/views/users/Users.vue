@@ -57,6 +57,7 @@ export default {
 
       positions: [
         "System Administrator",
+        "Director",
         "Provost",
         "Deputy Provost",
         "Bursar",

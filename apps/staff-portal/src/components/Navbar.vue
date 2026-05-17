@@ -141,7 +141,7 @@ export default {
               {{ authStore.user?.firstName || "Staff" }}
             </span>
             <span class="small text-muted">
-              {{ authStore.user?.role || "N/A" }}
+              {{ authStore.user?.position || "N/A" }}
             </span>
           </div>
         </div>

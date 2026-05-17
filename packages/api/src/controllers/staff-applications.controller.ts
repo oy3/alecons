@@ -1,8 +1,12 @@
 import {
     Controller,
     Get,
+    Post,
+    Put,
+    Delete,
     Patch,
     Body,
+    UploadedFile,
     Param,
     Query,
     UseGuards,
@@ -10,8 +14,11 @@ import {
     HttpException,
     Logger,
     Res,
+    Request,
+    UseInterceptors,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { InjectModel } from '@nestjs/mongoose';
@@ -23,13 +30,86 @@ import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema
 import { AcademicSession, AcademicSessionDocument } from '../schemas/academic-session.schema';
 import { Payment, PaymentDocument } from '../schemas/payment.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
+import { StudentPayment, StudentPaymentDocument } from '../schemas/student-payment.schema';
+import { ExamAttempt, ExamAttemptDocument } from '../schemas/exam-attempt.schema';
+import { ExamResult, ExamResultDocument } from '../schemas/exam-result.schema';
+import { ExamPassword, ExamPasswordDocument } from '../schemas/exam-password.schema';
 import { EmailService } from '../services/email.service';
 import { MatriculationService } from '../services/matriculation.service';
 import { AdmissionLetterPdfService } from '../services/admission-letter-pdf.service';
 import { UploadService } from '../services/upload.service';
 import { SessionControlsService } from '../services/session-controls.service';
 import { PaymentsService } from '../payments/payments.service';
+import { resolveProgramSelection } from '../utils/program-relation.util';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+
+type StaffUploadedFilePayload = {
+    type: string;
+    url: string;
+    key: string;
+    originalName?: string;
+    size?: number;
+    uploadedAt?: string | Date;
+};
+
+type StaffApplicationUpdatePayload = {
+    programId: string;
+    programTypeId?: string;
+    programModeId?: string;
+    personalInfo: {
+        firstName: string;
+        middleName?: string;
+        lastName: string;
+        phone?: string;
+        dob?: string;
+        gender?: string;
+        religion?: string;
+        maritalStatus?: string;
+        address?: string;
+        lga?: string;
+        stateOfOrigin?: string;
+        nationality?: string;
+    };
+    academicInfo: {
+        primarySchool?: {
+            name?: string;
+            startDate?: string;
+            endDate?: string;
+        };
+        secondarySchool?: {
+            name?: string;
+            startDate?: string;
+            endDate?: string;
+        };
+        examinations?: Array<{
+            examType?: string;
+            examYear?: string;
+            examNumber?: string;
+            subjects?: Array<{
+                subject?: string;
+                grade?: string;
+            }>;
+        }>;
+        nextOfKin?: {
+            name?: string;
+            phone?: string;
+            email?: string;
+            relationship?: string;
+            address?: string;
+        };
+        jambRegistrationNumber?: string;
+        jambScore?: number | string;
+        isJambExempt?: boolean;
+    };
+    uploadedFiles?: StaffUploadedFilePayload[];
+};
+
+type ApplicationAuditPayload = {
+    action: string;
+    description: string;
+    actor?: { _id?: string | Types.ObjectId; role?: string } | null;
+    metadata?: Record<string, unknown>;
+};
 
 @ApiTags('Staff Applications')
 @Controller('staff/applications')
@@ -46,6 +126,10 @@ export class StaffApplicationsController {
         @InjectModel(AcademicSession.name) private academicSessionModel: Model<AcademicSessionDocument>,
         @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
         @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
+        @InjectModel(StudentPayment.name) private studentPaymentModel: Model<StudentPaymentDocument>,
+        @InjectModel(ExamAttempt.name) private examAttemptModel: Model<ExamAttemptDocument>,
+        @InjectModel(ExamResult.name) private examResultModel: Model<ExamResultDocument>,
+        @InjectModel(ExamPassword.name) private examPasswordModel: Model<ExamPasswordDocument>,
         private emailService: EmailService,
         private matriculationService: MatriculationService,
         private admissionLetterPdfService: AdmissionLetterPdfService,
@@ -95,6 +179,183 @@ export class StaffApplicationsController {
         9: 'School Fees Payment',
         10: 'Submission Complete',
     };
+
+    private normalizeString(value?: string | null): string | undefined {
+        if (typeof value !== 'string') {
+            return undefined;
+        }
+
+        const normalizedValue = value.trim();
+        return normalizedValue ? normalizedValue : undefined;
+    }
+
+    private normalizeUploadedFiles(uploadedFiles?: StaffUploadedFilePayload[]): StaffUploadedFilePayload[] {
+        if (!Array.isArray(uploadedFiles)) {
+            return [];
+        }
+
+        return uploadedFiles.filter((file) => file?.type && file?.url && file?.key);
+    }
+
+    private collectApplicationAssetKeys(application: any): string[] {
+        const assetKeys = new Set<string>();
+
+        [
+            application?.profileImageUrl,
+            application?.documents?.profilePicture?.url,
+            application?.admissionLetter,
+        ]
+            .map((url) => this.uploadService.extractKeyFromUrl(url))
+            .filter(Boolean)
+            .forEach((key) => assetKeys.add(key));
+
+        (application?.documents?.olevelResults || []).forEach((document: any) => {
+            const key = this.uploadService.extractKeyFromUrl(document?.url);
+            if (key) {
+                assetKeys.add(key);
+            }
+        });
+
+        (application?.documents?.referenceLetters || []).forEach((document: any) => {
+            const key = this.uploadService.extractKeyFromUrl(document?.url);
+            if (key) {
+                assetKeys.add(key);
+            }
+        });
+
+        return [...assetKeys];
+    }
+
+    private async assertPreStudentLifecycle(application: any, user: any) {
+        const existingStudent = await this.studentModel.findOne({
+            $or: [
+                { applicationId: application._id },
+                { userId: user._id },
+            ],
+        }).select('_id');
+
+        const blockers: string[] = [];
+
+        if (application?.status === ApplicationStatus.COMPLETED) {
+            blockers.push('application is already completed');
+        }
+
+        if (application?.currentStage >= 10) {
+            blockers.push('application has already reached stage 10');
+        }
+
+        if (application?.matriculationNumber) {
+            blockers.push('application already has a matriculation number');
+        }
+
+        if (user?.role === UserRole.STUDENT) {
+            blockers.push('linked user is already a student');
+        }
+
+        if (existingStudent) {
+            blockers.push('linked student record already exists');
+        }
+
+        if (blockers.length) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: `Application can no longer be modified because ${blockers.join(', ')}.`,
+                },
+                HttpStatus.CONFLICT,
+            );
+        }
+    }
+
+    private appendAuditEntry(application: any, payload: ApplicationAuditPayload) {
+        const actorId = this.extractEntityId(payload.actor?._id);
+
+        application.auditTrail = Array.isArray(application.auditTrail)
+            ? application.auditTrail
+            : [];
+
+        application.auditTrail.push({
+            action: payload.action,
+            description: payload.description,
+            performedBy: actorId ? new Types.ObjectId(actorId) : undefined,
+            actorRole: payload.actor?.role,
+            metadata: this.normalizeAuditMetadata(payload.metadata),
+            createdAt: new Date(),
+        });
+    }
+
+    private normalizeAuditMetadata(value: unknown, key?: string): unknown {
+        if (value === null || value === undefined) {
+            return value;
+        }
+
+        if (value instanceof Date || value instanceof Types.ObjectId) {
+            return value;
+        }
+
+        if (Array.isArray(value)) {
+            return value.map((item) => this.normalizeAuditMetadata(item));
+        }
+
+        if (typeof value === 'string' && key && /(^_id$|Id$)/i.test(key) && Types.ObjectId.isValid(value)) {
+            return new Types.ObjectId(value);
+        }
+
+        if (typeof value === 'object') {
+            return Object.entries(value as Record<string, unknown>).reduce((accumulator, [entryKey, entryValue]) => {
+                accumulator[entryKey] = this.normalizeAuditMetadata(entryValue, entryKey);
+                return accumulator;
+            }, {} as Record<string, unknown>);
+        }
+
+        return value;
+    }
+
+    private async moveProfilePictureIfProvided(
+        application: any,
+        uploadedFiles: StaffUploadedFilePayload[],
+    ): Promise<{ profileDocument?: { type: string; url: string; uploadedAt: Date }; profileImageUrl?: string; oldKeysToDelete: string[] }> {
+        const profileUploads = uploadedFiles.filter((file) => file.type === 'profile_picture');
+        const unsupportedFile = uploadedFiles.find((file) => file.type !== 'profile_picture');
+
+        if (unsupportedFile) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Only profile picture updates are supported in the application edit form for now.',
+                },
+                HttpStatus.BAD_REQUEST,
+            );
+        }
+
+        if (!profileUploads.length) {
+            return { oldKeysToDelete: [] };
+        }
+
+        const latestProfileUpload = profileUploads[profileUploads.length - 1];
+        const movedProfilePicture = await this.uploadService.moveFromTempToFinal(
+            latestProfileUpload.key,
+            application.applicationNumber,
+            latestProfileUpload.type,
+        );
+
+        const oldKeysToDelete = [
+            this.uploadService.extractKeyFromUrl(application?.profileImageUrl),
+            this.uploadService.extractKeyFromUrl(application?.documents?.profilePicture?.url),
+        ].filter(Boolean);
+
+        return {
+            profileDocument: {
+                type: latestProfileUpload.type,
+                url: movedProfilePicture.url,
+                uploadedAt: latestProfileUpload.uploadedAt
+                    ? new Date(latestProfileUpload.uploadedAt)
+                    : new Date(),
+            },
+            profileImageUrl: movedProfilePicture.url,
+            oldKeysToDelete: [...new Set(oldKeysToDelete)],
+        };
+    }
 
     private getApplicationStageName(stageNumber?: number): string {
         if (!stageNumber) {
@@ -538,6 +799,7 @@ export class StaffApplicationsController {
             const application = await this.applicationModel
                 .findById(id)
                 .populate('userId', 'firstName lastName otherName email phone role')
+                .populate('auditTrail.performedBy', 'firstName lastName otherName email role')
                 .populate({
                     path: 'programId',
                     select: 'name code programTypeId programModeId',
@@ -607,6 +869,384 @@ export class StaffApplicationsController {
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Put(':id')
+    @ApiOperation({ summary: 'Update application details before student promotion' })
+    @ApiResponse({ status: 200, description: 'Application updated successfully' })
+    async updateApplication(
+        @Param('id') id: string,
+        @Body() updateData: StaffApplicationUpdatePayload,
+        @Request() req,
+    ) {
+        try {
+            if (!Types.ObjectId.isValid(id)) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Invalid application ID format',
+                    },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const application = await this.applicationModel
+                .findById(id)
+                .populate('userId', 'firstName lastName otherName phone role')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Application not found',
+                    },
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            const user = application.userId as any;
+            await this.assertPreStudentLifecycle(application, user);
+
+            const uploadedFiles = this.normalizeUploadedFiles(updateData.uploadedFiles);
+            const resolvedProgram = await resolveProgramSelection({
+                programModel: this.programModel,
+                programId: updateData.programId,
+                providedProgramTypeId: updateData.programTypeId,
+                providedProgramModeId: updateData.programModeId,
+                logger: this.logger,
+                logContext: {
+                    actorId: req.user?._id?.toString(),
+                    applicationId: application._id?.toString(),
+                },
+            });
+
+            const profileUpdate = await this.moveProfilePictureIfProvided(application, uploadedFiles);
+
+            const examinations = (updateData.academicInfo?.examinations || [])
+                .filter((exam) => exam?.examType && exam?.examYear && exam?.examNumber)
+                .map((exam) => ({
+                    examType: exam.examType.trim(),
+                    examYear: exam.examYear.trim(),
+                    examNumber: exam.examNumber.trim(),
+                    subjects: (exam.subjects || [])
+                        .filter((subject) => subject?.subject && subject?.grade)
+                        .map((subject) => ({
+                            subject: subject.subject.trim(),
+                            grade: subject.grade.trim(),
+                        })),
+                }));
+
+            const nextOfKin = updateData.academicInfo?.nextOfKin;
+            const hasNextOfKin = !!(
+                this.normalizeString(nextOfKin?.name) ||
+                this.normalizeString(nextOfKin?.phone) ||
+                this.normalizeString(nextOfKin?.email) ||
+                this.normalizeString(nextOfKin?.relationship) ||
+                this.normalizeString(nextOfKin?.address)
+            );
+
+            await this.userModel.findByIdAndUpdate(user._id, {
+                firstName: this.normalizeString(updateData.personalInfo?.firstName),
+                otherName: this.normalizeString(updateData.personalInfo?.middleName),
+                lastName: this.normalizeString(updateData.personalInfo?.lastName),
+                phone: this.normalizeString(updateData.personalInfo?.phone),
+            });
+
+            application.programId = resolvedProgram.programObjectId;
+            application.dob = updateData.personalInfo?.dob ? new Date(updateData.personalInfo.dob) : undefined;
+            application.gender = this.normalizeString(updateData.personalInfo?.gender);
+            application.religion = this.normalizeString(updateData.personalInfo?.religion);
+            application.maritalStatus = this.normalizeString(updateData.personalInfo?.maritalStatus);
+            application.address = this.normalizeString(updateData.personalInfo?.address);
+            application.stateOfOrigin = this.normalizeString(updateData.personalInfo?.stateOfOrigin);
+            application.lga = this.normalizeString(updateData.personalInfo?.lga);
+            application.nationality = this.normalizeString(updateData.personalInfo?.nationality);
+
+            application.academicBackground = {
+                primary: {
+                    name: this.normalizeString(updateData.academicInfo?.primarySchool?.name),
+                    startDate: this.normalizeString(updateData.academicInfo?.primarySchool?.startDate),
+                    endDate: this.normalizeString(updateData.academicInfo?.primarySchool?.endDate),
+                },
+                secondary: {
+                    name: this.normalizeString(updateData.academicInfo?.secondarySchool?.name),
+                    startDate: this.normalizeString(updateData.academicInfo?.secondarySchool?.startDate),
+                    endDate: this.normalizeString(updateData.academicInfo?.secondarySchool?.endDate),
+                },
+            };
+
+            application.nextOfKin = hasNextOfKin
+                ? {
+                    name: this.normalizeString(nextOfKin?.name),
+                    phone: this.normalizeString(nextOfKin?.phone),
+                    email: this.normalizeString(nextOfKin?.email),
+                    relationship: this.normalizeString(nextOfKin?.relationship),
+                    address: this.normalizeString(nextOfKin?.address),
+                }
+                : undefined;
+
+            application.examinations = examinations;
+            application.isJambExempt = updateData.academicInfo?.isJambExempt === true;
+
+            if (application.isJambExempt) {
+                application.jambRegistrationNumber = undefined;
+                application.jambScore = undefined;
+            } else {
+                application.jambRegistrationNumber = this.normalizeString(updateData.academicInfo?.jambRegistrationNumber);
+                application.jambScore =
+                    updateData.academicInfo?.jambScore !== undefined &&
+                        updateData.academicInfo?.jambScore !== null &&
+                        updateData.academicInfo?.jambScore !== ''
+                        ? Number(updateData.academicInfo.jambScore)
+                        : undefined;
+            }
+
+            if (profileUpdate.profileDocument) {
+                application.documents = {
+                    ...(application.documents || { olevelResults: [], referenceLetters: [] }),
+                    profilePicture: profileUpdate.profileDocument,
+                    olevelResults: application.documents?.olevelResults || [],
+                    referenceLetters: application.documents?.referenceLetters || [],
+                } as any;
+                application.profileImageUrl = profileUpdate.profileImageUrl;
+            }
+
+            this.appendAuditEntry(application, {
+                action: 'application_updated',
+                description: 'Application details were updated by staff.',
+                actor: req.user,
+                metadata: {
+                    programId: resolvedProgram.programId,
+                    replacedProfilePhoto: !!profileUpdate.profileDocument,
+                    examinationsCount: examinations.length,
+                    isJambExempt: application.isJambExempt === true,
+                },
+            });
+            await application.save();
+
+            await this.uploadService.deleteManyFromSpaces(profileUpdate.oldKeysToDelete);
+
+            this.logger.log('Application updated successfully:', {
+                applicationId: application._id.toString(),
+                actorId: req.user?._id?.toString(),
+            });
+
+            return {
+                success: true,
+                message: 'Application updated successfully',
+                data: {
+                    applicationId: application._id.toString(),
+                },
+            };
+        } catch (error) {
+            this.logger.error('Error updating application:', error.message);
+
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to update application',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Post(':id/upload-profile-photo')
+    @Patch(':id/upload-profile-photo')
+    @UseInterceptors(FileInterceptor('file'))
+    @ApiOperation({ summary: 'Upload a temporary replacement profile photo for an application' })
+    @ApiResponse({ status: 200, description: 'Profile photo uploaded successfully' })
+    async uploadApplicationProfilePhoto(
+        @Param('id') id: string,
+        @Request() req,
+        @Body() body,
+        @UploadedFile() file: Express.Multer.File,
+    ) {
+        try {
+            if (!Types.ObjectId.isValid(id)) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Invalid application ID format',
+                    },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            if (!file) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Profile photo file is required',
+                    },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const application = await this.applicationModel
+                .findById(id)
+                .populate('userId', 'role')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Application not found',
+                    },
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            await this.assertPreStudentLifecycle(application, application.userId as any);
+
+            const uploadResult = await this.uploadService.uploadToSpaces(
+                file,
+                application.applicationNumber,
+                body?.fileType || 'profile_picture',
+                true,
+            );
+
+            this.logger.log('Temporary staff profile photo uploaded successfully:', {
+                applicationId: application._id.toString(),
+                actorId: req.user?._id?.toString(),
+                key: uploadResult.key,
+            });
+
+            return {
+                success: true,
+                data: {
+                    type: 'profile_picture',
+                    url: uploadResult.url,
+                    key: uploadResult.key,
+                    originalName: file.originalname,
+                    size: file.size,
+                    uploadedAt: new Date(),
+                },
+            };
+        } catch (error) {
+            this.logger.error('Error uploading temporary application profile photo:', error.message);
+
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to upload profile photo',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Delete(':id')
+    @ApiOperation({ summary: 'Delete an application before student promotion' })
+    @ApiResponse({ status: 200, description: 'Application deleted successfully' })
+    async deleteApplication(@Param('id') id: string) {
+        try {
+            if (!Types.ObjectId.isValid(id)) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Invalid application ID format',
+                    },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const application = await this.applicationModel
+                .findById(id)
+                .populate('userId', 'role email')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Application not found',
+                    },
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            const user = application.userId as any;
+            await this.assertPreStudentLifecycle(application, user);
+
+            const paymentRecords = await this.studentPaymentModel
+                .find({
+                    $or: [
+                        { applicationId: application._id },
+                        { userId: user._id },
+                    ],
+                })
+                .select('_id receiptKey receiptUrl');
+
+            const applicationAssetKeys = this.collectApplicationAssetKeys(application);
+            const receiptKeys = paymentRecords
+                .map((payment) => payment.receiptKey || this.uploadService.extractKeyFromUrl(payment.receiptUrl))
+                .filter(Boolean);
+
+            await this.examResultModel.deleteMany({ userId: user._id });
+            await this.examAttemptModel.deleteMany({ userId: user._id });
+            await this.examPasswordModel.updateMany(
+                { usedBy: user._id },
+                { $pull: { usedBy: user._id } },
+            );
+            await this.studentPaymentModel.deleteMany({
+                $or: [
+                    { applicationId: application._id },
+                    { userId: user._id },
+                ],
+            });
+            await this.applicationModel.deleteOne({ _id: application._id });
+            await this.userModel.deleteOne({ _id: user._id });
+
+            await this.uploadService.deleteManyFromSpaces([
+                ...applicationAssetKeys,
+                ...receiptKeys,
+            ]);
+            await this.uploadService.deleteByPrefix(
+                this.uploadService.getApplicationTempPrefix(application.applicationNumber),
+            );
+
+            this.logger.log('Application deleted successfully:', {
+                applicationId: application._id.toString(),
+                userId: user._id.toString(),
+            });
+
+            return {
+                success: true,
+                message: 'Application deleted successfully',
+                data: {
+                    applicationId: application._id.toString(),
+                    userId: user._id.toString(),
+                },
+            };
+        } catch (error) {
+            this.logger.error('Error deleting application:', error.message);
+
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to delete application',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
     }
@@ -948,7 +1588,8 @@ export class StaffApplicationsController {
         @Body() updateData: {
             status: ApplicationStatus;
             remarks?: string;
-        }
+        },
+        @Request() req,
     ) {
         try {
             this.logger.log('Updating application status:', {
@@ -990,8 +1631,20 @@ export class StaffApplicationsController {
                 );
             }
 
+            const previousStatus = application.status;
+
             // Update application status
             application.status = updateData.status;
+            this.appendAuditEntry(application, {
+                action: 'status_updated',
+                description: `Application status changed from ${previousStatus} to ${updateData.status}.`,
+                actor: req.user,
+                metadata: {
+                    previousStatus,
+                    nextStatus: updateData.status,
+                    remarks: updateData.remarks,
+                },
+            });
             await application.save();
 
             this.logger.log('Application status updated successfully:', {
@@ -1102,7 +1755,8 @@ export class StaffApplicationsController {
             examDate: string;
             examTime: string;
             examLink: string;
-        }
+        },
+        @Request() req,
     ) {
         try {
             this.logger.log('Scheduling exam for application:', { id, examData });
@@ -1136,6 +1790,16 @@ export class StaffApplicationsController {
                 link: examData.examLink
             };
             application.currentStage = 4; // Move to exam stage
+            this.appendAuditEntry(application, {
+                action: 'entrance_exam_scheduled',
+                description: 'Entrance exam was scheduled for the application.',
+                actor: req.user,
+                metadata: {
+                    examDate: examData.examDate,
+                    examTime: examData.examTime,
+                    hasExamLink: !!examData.examLink,
+                },
+            });
 
             await application.save();
 
@@ -1178,7 +1842,8 @@ export class StaffApplicationsController {
             screeningDate: string;
             screeningTime: string;
             venue: string;
-        }
+        },
+        @Request() req,
     ) {
         try {
             this.logger.log('Scheduling screening for application:', { id, screeningData });
@@ -1220,6 +1885,16 @@ export class StaffApplicationsController {
                 completed: false
             };
             application.currentStage = 6; // Move to screening stage
+            this.appendAuditEntry(application, {
+                action: 'screening_scheduled',
+                description: 'Screening was scheduled for the application.',
+                actor: req.user,
+                metadata: {
+                    screeningDate: screeningData.screeningDate,
+                    screeningTime: screeningData.screeningTime,
+                    venue: screeningData.venue,
+                },
+            });
 
             await application.save();
 
@@ -1262,7 +1937,8 @@ export class StaffApplicationsController {
             decision: 'admitted' | 'rejected';
             sendProvisionalOffer?: boolean;
             reason?: string;
-        }
+        },
+        @Request() req,
     ) {
         try {
             this.logger.log('Making admission decision for application:', { id, decisionData });
@@ -1479,6 +2155,17 @@ export class StaffApplicationsController {
                 this.logger.log('Rejection email sent successfully');
             }
 
+            this.appendAuditEntry(application, {
+                action: 'admission_decision_recorded',
+                description: `Admission decision recorded as ${decisionData.decision}.`,
+                actor: req.user,
+                metadata: {
+                    decision: decisionData.decision,
+                    sendProvisionalOffer: decisionData.sendProvisionalOffer === true,
+                    reason: decisionData.reason,
+                },
+            });
+
             await application.save();
 
             this.logger.log('Admission decision made successfully for application:', id);
@@ -1510,7 +2197,8 @@ export class StaffApplicationsController {
         @Body() scoreData: {
             score: number;
             passed: boolean;
-        }
+        },
+        @Request() req,
     ) {
         try {
             this.logger.log('Updating exam score for application:', { id, scoreData });
@@ -1555,6 +2243,16 @@ export class StaffApplicationsController {
                 application.rejectionReason = 'Failed entrance examination';
             }
 
+            this.appendAuditEntry(application, {
+                action: 'entrance_exam_scored',
+                description: `Entrance exam score was recorded as ${scoreData.score}.`,
+                actor: req.user,
+                metadata: {
+                    score: scoreData.score,
+                    passed: scoreData.passed,
+                },
+            });
+
             await application.save();
 
             this.logger.log('Exam score updated successfully for application:', id);
@@ -1581,7 +2279,7 @@ export class StaffApplicationsController {
     @Patch(':id/complete-screening')
     @ApiOperation({ summary: 'Mark screening as completed' })
     @ApiResponse({ status: 200, description: 'Screening marked as completed' })
-    async completeScreening(@Param('id') id: string) {
+    async completeScreening(@Param('id') id: string, @Request() req) {
         try {
             this.logger.log('Marking screening as completed for application:', id);
 
@@ -1620,6 +2318,15 @@ export class StaffApplicationsController {
             }
             application.status = ApplicationStatus.ADMITTED;
             application.currentStage = 7; // Move to acceptance fee stage
+            this.appendAuditEntry(application, {
+                action: 'screening_completed',
+                description: 'Screening was marked as completed.',
+                actor: req.user,
+                metadata: {
+                    resultingStatus: application.status,
+                    resultingStage: application.currentStage,
+                },
+            });
             await application.save();
 
             this.logger.log('Screening marked as completed for application:', id);
@@ -1646,7 +2353,7 @@ export class StaffApplicationsController {
     @Patch(':id/generate-matric')
     @ApiOperation({ summary: 'Recover missing matriculation number and complete application setup' })
     @ApiResponse({ status: 200, description: 'Matriculation number recovered successfully' })
-    async generateMatriculationNumber(@Param('id') id: string) {
+    async generateMatriculationNumber(@Param('id') id: string, @Request() req) {
         try {
             this.logger.log('Recovering matriculation number for application:', id);
 
@@ -1706,6 +2413,14 @@ export class StaffApplicationsController {
             application.matriculationNumber = matriculationNumber;
             application.status = ApplicationStatus.COMPLETED;
             // currentStage should already be 10, no need to set it again
+            this.appendAuditEntry(application, {
+                action: 'matriculation_generated',
+                description: 'Matriculation number was generated and application was completed.',
+                actor: req.user,
+                metadata: {
+                    matriculationNumber,
+                },
+            });
             await application.save();
 
             // Get academic session for student record
@@ -1803,7 +2518,7 @@ export class StaffApplicationsController {
     @Patch(':id/send-matric-email')
     @ApiOperation({ summary: 'Send matriculation email to student' })
     @ApiResponse({ status: 200, description: 'Matriculation email sent successfully' })
-    async sendMatriculationEmail(@Param('id') id: string) {
+    async sendMatriculationEmail(@Param('id') id: string, @Request() req) {
         try {
             this.logger.log('Sending matriculation email for application:', id);
 
@@ -1834,6 +2549,17 @@ export class StaffApplicationsController {
                 application.matriculationNumber,
                 studentPortalUrl
             );
+
+            this.appendAuditEntry(application, {
+                action: 'matriculation_email_sent',
+                description: 'Matriculation email was sent to the student.',
+                actor: req.user,
+                metadata: {
+                    matriculationNumber: application.matriculationNumber,
+                    recipientEmail: user.email,
+                },
+            });
+            await application.save();
 
             this.logger.log('Matriculation email sent successfully to:', user.email);
 

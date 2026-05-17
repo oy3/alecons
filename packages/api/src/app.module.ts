@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
+import { MulterModule } from '@nestjs/platform-express';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -26,10 +27,15 @@ import { AcademicSession, AcademicSessionSchema } from './schemas/academic-sessi
 import { User, UserSchema } from './schemas/user.schema';
 import { Student, StudentSchema } from './schemas/student.schema';
 import { Payment, PaymentSchema } from './schemas/payment.schema';
+import { StudentPayment, StudentPaymentSchema } from './schemas/student-payment.schema';
+import { ExamAttempt, ExamAttemptSchema } from './schemas/exam-attempt.schema';
+import { ExamResult, ExamResultSchema } from './schemas/exam-result.schema';
+import { ExamPassword, ExamPasswordSchema } from './schemas/exam-password.schema';
 import { EmailService } from './services/email.service';
 import { MatriculationService } from './services/matriculation.service';
 import { ContentSanitizationService } from './services/content-sanitization.service';
 import { AdmissionLetterPdfService } from './services/admission-letter-pdf.service';
+import * as multer from 'multer';
 
 @Module({
     imports: [
@@ -45,7 +51,11 @@ import { AdmissionLetterPdfService } from './services/admission-letter-pdf.servi
             { name: AcademicSession.name, schema: AcademicSessionSchema },
             { name: User.name, schema: UserSchema },
             { name: Student.name, schema: StudentSchema },
-            { name: Payment.name, schema: PaymentSchema }
+            { name: Payment.name, schema: PaymentSchema },
+            { name: StudentPayment.name, schema: StudentPaymentSchema },
+            { name: ExamAttempt.name, schema: ExamAttemptSchema },
+            { name: ExamResult.name, schema: ExamResultSchema },
+            { name: ExamPassword.name, schema: ExamPasswordSchema },
         ]),
         ThrottlerModule.forRoot([
             {
@@ -61,6 +71,12 @@ import { AdmissionLetterPdfService } from './services/admission-letter-pdf.servi
             },
         }),
         ScheduleModule.forRoot(),
+        MulterModule.register({
+            storage: multer.memoryStorage(),
+            limits: {
+                fileSize: 5 * 1024 * 1024,
+            },
+        }),
         AuthModule,
         ProgramsModule,
         PaymentsModule,

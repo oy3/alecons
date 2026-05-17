@@ -13,6 +13,73 @@ const createEmptyPaymentHistory = () => ({
   cancelledCount: 0,
 });
 
+const createEmptyExamSubject = () => ({
+  subject: "",
+  grade: "",
+});
+
+const createEmptyExamination = () => ({
+  examType: "",
+  examYear: "",
+  examNumber: "",
+  subjects: [createEmptyExamSubject()],
+});
+
+const createEmptyProfileUploadState = () => ({
+  type: "",
+  url: "",
+  key: "",
+  originalName: "",
+  uploadedAt: "",
+  size: 0,
+});
+
+const createEmptyEditApplicationForm = () => ({
+  applicationId: null,
+  applicationNumber: "",
+  profileImagePreview: "https://placehold.co/160x160?text=Applicant",
+  programId: "",
+  programTypeId: "",
+  programModeId: "",
+  personalInfo: {
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    phone: "",
+    dob: "",
+    gender: "",
+    religion: "",
+    maritalStatus: "",
+    address: "",
+    lga: "",
+    stateOfOrigin: "",
+    nationality: "",
+  },
+  academicInfo: {
+    primarySchool: {
+      name: "",
+      startDate: "",
+      endDate: "",
+    },
+    secondarySchool: {
+      name: "",
+      startDate: "",
+      endDate: "",
+    },
+    examinations: [createEmptyExamination()],
+    nextOfKin: {
+      name: "",
+      phone: "",
+      email: "",
+      relationship: "",
+      address: "",
+    },
+    isJambExempt: false,
+    jambRegistrationNumber: "",
+    jambScore: "",
+  },
+});
+
 const stageLabels = {
   1: "Registration",
   2: "Form Fee",
@@ -46,6 +113,10 @@ export default {
       perPage: 10,
       totalApplications: 0,
       apiTotalPages: 0,
+      showEditModal: false,
+      isPreparingEditApplication: false,
+      isSavingApplication: false,
+      isUploadingProfilePhoto: false,
       showDetailsModal: false,
       isLoadingDetails: false,
       selectedApplication: null,
@@ -54,6 +125,8 @@ export default {
       selectedPaymentReceipt: null,
       showPaymentReceiptModal: false,
       processingPaymentId: null,
+      editApplicationForm: createEmptyEditApplicationForm(),
+      pendingProfileUpload: createEmptyProfileUploadState(),
 
       statusOptions: [
         { value: "all", label: "All Statuses" },
@@ -306,6 +379,46 @@ export default {
       return fullName || application?.applicantName || "N/A";
     },
 
+    getSortedAuditTrail(auditTrail) {
+      if (!Array.isArray(auditTrail)) return [];
+      return [...auditTrail].sort(
+        (left, right) =>
+          new Date(right?.createdAt || 0).getTime() -
+          new Date(left?.createdAt || 0).getTime(),
+      );
+    },
+
+    getAuditActorName(entry) {
+      const actor = entry?.performedBy;
+      if (!actor) return "System";
+      if (typeof actor === "string") return "User";
+
+      const fullName = [actor.firstName, actor.otherName, actor.lastName]
+        .filter(Boolean)
+        .join(" ");
+      return fullName || actor.email || "User";
+    },
+
+    formatAuditMetadata(metadata) {
+      if (!metadata || typeof metadata !== "object") return "";
+
+      return Object.entries(metadata)
+        .filter(([, value]) => value !== undefined && value !== null && value !== "")
+        .slice(0, 4)
+        .map(([key, value]) => {
+          let normalizedValue = value;
+
+          if (typeof value === "boolean") {
+            normalizedValue = value ? "Yes" : "No";
+          } else if (Array.isArray(value)) {
+            normalizedValue = value.join(", ");
+          }
+
+          return `${this.formatLabel(key)}: ${normalizedValue}`;
+        })
+        .join(" • ");
+    },
+
     getProgramName(application) {
       return application?.programId?.name || application?.program || "N/A";
     },
@@ -460,6 +573,428 @@ export default {
         (count, section) => count + section.documents.length,
         0,
       );
+    },
+
+    canModifyApplication(application) {
+      if (!application) {
+        return false;
+      }
+
+      return (
+        application.status !== "completed" &&
+        Number(application.currentStage || 0) < 10 &&
+        !application.matriculationNumber &&
+        application?.userId?.role !== "student"
+      );
+    },
+
+    populateEditApplicationForm(application) {
+      const primarySchool = application?.academicBackground?.primary || {};
+      const secondarySchool = application?.academicBackground?.secondary || {};
+      const nextOfKin = application?.nextOfKin || {};
+      const examinations = Array.isArray(application?.examinations)
+        ? application.examinations.map((exam) => ({
+            examType: exam?.examType || "",
+            examYear: exam?.examYear || "",
+            examNumber: exam?.examNumber || "",
+            subjects:
+              Array.isArray(exam?.subjects) && exam.subjects.length
+                ? exam.subjects.map((subject) => ({
+                    subject: subject?.subject || "",
+                    grade: subject?.grade || "",
+                  }))
+                : [createEmptyExamSubject()],
+          }))
+        : [createEmptyExamination()];
+
+      this.editApplicationForm = {
+        applicationId: application?._id || application?.id || null,
+        applicationNumber: application?.applicationNumber || "",
+        profileImagePreview: this.getProfileImage(application),
+        programId: application?.programId?._id || application?.programId || "",
+        programTypeId:
+          application?.programId?.programTypeId?._id ||
+          application?.programTypeId?._id ||
+          application?.programTypeId ||
+          "",
+        programModeId:
+          application?.programId?.programModeId?._id ||
+          application?.programModeId?._id ||
+          application?.programModeId ||
+          "",
+        personalInfo: {
+          firstName: application?.userId?.firstName || "",
+          middleName: application?.userId?.otherName || "",
+          lastName: application?.userId?.lastName || "",
+          phone: application?.userId?.phone || "",
+          dob: application?.dob
+            ? new Date(application.dob).toISOString().split("T")[0]
+            : "",
+          gender: application?.gender || "",
+          religion: application?.religion || "",
+          maritalStatus: application?.maritalStatus || "",
+          address: application?.address || "",
+          lga: application?.lga || "",
+          stateOfOrigin: application?.stateOfOrigin || "",
+          nationality: application?.nationality || "",
+        },
+        academicInfo: {
+          primarySchool: {
+            name: primarySchool?.name || "",
+            startDate: primarySchool?.startDate || "",
+            endDate: primarySchool?.endDate || "",
+          },
+          secondarySchool: {
+            name: secondarySchool?.name || "",
+            startDate: secondarySchool?.startDate || "",
+            endDate: secondarySchool?.endDate || "",
+          },
+          examinations: examinations.length ? examinations : [createEmptyExamination()],
+          nextOfKin: {
+            name: nextOfKin?.name || "",
+            phone: nextOfKin?.phone || "",
+            email: nextOfKin?.email || "",
+            relationship: nextOfKin?.relationship || "",
+            address: nextOfKin?.address || "",
+          },
+          isJambExempt: application?.isJambExempt === true,
+          jambRegistrationNumber: application?.jambRegistrationNumber || "",
+          jambScore:
+            application?.jambScore !== undefined && application?.jambScore !== null
+              ? String(application.jambScore)
+              : "",
+        },
+      };
+
+      this.pendingProfileUpload = createEmptyProfileUploadState();
+    },
+
+    async openEditApplication(application) {
+      try {
+        if (!this.authStore.hasPermission("applications", "edit")) {
+          this.$swal.fire({
+            icon: "error",
+            title: "Access Denied",
+            text: "You do not have permission to edit applications",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
+        if (!this.canModifyApplication(application)) {
+          this.$swal.fire({
+            icon: "info",
+            title: "Edit Unavailable",
+            text: "Only pre-student applications can be edited from this page.",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
+        this.showEditModal = true;
+        this.isPreparingEditApplication = true;
+
+        const applicationId = application.id || application._id;
+        const response = await apiService.getApplication(applicationId);
+
+        if (!response.success || !response.data?.application) {
+          throw new Error(
+            response.message || "Failed to load application details for editing",
+          );
+        }
+
+        if (!this.canModifyApplication(response.data.application)) {
+          throw new Error(
+            "This application can no longer be edited because it has already moved to the student lifecycle.",
+          );
+        }
+
+        this.populateEditApplicationForm(response.data.application);
+      } catch (error) {
+        logger.error("Failed to prepare application edit form:", error);
+        this.closeEditModal();
+        this.$swal.fire({
+          icon: "error",
+          title: "Edit Failed",
+          text: error.message || "Failed to open the application edit form",
+          confirmButtonColor: "#1a5f5f",
+        });
+      } finally {
+        this.isPreparingEditApplication = false;
+      }
+    },
+
+    closeEditModal() {
+      this.showEditModal = false;
+      this.isPreparingEditApplication = false;
+      this.isSavingApplication = false;
+      this.isUploadingProfilePhoto = false;
+      this.editApplicationForm = createEmptyEditApplicationForm();
+      this.pendingProfileUpload = createEmptyProfileUploadState();
+    },
+
+    async handleEditProfileUpload(event) {
+      const file = event.target?.files?.[0];
+
+      if (!file || !this.editApplicationForm.applicationId) {
+        return;
+      }
+
+      try {
+        this.isUploadingProfilePhoto = true;
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("fileType", "profile_picture");
+
+        const response = await apiService.uploadApplicationProfilePhoto(
+          this.editApplicationForm.applicationId,
+          formData,
+        );
+
+        if (!response.success || !response.data) {
+          throw new Error(response.message || "Failed to upload profile photo");
+        }
+
+        this.pendingProfileUpload = response.data;
+        this.editApplicationForm.profileImagePreview = response.data.url;
+
+        this.$swal.fire({
+          icon: "success",
+          title: "Photo Ready",
+          text: "The new profile photo has been uploaded. Save the form to apply it.",
+          timer: 2200,
+          showConfirmButton: false,
+        });
+      } catch (error) {
+        logger.error("Failed to upload application profile photo:", error);
+        this.$swal.fire({
+          icon: "error",
+          title: "Upload Failed",
+          text: error.message || "Failed to upload profile photo",
+          confirmButtonColor: "#1a5f5f",
+        });
+      } finally {
+        this.isUploadingProfilePhoto = false;
+        if (event?.target) {
+          event.target.value = "";
+        }
+      }
+    },
+
+    addExamination() {
+      this.editApplicationForm.academicInfo.examinations.push(
+        createEmptyExamination(),
+      );
+    },
+
+    removeExamination(index) {
+      if (this.editApplicationForm.academicInfo.examinations.length === 1) {
+        this.editApplicationForm.academicInfo.examinations = [
+          createEmptyExamination(),
+        ];
+        return;
+      }
+
+      this.editApplicationForm.academicInfo.examinations.splice(index, 1);
+    },
+
+    addExaminationSubject(examIndex) {
+      this.editApplicationForm.academicInfo.examinations[examIndex].subjects.push(
+        createEmptyExamSubject(),
+      );
+    },
+
+    removeExaminationSubject(examIndex, subjectIndex) {
+      const subjects =
+        this.editApplicationForm.academicInfo.examinations[examIndex].subjects;
+
+      if (subjects.length === 1) {
+        subjects.splice(0, 1, createEmptyExamSubject());
+        return;
+      }
+
+      subjects.splice(subjectIndex, 1);
+    },
+
+    buildApplicationUpdatePayload() {
+      return {
+        programId: this.editApplicationForm.programId,
+        programTypeId: this.editApplicationForm.programTypeId || undefined,
+        programModeId: this.editApplicationForm.programModeId || undefined,
+        personalInfo: {
+          ...this.editApplicationForm.personalInfo,
+        },
+        academicInfo: {
+          primarySchool: {
+            ...this.editApplicationForm.academicInfo.primarySchool,
+          },
+          secondarySchool: {
+            ...this.editApplicationForm.academicInfo.secondarySchool,
+          },
+          examinations: this.editApplicationForm.academicInfo.examinations.map(
+            (exam) => ({
+              examType: exam.examType,
+              examYear: exam.examYear,
+              examNumber: exam.examNumber,
+              subjects: exam.subjects.map((subject) => ({
+                subject: subject.subject,
+                grade: subject.grade,
+              })),
+            }),
+          ),
+          nextOfKin: {
+            ...this.editApplicationForm.academicInfo.nextOfKin,
+          },
+          isJambExempt: this.editApplicationForm.academicInfo.isJambExempt,
+          jambRegistrationNumber:
+            this.editApplicationForm.academicInfo.isJambExempt
+              ? undefined
+              : this.editApplicationForm.academicInfo.jambRegistrationNumber,
+          jambScore: this.editApplicationForm.academicInfo.isJambExempt
+            ? undefined
+            : this.editApplicationForm.academicInfo.jambScore,
+        },
+        uploadedFiles: this.pendingProfileUpload.key
+          ? [this.pendingProfileUpload]
+          : [],
+      };
+    },
+
+    async saveApplicationEdits() {
+      try {
+        if (!this.editApplicationForm.applicationId) {
+          return;
+        }
+
+        const confirmation = await this.$swal.fire({
+          icon: "question",
+          title: "Save Application Changes",
+          text: "Apply these edits to the application record?",
+          showCancelButton: true,
+          confirmButtonColor: "#1a5f5f",
+          cancelButtonColor: "#6c757d",
+          confirmButtonText: "Save changes",
+        });
+
+        if (!confirmation.isConfirmed) {
+          return;
+        }
+
+        this.isSavingApplication = true;
+
+        const response = await apiService.updateApplication(
+          this.editApplicationForm.applicationId,
+          this.buildApplicationUpdatePayload(),
+        );
+
+        if (!response.success) {
+          throw new Error(response.message || "Failed to update application");
+        }
+
+        await this.loadApplications();
+
+        if (this.selectedApplicationId === this.editApplicationForm.applicationId) {
+          await this.reloadSelectedApplicationDetails();
+        }
+
+        this.closeEditModal();
+
+        this.$swal.fire({
+          icon: "success",
+          title: "Application Updated",
+          text: "The application details were updated successfully.",
+          confirmButtonColor: "#1a5f5f",
+        });
+      } catch (error) {
+        logger.error("Failed to save application edits:", error);
+        this.$swal.fire({
+          icon: "error",
+          title: "Save Failed",
+          text: error.message || "Failed to update application",
+          confirmButtonColor: "#1a5f5f",
+        });
+      } finally {
+        this.isSavingApplication = false;
+      }
+    },
+
+    async deleteApplication(application) {
+      try {
+        if (!this.authStore.hasPermission("applications", "delete")) {
+          this.$swal.fire({
+            icon: "error",
+            title: "Access Denied",
+            text: "You do not have permission to delete applications",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
+        if (!this.canModifyApplication(application)) {
+          this.$swal.fire({
+            icon: "info",
+            title: "Delete Unavailable",
+            text: "Only pre-student applications can be fully deleted.",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
+        const result = await this.$swal.fire({
+          icon: "warning",
+          title: "Delete Application",
+          text: `Type ${application.applicationNumber} to confirm permanent deletion of this application and linked pre-student records.`,
+          input: "text",
+          inputPlaceholder: application.applicationNumber,
+          inputValidator: (value) => {
+            if ((value || "").trim() !== application.applicationNumber) {
+              return "Enter the exact application number to continue";
+            }
+            return null;
+          },
+          showCancelButton: true,
+          confirmButtonText: "Delete permanently",
+          confirmButtonColor: "#dc3545",
+          cancelButtonColor: "#6c757d",
+        });
+
+        if (!result.isConfirmed) {
+          return;
+        }
+
+        const applicationId = application.id || application._id;
+        const response = await apiService.deleteApplication(applicationId);
+
+        if (!response.success) {
+          throw new Error(response.message || "Failed to delete application");
+        }
+
+        if (this.selectedApplicationId === applicationId) {
+          this.closeDetailsModal();
+        }
+
+        if (this.editApplicationForm.applicationId === applicationId) {
+          this.closeEditModal();
+        }
+
+        await this.loadApplications();
+
+        this.$swal.fire({
+          icon: "success",
+          title: "Application Deleted",
+          text: "The application and linked pre-student records were deleted successfully.",
+          confirmButtonColor: "#1a5f5f",
+        });
+      } catch (error) {
+        logger.error("Failed to delete application:", error);
+        this.$swal.fire({
+          icon: "error",
+          title: "Delete Failed",
+          text: error.message || "Failed to delete application",
+          confirmButtonColor: "#1a5f5f",
+        });
+      }
     },
 
     closeDetailsModal() {
@@ -1240,13 +1775,21 @@ export default {
                                 <i class="bi bi-eye me-2"></i> View Details</a
                               >
                             </li>
-                            <li v-if="authStore.hasPermission('applications', 'edit')">
-                              <a  class="dropdown-item" href="">
+                            <li v-if="authStore.hasPermission('applications', 'edit') && canModifyApplication(app)">
+                              <a
+                                class="dropdown-item"
+                                href=""
+                                @click.prevent="openEditApplication(app)"
+                              >
                                 <i class="bi bi-pencil-square me-2"></i> Edit Application
                               </a>
                             </li>
-                            <li v-if="authStore.hasPermission('applications', 'delete') && app.status === 'pending'">
-                              <a href=""  class="dropdown-item">
+                            <li v-if="authStore.hasPermission('applications', 'delete') && canModifyApplication(app)">
+                              <a
+                                href=""
+                                class="dropdown-item"
+                                @click.prevent="deleteApplication(app)"
+                              >
                                 <i class="bi bi-trash me-2"></i> Delete Application
                               </a>
                             </li>
@@ -1470,6 +2013,22 @@ export default {
                         <i class="bi bi-eye me-1"></i>Details
                       </button>
                       <button
+                        v-if="authStore.hasPermission('applications', 'edit') && canModifyApplication(app)"
+                        type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        @click="openEditApplication(app)"
+                      >
+                        <i class="bi bi-pencil-square me-1"></i>Edit
+                      </button>
+                      <button
+                        v-if="authStore.hasPermission('applications', 'delete') && canModifyApplication(app)"
+                        type="button"
+                        class="btn btn-sm btn-outline-danger"
+                        @click="deleteApplication(app)"
+                      >
+                        <i class="bi bi-trash me-1"></i>Delete
+                      </button>
+                      <button
                         v-if="app.status === 'completed'"
                         type="button"
                         class="btn btn-sm btn-outline-success"
@@ -1537,6 +2096,485 @@ export default {
                 </li>
               </ul>
             </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showEditModal" class="modal-backdrop fade show"></div>
+
+    <div
+      class="modal fade"
+      :class="{ show: showEditModal }"
+      :style="{ display: showEditModal ? 'block' : 'none' }"
+      tabindex="-1"
+    >
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content application-details-modal">
+          <div class="modal-header border-0 pb-0">
+            <div>
+              <h5 class="modal-title fw-bold text-staff-primary">
+                Edit Application
+              </h5>
+              <p class="text-muted mb-0">
+                {{ editApplicationForm.applicationNumber || "Loading..." }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn-close"
+              @click="closeEditModal"
+            ></button>
+          </div>
+
+          <div class="modal-body px-4 pb-4">
+            <div v-if="isPreparingEditApplication" class="text-center py-5">
+              <div class="spinner-border text-staff-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              <p class="text-muted mt-3 mb-0">Loading application form...</p>
+            </div>
+
+            <form v-else @submit.prevent="saveApplicationEdits">
+              <div class="alert alert-light border mb-4">
+                Referees remain read-only in this edit form for now.
+              </div>
+
+              <div class="row g-4">
+                <div class="col-12">
+                  <div class="border rounded-4 p-3">
+                    <div class="row g-3 align-items-center">
+                      <div class="col-md-3 text-center">
+                        <img
+                          :src="editApplicationForm.profileImagePreview"
+                          alt="Applicant profile"
+                          class="rounded-circle border"
+                          style="width: 140px; height: 140px; object-fit: cover"
+                        />
+                      </div>
+                      <div class="col-md-9">
+                        <label class="form-label fw-semibold"
+                          >Replace Profile Photo</label
+                        >
+                        <input
+                          type="file"
+                          class="form-control"
+                          accept=".jpg,.jpeg,image/jpeg"
+                          :disabled="isUploadingProfilePhoto || isSavingApplication"
+                          @change="handleEditProfileUpload"
+                        />
+                        <div class="form-text">
+                          Upload a new JPEG photo. The previous profile photo
+                          will be removed after the save succeeds.
+                        </div>
+                        <div
+                          v-if="pendingProfileUpload.originalName"
+                          class="small text-success mt-2"
+                        >
+                          Ready to apply: {{ pendingProfileUpload.originalName }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <h6 class="fw-bold text-staff-primary mb-3">
+                    Identity and Program
+                  </h6>
+                  <div class="row g-3">
+                    <div class="col-md-4">
+                      <label class="form-label">First Name</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.firstName"
+                        type="text"
+                        class="form-control"
+                        required
+                      />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Middle Name</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.middleName"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Last Name</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.lastName"
+                        type="text"
+                        class="form-control"
+                        required
+                      />
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Phone Number</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.phone"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Program</label>
+                      <select
+                        v-model="editApplicationForm.programId"
+                        class="form-select"
+                        required
+                      >
+                        <option value="">Select program</option>
+                        <option
+                          v-for="program in programs"
+                          :key="program.value"
+                          :value="program.value"
+                        >
+                          {{ program.label }}
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <h6 class="fw-bold text-staff-primary mb-3">
+                    Personal Information
+                  </h6>
+                  <div class="row g-3">
+                    <div class="col-md-4">
+                      <label class="form-label">Date of Birth</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.dob"
+                        type="date"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Gender</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.gender"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Religion</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.religion"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Marital Status</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.maritalStatus"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">State of Origin</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.stateOfOrigin"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">LGA</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.lga"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Nationality</label>
+                      <input
+                        v-model="editApplicationForm.personalInfo.nationality"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Address</label>
+                      <textarea
+                        v-model="editApplicationForm.personalInfo.address"
+                        class="form-control"
+                        rows="3"
+                      ></textarea>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <h6 class="fw-bold text-staff-primary mb-3">
+                    Academic Background
+                  </h6>
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label class="form-label">Primary School</label>
+                      <input
+                        v-model="editApplicationForm.academicInfo.primarySchool.name"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label">Primary Start</label>
+                      <input
+                        v-model="editApplicationForm.academicInfo.primarySchool.startDate"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label">Primary End</label>
+                      <input
+                        v-model="editApplicationForm.academicInfo.primarySchool.endDate"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Secondary School</label>
+                      <input
+                        v-model="editApplicationForm.academicInfo.secondarySchool.name"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label">Secondary Start</label>
+                      <input
+                        v-model="editApplicationForm.academicInfo.secondarySchool.startDate"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label">Secondary End</label>
+                      <input
+                        v-model="editApplicationForm.academicInfo.secondarySchool.endDate"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold text-staff-primary mb-0">
+                      Examination Records
+                    </h6>
+                    <button
+                      type="button"
+                      class="btn btn-outline-staff-primary btn-sm"
+                      @click="addExamination"
+                    >
+                      <i class="bi bi-plus-lg me-1"></i>Add Exam
+                    </button>
+                  </div>
+
+                  <div
+                    v-for="(exam, examIndex) in editApplicationForm.academicInfo.examinations"
+                    :key="`exam-${examIndex}`"
+                    class="border rounded-4 p-3 mb-3"
+                  >
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                      <h6 class="mb-0">Exam {{ examIndex + 1 }}</h6>
+                      <button
+                        type="button"
+                        class="btn btn-link text-danger p-0"
+                        @click="removeExamination(examIndex)"
+                      >
+                        Remove
+                      </button>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-4">
+                        <label class="form-label">Exam Type</label>
+                        <input
+                          v-model="exam.examType"
+                          type="text"
+                          class="form-control"
+                        />
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label">Exam Year</label>
+                        <input
+                          v-model="exam.examYear"
+                          type="text"
+                          class="form-control"
+                        />
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label">Exam Number</label>
+                        <input
+                          v-model="exam.examNumber"
+                          type="text"
+                          class="form-control"
+                        />
+                      </div>
+                    </div>
+
+                    <div
+                      v-for="(subject, subjectIndex) in exam.subjects"
+                      :key="`subject-${examIndex}-${subjectIndex}`"
+                      class="row g-3 align-items-end mb-2"
+                    >
+                      <div class="col-md-5">
+                        <label class="form-label">Subject</label>
+                        <input
+                          v-model="subject.subject"
+                          type="text"
+                          class="form-control"
+                        />
+                      </div>
+                      <div class="col-md-5">
+                        <label class="form-label">Grade</label>
+                        <input
+                          v-model="subject.grade"
+                          type="text"
+                          class="form-control"
+                        />
+                      </div>
+                      <div class="col-md-2">
+                        <button
+                          type="button"
+                          class="btn btn-outline-danger w-100"
+                          @click="removeExaminationSubject(examIndex, subjectIndex)"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      class="btn btn-outline-staff-primary btn-sm mt-2"
+                      @click="addExaminationSubject(examIndex)"
+                    >
+                      <i class="bi bi-plus-lg me-1"></i>Add Subject
+                    </button>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <h6 class="fw-bold text-staff-primary mb-3">Next of Kin</h6>
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label class="form-label">Name</label>
+                      <input
+                        v-model="editApplicationForm.academicInfo.nextOfKin.name"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Phone</label>
+                      <input
+                        v-model="editApplicationForm.academicInfo.nextOfKin.phone"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Email</label>
+                      <input
+                        v-model="editApplicationForm.academicInfo.nextOfKin.email"
+                        type="email"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Relationship</label>
+                      <input
+                        v-model="editApplicationForm.academicInfo.nextOfKin.relationship"
+                        type="text"
+                        class="form-control"
+                      />
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Address</label>
+                      <textarea
+                        v-model="editApplicationForm.academicInfo.nextOfKin.address"
+                        class="form-control"
+                        rows="2"
+                      ></textarea>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <h6 class="fw-bold text-staff-primary mb-3">JAMB Details</h6>
+                  <div class="row g-3">
+                    <div class="col-12">
+                      <div class="form-check">
+                        <input
+                          id="staffEditJambExempt"
+                          v-model="editApplicationForm.academicInfo.isJambExempt"
+                          type="checkbox"
+                          class="form-check-input"
+                        />
+                        <label class="form-check-label" for="staffEditJambExempt">
+                          JAMB details do not apply to this applicant
+                        </label>
+                      </div>
+                    </div>
+                    <template v-if="!editApplicationForm.academicInfo.isJambExempt">
+                      <div class="col-md-6">
+                        <label class="form-label">JAMB Registration Number</label>
+                        <input
+                          v-model="editApplicationForm.academicInfo.jambRegistrationNumber"
+                          type="text"
+                          class="form-control"
+                        />
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label">JAMB Score</label>
+                        <input
+                          v-model="editApplicationForm.academicInfo.jambScore"
+                          type="number"
+                          min="0"
+                          max="400"
+                          class="form-control"
+                        />
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <div class="modal-footer border-0 pt-0">
+            <button
+              type="button"
+              class="btn btn-outline-secondary"
+              :disabled="isSavingApplication || isUploadingProfilePhoto"
+              @click="closeEditModal"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="btn btn-staff-primary"
+              :disabled="isPreparingEditApplication || isSavingApplication || isUploadingProfilePhoto"
+              @click="saveApplicationEdits"
+            >
+              <span
+                v-if="isSavingApplication"
+                class="spinner-border spinner-border-sm me-2"
+                role="status"
+                aria-hidden="true"
+              ></span>
+              Save Changes
+            </button>
           </div>
         </div>
       </div>
@@ -2230,6 +3268,63 @@ export default {
 
                   <div class="card border-0 shadow-sm mb-4">
                     <div class="card-body">
+                      <div
+                        class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"
+                      >
+                        <h6 class="section-title mb-0">Audit Trail</h6>
+                        <span class="badge bg-light text-dark"
+                          >{{ selectedApplication.auditTrail?.length || 0 }} events</span
+                        >
+                      </div>
+
+                      <div
+                        v-if="getSortedAuditTrail(selectedApplication.auditTrail).length"
+                        class="audit-trail-list"
+                      >
+                        <div
+                          v-for="(entry, index) in getSortedAuditTrail(selectedApplication.auditTrail)"
+                          :key="`${entry.createdAt || index}-${entry.action || index}`"
+                          class="audit-entry"
+                        >
+                          <div
+                            class="d-flex justify-content-between align-items-start flex-wrap gap-2"
+                          >
+                            <div>
+                              <div class="fw-semibold text-dark">
+                                {{ entry.description || formatLabel(entry.action) }}
+                              </div>
+                              <div class="small text-muted">
+                                {{ getAuditActorName(entry) }}
+                                <span v-if="entry.actorRole">
+                                  • {{ formatLabel(entry.actorRole) }}
+                                </span>
+                              </div>
+                            </div>
+                            <span class="audit-entry-time">
+                              {{ formatDateTime(entry.createdAt) }}
+                            </span>
+                          </div>
+
+                          <div v-if="entry.action" class="audit-entry-meta mt-2">
+                            {{ formatLabel(entry.action) }}
+                          </div>
+                          <div
+                            v-if="formatAuditMetadata(entry.metadata)"
+                            class="audit-entry-meta mt-1"
+                          >
+                            {{ formatAuditMetadata(entry.metadata) }}
+                          </div>
+                        </div>
+                      </div>
+
+                      <p v-else class="text-muted mb-0">
+                        No audit history recorded yet.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
                       <h6 class="section-title">Payments Summary</h6>
                       <div class="payment-summary-grid">
                         <div class="summary-tile success-tile">
@@ -2627,6 +3722,30 @@ code {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.audit-trail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.audit-entry {
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  background: rgba(248, 249, 250, 0.85);
+  border: 1px solid rgba(26, 95, 95, 0.08);
+}
+
+.audit-entry-time {
+  font-size: 0.8rem;
+  color: #6c757d;
+  white-space: nowrap;
+}
+
+.audit-entry-meta {
+  font-size: 0.82rem;
+  color: #6c757d;
 }
 
 .success-tile {

@@ -1,6 +1,13 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PutObjectCommand, DeleteObjectCommand, CopyObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+    PutObjectCommand,
+    DeleteObjectCommand,
+    DeleteObjectsCommand,
+    CopyObjectCommand,
+    GetObjectCommand,
+    ListObjectsV2Command,
+} from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { SpacesConfig, SPACES_CONFIG } from '../config/spaces.config';
 import * as path from 'path';
@@ -256,6 +263,120 @@ export class UploadService {
      */
     getFileUrl(key: string): string {
         return `${this.spacesUrl}/${key}`;
+    }
+
+    extractKeyFromUrl(url?: string | null): string | null {
+        if (!url) {
+            return null;
+        }
+
+        try {
+            const parsedUrl = new URL(url);
+            let key = decodeURIComponent(parsedUrl.pathname || '').replace(/^\/+/, '');
+
+            if (!key) {
+                return null;
+            }
+
+            const bucketPrefix = `${this.bucketName}/`;
+            if (key.startsWith(bucketPrefix)) {
+                key = key.slice(bucketPrefix.length);
+            }
+
+            return key || null;
+        } catch (error) {
+            this.logger.warn('Failed to extract Spaces key from URL:', {
+                url,
+                error: error.message,
+            });
+            return null;
+        }
+    }
+
+    async deleteByUrl(url?: string | null): Promise<void> {
+        const key = this.extractKeyFromUrl(url);
+
+        if (!key) {
+            return;
+        }
+
+        await this.deleteFromSpaces(key);
+    }
+
+    async deleteManyFromSpaces(keys: string[]): Promise<void> {
+        const normalizedKeys = [...new Set((keys || []).filter(Boolean))];
+
+        if (!normalizedKeys.length) {
+            return;
+        }
+
+        try {
+            for (let index = 0; index < normalizedKeys.length; index += 1000) {
+                const batch = normalizedKeys.slice(index, index + 1000);
+                const deleteCommand = new DeleteObjectsCommand({
+                    Bucket: this.bucketName,
+                    Delete: {
+                        Objects: batch.map((key) => ({ Key: key })),
+                        Quiet: true,
+                    },
+                });
+
+                await this.s3Client.send(deleteCommand);
+            }
+
+            this.logger.log('Deleted multiple files from Spaces successfully:', {
+                count: normalizedKeys.length,
+            });
+        } catch (error) {
+            this.logger.error('Failed to delete multiple files from Spaces:', {
+                count: normalizedKeys.length,
+                error: error.message,
+                stack: error.stack,
+            });
+        }
+    }
+
+    async deleteByPrefix(prefix: string): Promise<void> {
+        if (!prefix) {
+            return;
+        }
+
+        try {
+            let continuationToken: string | undefined;
+            const keysToDelete: string[] = [];
+
+            do {
+                const listCommand = new ListObjectsV2Command({
+                    Bucket: this.bucketName,
+                    Prefix: prefix,
+                    ContinuationToken: continuationToken,
+                });
+
+                const response = await this.s3Client.send(listCommand);
+
+                response.Contents?.forEach((entry) => {
+                    if (entry.Key) {
+                        keysToDelete.push(entry.Key);
+                    }
+                });
+
+                continuationToken = response.IsTruncated
+                    ? response.NextContinuationToken
+                    : undefined;
+            } while (continuationToken);
+
+            await this.deleteManyFromSpaces(keysToDelete);
+        } catch (error) {
+            this.logger.error('Failed to delete Spaces objects by prefix:', {
+                prefix,
+                error: error.message,
+                stack: error.stack,
+            });
+        }
+    }
+
+    getApplicationTempPrefix(applicationNumber: string): string {
+        return `${SPACES_CONFIG.FILE_PATHS.TEMP}/temp_${applicationNumber}/`;
     }
 
     /**

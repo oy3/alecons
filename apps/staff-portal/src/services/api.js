@@ -15,14 +15,18 @@ class StaffApiService {
 
     async makeRequest(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`
+        const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
 
         const config = {
             method: 'GET',
             headers: {
-                'Content-Type': 'application/json',
                 ...options.headers,
             },
             ...options,
+        }
+
+        if (!isFormData) {
+            config.headers['Content-Type'] = config.headers['Content-Type'] || 'application/json'
         }
 
         // Add authorization header if token exists
@@ -86,6 +90,13 @@ class StaffApiService {
         return this.makeRequest(endpoint, {
             method: 'POST',
             body: JSON.stringify(data),
+        })
+    }
+
+    async postForm(endpoint, formData) {
+        return this.makeRequest(endpoint, {
+            method: 'POST',
+            body: formData,
         })
     }
 
@@ -220,6 +231,23 @@ class StaffApiService {
             method: 'PATCH',
             body: JSON.stringify({ status, remarks }),
         })
+    }
+
+    async updateApplication(id, payload) {
+        return this.makeRequest(`/staff/applications/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        })
+    }
+
+    async deleteApplication(id) {
+        return this.makeRequest(`/staff/applications/${id}`, {
+            method: 'DELETE',
+        })
+    }
+
+    async uploadApplicationProfilePhoto(id, formData) {
+        return this.postForm(`/staff/applications/${id}/upload-profile-photo`, formData)
     }
 
     // Admission management methods

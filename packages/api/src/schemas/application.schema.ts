@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document as MongooseDocument, Types } from 'mongoose';
+import { Document as MongooseDocument, Types, Schema as MongooseSchema } from 'mongoose';
 import { Logger } from '@nestjs/common';
 
 export type ApplicationDocument = Application & MongooseDocument;
@@ -100,6 +100,15 @@ export interface ApplicationDocuments {
     profilePicture?: ApplicationDoc;
     olevelResults: ApplicationDoc[];
     referenceLetters: ApplicationDoc[];
+}
+
+export interface ApplicationAuditEntry {
+    action: string;
+    description: string;
+    performedBy?: Types.ObjectId;
+    actorRole?: string;
+    metadata?: Record<string, unknown>;
+    createdAt: Date;
 }
 
 @Schema({ timestamps: true })
@@ -287,11 +296,18 @@ export class Application {
     matriculationNumber?: string;
 
     // Audit Trail
-    @Prop({ type: Types.ObjectId, ref: 'User' })
-    lastUpdatedBy?: Types.ObjectId;
-
-    @Prop()
-    lastUpdatedAt?: Date;
+    @Prop({
+        type: [{
+            action: { type: String, required: true },
+            description: { type: String, required: true },
+            performedBy: { type: Types.ObjectId, ref: 'User' },
+            actorRole: { type: String },
+            metadata: { type: MongooseSchema.Types.Mixed },
+            createdAt: { type: Date, default: Date.now },
+        }],
+        default: [],
+    })
+    auditTrail: ApplicationAuditEntry[];
 
     @Prop({ default: true })
     isActive: boolean;

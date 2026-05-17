@@ -45,6 +45,53 @@ export class ApplicationUploadController {
         @InjectModel(User.name) private userModel: Model<UserDocument>,
     ) { }
 
+    private appendAuditEntry(application: any, payload: {
+        action: string;
+        description: string;
+        actor?: { _id?: string | Types.ObjectId; role?: string } | null;
+        metadata?: Record<string, unknown>;
+    }) {
+        application.auditTrail = Array.isArray(application.auditTrail)
+            ? application.auditTrail
+            : [];
+
+        application.auditTrail.push({
+            action: payload.action,
+            description: payload.description,
+            performedBy: payload.actor?._id ? new Types.ObjectId(payload.actor._id) : undefined,
+            actorRole: payload.actor?.role,
+            metadata: this.normalizeAuditMetadata(payload.metadata),
+            createdAt: new Date(),
+        });
+    }
+
+    private normalizeAuditMetadata(value: unknown, key?: string): unknown {
+        if (value === null || value === undefined) {
+            return value;
+        }
+
+        if (value instanceof Date || value instanceof Types.ObjectId) {
+            return value;
+        }
+
+        if (Array.isArray(value)) {
+            return value.map((item) => this.normalizeAuditMetadata(item));
+        }
+
+        if (typeof value === 'string' && key && /(^_id$|Id$)/i.test(key) && Types.ObjectId.isValid(value)) {
+            return new Types.ObjectId(value);
+        }
+
+        if (typeof value === 'object') {
+            return Object.entries(value as Record<string, unknown>).reduce((accumulator, [entryKey, entryValue]) => {
+                accumulator[entryKey] = this.normalizeAuditMetadata(entryValue, entryKey);
+                return accumulator;
+            }, {} as Record<string, unknown>);
+        }
+
+        return value;
+    }
+
     @Post('upload')
     @UseInterceptors(FileInterceptor('file'))
     async uploadFile(
@@ -463,6 +510,17 @@ export class ApplicationUploadController {
                 application.currentStage = await this.sessionControlsService.getNextStageAfterApplicationForm(
                     application.entryAcademicSession,
                 );
+                this.appendAuditEntry(application, {
+                    action: 'application_submitted',
+                    description: 'Application form was submitted by the applicant.',
+                    actor: req.user,
+                    metadata: {
+                        documentsUploaded: documents.length,
+                        examinationsCount: examinations.length,
+                        refereesCount: referees.length,
+                        isJambExempt: application.isJambExempt === true,
+                    },
+                });
 
                 // Debug: Log the application object just before saving
                 this.logger.log('Application object just before save:', {

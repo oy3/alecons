@@ -200,6 +200,7 @@ export default {
   border-bottom: 3px solid transparent;
   font-weight: 500;
   padding: 1rem 1.5rem;
+  border-radius: 0px;
 }
 
 .nav-tabs .nav-link:hover {

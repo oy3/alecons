@@ -1,79 +1,86 @@
 <script>
-import { apiService } from '../../../services/api.js'
-import { logger } from '@shared/utils/logger'
-import Swal from 'sweetalert2'
+import { apiService } from "../../../services/api.js";
+import { logger } from "@shared/utils/logger";
+import Swal from "sweetalert2";
 
 export default {
-  name: 'Payments',
+  name: "Payments",
   data() {
     return {
       allPayments: [], // Store all payments from server
       payments: [], // Displayed payments after filtering
       destinationAccounts: [],
       isLoading: true,
-      searchQuery: '',
+      searchQuery: "",
       currentPage: 1,
       perPage: 10,
       showDestinationAccountsModal: false,
-    }
+    };
   },
   computed: {
     filteredPayments() {
-      if (!this.searchQuery) return this.allPayments
+      if (!this.searchQuery) return this.allPayments;
 
-      return this.allPayments.filter(payment =>
-        payment.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        (payment.description && payment.description.toLowerCase().includes(this.searchQuery.toLowerCase())) ||
-        (payment.paymentCode && payment.paymentCode.toLowerCase().includes(this.searchQuery.toLowerCase())) ||
-        payment.amount.toString().includes(this.searchQuery)
-      )
+      return this.allPayments.filter(
+        (payment) =>
+          payment.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+          (payment.description &&
+            payment.description
+              .toLowerCase()
+              .includes(this.searchQuery.toLowerCase())) ||
+          (payment.paymentCode &&
+            payment.paymentCode
+              .toLowerCase()
+              .includes(this.searchQuery.toLowerCase())) ||
+          payment.amount.toString().includes(this.searchQuery),
+      );
     },
 
     paginatedPayments() {
-      const start = (this.currentPage - 1) * this.perPage
-      const end = start + this.perPage
-      return this.filteredPayments.slice(start, end)
+      const start = (this.currentPage - 1) * this.perPage;
+      const end = start + this.perPage;
+      return this.filteredPayments.slice(start, end);
     },
 
     totalPages() {
-      return Math.ceil(this.filteredPayments.length / this.perPage)
+      return Math.ceil(this.filteredPayments.length / this.perPage);
     },
 
     visiblePages() {
-      const pages = []
-      const start = Math.max(1, this.currentPage - 2)
-      const end = Math.min(this.totalPages, this.currentPage + 2)
-      
+      const pages = [];
+      const start = Math.max(1, this.currentPage - 2);
+      const end = Math.min(this.totalPages, this.currentPage + 2);
+
       for (let i = start; i <= end; i++) {
-        pages.push(i)
+        pages.push(i);
       }
-      
-      return pages
-    }
+
+      return pages;
+    },
   },
   watch: {
     searchQuery() {
-      this.currentPage = 1
-    }
+      this.currentPage = 1;
+    },
   },
   async mounted() {
-    await Promise.all([this.loadPayments(), this.loadDestinationAccounts()])
+    await Promise.all([this.loadPayments(), this.loadDestinationAccounts()]);
   },
   methods: {
     async loadPayments() {
       try {
-        this.isLoading = true
-        logger.info('Loading payments...')
+        this.isLoading = true;
+        logger.info("Loading payments...");
 
         // Load all payments at once (no pagination for simplicity)
         const response = await apiService.getPayments({
-          limit: 1000 // Load all payments
-        })
+          limit: 1000, // Load all payments
+        });
 
-        logger.info('API Response:', response)
+        logger.info("API Response:", response);
 
         if (response.success) {
-          this.allPayments = response.data.payments.map(payment => ({
+          this.allPayments = response.data.payments.map((payment) => ({
             id: payment.id,
             name: payment.name,
             description: payment.description,
@@ -81,128 +88,142 @@ export default {
             isActive: payment.isActive,
             paymentCode: payment.paymentCode,
             targetAudience: payment.targetAudience,
-            paystackDestinationAccount: payment.paystackDestinationAccount || null,
-            manualTransferDestinationAccount: payment.manualTransferDestinationAccount || null,
-            paystackDestinationAccountId: payment.paystackDestinationAccountId || null,
-            manualTransferDestinationAccountId: payment.manualTransferDestinationAccountId || null,
+            paystackDestinationAccount:
+              payment.paystackDestinationAccount || null,
+            manualTransferDestinationAccount:
+              payment.manualTransferDestinationAccount || null,
+            paystackDestinationAccountId:
+              payment.paystackDestinationAccountId || null,
+            manualTransferDestinationAccountId:
+              payment.manualTransferDestinationAccountId || null,
             createdAt: new Date(payment.createdAt),
-            updatedAt: new Date(payment.updatedAt)
-          }))
+            updatedAt: new Date(payment.updatedAt),
+          }));
 
-          logger.info(`Loaded ${this.allPayments.length} payments`)
-          logger.info('All payments loaded:', this.allPayments)
+          logger.info(`Loaded ${this.allPayments.length} payments`);
+          logger.info("All payments loaded:", this.allPayments);
         } else {
-          throw new Error(response.message || 'Failed to load payments')
+          throw new Error(response.message || "Failed to load payments");
         }
       } catch (error) {
-        logger.error('Error loading payments:', error)
-        logger.error('Full error details:', error)
-        
+        logger.error("Error loading payments:", error);
+        logger.error("Full error details:", error);
+
         // Show more detailed error information
-        let errorMessage = 'Failed to load payments. Please try again.'
-        if (error.message.includes('Unauthorized')) {
-          errorMessage = 'You are not authorized to view payments. Please check your permissions.'
-        } else if (error.message.includes('Network')) {
-          errorMessage = 'Network error. Please check your connection.'
+        let errorMessage = "Failed to load payments. Please try again.";
+        if (error.message.includes("Unauthorized")) {
+          errorMessage =
+            "You are not authorized to view payments. Please check your permissions.";
+        } else if (error.message.includes("Network")) {
+          errorMessage = "Network error. Please check your connection.";
         }
-        
+
         // For now, add some fallback data so we can test the UI
-        logger.warn('Using fallback payment data for testing')
+        logger.warn("Using fallback payment data for testing");
         this.allPayments = [
           {
             id: 1,
-            name: 'Application Fee',
-            description: 'Fee for submitting university application',
+            name: "Application Fee",
+            description: "Fee for submitting university application",
             amount: 25000,
             isActive: true,
-            paymentCode: 'APP_FEE',
+            paymentCode: "APP_FEE",
             paystackDestinationAccount: null,
             manualTransferDestinationAccount: null,
-            createdAt: new Date('2024-01-15')
+            createdAt: new Date("2024-01-15"),
           },
           {
             id: 2,
-            name: 'Tuition Fee - Semester 1',
-            description: 'First semester tuition payment',
+            name: "Tuition Fee - Semester 1",
+            description: "First semester tuition payment",
             amount: 350000,
             isActive: true,
-            paymentCode: 'TUITION_S1',
+            paymentCode: "TUITION_S1",
             paystackDestinationAccount: null,
             manualTransferDestinationAccount: null,
-            createdAt: new Date('2024-01-20')
+            createdAt: new Date("2024-01-20"),
           },
           {
             id: 3,
-            name: 'Library Fee',
-            description: 'Annual library access and maintenance fee',
+            name: "Library Fee",
+            description: "Annual library access and maintenance fee",
             amount: 15000,
             isActive: true,
-            paymentCode: 'LIBRARY_FEE',
+            paymentCode: "LIBRARY_FEE",
             paystackDestinationAccount: null,
             manualTransferDestinationAccount: null,
-            createdAt: new Date('2024-01-25')
-          }
-        ]
-        
+            createdAt: new Date("2024-01-25"),
+          },
+        ];
+
         Swal.fire({
-          title: 'Warning!',
-          text: errorMessage + ' (Using sample data for now)',
-          icon: 'warning',
-          confirmButtonText: 'OK',
-          confirmButtonColor: '#ffc107'
-        })
+          title: "Warning!",
+          text: errorMessage + " (Using sample data for now)",
+          icon: "warning",
+          confirmButtonText: "OK",
+          confirmButtonColor: "#ffc107",
+        });
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
     async loadDestinationAccounts() {
       try {
-        const response = await apiService.getPaymentDestinationAccounts()
+        const response = await apiService.getPaymentDestinationAccounts();
 
         if (response.success) {
-          this.destinationAccounts = response.data || []
+          this.destinationAccounts = response.data || [];
         } else {
-          throw new Error(response.message || 'Failed to load destination accounts')
+          throw new Error(
+            response.message || "Failed to load destination accounts",
+          );
         }
       } catch (error) {
-        logger.error('Error loading destination accounts:', error)
-        this.destinationAccounts = []
+        logger.error("Error loading destination accounts:", error);
+        this.destinationAccounts = [];
       }
     },
 
     getDestinationAccountsByChannel(channelType) {
-      return this.destinationAccounts.filter(account => account.channelType === channelType)
+      return this.destinationAccounts.filter(
+        (account) => account.channelType === channelType,
+      );
     },
 
-    buildDestinationOptions(channelType, selectedId = '') {
-      const accounts = this.getDestinationAccountsByChannel(channelType)
-      const emptyLabel = channelType === 'paystack'
-        ? 'Default main Paystack account'
-        : 'Default manual transfer account / env fallback'
+    buildDestinationOptions(channelType, selectedId = "") {
+      const accounts = this.getDestinationAccountsByChannel(channelType);
+      const emptyLabel =
+        channelType === "paystack"
+          ? "Default main Paystack account"
+          : "Default manual transfer account / env fallback";
 
-      const options = [`<option value="">${emptyLabel}</option>`]
+      const options = [`<option value="">${emptyLabel}</option>`];
 
-      accounts.forEach(account => {
-        const selected = selectedId && selectedId === account.id ? 'selected' : ''
-        const badge = account.isDefault ? ' (Default)' : ''
-        options.push(`<option value="${account.id}" ${selected}>${account.title} - ${account.code}${badge}</option>`)
-      })
+      accounts.forEach((account) => {
+        const selected =
+          selectedId && selectedId === account.id ? "selected" : "";
+        const badge = account.isDefault ? " (Default)" : "";
+        options.push(
+          `<option value="${account.id}" ${selected}>${account.title} - ${account.code}${badge}</option>`,
+        );
+      });
 
-      return options.join('')
+      return options.join("");
     },
 
     formatDestinationAccount(account, emptyLabel) {
       if (!account) {
-        return emptyLabel
+        return emptyLabel;
       }
 
-      return `${account.title} (${account.code})`
+      // return `${account.title} (${account.code})`;
+      return `${account.title}`;
     },
 
     async showAddPaymentModal() {
       const { value: formValues } = await Swal.fire({
-        title: 'Add New Payment',
+        title: "Add New Payment",
         html: `
           <div class="row g-3 text-start">
             <div class="col-12">
@@ -235,13 +256,13 @@ export default {
             <div class="col-md-6">
               <label for="swal-paystack-destination" class="form-label">Paystack Destination</label>
               <select id="swal-paystack-destination" class="form-select">
-                ${this.buildDestinationOptions('paystack')}
+                ${this.buildDestinationOptions("paystack")}
               </select>
             </div>
             <div class="col-md-6">
               <label for="swal-manual-destination" class="form-label">Manual Transfer Destination</label>
               <select id="swal-manual-destination" class="form-select">
-                ${this.buildDestinationOptions('manual_transfer')}
+                ${this.buildDestinationOptions("manual_transfer")}
               </select>
             </div>
             <div class="col-12">
@@ -255,95 +276,119 @@ export default {
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: 'Create Payment',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#198754',
-        cancelButtonColor: '#6c757d',
+        confirmButtonText: "Create Payment",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#198754",
+        cancelButtonColor: "#6c757d",
         preConfirm: () => {
-          const name = document.getElementById('swal-payment-name').value
-          const paymentCode = document.getElementById('swal-payment-code').value
-          const description = document.getElementById('swal-payment-description').value
-          const amount = document.getElementById('swal-payment-amount').value
-          const isActive = document.getElementById('swal-payment-active').checked
-          const audienceSelect = document.getElementById('swal-target-audience')
-          const targetAudience = Array.from(audienceSelect.selectedOptions).map(option => option.value)
-          const paystackDestinationAccountId = document.getElementById('swal-paystack-destination').value || null
-          const manualTransferDestinationAccountId = document.getElementById('swal-manual-destination').value || null
+          const name = document.getElementById("swal-payment-name").value;
+          const paymentCode =
+            document.getElementById("swal-payment-code").value;
+          const description = document.getElementById(
+            "swal-payment-description",
+          ).value;
+          const amount = document.getElementById("swal-payment-amount").value;
+          const isActive = document.getElementById(
+            "swal-payment-active",
+          ).checked;
+          const audienceSelect = document.getElementById(
+            "swal-target-audience",
+          );
+          const targetAudience = Array.from(audienceSelect.selectedOptions).map(
+            (option) => option.value,
+          );
+          const paystackDestinationAccountId =
+            document.getElementById("swal-paystack-destination").value || null;
+          const manualTransferDestinationAccountId =
+            document.getElementById("swal-manual-destination").value || null;
 
           if (!name || !paymentCode || !amount) {
-            Swal.showValidationMessage('Please fill in all required fields')
-            return false
+            Swal.showValidationMessage("Please fill in all required fields");
+            return false;
           }
 
           if (targetAudience.length === 0) {
-            Swal.showValidationMessage('Please select at least one target audience')
-            return false
+            Swal.showValidationMessage(
+              "Please select at least one target audience",
+            );
+            return false;
           }
 
           // Validate payment code format (alphanumeric only)
-          const codePattern = /^[A-Za-z0-9]+$/
+          const codePattern = /^[A-Za-z0-9]+$/;
           if (!codePattern.test(paymentCode)) {
-            Swal.showValidationMessage('Payment code should contain only letters and numbers (no spaces or special characters)')
-            return false
+            Swal.showValidationMessage(
+              "Payment code should contain only letters and numbers (no spaces or special characters)",
+            );
+            return false;
           }
 
           if (parseFloat(amount) < 0) {
-            Swal.showValidationMessage('Amount cannot be negative')
-            return false
+            Swal.showValidationMessage("Amount cannot be negative");
+            return false;
           }
 
-          return { name, paymentCode, description, amount: parseFloat(amount), isActive, targetAudience, paystackDestinationAccountId, manualTransferDestinationAccountId }
-        }
-      })
+          return {
+            name,
+            paymentCode,
+            description,
+            amount: parseFloat(amount),
+            isActive,
+            targetAudience,
+            paystackDestinationAccountId,
+            manualTransferDestinationAccountId,
+          };
+        },
+      });
 
       if (formValues) {
-        await this.createPayment(formValues)
+        await this.createPayment(formValues);
       }
     },
 
     async createPayment(paymentData) {
       try {
-        logger.info('Creating payment:', paymentData)
+        logger.info("Creating payment:", paymentData);
 
-        const response = await apiService.createPayment(paymentData)
+        const response = await apiService.createPayment(paymentData);
 
         if (response.success) {
           // Reload payments to get updated list
-          await this.loadPayments()
+          await this.loadPayments();
 
           Swal.fire({
-            title: 'Success!',
-            text: 'Payment created successfully.',
-            icon: 'success',
-            confirmButtonText: 'OK',
-            confirmButtonColor: '#198754'
-          })
+            title: "Success!",
+            text: "Payment created successfully.",
+            icon: "success",
+            confirmButtonText: "OK",
+            confirmButtonColor: "#198754",
+          });
 
-          logger.info('Payment created successfully')
+          logger.info("Payment created successfully");
         } else {
-          throw new Error(response.message || 'Failed to create payment')
+          throw new Error(response.message || "Failed to create payment");
         }
       } catch (error) {
-        logger.error('Error creating payment:', error)
-        
-        let errorMessage = 'Failed to create payment. Please try again.'
-        if (error.message.includes('already exists')) {
-          errorMessage = 'A payment with this name already exists.'
+        logger.error("Error creating payment:", error);
+
+        let errorMessage = "Failed to create payment. Please try again.";
+        if (error.message.includes("already exists")) {
+          errorMessage = "A payment with this name already exists.";
         }
 
         Swal.fire({
-          title: 'Error!',
+          title: "Error!",
           text: errorMessage,
-          icon: 'error',
-          confirmButtonText: 'OK',
-          confirmButtonColor: '#dc3545'
-        })
+          icon: "error",
+          confirmButtonText: "OK",
+          confirmButtonColor: "#dc3545",
+        });
       }
     },
 
     async editPayment(payment) {
       const { value: formValues } = await Swal.fire({
-        title: 'Edit Payment',
+        title: "Edit Payment",
         html: `
           <div class="row g-3 text-start">
             <div class="col-12">
@@ -352,12 +397,12 @@ export default {
             </div>
             <div class="col-12">
               <label for="swal-edit-code" class="form-label">Payment Code</label>
-              <input id="swal-edit-code" class="form-control" value="${payment.paymentCode || ''}" required>
+              <input id="swal-edit-code" class="form-control" value="${payment.paymentCode || ""}" required>
               <div class="form-text">Unique code to identify this payment type</div>
             </div>
             <div class="col-12">
               <label for="swal-edit-description" class="form-label">Description</label>
-              <textarea id="swal-edit-description" class="form-control" rows="3">${payment.description || ''}</textarea>
+              <textarea id="swal-edit-description" class="form-control" rows="3">${payment.description || ""}</textarea>
             </div>
             <div class="col-12">
               <label for="swal-edit-amount" class="form-label">Amount (₦)</label>
@@ -366,28 +411,28 @@ export default {
             <div class="col-12">
               <label for="swal-edit-target-audience" class="form-label">Target Audience</label>
               <select id="swal-edit-target-audience" class="form-select" multiple required>
-                <option value="applicant" ${payment.targetAudience?.includes('applicant') ? 'selected' : ''}>Applicant</option>
-                <option value="student" ${payment.targetAudience?.includes('student') ? 'selected' : ''}>Student</option>
-                <option value="academic_staff" ${payment.targetAudience?.includes('academic_staff') ? 'selected' : ''}>Academic Staff</option>
-                <option value="admin_staff" ${payment.targetAudience?.includes('admin_staff') ? 'selected' : ''}>Admin Staff</option>
+                <option value="applicant" ${payment.targetAudience?.includes("applicant") ? "selected" : ""}>Applicant</option>
+                <option value="student" ${payment.targetAudience?.includes("student") ? "selected" : ""}>Student</option>
+                <option value="academic_staff" ${payment.targetAudience?.includes("academic_staff") ? "selected" : ""}>Academic Staff</option>
+                <option value="admin_staff" ${payment.targetAudience?.includes("admin_staff") ? "selected" : ""}>Admin Staff</option>
               </select>
               <div class="form-text">Hold Ctrl/Cmd to select multiple audiences</div>
             </div>
             <div class="col-md-6">
               <label for="swal-edit-paystack-destination" class="form-label">Paystack Destination</label>
               <select id="swal-edit-paystack-destination" class="form-select">
-                ${this.buildDestinationOptions('paystack', payment.paystackDestinationAccountId || '')}
+                ${this.buildDestinationOptions("paystack", payment.paystackDestinationAccountId || "")}
               </select>
             </div>
             <div class="col-md-6">
               <label for="swal-edit-manual-destination" class="form-label">Manual Transfer Destination</label>
               <select id="swal-edit-manual-destination" class="form-select">
-                ${this.buildDestinationOptions('manual_transfer', payment.manualTransferDestinationAccountId || '')}
+                ${this.buildDestinationOptions("manual_transfer", payment.manualTransferDestinationAccountId || "")}
               </select>
             </div>
             <div class="col-12">
               <div class="form-check text-start">
-                <input id="swal-edit-active" class="form-check-input" type="checkbox" ${payment.isActive ? 'checked' : ''}>
+                <input id="swal-edit-active" class="form-check-input" type="checkbox" ${payment.isActive ? "checked" : ""}>
                 <label for="swal-edit-active" class="form-check-label">
                   Set as active
                 </label>
@@ -396,219 +441,245 @@ export default {
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: 'Update Payment',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#198754',
-        cancelButtonColor: '#6c757d',
+        confirmButtonText: "Update Payment",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#198754",
+        cancelButtonColor: "#6c757d",
         didOpen: () => {
           // Manually set the selected options after the modal opens
-          const targetAudienceSelect = document.getElementById('swal-edit-target-audience');
+          const targetAudienceSelect = document.getElementById(
+            "swal-edit-target-audience",
+          );
           if (targetAudienceSelect && payment.targetAudience) {
-            Array.from(targetAudienceSelect.options).forEach(option => {
+            Array.from(targetAudienceSelect.options).forEach((option) => {
               option.selected = payment.targetAudience.includes(option.value);
             });
           }
         },
         preConfirm: () => {
-          const name = document.getElementById('swal-edit-name').value
-          const paymentCode = document.getElementById('swal-edit-code').value
-          const description = document.getElementById('swal-edit-description').value
-          const amount = document.getElementById('swal-edit-amount').value
-          const isActive = document.getElementById('swal-edit-active').checked
-          const audienceSelect = document.getElementById('swal-edit-target-audience')
-          const targetAudience = Array.from(audienceSelect.selectedOptions).map(option => option.value)
-          const paystackDestinationAccountId = document.getElementById('swal-edit-paystack-destination').value || null
-          const manualTransferDestinationAccountId = document.getElementById('swal-edit-manual-destination').value || null
+          const name = document.getElementById("swal-edit-name").value;
+          const paymentCode = document.getElementById("swal-edit-code").value;
+          const description = document.getElementById(
+            "swal-edit-description",
+          ).value;
+          const amount = document.getElementById("swal-edit-amount").value;
+          const isActive = document.getElementById("swal-edit-active").checked;
+          const audienceSelect = document.getElementById(
+            "swal-edit-target-audience",
+          );
+          const targetAudience = Array.from(audienceSelect.selectedOptions).map(
+            (option) => option.value,
+          );
+          const paystackDestinationAccountId =
+            document.getElementById("swal-edit-paystack-destination").value ||
+            null;
+          const manualTransferDestinationAccountId =
+            document.getElementById("swal-edit-manual-destination").value ||
+            null;
 
           if (!name || !paymentCode || !amount) {
-            Swal.showValidationMessage('Please fill in all required fields')
-            return false
+            Swal.showValidationMessage("Please fill in all required fields");
+            return false;
           }
 
           if (targetAudience.length === 0) {
-            Swal.showValidationMessage('Please select at least one target audience')
-            return false
+            Swal.showValidationMessage(
+              "Please select at least one target audience",
+            );
+            return false;
           }
 
           // Validate payment code format (alphanumeric only)
-          const codePattern = /^[A-Za-z0-9]+$/
+          const codePattern = /^[A-Za-z0-9]+$/;
           if (!codePattern.test(paymentCode)) {
-            Swal.showValidationMessage('Payment code should contain only letters and numbers (no spaces or special characters)')
-            return false
+            Swal.showValidationMessage(
+              "Payment code should contain only letters and numbers (no spaces or special characters)",
+            );
+            return false;
           }
 
           if (parseFloat(amount) < 0) {
-            Swal.showValidationMessage('Amount cannot be negative')
-            return false
+            Swal.showValidationMessage("Amount cannot be negative");
+            return false;
           }
 
-          return { name, paymentCode, description, amount: parseFloat(amount), isActive, targetAudience, paystackDestinationAccountId, manualTransferDestinationAccountId }
-        }
-      })
+          return {
+            name,
+            paymentCode,
+            description,
+            amount: parseFloat(amount),
+            isActive,
+            targetAudience,
+            paystackDestinationAccountId,
+            manualTransferDestinationAccountId,
+          };
+        },
+      });
 
       if (formValues) {
-        await this.updatePayment(payment.id, formValues)
+        await this.updatePayment(payment.id, formValues);
       }
     },
 
     async updatePayment(paymentId, updateData) {
       try {
-        logger.info('Updating payment:', paymentId, updateData)
+        logger.info("Updating payment:", paymentId, updateData);
 
-        const response = await apiService.updatePayment(paymentId, updateData)
+        const response = await apiService.updatePayment(paymentId, updateData);
 
         if (response.success) {
           // Reload payments to get updated list
-          await this.loadPayments()
+          await this.loadPayments();
 
           Swal.fire({
-            title: 'Success!',
-            text: 'Payment updated successfully.',
-            icon: 'success',
-            confirmButtonText: 'OK',
-            confirmButtonColor: '#198754'
-          })
+            title: "Success!",
+            text: "Payment updated successfully.",
+            icon: "success",
+            confirmButtonText: "OK",
+            confirmButtonColor: "#198754",
+          });
 
-          logger.info('Payment updated successfully')
+          logger.info("Payment updated successfully");
         } else {
-          throw new Error(response.message || 'Failed to update payment')
+          throw new Error(response.message || "Failed to update payment");
         }
       } catch (error) {
-        logger.error('Error updating payment:', error)
-        
-        let errorMessage = 'Failed to update payment. Please try again.'
-        if (error.message.includes('already exists')) {
-          errorMessage = 'A payment with this name already exists.'
+        logger.error("Error updating payment:", error);
+
+        let errorMessage = "Failed to update payment. Please try again.";
+        if (error.message.includes("already exists")) {
+          errorMessage = "A payment with this name already exists.";
         }
 
         Swal.fire({
-          title: 'Error!',
+          title: "Error!",
           text: errorMessage,
-          icon: 'error',
-          confirmButtonText: 'OK',
-          confirmButtonColor: '#dc3545'
-        })
+          icon: "error",
+          confirmButtonText: "OK",
+          confirmButtonColor: "#dc3545",
+        });
       }
     },
 
     async togglePaymentStatus(payment) {
-      const action = payment.isActive ? 'deactivate' : 'activate'
-      
+      const action = payment.isActive ? "deactivate" : "activate";
+
       const result = await Swal.fire({
         title: `${action.charAt(0).toUpperCase() + action.slice(1)} Payment?`,
         text: `Are you sure you want to ${action} "${payment.name}"?`,
-        icon: 'question',
+        icon: "question",
         showCancelButton: true,
         confirmButtonText: `Yes, ${action}`,
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: payment.isActive ? '#ffc107' : '#198754',
-        cancelButtonColor: '#6c757d'
-      })
+        cancelButtonText: "Cancel",
+        confirmButtonColor: payment.isActive ? "#ffc107" : "#198754",
+        cancelButtonColor: "#6c757d",
+      });
 
       if (result.isConfirmed) {
         try {
-          logger.info(`${action}ing payment:`, payment.id)
+          logger.info(`${action}ing payment:`, payment.id);
 
-          const response = await apiService.togglePaymentStatus(payment.id)
+          const response = await apiService.togglePaymentStatus(payment.id);
 
           if (response.success) {
             // Reload payments to get updated list
-            await this.loadPayments()
+            await this.loadPayments();
 
             Swal.fire({
-              title: 'Success!',
+              title: "Success!",
               text: `Payment ${action}d successfully.`,
-              icon: 'success',
-              confirmButtonText: 'OK',
-              confirmButtonColor: '#198754'
-            })
+              icon: "success",
+              confirmButtonText: "OK",
+              confirmButtonColor: "#198754",
+            });
 
-            logger.info(`Payment ${action}d successfully`)
+            logger.info(`Payment ${action}d successfully`);
           } else {
-            throw new Error(response.message || `Failed to ${action} payment`)
+            throw new Error(response.message || `Failed to ${action} payment`);
           }
         } catch (error) {
-          logger.error(`Error ${action}ing payment:`, error)
+          logger.error(`Error ${action}ing payment:`, error);
           Swal.fire({
-            title: 'Error!',
+            title: "Error!",
             text: `Failed to ${action} payment. Please try again.`,
-            icon: 'error',
-            confirmButtonText: 'OK',
-            confirmButtonColor: '#dc3545'
-          })
+            icon: "error",
+            confirmButtonText: "OK",
+            confirmButtonColor: "#dc3545",
+          });
         }
       }
     },
 
     async deletePayment(payment) {
       const result = await Swal.fire({
-        title: 'Delete Payment?',
+        title: "Delete Payment?",
         text: `Are you sure you want to delete "${payment.name}"? This action cannot be undone.`,
-        icon: 'warning',
+        icon: "warning",
         showCancelButton: true,
-        confirmButtonText: 'Yes, delete',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d'
-      })
+        confirmButtonText: "Yes, delete",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#dc3545",
+        cancelButtonColor: "#6c757d",
+      });
 
       if (result.isConfirmed) {
         try {
-          logger.info('Deleting payment:', payment.id)
+          logger.info("Deleting payment:", payment.id);
 
-          const response = await apiService.deletePayment(payment.id)
+          const response = await apiService.deletePayment(payment.id);
 
           if (response.success) {
             // Reload payments to get updated list
-            await this.loadPayments()
+            await this.loadPayments();
 
             Swal.fire({
-              title: 'Deleted!',
-              text: 'Payment deleted successfully.',
-              icon: 'success',
-              confirmButtonText: 'OK',
-              confirmButtonColor: '#198754'
-            })
+              title: "Deleted!",
+              text: "Payment deleted successfully.",
+              icon: "success",
+              confirmButtonText: "OK",
+              confirmButtonColor: "#198754",
+            });
 
-            logger.info('Payment deleted successfully')
+            logger.info("Payment deleted successfully");
           } else {
-            throw new Error(response.message || 'Failed to delete payment')
+            throw new Error(response.message || "Failed to delete payment");
           }
         } catch (error) {
-          logger.error('Error deleting payment:', error)
-          
-          let errorMessage = 'Failed to delete payment. Please try again.'
-          if (error.message.includes('been used by students')) {
-            errorMessage = 'Cannot delete payment that has been used by students.'
+          logger.error("Error deleting payment:", error);
+
+          let errorMessage = "Failed to delete payment. Please try again.";
+          if (error.message.includes("been used by students")) {
+            errorMessage =
+              "Cannot delete payment that has been used by students.";
           }
 
           Swal.fire({
-            title: 'Error!',
+            title: "Error!",
             text: errorMessage,
-            icon: 'error',
-            confirmButtonText: 'OK',
-            confirmButtonColor: '#dc3545'
-          })
+            icon: "error",
+            confirmButtonText: "OK",
+            confirmButtonColor: "#dc3545",
+          });
         }
       }
     },
 
     openDestinationAccountsModal() {
-      this.showDestinationAccountsModal = true
+      this.showDestinationAccountsModal = true;
     },
 
     closeDestinationAccountsModal() {
-      this.showDestinationAccountsModal = false
+      this.showDestinationAccountsModal = false;
     },
 
     async showDestinationAccountForm(account = null) {
-      const isEdit = !!account
+      const isEdit = !!account;
       const { value: formValues } = await Swal.fire({
-        title: isEdit ? 'Edit Destination Account' : 'Add Destination Account',
-        width: '780px',
+        title: isEdit ? "Edit Destination Account" : "Add Destination Account",
+        width: "780px",
         customClass: {
-          popup: 'destination-account-swal-popup',
-          htmlContainer: 'destination-account-swal-html'
+          popup: "destination-account-swal-popup",
+          htmlContainer: "destination-account-swal-html",
         },
         html: `
           <div class="text-start">
@@ -621,61 +692,61 @@ export default {
             <div class="row g-3 text-start">
             <div class="col-md-6">
               <label for="swal-destination-title" class="form-label">Title</label>
-              <input id="swal-destination-title" class="form-control" value="${account?.title || ''}" placeholder="e.g. Accommodation Account" required>
+              <input id="swal-destination-title" class="form-control" value="${account?.title || ""}" placeholder="e.g. Accommodation Account" required>
               <div class="form-text">Friendly name staff will see when assigning payment routes.</div>
             </div>
             <div class="col-md-6">
               <label for="swal-destination-code" class="form-label">Code</label>
-              <input id="swal-destination-code" class="form-control" value="${account?.code || ''}" placeholder="e.g. ACCOMMODATION_PAYSTACK" required>
+              <input id="swal-destination-code" class="form-control" value="${account?.code || ""}" placeholder="e.g. ACCOMMODATION_PAYSTACK" required>
               <div class="form-text">Internal unique code used to identify this destination account.</div>
             </div>
             <div class="col-md-6">
               <label for="swal-destination-channel" class="form-label">Channel</label>
               <select id="swal-destination-channel" class="form-select">
-                <option value="paystack" ${account?.channelType === 'paystack' ? 'selected' : ''}>Paystack</option>
-                <option value="manual_transfer" ${account?.channelType === 'manual_transfer' ? 'selected' : ''}>Manual Transfer</option>
+                <option value="paystack" ${account?.channelType === "paystack" ? "selected" : ""}>Paystack</option>
+                <option value="manual_transfer" ${account?.channelType === "manual_transfer" ? "selected" : ""}>Manual Transfer</option>
               </select>
               <div class="form-text">Choose how this destination account will be used.</div>
             </div>
             <div class="col-md-6">
               <label for="swal-destination-provider" class="form-label">Provider Type</label>
               <select id="swal-destination-provider" class="form-select">
-                <option value="main" ${account?.providerType === 'main' ? 'selected' : ''}>Main</option>
-                <option value="subaccount" ${account?.providerType === 'subaccount' ? 'selected' : ''}>Subaccount</option>
-                <option value="bank_account" ${account?.providerType === 'bank_account' ? 'selected' : ''}>Bank Account</option>
+                <option value="main" ${account?.providerType === "main" ? "selected" : ""}>Main</option>
+                <option value="subaccount" ${account?.providerType === "subaccount" ? "selected" : ""}>Subaccount</option>
+                <option value="bank_account" ${account?.providerType === "bank_account" ? "selected" : ""}>Bank Account</option>
               </select>
               <div class="form-text">Use <strong>Main</strong> for default Paystack settlement, <strong>Subaccount</strong> for Paystack subaccounts, and <strong>Bank Account</strong> for manual transfers.</div>
             </div>
             <div class="col-md-6">
               <label for="swal-destination-account-name" class="form-label">Account Name</label>
-              <input id="swal-destination-account-name" class="form-control" value="${account?.accountName || ''}" placeholder="e.g. Alecons Accommodation Account">
+              <input id="swal-destination-account-name" class="form-control" value="${account?.accountName || ""}" placeholder="e.g. Alecons Accommodation Account">
             </div>
             <div class="col-md-6">
               <label for="swal-destination-bank-name" class="form-label">Bank Name</label>
-              <input id="swal-destination-bank-name" class="form-control" value="${account?.bankName || ''}" placeholder="e.g. Wema Bank">
+              <input id="swal-destination-bank-name" class="form-control" value="${account?.bankName || ""}" placeholder="e.g. Wema Bank">
             </div>
             <div class="col-md-6">
               <label for="swal-destination-account-number" class="form-label">Account Number</label>
-              <input id="swal-destination-account-number" class="form-control" value="${account?.accountNumber || ''}" placeholder="e.g. 0123456789">
+              <input id="swal-destination-account-number" class="form-control" value="${account?.accountNumber || ""}" placeholder="e.g. 0123456789">
             </div>
             <div class="col-md-6">
               <label for="swal-destination-subaccount" class="form-label">Paystack Subaccount Code</label>
-              <input id="swal-destination-subaccount" class="form-control" value="${account?.paystackSubaccountCode || ''}" placeholder="e.g. ACCT_8f3sdfk0kdl">
+              <input id="swal-destination-subaccount" class="form-control" value="${account?.paystackSubaccountCode || ""}" placeholder="e.g. ACCT_8f3sdfk0kdl">
               <div class="form-text">Required only when Channel = Paystack and Provider Type = Subaccount.</div>
             </div>
             <div class="col-12">
               <label for="swal-destination-note" class="form-label">Note</label>
-              <textarea id="swal-destination-note" class="form-control" rows="3" placeholder="e.g. Use this account for accommodation-related payments only">${account?.note || ''}</textarea>
+              <textarea id="swal-destination-note" class="form-control" rows="3" placeholder="e.g. Use this account for accommodation-related payments only">${account?.note || ""}</textarea>
             </div>
             <div class="col-md-6">
               <div class="form-check mt-2">
-                <input id="swal-destination-default" class="form-check-input" type="checkbox" ${account?.isDefault ? 'checked' : ''}>
+                <input id="swal-destination-default" class="form-check-input" type="checkbox" ${account?.isDefault ? "checked" : ""}>
                 <label for="swal-destination-default" class="form-check-label">Set as default for this channel</label>
               </div>
             </div>
             <div class="col-md-6">
               <div class="form-check mt-2">
-                <input id="swal-destination-active" class="form-check-input" type="checkbox" ${account?.active !== false ? 'checked' : ''}>
+                <input id="swal-destination-active" class="form-check-input" type="checkbox" ${account?.active !== false ? "checked" : ""}>
                 <label for="swal-destination-active" class="form-check-label">Active</label>
               </div>
             </div>
@@ -683,127 +754,199 @@ export default {
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: isEdit ? 'Update Account' : 'Create Account',
-        confirmButtonColor: '#198754',
-        cancelButtonColor: '#6c757d',
+        confirmButtonText: isEdit ? "Update Account" : "Create Account",
+        confirmButtonColor: "#198754",
+        cancelButtonColor: "#6c757d",
         preConfirm: () => {
-          const title = document.getElementById('swal-destination-title').value.trim()
-          const code = document.getElementById('swal-destination-code').value.trim().toUpperCase()
-          const channelType = document.getElementById('swal-destination-channel').value
-          const providerType = document.getElementById('swal-destination-provider').value
-          const accountName = document.getElementById('swal-destination-account-name').value.trim()
-          const bankName = document.getElementById('swal-destination-bank-name').value.trim()
-          const accountNumber = document.getElementById('swal-destination-account-number').value.trim()
-          const paystackSubaccountCode = document.getElementById('swal-destination-subaccount').value.trim()
-          const note = document.getElementById('swal-destination-note').value.trim()
-          const isDefault = document.getElementById('swal-destination-default').checked
-          const active = document.getElementById('swal-destination-active').checked
+          const title = document
+            .getElementById("swal-destination-title")
+            .value.trim();
+          const code = document
+            .getElementById("swal-destination-code")
+            .value.trim()
+            .toUpperCase();
+          const channelType = document.getElementById(
+            "swal-destination-channel",
+          ).value;
+          const providerType = document.getElementById(
+            "swal-destination-provider",
+          ).value;
+          const accountName = document
+            .getElementById("swal-destination-account-name")
+            .value.trim();
+          const bankName = document
+            .getElementById("swal-destination-bank-name")
+            .value.trim();
+          const accountNumber = document
+            .getElementById("swal-destination-account-number")
+            .value.trim();
+          const paystackSubaccountCode = document
+            .getElementById("swal-destination-subaccount")
+            .value.trim();
+          const note = document
+            .getElementById("swal-destination-note")
+            .value.trim();
+          const isDefault = document.getElementById(
+            "swal-destination-default",
+          ).checked;
+          const active = document.getElementById(
+            "swal-destination-active",
+          ).checked;
 
           if (!title || !code) {
-            Swal.showValidationMessage('Title and code are required')
-            return false
+            Swal.showValidationMessage("Title and code are required");
+            return false;
           }
 
-          if (channelType === 'manual_transfer' && (!accountName || !bankName || !accountNumber)) {
-            Swal.showValidationMessage('Manual transfer accounts require account name, bank name, and account number')
-            return false
+          if (
+            channelType === "manual_transfer" &&
+            (!accountName || !bankName || !accountNumber)
+          ) {
+            Swal.showValidationMessage(
+              "Manual transfer accounts require account name, bank name, and account number",
+            );
+            return false;
           }
 
-          if (channelType === 'paystack' && providerType === 'subaccount' && !paystackSubaccountCode) {
-            Swal.showValidationMessage('Paystack subaccount code is required for paystack subaccounts')
-            return false
+          if (
+            channelType === "paystack" &&
+            providerType === "subaccount" &&
+            !paystackSubaccountCode
+          ) {
+            Swal.showValidationMessage(
+              "Paystack subaccount code is required for paystack subaccounts",
+            );
+            return false;
           }
 
-          return { title, code, channelType, providerType, accountName, bankName, accountNumber, paystackSubaccountCode, note, isDefault, active }
-        }
-      })
+          return {
+            title,
+            code,
+            channelType,
+            providerType,
+            accountName,
+            bankName,
+            accountNumber,
+            paystackSubaccountCode,
+            note,
+            isDefault,
+            active,
+          };
+        },
+      });
 
-      if (!formValues) return
+      if (!formValues) return;
 
       try {
         const response = isEdit
-          ? await apiService.updatePaymentDestinationAccount(account.id, formValues)
-          : await apiService.createPaymentDestinationAccount(formValues)
+          ? await apiService.updatePaymentDestinationAccount(
+              account.id,
+              formValues,
+            )
+          : await apiService.createPaymentDestinationAccount(formValues);
 
         if (!response.success) {
-          throw new Error(response.message || `Failed to ${isEdit ? 'update' : 'create'} destination account`)
+          throw new Error(
+            response.message ||
+              `Failed to ${isEdit ? "update" : "create"} destination account`,
+          );
         }
 
-        await Promise.all([this.loadDestinationAccounts(), this.loadPayments()])
+        await Promise.all([
+          this.loadDestinationAccounts(),
+          this.loadPayments(),
+        ]);
 
         Swal.fire({
-          title: 'Success!',
-          text: `Destination account ${isEdit ? 'updated' : 'created'} successfully.`,
-          icon: 'success',
-          confirmButtonColor: '#198754'
-        })
+          title: "Success!",
+          text: `Destination account ${isEdit ? "updated" : "created"} successfully.`,
+          icon: "success",
+          confirmButtonColor: "#198754",
+        });
       } catch (error) {
-        logger.error('Error saving destination account:', error)
+        logger.error("Error saving destination account:", error);
         Swal.fire({
-          title: 'Error!',
-          text: error.message || 'Failed to save destination account.',
-          icon: 'error',
-          confirmButtonColor: '#dc3545'
-        })
+          title: "Error!",
+          text: error.message || "Failed to save destination account.",
+          icon: "error",
+          confirmButtonColor: "#dc3545",
+        });
       }
     },
 
     async deleteDestinationAccount(account) {
       const result = await Swal.fire({
-        title: 'Delete Destination Account?',
+        title: "Delete Destination Account?",
         text: `Are you sure you want to delete "${account.title}"?`,
-        icon: 'warning',
+        icon: "warning",
         showCancelButton: true,
-        confirmButtonText: 'Yes, delete',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d'
-      })
+        confirmButtonText: "Yes, delete",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#dc3545",
+        cancelButtonColor: "#6c757d",
+      });
 
-      if (!result.isConfirmed) return
+      if (!result.isConfirmed) return;
 
       try {
-        const response = await apiService.deletePaymentDestinationAccount(account.id)
+        const response = await apiService.deletePaymentDestinationAccount(
+          account.id,
+        );
         if (!response.success) {
-          throw new Error(response.message || 'Failed to delete destination account')
+          throw new Error(
+            response.message || "Failed to delete destination account",
+          );
         }
 
-        await Promise.all([this.loadDestinationAccounts(), this.loadPayments()])
-        Swal.fire({ title: 'Deleted!', text: 'Destination account deleted successfully.', icon: 'success', confirmButtonColor: '#198754' })
+        await Promise.all([
+          this.loadDestinationAccounts(),
+          this.loadPayments(),
+        ]);
+        Swal.fire({
+          title: "Deleted!",
+          text: "Destination account deleted successfully.",
+          icon: "success",
+          confirmButtonColor: "#198754",
+        });
       } catch (error) {
-        logger.error('Error deleting destination account:', error)
-        Swal.fire({ title: 'Error!', text: error.message || 'Failed to delete destination account.', icon: 'error', confirmButtonColor: '#dc3545' })
+        logger.error("Error deleting destination account:", error);
+        Swal.fire({
+          title: "Error!",
+          text: error.message || "Failed to delete destination account.",
+          icon: "error",
+          confirmButtonColor: "#dc3545",
+        });
       }
     },
 
     formatAmount(amount) {
-      return new Intl.NumberFormat('en-NG', {
+      return new Intl.NumberFormat("en-NG", {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }).format(amount)
+        maximumFractionDigits: 2,
+      }).format(amount);
     },
 
     formatAudienceLabel(audience) {
       const labels = {
-        'applicant': 'Applicant',
-        'student': 'Student',
-        'academic_staff': 'Academic Staff',
-        'admin_staff': 'Admin Staff'
-      }
-      return labels[audience] || audience
+        applicant: "Applicant",
+        student: "Student",
+        academic_staff: "Academic Staff",
+        admin_staff: "Admin Staff",
+      };
+      return labels[audience] || audience;
     },
 
     getAudienceBadgeClass(audience) {
       const classes = {
-        'applicant': 'bg-primary',
-        'student': 'bg-success',
-        'academic_staff': 'bg-info',
-        'admin_staff': 'bg-warning text-dark'
-      }
-      return classes[audience] || 'bg-secondary'
-    }
-  }
-}
+        applicant: "bg-primary",
+        student: "bg-success",
+        academic_staff: "bg-info",
+        admin_staff: "bg-warning text-dark",
+      };
+      return classes[audience] || "bg-secondary";
+    },
+  },
+};
 </script>
 
 <template>
@@ -821,7 +964,7 @@ export default {
                   type="text"
                   class="form-control"
                   placeholder="Search by payment name, code, description, or amount..."
-                >
+                />
               </div>
               <div class="col-md-4">
                 <button
@@ -863,14 +1006,14 @@ export default {
                 <thead class="table-light">
                   <tr>
                     <th>Payment Name</th>
-                    <th>Payment Code</th>
+                    <!-- <th>Payment Code</th> -->
                     <th>Description</th>
                     <th>Amount</th>
                     <th>Paystack Route</th>
                     <th>Manual Route</th>
-                    <th>Target Audience</th>
+                    <th>Target</th>
                     <th>Status</th>
-                    <th width="150">Actions</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -878,11 +1021,13 @@ export default {
                     <td>
                       <div class="fw-semibold">{{ payment.name }}</div>
                     </td>
-                    <td>
+                    <!-- <td>
                       <code class="text-primary">{{ payment.paymentCode || 'N/A' }}</code>
-                    </td>
+                    </td> -->
                     <td>
-                      <div class="text-muted">{{ payment.description || 'No description' }}</div>
+                      <div class="text-muted">
+                        {{ payment.description || "No description" }}
+                      </div>
                     </td>
                     <td>
                       <div class="fw-semibold text-success">
@@ -890,15 +1035,31 @@ export default {
                       </div>
                     </td>
                     <td>
-                      <small class="text-muted d-block">{{ formatDestinationAccount(payment.paystackDestinationAccount, 'Main / Default account') }}</small>
+                      <small class="text-muted d-block">
+                        {{
+                          formatDestinationAccount(
+                            payment.paystackDestinationAccount,
+                            "Main / Default account",
+                          )
+                        }}
+                      </small>
                     </td>
                     <td>
-                      <small class="text-muted d-block">{{ formatDestinationAccount(payment.manualTransferDestinationAccount, 'Default / Env fallback') }}</small>
+                      <small class="text-muted d-block">
+                        {{
+                          formatDestinationAccount(
+                            payment.manualTransferDestinationAccount,
+                            "Default / Env fallback",
+                          )
+                        }}
+                      </small>
                     </td>
                     <td>
                       <div class="d-flex flex-wrap gap-1">
-                        <span 
-                          v-for="audience in (payment.targetAudience || ['applicant'])" 
+                        <span
+                          v-for="audience in payment.targetAudience || [
+                            'applicant',
+                          ]"
                           :key="audience"
                           class="badge"
                           :class="getAudienceBadgeClass(audience)"
@@ -908,43 +1069,80 @@ export default {
                       </div>
                     </td>
                     <td>
-                      <span 
-                        :class="payment.isActive ? 'badge bg-success' : 'badge bg-danger'"
+                      <span
+                        :class="
+                          payment.isActive
+                            ? 'badge bg-success'
+                            : 'badge bg-danger'
+                        "
                       >
-                        {{ payment.isActive ? 'Active' : 'Inactive' }}
+                        {{ payment.isActive ? "Active" : "Inactive" }}
                       </span>
                     </td>
                     <td>
-                      <div class="btn-group" role="group">
-                        <button
-                          class="btn btn-sm btn-outline-staff-primary"
-                          @click="editPayment(payment)"
-                          title="Edit Payment"
+                      <div class="dropdown">
+                        <a
+                          class="btn btn-link text-dark dropdown-toggle no-caret"
+                          href="#"
+                          role="button"
+                          data-bs-toggle="dropdown"
+                          aria-expanded="false"
                         >
-                          <i class="bi bi-pencil"></i>
-                        </button>
-                        <button
-                          class="btn btn-sm"
-                          :class="payment.isActive ? 'btn-outline-warning' : 'btn-outline-success'"
-                          @click="togglePaymentStatus(payment)"
-                          :title="payment.isActive ? 'Deactivate Payment' : 'Activate Payment'"
-                        >
-                          <i :class="payment.isActive ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
-                        </button>
-                        <button
-                          class="btn btn-sm btn-outline-danger"
-                          @click="deletePayment(payment)"
-                          title="Delete Payment"
-                        >
-                          <i class="bi bi-trash"></i>
-                        </button>
+                          <i class="bi bi-three-dots-vertical"></i>
+                        </a>
+
+                        <ul class="dropdown-menu">
+                          <li>
+                            <a
+                              class="dropdown-item"
+                              :class="
+                                payment.isActive
+                                  ? 'text-success'
+                                  : 'text-warning'
+                              "
+                              href="#"
+                              @click.prevent="togglePaymentStatus(payment)"
+                            >
+                              <i
+                                :class="
+                                  payment.isActive
+                                    ? 'bi bi-toggle-on'
+                                    : 'bi bi-toggle-off'
+                                "
+                              ></i>
+                              {{ payment.isActive ? "Deactivate" : "Activate" }}
+                            </a>
+                          </li>
+                          <li>
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="editPayment(payment)"
+                            >
+                              <i class="bi bi-pencil"></i> Edit
+                            </a>
+                          </li>
+                          <li>
+                            <a
+                              class="dropdown-item text-danger"
+                              href="#"
+                              @click.prevent="deletePayment(payment)"
+                            >
+                              <i class="bi bi-trash"></i> Delete
+                            </a>
+                          </li>
+                        </ul>
                       </div>
                     </td>
                   </tr>
                   <tr v-if="paginatedPayments.length === 0">
                     <td colspan="9" class="text-center py-4 text-muted">
                       <i class="bi bi-credit-card display-6 d-block mb-2"></i>
-                      {{ searchQuery ? 'No payments found matching your search.' : 'No payments available. Create one to get started.' }}
+                      {{
+                        searchQuery
+                          ? "No payments found matching your search."
+                          : "No payments available. Create one to get started."
+                      }}
                     </td>
                   </tr>
                 </tbody>
@@ -961,30 +1159,54 @@ export default {
         <nav aria-label="Payments pagination">
           <ul class="pagination pagination-sm justify-content-center mb-0">
             <li class="page-item" :class="{ disabled: currentPage === 1 }">
-              <button class="page-link" @click="currentPage = 1" :disabled="currentPage === 1">
+              <button
+                class="page-link"
+                @click="currentPage = 1"
+                :disabled="currentPage === 1"
+              >
                 <<
               </button>
             </li>
             <li class="page-item" :class="{ disabled: currentPage === 1 }">
-              <button class="page-link" @click="currentPage--" :disabled="currentPage === 1">
+              <button
+                class="page-link"
+                @click="currentPage--"
+                :disabled="currentPage === 1"
+              >
                 <
               </button>
             </li>
-            <li 
-              v-for="page in visiblePages" 
-              :key="page" 
-              class="page-item" 
+            <li
+              v-for="page in visiblePages"
+              :key="page"
+              class="page-item"
               :class="{ active: page === currentPage }"
             >
-              <button class="page-link text-white" @click="currentPage = page">{{ page }}</button>
+              <button class="page-link text-white" @click="currentPage = page">
+                {{ page }}
+              </button>
             </li>
-            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-              <button class="page-link" @click="currentPage++" :disabled="currentPage === totalPages">
+            <li
+              class="page-item"
+              :class="{ disabled: currentPage === totalPages }"
+            >
+              <button
+                class="page-link"
+                @click="currentPage++"
+                :disabled="currentPage === totalPages"
+              >
                 >
               </button>
             </li>
-            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-              <button class="page-link" @click="currentPage = totalPages" :disabled="currentPage === totalPages">
+            <li
+              class="page-item"
+              :class="{ disabled: currentPage === totalPages }"
+            >
+              <button
+                class="page-link"
+                @click="currentPage = totalPages"
+                :disabled="currentPage === totalPages"
+              >
                 >>
               </button>
             </li>
@@ -993,20 +1215,40 @@ export default {
       </div>
     </div>
 
-    <div class="modal fade" :class="{ show: showDestinationAccountsModal }" :style="{ display: showDestinationAccountsModal ? 'block' : 'none' }" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div
+      class="modal fade"
+      :class="{ show: showDestinationAccountsModal }"
+      :style="{ display: showDestinationAccountsModal ? 'block' : 'none' }"
+      tabindex="-1"
+      aria-hidden="true"
+    >
+      <div
+        class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"
+      >
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title">
               <i class="bi bi-diagram-3 me-2 text-staff-primary"></i>
               Payment Destination Accounts
             </h5>
-            <button type="button" class="btn-close" @click="closeDestinationAccountsModal"></button>
+            <button
+              type="button"
+              class="btn-close"
+              @click="closeDestinationAccountsModal"
+            ></button>
           </div>
           <div class="modal-body">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-              <p class="text-muted mb-0">Manage Paystack and manual transfer destination accounts used by each payment.</p>
-              <button class="btn btn-staff-primary" @click="showDestinationAccountForm()">
+            <div
+              class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"
+            >
+              <p class="text-muted mb-0">
+                Manage Paystack and manual transfer destination accounts used by
+                each payment.
+              </p>
+              <button
+                class="btn btn-staff-primary"
+                @click="showDestinationAccountForm()"
+              >
                 <i class="bi bi-plus-circle me-2"></i>Add Destination Account
               </button>
             </div>
@@ -1028,34 +1270,79 @@ export default {
                   <tr v-for="account in destinationAccounts" :key="account.id">
                     <td>
                       <div class="fw-semibold">{{ account.title }}</div>
-                      <small v-if="account.note" class="text-muted">{{ account.note }}</small>
+                      <small v-if="account.note" class="text-muted">{{
+                        account.note
+                      }}</small>
                     </td>
-                    <td><code class="text-primary">{{ account.code }}</code></td>
                     <td>
-                      <span class="badge" :class="account.channelType === 'paystack' ? 'bg-primary' : 'bg-success'">
-                        {{ account.channelType === 'paystack' ? 'Paystack' : 'Manual Transfer' }}
+                      <code class="text-primary">{{ account.code }}</code>
+                    </td>
+                    <td>
+                      <span
+                        class="badge"
+                        :class="
+                          account.channelType === 'paystack'
+                            ? 'bg-primary'
+                            : 'bg-success'
+                        "
+                      >
+                        {{
+                          account.channelType === "paystack"
+                            ? "Paystack"
+                            : "Manual Transfer"
+                        }}
                       </span>
                     </td>
                     <td>
-                      <span class="text-capitalize">{{ account.providerType.replace('_', ' ') }}</span>
-                      <span v-if="account.isDefault" class="badge bg-warning text-dark ms-2">Default</span>
+                      <span class="text-capitalize">{{
+                        account.providerType.replace("_", " ")
+                      }}</span>
+                      <span
+                        v-if="account.isDefault"
+                        class="badge bg-warning text-dark ms-2"
+                        >Default</span
+                      >
                     </td>
                     <td>
-                      <div v-if="account.accountName" class="small fw-semibold">{{ account.accountName }}</div>
-                      <div v-if="account.bankName || account.accountNumber" class="small text-muted">{{ account.bankName || '—' }} • {{ account.accountNumber || '—' }}</div>
-                      <div v-if="account.paystackSubaccountCode" class="small text-muted">{{ account.paystackSubaccountCode }}</div>
+                      <div v-if="account.accountName" class="small fw-semibold">
+                        {{ account.accountName }}
+                      </div>
+                      <div
+                        v-if="account.bankName || account.accountNumber"
+                        class="small text-muted"
+                      >
+                        {{ account.bankName || "—" }} •
+                        {{ account.accountNumber || "—" }}
+                      </div>
+                      <div
+                        v-if="account.paystackSubaccountCode"
+                        class="small text-muted"
+                      >
+                        {{ account.paystackSubaccountCode }}
+                      </div>
                     </td>
                     <td>
-                      <span class="badge" :class="account.active ? 'bg-success' : 'bg-danger'">
-                        {{ account.active ? 'Active' : 'Inactive' }}
+                      <span
+                        class="badge"
+                        :class="account.active ? 'bg-success' : 'bg-danger'"
+                      >
+                        {{ account.active ? "Active" : "Inactive" }}
                       </span>
                     </td>
                     <td>
                       <div class="btn-group" role="group">
-                        <button class="btn btn-sm btn-outline-staff-primary" @click="showDestinationAccountForm(account)" title="Edit Account">
+                        <button
+                          class="btn btn-sm btn-outline-staff-primary"
+                          @click="showDestinationAccountForm(account)"
+                          title="Edit Account"
+                        >
                           <i class="bi bi-pencil"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger" @click="deleteDestinationAccount(account)" title="Delete Account">
+                        <button
+                          class="btn btn-sm btn-outline-danger"
+                          @click="deleteDestinationAccount(account)"
+                          title="Delete Account"
+                        >
                           <i class="bi bi-trash"></i>
                         </button>
                       </div>
@@ -1072,13 +1359,23 @@ export default {
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-outline-secondary" @click="closeDestinationAccountsModal">Close</button>
+            <button
+              type="button"
+              class="btn btn-outline-secondary"
+              @click="closeDestinationAccountsModal"
+            >
+              Close
+            </button>
           </div>
         </div>
       </div>
     </div>
 
-    <div v-if="showDestinationAccountsModal" class="modal-backdrop fade show" @click="closeDestinationAccountsModal"></div>
+    <div
+      v-if="showDestinationAccountsModal"
+      class="modal-backdrop fade show"
+      @click="closeDestinationAccountsModal"
+    ></div>
   </div>
 </template>
 
@@ -1160,5 +1457,4 @@ export default {
   max-height: calc(82vh - 180px);
   overflow-y: auto;
 }
-
 </style>

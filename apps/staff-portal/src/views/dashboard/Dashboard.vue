@@ -244,10 +244,9 @@ export default {
       >
       
         <!-- Pending Applications -->
-        <!-- TODO: fix for stats later -->
         <div
           class="col-lg-3 col-md-6 mb-3"
-       v-if="authStore.hasModuleAccess('applications')"   
+       v-if="authStore.hasPermission('applications', 'view')"   
         >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
@@ -327,7 +326,7 @@ export default {
         <!-- Total Users -->
         <div
           class="col-lg-3 col-md-6 mb-3"
-          v-if="authStore.hasPermission('users', 'manage')"
+          v-if="authStore.hasPermission('users', 'view')"
         >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">

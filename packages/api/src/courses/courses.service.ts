@@ -147,6 +147,9 @@ export class CoursesService {
             courseId: new Types.ObjectId(createProgramCourseDto.courseId),
             programId: new Types.ObjectId(createProgramCourseDto.programId),
             lecturerIds: (createProgramCourseDto.lecturerIds || []).map((id) => new Types.ObjectId(id)),
+            courseAdvisorId: createProgramCourseDto.courseAdvisorId
+                ? new Types.ObjectId(createProgramCourseDto.courseAdvisorId)
+                : undefined,
             active: createProgramCourseDto.active ?? true,
         });
 
@@ -161,6 +164,7 @@ export class CoursesService {
                     { path: 'programModeId', select: 'mode' },
                 ],
             })
+            .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
             .populate('lecturerIds', 'firstName otherName lastName email role isActive')
             .exec();
 
@@ -222,6 +226,7 @@ export class CoursesService {
                         { path: 'programModeId', select: 'mode' },
                     ],
                 })
+                .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
                 .populate('lecturerIds', 'firstName otherName lastName email role isActive')
                 .sort({ createdAt: -1 })
                 .skip(skip)
@@ -262,6 +267,11 @@ export class CoursesService {
         if (updateProgramCourseDto.lecturerIds) {
             updateData.lecturerIds = updateProgramCourseDto.lecturerIds.map((lecturerId) => new Types.ObjectId(lecturerId));
         }
+        if (updateProgramCourseDto.courseAdvisorId !== undefined) {
+            updateData.courseAdvisorId = updateProgramCourseDto.courseAdvisorId
+                ? new Types.ObjectId(updateProgramCourseDto.courseAdvisorId)
+                : null;
+        }
 
         const programCourse = await this.programCourseModel
             .findByIdAndUpdate(id, updateData, { new: true })
@@ -274,6 +284,7 @@ export class CoursesService {
                     { path: 'programModeId', select: 'mode' },
                 ],
             })
+            .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
             .populate('lecturerIds', 'firstName otherName lastName email role isActive')
             .exec();
 
@@ -326,22 +337,12 @@ export class CoursesService {
             }
         }
 
+        if (input.courseAdvisorId) {
+            await this.validateActiveStaffUsers([input.courseAdvisorId], 'Selected course advisor is invalid or inactive');
+        }
+
         if (input.lecturerIds?.length) {
-            const uniqueLecturerIds = [...new Set(input.lecturerIds)];
-            const users = await this.userModel.find({
-                _id: { $in: uniqueLecturerIds.map((id) => new Types.ObjectId(id)) },
-                role: { $in: [UserRole.STAFF, UserRole.ADMIN] },
-                isActive: true,
-            }).lean();
-
-            const staffRecords = await this.staffModel.find({
-                userId: { $in: users.map((user) => user._id) },
-                isActive: true,
-            }).lean();
-
-            if (users.length !== uniqueLecturerIds.length || staffRecords.length !== uniqueLecturerIds.length) {
-                throw new BadRequestException('One or more selected lecturers are invalid or inactive');
-            }
+            await this.validateActiveStaffUsers(input.lecturerIds, 'One or more selected lecturers are invalid or inactive');
         }
 
         if (input.level && input.level < 1) {
@@ -378,6 +379,29 @@ export class CoursesService {
     private ensureValidObjectId(value: string, message: string) {
         if (!Types.ObjectId.isValid(value)) {
             throw new BadRequestException(message);
+        }
+    }
+
+    private async validateActiveStaffUsers(userIds: string[], errorMessage: string) {
+        const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+
+        for (const userId of uniqueUserIds) {
+            this.ensureValidObjectId(userId, errorMessage);
+        }
+
+        const users = await this.userModel.find({
+            _id: { $in: uniqueUserIds.map((id) => new Types.ObjectId(id)) },
+            role: { $in: [UserRole.STAFF, UserRole.ADMIN] },
+            isActive: true,
+        }).lean();
+
+        const staffRecords = await this.staffModel.find({
+            userId: { $in: users.map((user) => user._id) },
+            isActive: true,
+        }).lean();
+
+        if (users.length !== uniqueUserIds.length || staffRecords.length !== uniqueUserIds.length) {
+            throw new BadRequestException(errorMessage);
         }
     }
 
@@ -433,6 +457,18 @@ export class CoursesService {
             semester: programCourse.semester,
             category: programCourse.category,
             active: programCourse.active,
+            courseAdvisorId: programCourse.courseAdvisorId?._id?.toString?.()
+                || programCourse.courseAdvisorId?.toString?.()
+                || null,
+            courseAdvisor: programCourse.courseAdvisorId ? {
+                id: programCourse.courseAdvisorId._id?.toString?.() || programCourse.courseAdvisorId.toString?.() || null,
+                firstName: programCourse.courseAdvisorId.firstName,
+                otherName: programCourse.courseAdvisorId.otherName,
+                lastName: programCourse.courseAdvisorId.lastName,
+                email: programCourse.courseAdvisorId.email,
+                role: programCourse.courseAdvisorId.role,
+                isActive: programCourse.courseAdvisorId.isActive,
+            } : null,
             lecturers: Array.isArray(programCourse.lecturerIds)
                 ? programCourse.lecturerIds.map((lecturer: any) => ({
                     id: lecturer._id?.toString?.() || lecturer.toString?.() || null,

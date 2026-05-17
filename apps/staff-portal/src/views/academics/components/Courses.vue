@@ -8,9 +8,10 @@ const createEmptyProgramCourseForm = () => ({
   programId: '',
   units: 2,
   hours: 2,
+  courseAdvisorId: null,
   lecturerIds: [],
-  level: 1,
-  semester: 1,
+  level: null,
+  semester: null,
   category: 'compulsory',
   active: true
 })
@@ -58,7 +59,6 @@ export default {
       selectedProgramCourse: null,
       programCourseForm: createEmptyProgramCourseForm(),
       courseForm: createEmptyCourseForm(),
-      levelOptions: [1, 2, 3, 4, 5, 6],
       semesterOptions: [
         { value: 1, label: 'First Semester' },
         { value: 2, label: 'Second Semester' }
@@ -78,6 +78,21 @@ export default {
     },
     catalogPreview() {
       return this.courseCatalog.slice(0, 5)
+    },
+    selectedProgramVariant() {
+      return this.programs.find((program) => program.id === this.programCourseForm.programId) || null
+    },
+    assignmentLevelOptions() {
+      const durationYears = Number(this.selectedProgramVariant?.durationYears || 0)
+
+      if (!durationYears || durationYears < 1) {
+        return []
+      }
+
+      return Array.from({ length: durationYears }, (_, index) => index + 1)
+    },
+    hasSelectedProgramVariant() {
+      return Boolean(this.programCourseForm.programId)
     }
   },
   watch: {
@@ -107,6 +122,21 @@ export default {
     'programCourseFilters.category'() {
       this.currentPage = 1
       this.loadProgramCourses()
+    },
+    'programCourseForm.programId'(newProgramId) {
+      if (!newProgramId) {
+        this.programCourseForm.level = null
+        this.programCourseForm.semester = null
+        return
+      }
+
+      if (!this.assignmentLevelOptions.includes(this.programCourseForm.level)) {
+        this.programCourseForm.level = null
+      }
+
+      if (!this.semesterOptions.some((semester) => semester.value === this.programCourseForm.semester)) {
+        this.programCourseForm.semester = null
+      }
     },
     catalogSearchQuery() {
       this.debounceCourseCatalogReload()
@@ -304,6 +334,7 @@ export default {
           programId: programCourse.program?.id || '',
           units: programCourse.units,
           hours: programCourse.hours,
+          courseAdvisorId: programCourse.courseAdvisor?.id || null,
           lecturerIds: (programCourse.lecturers || []).map((lecturer) => lecturer.id),
           level: programCourse.level,
           semester: programCourse.semester,
@@ -311,6 +342,24 @@ export default {
           active: programCourse.active,
         }
         : createEmptyProgramCourseForm()
+      this.showProgramCourseModal = true
+    },
+
+    duplicateProgramCourse(programCourse) {
+      this.selectedProgramCourse = null
+      this.programCourseForm = {
+        id: null,
+        courseId: programCourse.course?.id || '',
+        programId: '',
+        units: programCourse.units,
+        hours: programCourse.hours,
+        courseAdvisorId: programCourse.courseAdvisor?.id || null,
+        lecturerIds: (programCourse.lecturers || []).map((lecturer) => lecturer.id),
+        level: programCourse.level,
+        semester: programCourse.semester,
+        category: programCourse.category,
+        active: programCourse.active,
+      }
       this.showProgramCourseModal = true
     },
 
@@ -322,13 +371,26 @@ export default {
 
     async saveProgramCourse() {
       try {
+        if (!this.programCourseForm.courseId || !this.programCourseForm.programId) {
+          throw new Error('Please select both course and program variant.')
+        }
+
+        if (this.programCourseForm.level === null || this.programCourseForm.level === undefined) {
+          throw new Error('Please select a level.')
+        }
+
+        if (this.programCourseForm.semester === null || this.programCourseForm.semester === undefined) {
+          throw new Error('Please select a semester.')
+        }
+
         this.isSavingProgramCourse = true
+        const { id, ...programCoursePayload } = this.programCourseForm
         const payload = {
-          ...this.programCourseForm,
-          units: Number(this.programCourseForm.units),
-          hours: Number(this.programCourseForm.hours),
-          level: Number(this.programCourseForm.level),
-          semester: Number(this.programCourseForm.semester),
+          ...programCoursePayload,
+          units: Number(programCoursePayload.units),
+          hours: Number(programCoursePayload.hours),
+          level: Number(programCoursePayload.level),
+          semester: Number(programCoursePayload.semester),
         }
 
         if (this.selectedProgramCourse?.id) {
@@ -418,15 +480,16 @@ export default {
     async saveCourse() {
       try {
         this.isSavingCourse = true
+        const { id, ...courseFormPayload } = this.courseForm
         const payload = {
-          ...this.courseForm,
-          code: this.courseForm.code.trim().toUpperCase(),
-          title: this.courseForm.title.trim(),
-          description: this.courseForm.description.trim(),
+          ...courseFormPayload,
+          code: courseFormPayload.code.trim().toUpperCase(),
+          title: courseFormPayload.title.trim(),
+          description: courseFormPayload.description.trim(),
         }
 
-        if (this.courseForm.id) {
-          await apiService.updateCourse(this.courseForm.id, payload)
+        if (id) {
+          await apiService.updateCourse(id, payload)
         } else {
           await apiService.createCourse(payload)
         }
@@ -628,12 +691,15 @@ export default {
                       </div>
                     </td>
                     <td>
-                      <div v-if="programCourse.lecturers?.length" class="d-flex flex-column gap-1">
+                      <div class="d-flex flex-column gap-1">
+                        <span v-if="programCourse.courseAdvisor" class="small text-dark fw-semibold">
+                          Advisor: {{ getLecturerName(programCourse.courseAdvisor) }}
+                        </span>
                         <span v-for="lecturer in programCourse.lecturers" :key="lecturer.id" class="small text-muted">
                           {{ getLecturerName(lecturer) }}
                         </span>
+                        <span v-if="!programCourse.courseAdvisor && !programCourse.lecturers?.length" class="text-muted small">Not assigned</span>
                       </div>
-                      <span v-else class="text-muted small">Not assigned</span>
                     </td>
                     <td class="text-center">
                       <span class="badge rounded-pill" :class="getStatusBadgeClass(programCourse.active)">
@@ -644,6 +710,9 @@ export default {
                       <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-success" @click="openProgramCourseModal(programCourse)">
                           <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-outline-staff-primary" @click="duplicateProgramCourse(programCourse)">
+                          <i class="bi bi-copy"></i>
                         </button>
                         <button class="btn btn-outline-danger" @click="confirmDeleteProgramCourse(programCourse)">
                           <i class="bi bi-trash"></i>
@@ -692,7 +761,7 @@ export default {
               <div class="col-md-6">
                 <label class="form-label">Course</label>
                 <select v-model="programCourseForm.courseId" class="form-select">
-                  <option value="">Select course</option>
+                  <option value="" disabled>Select course</option>
                   <option v-for="course in courseOptions" :key="course.id" :value="course.id">
                     {{ course.code }} · {{ course.title }}
                   </option>
@@ -701,7 +770,7 @@ export default {
               <div class="col-md-6">
                 <label class="form-label">Program Variant</label>
                 <select v-model="programCourseForm.programId" class="form-select">
-                  <option value="">Select program</option>
+                  <option value="" disabled>Select program</option>
                   <option v-for="program in programs" :key="program.id" :value="program.id">
                     {{ getProgramLabel(program) }}
                   </option>
@@ -717,13 +786,17 @@ export default {
               </div>
               <div class="col-md-3">
                 <label class="form-label">Level</label>
-                <select v-model.number="programCourseForm.level" class="form-select">
-                  <option v-for="level in levelOptions" :key="level" :value="level">Level {{ level }}</option>
+                <select v-model.number="programCourseForm.level" class="form-select" :disabled="!hasSelectedProgramVariant">
+                  <option v-if="!hasSelectedProgramVariant" value="">Select program variant first</option>
+                  <option v-else :value="null" disabled>Select level</option>
+                  <option v-for="level in assignmentLevelOptions" :key="level" :value="level">Level {{ level }}</option>
                 </select>
               </div>
               <div class="col-md-3">
                 <label class="form-label">Semester</label>
-                <select v-model.number="programCourseForm.semester" class="form-select">
+                <select v-model.number="programCourseForm.semester" class="form-select" :disabled="!hasSelectedProgramVariant">
+                  <option v-if="!hasSelectedProgramVariant" value="">Select program variant first</option>
+                  <option v-else :value="null" disabled>Select semester</option>
                   <option v-for="semester in semesterOptions" :key="semester.value" :value="semester.value">{{ semester.label }}</option>
                 </select>
               </div>
@@ -739,6 +812,15 @@ export default {
                   <label class="form-check-label fw-semibold" for="programCourseActive">Active program course</label>
                   <div class="small text-muted">Inactive mappings stay in history but won’t be treated as live curriculum.</div>
                 </div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Course Advisor</label>
+                <select v-model="programCourseForm.courseAdvisorId" class="form-select">
+                  <option :value="null" disabled>Select course advisor</option>
+                  <option v-for="lecturer in lecturers" :key="lecturer._id" :value="lecturer._id">
+                    {{ getLecturerName(lecturer) }} · {{ lecturer.email }}
+                  </option>
+                </select>
               </div>
               <div class="col-12">
                 <label class="form-label">Lecturers</label>
@@ -846,7 +928,12 @@ export default {
       </div>
     </div>
 
-    <div class="modal fade" :class="{ show: showCourseFormModal }" :style="{ display: showCourseFormModal ? 'block' : 'none' }" tabindex="-1">
+    <div
+      class="modal fade"
+      :class="{ show: showCourseFormModal, 'stacked-course-modal': showCatalogModal && showCourseFormModal }"
+      :style="{ display: showCourseFormModal ? 'block' : 'none' }"
+      tabindex="-1"
+    >
       <div class="modal-dialog modal-lg">
         <div class="modal-content border-0 course-modal">
           <div class="modal-header border-0 pb-0">
@@ -889,7 +976,15 @@ export default {
       </div>
     </div>
 
-    <div class="modal-backdrop fade" :class="{ show: showProgramCourseModal || showCatalogModal || showCourseFormModal }" v-if="showProgramCourseModal || showCatalogModal || showCourseFormModal"></div>
+    <div
+      class="modal-backdrop fade"
+      :class="{ show: showProgramCourseModal || showCatalogModal || showCourseFormModal }"
+      v-if="showProgramCourseModal || showCatalogModal || showCourseFormModal"
+    ></div>
+    <div
+      v-if="showCatalogModal && showCourseFormModal"
+      class="modal-backdrop fade show stacked-course-backdrop"
+    ></div>
   </div>
 </template>
 
@@ -917,6 +1012,14 @@ export default {
 
 .course-modal {
   border-radius: 18px;
+}
+
+.stacked-course-modal {
+  z-index: 1057;
+}
+
+.stacked-course-backdrop {
+  z-index: 1056;
 }
 
 .catalog-preview-panel {

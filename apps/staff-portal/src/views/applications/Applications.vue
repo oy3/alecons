@@ -1766,7 +1766,7 @@ export default {
                             <i class="bi bi-three-dots-vertical fs-5"></i>
                         </a>
                           <ul class="dropdown-menu">
-                            <li>
+                            <li v-if="authStore.hasPermission('applications', 'view')">
                               <a
                                 class="dropdown-item"
                                 href=""

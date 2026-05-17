@@ -237,14 +237,17 @@ export default {
         class="row mb-4"
         v-if="
           authStore.hasModuleAccess('applications') ||
+          authStore.hasModuleAccess('admissions') ||
           authStore.hasModuleAccess('payments') ||
           authStore.hasModuleAccess('users')
         "
       >
+      
         <!-- Pending Applications -->
+        <!-- TODO: fix for stats later -->
         <div
           class="col-lg-3 col-md-6 mb-3"
-          v-if="authStore.hasModuleAccess('applications')"
+       v-if="authStore.hasModuleAccess('applications')"   
         >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
@@ -271,7 +274,7 @@ export default {
         <!-- Admitted Students -->
         <div
           class="col-lg-3 col-md-6 mb-3"
-          v-if="authStore.hasModuleAccess('applications')"
+          v-if="authStore.hasPermission('admissions', 'manage')"
         >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
@@ -298,7 +301,7 @@ export default {
         <!-- Total Revenue -->
         <div
           class="col-lg-3 col-md-6 mb-3"
-          v-if="authStore.isAdmin && authStore.hasModuleAccess('payments')"
+          v-if="authStore.hasPermission('payments', 'manage')"
         >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
@@ -324,7 +327,7 @@ export default {
         <!-- Total Users -->
         <div
           class="col-lg-3 col-md-6 mb-3"
-          v-if="authStore.isAdmin || authStore.hasModuleAccess('users')"
+          v-if="authStore.hasPermission('users', 'manage')"
         >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
@@ -353,7 +356,7 @@ export default {
         <!-- Recent Applications -->
         <div
           class="col-lg-8 mb-4"
-          v-if="authStore.hasModuleAccess('applications')"
+          v-if="authStore.hasPermission('applications', 'view')"
         >
           <div class="card border-0 shadow-sm p-0">
             <div class="card-header bg-transparent border-bottom-0">

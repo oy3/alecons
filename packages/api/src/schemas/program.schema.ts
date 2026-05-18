@@ -17,6 +17,15 @@ export class Program {
     @Prop()
     description?: string;
 
+    @Prop({ min: 1 })
+    minUnits?: number;
+
+    @Prop({ min: 1 })
+    maxUnits?: number;
+
+    @Prop({ type: Types.ObjectId, ref: 'User' })
+    courseAdvisorId?: Types.ObjectId;
+
     @Prop({ type: Types.ObjectId, ref: 'ProgramType', required: true })
     programTypeId: Types.ObjectId;
 

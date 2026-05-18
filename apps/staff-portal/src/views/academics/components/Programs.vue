@@ -10,6 +10,7 @@ export default {
       departments: [],
       programTypes: [],
       programModes: [],
+      lecturers: [],
       isLoading: true,
       searchQuery: "",
       currentPage: 1,
@@ -34,6 +35,10 @@ export default {
             id: program.id, // Use first program's ID as representative
             name: program.name,
             description: program.description,
+            minUnits: program.minUnits,
+            maxUnits: program.maxUnits,
+            courseAdvisorId: program.courseAdvisorId,
+            courseAdvisor: program.courseAdvisor,
             department: program.department,
             departmentId: program.departmentId,
             variants: [],
@@ -48,6 +53,10 @@ export default {
           programTypeId: program.programTypeId,
           programModeId: program.programModeId,
           durationYears: program.durationYears,
+          minUnits: program.minUnits,
+          maxUnits: program.maxUnits,
+          courseAdvisorId: program.courseAdvisorId,
+          courseAdvisor: program.courseAdvisor,
           active: program.active
         });
         
@@ -85,7 +94,12 @@ export default {
         this.loadDepartments(),
         this.loadProgramTypes(),
         this.loadProgramModes(),
+        this.loadLecturers(),
       ]);
+    },
+
+    getLecturerName(lecturer) {
+      return [lecturer.firstName, lecturer.otherName, lecturer.lastName].filter(Boolean).join(" ");
     },
 
     async loadPrograms() {
@@ -184,6 +198,20 @@ export default {
       }
     },
 
+    async loadLecturers() {
+      try {
+        const response = await apiService.getUsers({ page: 1, limit: 200, role: 'staff', status: 'active' });
+        if (response.success) {
+          this.lecturers = (response.data?.users || []).filter((user) => user.isActive !== false);
+        } else {
+          this.lecturers = [];
+        }
+      } catch (error) {
+        logger.error("Failed to load lecturers for programs:", error);
+        this.lecturers = [];
+      }
+    },
+
     async showAddProgramModal() {
       // Ensure arrays are properly initialized
       if (!Array.isArray(this.departments)) {
@@ -238,6 +266,10 @@ export default {
         .map((mode) => `<option value="${mode.id}">${mode.mode}</option>`)
         .join("");
 
+      const lecturerOptions = this.lecturers
+        .map((lecturer) => `<option value="${lecturer._id}">${this.getLecturerName(lecturer)} · ${lecturer.email}</option>`)
+        .join("");
+
       const { value: result } = await this.$swal.fire({
         title: "Add New Program",
         html: `
@@ -256,6 +288,21 @@ export default {
             <div class="col-12">
               <label class="form-label">Description (Optional)</label>
               <textarea id="description" class="form-control" rows="3" placeholder="Program description..."></textarea>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Min Units</label>
+              <input id="minUnits" type="number" class="form-control" min="1" placeholder="e.g. 15" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Max Units</label>
+              <input id="maxUnits" type="number" class="form-control" min="1" placeholder="e.g. 30" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Course Advisor</label>
+              <select id="courseAdvisorId" class="form-select">
+                <option value="">Select Course Advisor</option>
+                ${lecturerOptions}
+              </select>
             </div>
 
             <div class="col-12 d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
@@ -367,9 +414,17 @@ export default {
           const department = document.getElementById("department").value;
           const programName = document.getElementById("programName").value;
           const description = document.getElementById("description").value;
+          const minUnits = parseInt(document.getElementById("minUnits").value, 10);
+          const maxUnits = parseInt(document.getElementById("maxUnits").value, 10);
+          const courseAdvisorId = document.getElementById("courseAdvisorId").value;
 
-          if (!department || !programName) {
+          if (!department || !programName || !minUnits || !maxUnits) {
             this.$swal.showValidationMessage("Please fill in all required fields");
+            return false;
+          }
+
+          if (maxUnits < minUnits) {
+            this.$swal.showValidationMessage("Maximum units must be greater than or equal to minimum units");
             return false;
           }
 
@@ -405,6 +460,9 @@ export default {
             departmentId: department,
             programName,
             description,
+            minUnits,
+            maxUnits,
+            courseAdvisorId: courseAdvisorId || null,
             variants
           };
         },
@@ -427,6 +485,9 @@ export default {
             departmentId: programData.departmentId,
             name: programData.programName,
             description: programData.description,
+            minUnits: programData.minUnits,
+            maxUnits: programData.maxUnits,
+            courseAdvisorId: programData.courseAdvisorId,
             programTypeId: variant.programTypeId,
             programModeId: variant.programModeId,
             durationYears: variant.durationYears,
@@ -536,6 +597,13 @@ export default {
         .map((mode) => `<option value="${mode.id}">${mode.mode}</option>`)
         .join("");
 
+      const lecturerOptions = this.lecturers
+        .map((lecturer) => {
+          const isSelected = lecturer._id === programGroup.courseAdvisorId;
+          return `<option value="${lecturer._id}" ${isSelected ? 'selected' : ''}>${this.getLecturerName(lecturer)} · ${lecturer.email}</option>`;
+        })
+        .join("");
+
       const { value: result } = await this.$swal.fire({
         title: "Edit Program",
         html: `
@@ -553,7 +621,22 @@ export default {
             </div>
             <div class="col-12">
               <label class="form-label">Description (Optional)</label>
-              <textarea id="description" class="form-control" rows="3" disabled>${programGroup.description || ""}</textarea>
+              <textarea id="description" class="form-control" rows="3">${programGroup.description || ""}</textarea>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Min Units</label>
+              <input id="minUnits" type="number" class="form-control" min="1" value="${programGroup.minUnits || ''}" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Max Units</label>
+              <input id="maxUnits" type="number" class="form-control" min="1" value="${programGroup.maxUnits || ''}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Course Advisor</label>
+              <select id="courseAdvisorId" class="form-select">
+                <option value="">Select Course Advisor</option>
+                ${lecturerOptions}
+              </select>
             </div>
 
             <div class="col-12 d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
@@ -681,9 +764,17 @@ export default {
           const department = document.getElementById("department").value;
           const programName = document.getElementById("programName").value;
           const description = document.getElementById("description").value;
+          const minUnits = parseInt(document.getElementById("minUnits").value, 10);
+          const maxUnits = parseInt(document.getElementById("maxUnits").value, 10);
+          const courseAdvisorId = document.getElementById("courseAdvisorId").value;
 
-          if (!department || !programName) {
+          if (!department || !programName || !minUnits || !maxUnits) {
             this.$swal.showValidationMessage("Please fill in all required fields");
+            return false;
+          }
+
+          if (maxUnits < minUnits) {
+            this.$swal.showValidationMessage("Maximum units must be greater than or equal to minimum units");
             return false;
           }
 
@@ -721,6 +812,9 @@ export default {
             departmentId: department,
             programName,
             description,
+            minUnits,
+            maxUnits,
+            courseAdvisorId: courseAdvisorId || null,
             variants,
             originalGroup: programGroup
           };
@@ -754,6 +848,9 @@ export default {
               departmentId: programData.departmentId,
               name: programData.programName,
               description: programData.description,
+              minUnits: programData.minUnits,
+              maxUnits: programData.maxUnits,
+              courseAdvisorId: programData.courseAdvisorId,
               programTypeId: variant.programTypeId,
               programModeId: variant.programModeId,
               durationYears: variant.durationYears,
@@ -769,6 +866,9 @@ export default {
               departmentId: programData.departmentId,
               name: programData.programName,
               description: programData.description,
+              minUnits: programData.minUnits,
+              maxUnits: programData.maxUnits,
+              courseAdvisorId: programData.courseAdvisorId,
               programTypeId: variant.programTypeId,
               programModeId: variant.programModeId,
               durationYears: variant.durationYears,

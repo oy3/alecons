@@ -5,6 +5,8 @@ import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
 import { Program, ProgramDocument } from '../schemas/program.schema';
 import { Department, DepartmentDocument } from '../schemas/department.schema';
+import { User, UserDocument, UserRole } from '../schemas/user.schema';
+import { Staff, StaffDocument } from '../schemas/staff.schema';
 import {
     CreateProgramDto,
     UpdateProgramDto,
@@ -22,7 +24,48 @@ export class ProgramsService {
         @InjectModel(ProgramMode.name) private programModeModel: Model<ProgramModeDocument>,
         @InjectModel(Program.name) private programModel: Model<ProgramDocument>,
         @InjectModel(Department.name) private departmentModel: Model<DepartmentDocument>,
+        @InjectModel(User.name) private userModel: Model<UserDocument>,
+        @InjectModel(Staff.name) private staffModel: Model<StaffDocument>,
     ) { }
+
+    private async validateCourseAdvisor(courseAdvisorId?: string) {
+        if (!courseAdvisorId) {
+            return;
+        }
+
+        if (!Types.ObjectId.isValid(courseAdvisorId)) {
+            throw new BadRequestException('Invalid course advisor ID');
+        }
+
+        const advisor = await this.userModel.findOne({
+            _id: new Types.ObjectId(courseAdvisorId),
+            role: { $in: [UserRole.STAFF, UserRole.ADMIN] },
+            isActive: true,
+        }).lean();
+
+        if (!advisor) {
+            throw new BadRequestException('Selected course advisor is invalid or inactive');
+        }
+
+        const staffRecord = await this.staffModel.findOne({
+            userId: advisor._id,
+            isActive: true,
+        }).lean();
+
+        if (!staffRecord) {
+            throw new BadRequestException('Selected course advisor is invalid or inactive');
+        }
+    }
+
+    private validateUnitRange(minUnits?: number, maxUnits?: number) {
+        if (minUnits === undefined || maxUnits === undefined) {
+            return;
+        }
+
+        if (maxUnits < minUnits) {
+            throw new BadRequestException('Maximum units must be greater than or equal to minimum units');
+        }
+    }
 
     // Program CRUD Operations
     async createProgram(createProgramDto: CreateProgramDto) {
@@ -45,6 +88,9 @@ export class ProgramsService {
                 throw new BadRequestException('Program mode not found');
             }
 
+            await this.validateCourseAdvisor(createProgramDto.courseAdvisorId);
+            this.validateUnitRange(createProgramDto.minUnits, createProgramDto.maxUnits);
+
             // Use atomic operation to generate code to avoid race conditions
             let savedProgram;
             let attempts = 0;
@@ -61,6 +107,9 @@ export class ProgramsService {
                         departmentId: new Types.ObjectId(createProgramDto.departmentId),
                         programTypeId: new Types.ObjectId(createProgramDto.programTypeId),
                         programModeId: new Types.ObjectId(createProgramDto.programModeId),
+                        courseAdvisorId: createProgramDto.courseAdvisorId
+                            ? new Types.ObjectId(createProgramDto.courseAdvisorId)
+                            : undefined,
                         code: nextCode,
                         active: createProgramDto.active ?? true
                     });
@@ -133,6 +182,7 @@ export class ProgramsService {
             if (isPublicAccess) {
                 const programs = await this.programModel
                     .find(filter)
+                    .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
                     .sort({ createdAt: -1 })
                     .exec();
 
@@ -143,6 +193,9 @@ export class ProgramsService {
                         name: program.name,
                         code: program.code,
                         description: program.description,
+                        minUnits: program.minUnits,
+                        maxUnits: program.maxUnits,
+                        courseAdvisorId: this.extractReferenceId(program.courseAdvisorId),
                         departmentId: program.departmentId.toString(),
                         programTypeId: program.programTypeId.toString(),
                         programModeId: program.programModeId.toString(),
@@ -157,6 +210,7 @@ export class ProgramsService {
             const programs = await this.programModel
                 .find(filter)
                 .populate('departmentId', 'name code')
+                .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
                 .populate('programTypeId', 'type description')
                 .populate('programModeId', 'mode description')
                 .sort({ createdAt: -1 })
@@ -213,6 +267,7 @@ export class ProgramsService {
             const programs = await this.programModel
                 .find(filter)
                 .populate('departmentId', 'name code')
+                .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
                 .populate('programTypeId', 'type description')
                 .populate('programModeId', 'mode description')
                 .sort({ createdAt: -1 })
@@ -246,6 +301,7 @@ export class ProgramsService {
             const program = await this.programModel
                 .findById(id)
                 .populate('departmentId', 'name code')
+                .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
                 .populate('programTypeId', 'type description')
                 .populate('programModeId', 'mode description')
                 .exec();
@@ -294,6 +350,12 @@ export class ProgramsService {
                 }
             }
 
+            if (updateProgramDto.courseAdvisorId) {
+                await this.validateCourseAdvisor(updateProgramDto.courseAdvisorId);
+            }
+
+            this.validateUnitRange(updateProgramDto.minUnits, updateProgramDto.maxUnits);
+
             const updateData: any = { ...updateProgramDto };
 
             // Convert string IDs to ObjectIds
@@ -306,10 +368,16 @@ export class ProgramsService {
             if (updateProgramDto.programModeId) {
                 updateData.programModeId = new Types.ObjectId(updateProgramDto.programModeId);
             }
+            if (updateProgramDto.courseAdvisorId !== undefined) {
+                updateData.courseAdvisorId = updateProgramDto.courseAdvisorId
+                    ? new Types.ObjectId(updateProgramDto.courseAdvisorId)
+                    : null;
+            }
 
             const program = await this.programModel
                 .findByIdAndUpdate(id, updateData, { new: true })
                 .populate('departmentId', 'name code')
+                .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
                 .populate('programTypeId', 'type description')
                 .populate('programModeId', 'mode description')
                 .exec();
@@ -711,6 +779,18 @@ export class ProgramsService {
             name: program.name,
             code: program.code,
             description: program.description,
+            minUnits: program.minUnits,
+            maxUnits: program.maxUnits,
+            courseAdvisorId: this.extractReferenceId(program.courseAdvisorId),
+            courseAdvisor: program.courseAdvisorId ? {
+                id: this.extractReferenceId(program.courseAdvisorId),
+                firstName: program.courseAdvisorId.firstName,
+                otherName: program.courseAdvisorId.otherName,
+                lastName: program.courseAdvisorId.lastName,
+                email: program.courseAdvisorId.email,
+                role: program.courseAdvisorId.role,
+                isActive: program.courseAdvisorId.isActive,
+            } : null,
             programTypeId: this.extractReferenceId(program.programTypeId),
             programType: program.programTypeId?.type || null,
             programModeId: this.extractReferenceId(program.programModeId),

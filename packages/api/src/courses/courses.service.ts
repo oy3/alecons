@@ -147,9 +147,6 @@ export class CoursesService {
             courseId: new Types.ObjectId(createProgramCourseDto.courseId),
             programId: new Types.ObjectId(createProgramCourseDto.programId),
             lecturerIds: (createProgramCourseDto.lecturerIds || []).map((id) => new Types.ObjectId(id)),
-            courseAdvisorId: createProgramCourseDto.courseAdvisorId
-                ? new Types.ObjectId(createProgramCourseDto.courseAdvisorId)
-                : undefined,
             active: createProgramCourseDto.active ?? true,
         });
 
@@ -164,7 +161,6 @@ export class CoursesService {
                     { path: 'programModeId', select: 'mode' },
                 ],
             })
-            .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
             .populate('lecturerIds', 'firstName otherName lastName email role isActive')
             .exec();
 
@@ -226,7 +222,6 @@ export class CoursesService {
                         { path: 'programModeId', select: 'mode' },
                     ],
                 })
-                .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
                 .populate('lecturerIds', 'firstName otherName lastName email role isActive')
                 .sort({ createdAt: -1 })
                 .skip(skip)
@@ -267,11 +262,6 @@ export class CoursesService {
         if (updateProgramCourseDto.lecturerIds) {
             updateData.lecturerIds = updateProgramCourseDto.lecturerIds.map((lecturerId) => new Types.ObjectId(lecturerId));
         }
-        if (updateProgramCourseDto.courseAdvisorId !== undefined) {
-            updateData.courseAdvisorId = updateProgramCourseDto.courseAdvisorId
-                ? new Types.ObjectId(updateProgramCourseDto.courseAdvisorId)
-                : null;
-        }
 
         const programCourse = await this.programCourseModel
             .findByIdAndUpdate(id, updateData, { new: true })
@@ -284,7 +274,6 @@ export class CoursesService {
                     { path: 'programModeId', select: 'mode' },
                 ],
             })
-            .populate('courseAdvisorId', 'firstName otherName lastName email role isActive')
             .populate('lecturerIds', 'firstName otherName lastName email role isActive')
             .exec();
 
@@ -335,10 +324,6 @@ export class CoursesService {
             if (!program) {
                 throw new BadRequestException('Program not found');
             }
-        }
-
-        if (input.courseAdvisorId) {
-            await this.validateActiveStaffUsers([input.courseAdvisorId], 'Selected course advisor is invalid or inactive');
         }
 
         if (input.lecturerIds?.length) {
@@ -457,18 +442,6 @@ export class CoursesService {
             semester: programCourse.semester,
             category: programCourse.category,
             active: programCourse.active,
-            courseAdvisorId: programCourse.courseAdvisorId?._id?.toString?.()
-                || programCourse.courseAdvisorId?.toString?.()
-                || null,
-            courseAdvisor: programCourse.courseAdvisorId ? {
-                id: programCourse.courseAdvisorId._id?.toString?.() || programCourse.courseAdvisorId.toString?.() || null,
-                firstName: programCourse.courseAdvisorId.firstName,
-                otherName: programCourse.courseAdvisorId.otherName,
-                lastName: programCourse.courseAdvisorId.lastName,
-                email: programCourse.courseAdvisorId.email,
-                role: programCourse.courseAdvisorId.role,
-                isActive: programCourse.courseAdvisorId.isActive,
-            } : null,
             lecturers: Array.isArray(programCourse.lecturerIds)
                 ? programCourse.lecturerIds.map((lecturer: any) => ({
                     id: lecturer._id?.toString?.() || lecturer.toString?.() || null,

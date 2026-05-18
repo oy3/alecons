@@ -2446,6 +2446,7 @@ export class StaffApplicationsController {
                     programId: application.programId,
                     admissionYear: admissionYear,
                     academicSession: studentAcademicSessionId, // Store ObjectId reference
+                    entryAcademicSession: studentAcademicSessionId,
                     status: 'active',
                     currentLevel: 1,
                     currentSemester: 1,
@@ -2463,6 +2464,7 @@ export class StaffApplicationsController {
                 existingStudent.programId = application.programId;
                 existingStudent.admissionYear = admissionYear;
                 existingStudent.academicSession = studentAcademicSessionId;
+                existingStudent.entryAcademicSession = studentAcademicSessionId;
                 existingStudent.profileImageUrl = application.profileImageUrl;
                 existingStudent.status = existingStudent.status || 'active';
                 existingStudent.currentLevel = existingStudent.currentLevel || 1;

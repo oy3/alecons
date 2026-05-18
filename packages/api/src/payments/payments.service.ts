@@ -1314,7 +1314,8 @@ export class PaymentsService {
                         matriculationNumber: matriculationNumber,
                         programId: fullApplication.programId,
                         admissionYear: admissionYear,
-                        academicSession: academicSessionId
+                        academicSession: academicSessionId,
+                        entryAcademicSession: academicSessionId
                     });
 
                     const newStudent = new this.studentModel({
@@ -1324,6 +1325,7 @@ export class PaymentsService {
                         programId: fullApplication.programId,
                         admissionYear: admissionYear,
                         academicSession: academicSessionId, // Store ObjectId reference
+                        entryAcademicSession: academicSessionId,
                         status: 'active',
                         currentLevel: 1,
                         currentSemester: 1,
@@ -1341,6 +1343,7 @@ export class PaymentsService {
                     existingStudent.programId = fullApplication.programId;
                     existingStudent.admissionYear = admissionYear;
                     existingStudent.academicSession = academicSessionId;
+                    existingStudent.entryAcademicSession = academicSessionId;
                     existingStudent.profileImageUrl = fullApplication.profileImageUrl;
                     existingStudent.status = existingStudent.status || 'active';
                     existingStudent.currentLevel = existingStudent.currentLevel || 1;

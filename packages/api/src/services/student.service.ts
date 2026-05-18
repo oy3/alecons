@@ -37,24 +37,30 @@ export class StudentService {
                     model: 'Application',
                     populate: {
                         path: 'programId',
-                        select: 'name code programTypeId programModeId',
+                        select: 'name code minUnits maxUnits courseAdvisorId programTypeId programModeId',
                         populate: [
                             { path: 'programTypeId', select: 'type description' },
                             { path: 'programModeId', select: 'mode description' },
+                            { path: 'courseAdvisorId', select: 'firstName otherName lastName email role isActive' },
                         ],
                     }
                 })
                 .populate({
                     path: 'programId',
-                    select: 'name code programTypeId programModeId',
+                    select: 'name code minUnits maxUnits courseAdvisorId programTypeId programModeId',
                     populate: [
                         { path: 'programTypeId', select: 'type description' },
                         { path: 'programModeId', select: 'mode description' },
+                        { path: 'courseAdvisorId', select: 'firstName otherName lastName email role isActive' },
                     ]
                 })
                 .populate({
                     path: 'academicSession',
-                    select: 'name year isActive'
+                    select: 'sessionYear startDate endDate status active'
+                })
+                .populate({
+                    path: 'entryAcademicSession',
+                    select: 'sessionYear startDate endDate status active'
                 })
                 .exec();
 
@@ -91,7 +97,8 @@ export class StudentService {
                         program: student.programId,
                         programType: getNestedProgramRelation(student).programType,
                         programMode: getNestedProgramRelation(student).programMode,
-                        academicSession: student.academicSession
+                        academicSession: student.academicSession,
+                        entryAcademicSession: student.entryAcademicSession
                     },
                     user: student.userId ? {
                         id: (student.userId as any)._id,
@@ -173,22 +180,25 @@ export class StudentService {
                 path: 'applicationId',
                 populate: {
                     path: 'programId',
-                    select: 'name code programTypeId programModeId',
+                    select: 'name code minUnits maxUnits courseAdvisorId programTypeId programModeId',
                     populate: [
                         { path: 'programTypeId', select: 'type description' },
                         { path: 'programModeId', select: 'mode description' },
+                        { path: 'courseAdvisorId', select: 'firstName otherName lastName email role isActive' },
                     ],
                 },
             })
             .populate({
                 path: 'programId',
-                select: 'name code programTypeId programModeId',
+                select: 'name code minUnits maxUnits courseAdvisorId programTypeId programModeId',
                 populate: [
                     { path: 'programTypeId', select: 'type description' },
                     { path: 'programModeId', select: 'mode description' },
+                    { path: 'courseAdvisorId', select: 'firstName otherName lastName email role isActive' },
                 ],
             })
-            .populate('academicSession', 'name year isActive')
+            .populate('academicSession', 'sessionYear startDate endDate status active')
+            .populate('entryAcademicSession', 'sessionYear startDate endDate status active')
             .skip(skip)
             .limit(limit)
             .sort({ createdAt: -1 })

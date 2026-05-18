@@ -101,10 +101,6 @@ export class CreateProgramCourseDto {
     @IsMongoId({ each: true })
     lecturerIds?: string[];
 
-    @IsOptional()
-    @IsMongoId()
-    courseAdvisorId?: string;
-
     @Transform(({ value }) => parseInt(value, 10))
     @IsInt()
     @Min(1)
@@ -148,10 +144,6 @@ export class UpdateProgramCourseDto {
     @ArrayUnique()
     @IsMongoId({ each: true })
     lecturerIds?: string[];
-
-    @IsOptional()
-    @IsMongoId()
-    courseAdvisorId?: string;
 
     @IsOptional()
     @Transform(({ value }) => parseInt(value, 10))

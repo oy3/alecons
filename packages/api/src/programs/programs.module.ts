@@ -6,6 +6,8 @@ import { Program, ProgramSchema } from '../schemas/program.schema';
 import { ProgramType, ProgramTypeSchema } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeSchema } from '../schemas/program-mode.schema';
 import { Department, DepartmentSchema } from '../schemas/department.schema';
+import { User, UserSchema } from '../schemas/user.schema';
+import { Staff, StaffSchema } from '../schemas/staff.schema';
 
 @Module({
     imports: [
@@ -14,6 +16,8 @@ import { Department, DepartmentSchema } from '../schemas/department.schema';
             { name: ProgramType.name, schema: ProgramTypeSchema },
             { name: ProgramMode.name, schema: ProgramModeSchema },
             { name: Department.name, schema: DepartmentSchema },
+            { name: User.name, schema: UserSchema },
+            { name: Staff.name, schema: StaffSchema },
         ]),
     ],
     controllers: [ProgramsController],

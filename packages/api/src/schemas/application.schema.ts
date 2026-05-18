@@ -160,6 +160,7 @@ export class Application {
     profileImageUrl?: string;
 
     // Guardian Information
+    // TODO: Include in application form and autofill in tenancy agreement in student portal
     @Prop({
         type: {
             name: String,

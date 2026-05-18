@@ -237,6 +237,35 @@ class ApiService {
         return this.makeRequest('/student/profile');
     }
 
+    async getCourseRegistration(level, semester) {
+        const searchParams = new URLSearchParams();
+
+        if (level) {
+            searchParams.set('level', level);
+        }
+
+        if (semester) {
+            searchParams.set('semester', semester);
+        }
+
+        const params = searchParams.toString() ? `?${searchParams.toString()}` : '';
+        return this.makeRequest(`/student/course-registration${params}`);
+    }
+
+    async saveCourseRegistrationDraft(payload) {
+        return this.makeRequest('/student/course-registration/draft', {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    }
+
+    async submitCourseRegistration(payload) {
+        return this.makeRequest('/student/course-registration/submit', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    }
+
     // Health check
     async healthCheck() {
         return this.makeRequest('/health');

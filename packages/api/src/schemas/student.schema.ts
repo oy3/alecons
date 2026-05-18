@@ -23,6 +23,9 @@ export class Student {
     @Prop({ type: Types.ObjectId, ref: 'AcademicSession', required: true })
     academicSession: Types.ObjectId; // Reference to AcademicSession collection
 
+    @Prop({ type: Types.ObjectId, ref: 'AcademicSession', required: true })
+    entryAcademicSession: Types.ObjectId;
+
     @Prop({ default: 'active' })
     status: string; // active, suspended, graduated, withdrawn
 

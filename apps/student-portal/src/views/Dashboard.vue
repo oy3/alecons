@@ -1,6 +1,7 @@
 <script>
 import { useAuthStore } from '../stores/auth.js'
 import { studentPaymentService } from '../services/payment.js'
+import { apiService } from '../services/api.js'
 import { logger } from '@shared/utils/logger'
 
 export default {
@@ -13,6 +14,8 @@ export default {
                 unpaidFees: []
             },
             isLoadingFinance: true,
+            isLoadingRegistration: true,
+            registrationContext: null,
             academicSessions: [],
             selectedSessionId: ''
         }
@@ -38,10 +41,48 @@ export default {
         
         balanceStatusClass() {
             return this.hasOutstandingPayments ? 'text-danger' : 'text-success';
+        },
+
+        registeredCoursesCount() {
+          return this.approvedRegisteredCourses.length;
+        },
+
+        approvedRegisteredCourses() {
+          if (this.registrationContext?.registration?.status !== 'approved') {
+            return [];
+          }
+
+          return (this.registrationContext?.registration?.items || [])
+            .map((item) => item.programCourse)
+            .filter(Boolean);
+        },
+
+        registeredCoursesPreview() {
+          return this.approvedRegisteredCourses
+            .slice(0, 3);
+        },
+
+        registrationStatusText() {
+          const status = this.registrationContext?.registration?.status;
+
+          if (!status) {
+            return this.registrationContext?.eligibility?.eligible
+              ? 'Ready for registration'
+              : 'Registration unavailable';
+          }
+
+          if (status === 'approved') {
+            return 'Approved courses';
+          }
+
+          return status.charAt(0).toUpperCase() + status.slice(1);
         }
     },
     async mounted() {
-        await this.loadFinanceData();
+        await Promise.all([
+          this.loadFinanceData(),
+          this.loadRegistrationData(),
+        ]);
     },
     methods: {
       getStudentEntryYear() {
@@ -73,6 +114,20 @@ export default {
           return !sessionYear || sessionYear >= entryYear;
         });
       },
+
+        async loadRegistrationData() {
+          try {
+            this.isLoadingRegistration = true;
+            const response = await apiService.getCourseRegistration();
+            if (response.success) {
+              this.registrationContext = response.data;
+            }
+          } catch (error) {
+            logger.error('Dashboard: Error loading course registration summary:', error);
+          } finally {
+            this.isLoadingRegistration = false;
+          }
+        },
 
         async loadFinanceData() {
             try {
@@ -114,6 +169,19 @@ export default {
         
         formatCurrency(amount) {
             return studentPaymentService.formatCurrency(amount);
+        },
+
+        getCourseInstructor(course) {
+          const lecturers = course?.lecturers || [];
+
+          if (!lecturers.length) {
+            return 'N/A';
+          }
+
+          return lecturers
+            .map((lecturer) => [lecturer.firstName, lecturer.lastName].filter(Boolean).join(' '))
+            .filter(Boolean)
+            .join(', ');
         }
     }
 }
@@ -151,8 +219,14 @@ export default {
               </div>
               <div class="flex-grow-1 ms-3">
                 <h6 class="fw-bold text-dark mb-1">Courses</h6>
-                <h4 class="fw-bold text-primary mb-0">0</h4>
-                <small class="text-muted">No courses registered</small>
+                <div v-if="isLoadingRegistration" class="d-flex align-items-center">
+                  <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+                  <span class="text-muted">Loading...</span>
+                </div>
+                <div v-else>
+                  <h4 class="fw-bold text-primary mb-0">{{ registeredCoursesCount }}</h4>
+                  <small class="text-muted">{{ registrationStatusText }}</small>
+                </div>
               </div>
             </div>
           </div>
@@ -260,78 +334,46 @@ export default {
               </router-link>
             </div>
           </div>
-          <div class="card-body">
-            <!-- TODO: Replace with actual course data from backend when course registration system is implemented -->
-            <div class="text-center py-5">
-              <i class="bi bi-book text-muted" style="font-size: 3rem;"></i>
-              <h6 class="text-muted mt-3">No Courses Available</h6>
-              <p class="text-muted small">Course registration and enrollment system will be available soon.</p>
+          <div class="card-body p-0">
+            <div v-if="isLoadingRegistration" class="text-center py-5">
+              <div class="spinner-border text-primary mb-3"></div>
+              <p class="text-muted mb-0">Loading current registration...</p>
             </div>
-            
-            <!-- COMMENTED OUT: Mock course data - uncomment when backend is ready
-            <div class="table-responsive">
-              <table class="table table-hover mb-0">
+            <div v-else-if="registeredCoursesPreview.length === 0" class="text-center py-5">
+              <i class="bi bi-book text-muted" style="font-size: 3rem;"></i>
+              <h6 class="text-muted mt-3">No Approved Courses Yet</h6>
+              <p class="text-muted small">Approved courses will appear here after your registration has been reviewed.</p>
+            </div>
+            <div v-else class="table-responsive">
+              <table class="table mb-0">
                 <thead class="table-light">
                   <tr>
                     <th class="border-0 fw-bold text-dark">Course</th>
                     <th class="border-0 fw-bold text-dark">Instructor</th>
-                    <th class="border-0 fw-bold text-dark">Schedule</th>
+                    <th class="border-0 fw-bold text-dark text-center">Schedule</th>
                     <th class="border-0 fw-bold text-dark">Progress</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td class="py-3">
+                  <tr v-for="course in registeredCoursesPreview" :key="course.id">
+                    <td class="">
                       <div>
-                        <div class="fw-bold text-dark">Anatomy & Physiology</div>
-                        <small class="text-muted">ANA 201</small>
+                        <div class="fw-bold text-dark">{{ course.course?.title }}</div>
+                        <small class="text-muted">{{ course.course?.code }}</small>
                       </div>
                     </td>
-                    <td class="py-3">Dr. Sarah Johnson</td>
-                    <td class="py-3">Mon, Wed, Fri - 9:00 AM</td>
-                    <td class="py-3">
+                    <td class="">{{ getCourseInstructor(course) }}</td>
+                    <td class="text-center">N/A</td>
+                    <td class="">
                       <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-primary" style="width: 75%"></div>
+                        <div class="progress-bar bg-primary" style="width: 0%"></div>
                       </div>
-                      <small class="text-muted">75% Complete</small>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="py-3">
-                      <div>
-                        <div class="fw-bold text-dark">Fundamentals of Nursing</div>
-                        <small class="text-muted">NUR 101</small>
-                      </div>
-                    </td>
-                    <td class="py-3">Prof. Michael Brown</td>
-                    <td class="py-3">Tue, Thu - 2:00 PM</td>
-                    <td class="py-3">
-                      <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-primary" style="width: 60%"></div>
-                      </div>
-                      <small class="text-muted">60% Complete</small>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="py-3">
-                      <div>
-                        <div class="fw-bold text-dark">Medical Terminology</div>
-                        <small class="text-muted">MED 150</small>
-                      </div>
-                    </td>
-                    <td class="py-3">Dr. Emily Davis</td>
-                    <td class="py-3">Mon, Wed - 11:00 AM</td>
-                    <td class="py-3">
-                      <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-primary" style="width: 45%"></div>
-                      </div>
-                      <small class="text-muted">45% Complete</small>
+                      <small class="text-muted">0% Complete</small>
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            -->
           </div>
         </div>
 

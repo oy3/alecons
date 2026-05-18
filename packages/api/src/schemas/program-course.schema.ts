@@ -25,9 +25,6 @@ export class ProgramCourse {
     @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
     lecturerIds: Types.ObjectId[];
 
-    @Prop({ type: Types.ObjectId, ref: 'User' })
-    courseAdvisorId?: Types.ObjectId;
-
     @Prop({ required: true, min: 1 })
     level: number;
 

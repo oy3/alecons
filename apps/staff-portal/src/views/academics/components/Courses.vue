@@ -8,7 +8,6 @@ const createEmptyProgramCourseForm = () => ({
   programId: '',
   units: 2,
   hours: 2,
-  courseAdvisorId: null,
   lecturerIds: [],
   level: null,
   semester: null,
@@ -334,7 +333,6 @@ export default {
           programId: programCourse.program?.id || '',
           units: programCourse.units,
           hours: programCourse.hours,
-          courseAdvisorId: programCourse.courseAdvisor?.id || null,
           lecturerIds: (programCourse.lecturers || []).map((lecturer) => lecturer.id),
           level: programCourse.level,
           semester: programCourse.semester,
@@ -353,7 +351,6 @@ export default {
         programId: '',
         units: programCourse.units,
         hours: programCourse.hours,
-        courseAdvisorId: programCourse.courseAdvisor?.id || null,
         lecturerIds: (programCourse.lecturers || []).map((lecturer) => lecturer.id),
         level: programCourse.level,
         semester: programCourse.semester,
@@ -692,13 +689,10 @@ export default {
                     </td>
                     <td>
                       <div class="d-flex flex-column gap-1">
-                        <span v-if="programCourse.courseAdvisor" class="small text-dark fw-semibold">
-                          Advisor: {{ getLecturerName(programCourse.courseAdvisor) }}
-                        </span>
                         <span v-for="lecturer in programCourse.lecturers" :key="lecturer.id" class="small text-muted">
                           {{ getLecturerName(lecturer) }}
                         </span>
-                        <span v-if="!programCourse.courseAdvisor && !programCourse.lecturers?.length" class="text-muted small">Not assigned</span>
+                        <span v-if="!programCourse.lecturers?.length" class="text-muted small">Not assigned</span>
                       </div>
                     </td>
                     <td class="text-center">
@@ -763,7 +757,7 @@ export default {
                 <select v-model="programCourseForm.courseId" class="form-select">
                   <option value="" disabled>Select course</option>
                   <option v-for="course in courseOptions" :key="course.id" :value="course.id">
-                    {{ course.code }} · {{ course.title }}
+                    {{ course.code }} - {{ course.title }}
                   </option>
                 </select>
               </div>
@@ -812,15 +806,6 @@ export default {
                   <label class="form-check-label fw-semibold" for="programCourseActive">Active program course</label>
                   <div class="small text-muted">Inactive mappings stay in history but won’t be treated as live curriculum.</div>
                 </div>
-              </div>
-              <div class="col-12">
-                <label class="form-label">Course Advisor</label>
-                <select v-model="programCourseForm.courseAdvisorId" class="form-select">
-                  <option :value="null" disabled>Select course advisor</option>
-                  <option v-for="lecturer in lecturers" :key="lecturer._id" :value="lecturer._id">
-                    {{ getLecturerName(lecturer) }} · {{ lecturer.email }}
-                  </option>
-                </select>
               </div>
               <div class="col-12">
                 <label class="form-label">Lecturers</label>

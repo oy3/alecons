@@ -18,6 +18,21 @@ export class CreateProgramDto {
     @IsOptional()
     description?: string;
 
+    @ApiProperty({ description: 'Minimum session units', minimum: 1 })
+    @IsNumber()
+    @Min(1)
+    minUnits: number;
+
+    @ApiProperty({ description: 'Maximum session units', minimum: 1 })
+    @IsNumber()
+    @Min(1)
+    maxUnits: number;
+
+    @ApiPropertyOptional({ description: 'Course advisor user ID' })
+    @IsMongoId()
+    @IsOptional()
+    courseAdvisorId?: string;
+
     @ApiProperty({ description: 'Program type ID' })
     @IsMongoId()
     @IsNotEmpty()
@@ -54,6 +69,23 @@ export class UpdateProgramDto {
     @IsString()
     @IsOptional()
     description?: string;
+
+    @ApiPropertyOptional({ description: 'Minimum session units', minimum: 1 })
+    @IsNumber()
+    @Min(1)
+    @IsOptional()
+    minUnits?: number;
+
+    @ApiPropertyOptional({ description: 'Maximum session units', minimum: 1 })
+    @IsNumber()
+    @Min(1)
+    @IsOptional()
+    maxUnits?: number;
+
+    @ApiPropertyOptional({ description: 'Course advisor user ID' })
+    @IsMongoId()
+    @IsOptional()
+    courseAdvisorId?: string;
 
     @ApiPropertyOptional({ description: 'Program type ID' })
     @IsMongoId()

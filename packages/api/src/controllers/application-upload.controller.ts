@@ -509,6 +509,7 @@ export class ApplicationUploadController {
                 application.status = ApplicationStatus.PENDING;
                 application.currentStage = await this.sessionControlsService.getNextStageAfterApplicationForm(
                     application.entryAcademicSession,
+                    application,
                 );
                 this.appendAuditEntry(application, {
                     action: 'application_submitted',

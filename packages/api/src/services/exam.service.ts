@@ -63,7 +63,7 @@ export class ExamService {
     private async getUserApplication(userId: string) {
         return this.applicationModel
             .findOne({ userId: new Types.ObjectId(userId) })
-            .select('programId entryAcademicSession currentStage')
+            .select('programId entryAcademicSession currentStage isJambExempt')
             .exec();
     }
 
@@ -908,6 +908,7 @@ export class ExamService {
                         if (userRole === 'applicant') {
                             const flowConfig = await this.sessionControlsService.getAdmissionFlowConfig(
                                 application.entryAcademicSession,
+                                application,
                             );
 
                             if (!flowConfig.entranceExamEnabled) {
@@ -1208,6 +1209,7 @@ export class ExamService {
             if (application) {
                 const flowConfig = await this.sessionControlsService.getAdmissionFlowConfig(
                     application.entryAcademicSession,
+                    application,
                 );
 
                 if (!flowConfig.entranceExamEnabled) {

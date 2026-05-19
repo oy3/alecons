@@ -12,12 +12,21 @@ export interface AdmissionFlowConfig {
     screeningEnabled: boolean;
 }
 
+interface AdmissionFlowApplicationContext {
+    entryAcademicSession?:
+    | Types.ObjectId
+    | { _id?: Types.ObjectId | string }
+    | string;
+    isJambExempt?: boolean;
+}
+
 interface ApplicationStageCarrier {
     currentStage: number;
     entryAcademicSession?:
     | Types.ObjectId
     | { _id?: Types.ObjectId | string }
     | string;
+    isJambExempt?: boolean;
     save?: () => Promise<unknown>;
     markModified?: (path: string) => void;
 }
@@ -126,6 +135,12 @@ export class SessionControlsService {
         }
 
         return null;
+    }
+
+    private shouldAllowJambExemptEntranceExam(
+        application?: AdmissionFlowApplicationContext,
+    ) {
+        return application?.isJambExempt === true;
     }
 
     async createDefaultControls(
@@ -301,8 +316,11 @@ export class SessionControlsService {
             | Types.ObjectId
             | { _id?: Types.ObjectId | string }
             | string,
+        application?: AdmissionFlowApplicationContext,
     ): Promise<AdmissionFlowConfig> {
         const sessionId = this.extractSessionId(academicSessionId);
+        const jambExemptExamOverride =
+            this.shouldAllowJambExemptEntranceExam(application);
 
         if (!sessionId) {
             return {
@@ -325,11 +343,14 @@ export class SessionControlsService {
         const normalizedSessionControl =
             await this.ensureDefaultControls(sessionControl);
 
+        const entranceExamControlEnabled =
+            normalizedSessionControl.controls.find(
+                (control) => control.name === "entranceExam",
+            )?.active ?? true;
+
         return {
             entranceExamEnabled:
-                normalizedSessionControl.controls.find(
-                    (control) => control.name === "entranceExam",
-                )?.active ?? true,
+                entranceExamControlEnabled || jambExemptExamOverride,
             screeningEnabled:
                 normalizedSessionControl.controls.find(
                     (control) => control.name === "screening",
@@ -342,8 +363,12 @@ export class SessionControlsService {
             | Types.ObjectId
             | { _id?: Types.ObjectId | string }
             | string,
+        application?: AdmissionFlowApplicationContext,
     ): Promise<number> {
-        const flowConfig = await this.getAdmissionFlowConfig(academicSessionId);
+        const flowConfig = await this.getAdmissionFlowConfig(
+            academicSessionId,
+            application,
+        );
 
         if (flowConfig.entranceExamEnabled) {
             return 4;
@@ -357,8 +382,9 @@ export class SessionControlsService {
             | Types.ObjectId
             | { _id?: Types.ObjectId | string }
             | string,
+        application?: AdmissionFlowApplicationContext,
     ): Promise<number> {
-        await this.getAdmissionFlowConfig(academicSessionId);
+        await this.getAdmissionFlowConfig(academicSessionId, application);
         return 5;
     }
 
@@ -371,6 +397,7 @@ export class SessionControlsService {
     }> {
         const admissionFlow = await this.getAdmissionFlowConfig(
             application.entryAcademicSession,
+            application,
         );
         let currentStage = application.currentStage;
 

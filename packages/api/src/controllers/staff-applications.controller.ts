@@ -1774,6 +1774,7 @@ export class StaffApplicationsController {
 
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
+                application,
             );
 
             if (!admissionFlow.entranceExamEnabled) {
@@ -1861,6 +1862,7 @@ export class StaffApplicationsController {
 
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
+                application,
             );
 
             if (!admissionFlow.screeningEnabled) {
@@ -2236,6 +2238,7 @@ export class StaffApplicationsController {
             if (scoreData.passed) {
                 application.currentStage = await this.sessionControlsService.getNextStageAfterExam(
                     application.entryAcademicSession,
+                    application,
                 );
             } else {
                 application.status = ApplicationStatus.REJECTED;

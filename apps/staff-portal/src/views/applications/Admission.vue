@@ -4,6 +4,9 @@ import { apiService } from "../../services/api.js";
 import { logger } from "@shared/utils/logger";
 import { Modal } from "bootstrap";
 
+const CBT_APP_URL = import.meta.env.VITE_APP_CBT_URL || "N/A";
+const SCHOOL_ADDRESS = import.meta.env.VITE_APP_SCHOOL_ADDRESS || "N/A";
+
 export default {
   name: "AdmissionManagement",
   setup() {
@@ -42,6 +45,7 @@ export default {
       examForm: {
         examDate: "",
         examTime: "",
+        examLinkType: "cbt",
         examLink: "",
       },
       examFormProcessing: false,
@@ -49,7 +53,7 @@ export default {
       screeningForm: {
         screeningDate: "",
         screeningTime: "",
-        venue: "",
+        venue: SCHOOL_ADDRESS,
       },
       screeningFormProcessing: false,
 
@@ -80,6 +84,14 @@ export default {
     totalPages() {
       const calculated = Math.ceil(this.totalApplications / this.perPage);
       return this.apiTotalPages || Math.max(1, calculated);
+    },
+
+    cbtExamUrl() {
+      return CBT_APP_URL;
+    },
+
+    defaultScreeningVenue() {
+      return SCHOOL_ADDRESS;
     },
 
     visiblePages() {
@@ -518,13 +530,44 @@ export default {
       this.examForm = {
         examDate: "",
         examTime: "",
+        examLinkType: "cbt",
         examLink: "",
       };
       this.showModal("scheduleExamModal");
     },
 
+    getResolvedExamLink() {
+      if (this.examForm.examLinkType === "custom") {
+        return this.examForm.examLink.trim();
+      }
+
+      return this.cbtExamUrl;
+    },
+
     async submitExamSchedule() {
       try {
+        const resolvedExamLink = this.getResolvedExamLink();
+
+        if (!this.examForm.examDate || !this.examForm.examTime) {
+          this.$swal.fire({
+            icon: "warning",
+            title: "Missing Details",
+            text: "Exam date and time are required.",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
+        if (!resolvedExamLink) {
+          this.$swal.fire({
+            icon: "warning",
+            title: "Missing Exam Link",
+            text: "Select ALECONS Online CBT or provide a custom exam link.",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
         this.examFormProcessing = true;
 
         const response = await apiService.scheduleExam(
@@ -532,7 +575,7 @@ export default {
           {
             examDate: this.examForm.examDate,
             examTime: this.examForm.examTime,
-            examLink: this.examForm.examLink,
+            examLink: resolvedExamLink,
           },
         );
 
@@ -610,13 +653,35 @@ export default {
       this.screeningForm = {
         screeningDate: "",
         screeningTime: "",
-        venue: "",
+        venue: this.defaultScreeningVenue,
       };
       this.showModal("scheduleScreeningModal");
     },
 
     async submitScreeningSchedule() {
       try {
+        const venue = this.screeningForm.venue.trim();
+
+        if (!this.screeningForm.screeningDate || !this.screeningForm.screeningTime) {
+          this.$swal.fire({
+            icon: "warning",
+            title: "Missing Details",
+            text: "Screening date and time are required.",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
+        if (!venue) {
+          this.$swal.fire({
+            icon: "warning",
+            title: "Missing Venue",
+            text: "Screening venue is required.",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
         this.screeningFormProcessing = true;
 
         const response = await apiService.scheduleScreening(
@@ -624,7 +689,7 @@ export default {
           {
             screeningDate: this.screeningForm.screeningDate,
             screeningTime: this.screeningForm.screeningTime,
-            venue: this.screeningForm.venue,
+            venue,
           },
         );
 
@@ -644,7 +709,7 @@ export default {
         this.$swal.fire({
           icon: "error",
           title: "Failed",
-          text: "Failed to schedule screening. Please try again.",
+          text: error.message || "Failed to schedule screening. Please try again.",
           confirmButtonColor: "#1a5f5f",
         });
       } finally {
@@ -737,7 +802,9 @@ export default {
       this.detailsExporting = true;
 
       try {
-        const applicationId = this.selectedApplicationDetails.id || this.selectedApplicationDetails._id;
+        const applicationId =
+          this.selectedApplicationDetails.id ||
+          this.selectedApplicationDetails._id;
 
         if (!applicationId) {
           throw new Error("Application identifier is missing for export");
@@ -1380,14 +1447,35 @@ export default {
               />
             </div>
             <div class="mb-3">
-              <label for="examLink" class="form-label">Exam Link</label>
+              <label for="examLinkType" class="form-label">Exam Link</label>
+              <select
+                id="examLinkType"
+                v-model="examForm.examLinkType"
+                class="form-select"
+              >
+                <option value="cbt">ALECONS's Online CBT</option>
+                <option value="custom">Custom Link</option>
+              </select>
+            </div>
+            <div v-if="examForm.examLinkType === 'cbt'" class="mb-3">
+              <input
+                id="cbtExamLink"
+                :value="cbtExamUrl"
+                type="url"
+                class="form-control"
+                readonly
+              />
+              <small class="text-muted">
+                This will use the default CBT link.
+              </small>
+            </div>
+            <div v-else class="mb-3">
               <input
                 id="examLink"
                 v-model="examForm.examLink"
                 type="url"
                 class="form-control"
                 placeholder="https://cbt.platform.com/exam/123"
-                required
               />
             </div>
           </form>
@@ -1441,9 +1529,9 @@ export default {
         <div class="modal-body">
           <form @submit.prevent="submitScreeningSchedule">
             <div class="mb-3">
-              <label for="screeningDate" class="form-label"
-                >Screening Date</label
-              >
+              <label for="screeningDate" class="form-label">
+                Screening Date
+              </label>
               <input
                 id="screeningDate"
                 v-model="screeningForm.screeningDate"
@@ -1453,9 +1541,9 @@ export default {
               />
             </div>
             <div class="mb-3">
-              <label for="screeningTime" class="form-label"
-                >Screening Time</label
-              >
+              <label for="screeningTime" class="form-label">
+                Screening Time
+              </label>
               <input
                 id="screeningTime"
                 v-model="screeningForm.screeningTime"

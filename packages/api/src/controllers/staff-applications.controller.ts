@@ -1879,11 +1879,36 @@ export class StaffApplicationsController {
                 );
             }
 
+            const normalizedVenue = screeningData.venue?.trim();
+
+            if (!screeningData.screeningDate || !screeningData.screeningTime) {
+                throw new HttpException(
+                    { success: false, message: 'Screening date and time are required' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            if (!normalizedVenue) {
+                throw new HttpException(
+                    { success: false, message: 'Screening venue is required' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const screeningDate = new Date(screeningData.screeningDate);
+
+            if (Number.isNaN(screeningDate.getTime())) {
+                throw new HttpException(
+                    { success: false, message: 'Screening date is invalid' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
             // Update application with screening details using grouped structure
             application.screening = {
-                date: new Date(screeningData.screeningDate),
+                date: screeningDate,
                 time: screeningData.screeningTime,
-                venue: screeningData.venue,
+                venue: normalizedVenue,
                 completed: false
             };
             application.currentStage = 6; // Move to screening stage
@@ -1918,12 +1943,18 @@ export class StaffApplicationsController {
             };
 
         } catch (error) {
-            this.logger.error('Error scheduling screening:', error.message);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to schedule screening';
+            this.logger.error('Error scheduling screening:', errorMessage);
+
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
             throw new HttpException(
                 {
                     success: false,
                     message: 'Failed to schedule screening',
-                    error: error.message
+                    error: errorMessage
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR
             );
@@ -1967,6 +1998,7 @@ export class StaffApplicationsController {
 
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
+                application,
             );
 
             // Update application with admission decision using correct enum
@@ -2216,6 +2248,7 @@ export class StaffApplicationsController {
 
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
+                application,
             );
 
             if (!admissionFlow.entranceExamEnabled) {
@@ -2297,6 +2330,7 @@ export class StaffApplicationsController {
 
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
+                application,
             );
 
             if (!admissionFlow.screeningEnabled) {

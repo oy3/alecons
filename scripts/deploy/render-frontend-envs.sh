@@ -39,6 +39,8 @@ export VITE_PAYMENT_PAYSTACK_ENABLED="${VITE_PAYMENT_PAYSTACK_ENABLED:-true}"
 export VITE_PAYMENT_MANUAL_TRANSFER_ENABLED="${VITE_PAYMENT_MANUAL_TRANSFER_ENABLED:-true}"
 export VITE_APP_ENV="${VITE_APP_ENV:-production}"
 export VITE_APP_DEBUG="${VITE_APP_DEBUG:-false}"
+export VITE_APP_CBT_URL="${VITE_APP_CBT_URL:-https://cbt.alecons.edu.ng}"
+export VITE_APP_SCHOOL_ADDRESS="${VITE_APP_SCHOOL_ADDRESS:-Alebiosu College of Nursing Sciences, Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria}"
 export VITE_CBT_APP_NAME="${VITE_CBT_APP_NAME:-ALECONS CBT}"
 export VITE_APP_VERSION="${VITE_APP_VERSION:-1.0.0}"
 export VITE_LOG_LEVEL="${VITE_LOG_LEVEL:-info}"
@@ -66,7 +68,9 @@ write_env_file "$ROOT_DIR/apps/student-portal/.env.production" \
     VITE_PAYMENT_MANUAL_TRANSFER_ENABLED
 
 write_env_file "$ROOT_DIR/apps/staff-portal/.env.production" \
-    VITE_API_URL
+    VITE_API_URL \
+    VITE_APP_CBT_URL \
+    VITE_APP_SCHOOL_ADDRESS
 
 write_env_file "$ROOT_DIR/apps/cbt/.env.production" \
     VITE_API_BASE_URL \

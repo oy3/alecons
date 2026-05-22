@@ -2083,6 +2083,20 @@ export class PaymentsService {
             },
             {
                 $lookup: {
+                    from: 'users',
+                    localField: 'rejectedBy',
+                    foreignField: '_id',
+                    as: 'rejectedByUser',
+                },
+            },
+            {
+                $unwind: {
+                    path: '$rejectedByUser',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $lookup: {
                     from: 'applications',
                     localField: 'applicationId',
                     foreignField: '_id',
@@ -2381,6 +2395,10 @@ export class PaymentsService {
                             receiptUploadedAt: 1,
                             verificationRemarks: 1,
                             remarks: 1,
+                            rejectedBy: {
+                                firstName: '$rejectedByUser.firstName',
+                                lastName: '$rejectedByUser.lastName',
+                            },
                             channel: 1,
                         },
                     },

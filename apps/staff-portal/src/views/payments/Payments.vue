@@ -1086,6 +1086,13 @@ export default {
       return reference || "N/A";
     },
 
+    getRejectorDisplayName(payment) {
+      const firstName = payment?.rejectedBy?.firstName || "";
+      const lastName = payment?.rejectedBy?.lastName || "";
+      const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+      return fullName || "N/A";
+    },
+
     getEffectivePaidDate(payment) {
       return payment.paidAt || payment.effectivePaidAt || payment.createdAt;
     },
@@ -1185,7 +1192,7 @@ export default {
         },
         {
           label: "Receipt File",
-          valueHtml: payment.receiptUrl
+          valueHtml: this.canPreviewReceipt(payment)
             ? `${this.escapeHtml(this.safeDisplay(payment.receiptOriginalName))} <a href="#" id="${this.escapeHtml(receiptActionId)}" class="ms-2 small fw-semibold">View</a>`
             : this.escapeHtml(this.safeDisplay(payment.receiptOriginalName)),
         },
@@ -1201,7 +1208,7 @@ export default {
 
       const detailsHtml = `
         <div class="container-fluid px-0 px-sm-1 text-start">
-          <div class="card border-0 bg-light mb-3">
+          <div class="card border-0 bg-light mb-3 p-1">
             <div class="card-body py-2 py-sm-3 px-2 px-sm-3">
               <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2 gap-sm-3">
                 <div>
@@ -1222,7 +1229,7 @@ export default {
 
           <div class="row g-2 g-sm-3">
             <div class="col-12 col-md-6">
-              <div class="card h-100 border-0 shadow-sm">
+              <div class="card h-100 border-0 shadow-sm p-1">
                 <div class="card-body p-2 p-sm-3">
                   <h6 class="fw-bold mb-2 mb-sm-3">Identity</h6>
                   <ul class="list-group list-group-flush">
@@ -1233,7 +1240,7 @@ export default {
             </div>
 
             <div class="col-12 col-md-6">
-              <div class="card h-100 border-0 shadow-sm">
+              <div class="card h-100 border-0 shadow-sm p-1">
                 <div class="card-body p-2 p-sm-3">
                   <h6 class="fw-bold mb-2 mb-sm-3">Payment Info</h6>
                   <ul class="list-group list-group-flush">
@@ -1244,7 +1251,7 @@ export default {
             </div>
 
             <div class="col-12">
-              <div class="card border-0 shadow-sm">
+              <div class="card border-0 shadow-sm p-1">
                 <div class="card-body p-2 p-sm-3">
                   <h6 class="fw-bold mb-2 mb-sm-3">Timeline & Receipt</h6>
                   <ul class="list-group list-group-flush">
@@ -1255,11 +1262,17 @@ export default {
             </div>
 
             <div class="col-12">
-              <div class="card border-0 shadow-sm">
+              <div class="card border-0 shadow-sm p-1">
                 <div class="card-body p-2 p-sm-3">
                   <h6 class="fw-bold mb-2 mb-sm-3">Remarks</h6>
                   <div class="small text-muted text-uppercase fw-semibold mb-1">General</div>
                   <p class="mb-3">${this.escapeHtml(this.safeDisplay(payment.remarks))}</p>
+                  ${
+                    payment.status === "rejected"
+                      ? `<div class="small text-muted text-uppercase fw-semibold mb-1">Rejected By</div>
+                  <p class="mb-3">${this.escapeHtml(this.getRejectorDisplayName(payment))}</p>`
+                      : ""
+                  }
                   <div class="small text-muted text-uppercase fw-semibold mb-1">Verification</div>
                   <p class="mb-0">${this.escapeHtml(this.safeDisplay(payment.verificationRemarks))}</p>
                 </div>
@@ -1292,7 +1305,7 @@ export default {
             htmlContainer.style.overflowX = "hidden";
           }
 
-          if (!payment.receiptUrl) {
+          if (!this.canPreviewReceipt(payment)) {
             return;
           }
 
@@ -1332,6 +1345,11 @@ export default {
       return payment.method === "manual_transfer";
     },
 
+    canPreviewReceipt(payment) {
+      return !!payment?.receiptUrl;
+      // && payment?.status !== "rejected"
+    },
+
     canReviewManualTransfer(payment) {
       return (
         this.isManualTransferPayment(payment) &&
@@ -1355,11 +1373,14 @@ export default {
     },
 
     async previewReceipt(payment) {
-      if (!payment?.receiptUrl) {
+      if (!this.canPreviewReceipt(payment)) {
         await Swal.fire({
           icon: "info",
           title: "Receipt unavailable",
-          text: "No uploaded receipt is available for this payment record.",
+          text:
+            payment?.status === "rejected"
+              ? "Rejected manual transfer receipts are no longer available for preview."
+              : "No uploaded receipt is available for this payment record.",
           confirmButtonColor: "#1a5f5f",
         });
         return;
@@ -1649,20 +1670,15 @@ export default {
       <!-- Total Revenue -->
       <div class="col-lg-3 col-md-6 mb-3">
         <div class="card p-0 h-100 border-0 shadow-sm">
-          <div class="card-body">
-            <div class="d-flex align-items-center justify-content-center">
-              <div
-                class="bg-success-subtle text-success rounded-circle d-flex align-items-center justify-content-center"
-                style="width: 60px; height: 60px"
-              >
-                <i class="bi bi-piggy-bank fs-4"></i>
-              </div>
-              <div class="ms-3">
-                <h6 class="card-title text-body-secondary">Total Revenue</h6>
-                <h3 class="fw-bold text-dark mb-0">
-                  {{ formatCurrency(paymentStats.totalRevenue) }}
-                </h3>
-              </div>
+          <div class="card-body d-flex flex-row">
+            <div class="my-auto">
+              <i class="bi bi-piggy-bank-fill fs-4 text-success"></i>
+            </div>
+            <div class="ms-3">
+              <h6 class="card-title text-body-secondary">Total Revenue</h6>
+              <h4 class="fw-bold text-dark mb-0">
+                {{ formatCurrency(paymentStats.totalRevenue) }}
+              </h4>
             </div>
           </div>
         </div>
@@ -1671,22 +1687,18 @@ export default {
       <!-- Awaiting Verification -->
       <div class="col-lg-3 col-md-6 mb-3">
         <div class="card p-0 h-100 border-0 shadow-sm">
-          <div class="card-body">
-            <div class="d-flex align-items-center justify-content-center">
-              <div
-                class="bg-warning-subtle text-warning rounded-circle d-flex align-items-center justify-content-center"
-                style="width: 60px; height: 60px"
-              >
-                <i class="bi bi-hourglass-split fs-4"></i>
-              </div>
-              <div class="ms-3">
-                <h6 class="card-title text-body-secondary">
-                  Awaiting Verification
-                </h6>
-                <h3 class="fw-bold text-dark mb-0">
-                  {{ formatCurrency(paymentStats.awaitingVerification) }}
-                </h3>
-              </div>
+          <div class="card-body d-flex flex-row">
+            <div class="my-auto">
+              <i class="bi bi-hourglass-split fs-4 text-warning"></i>
+            </div>
+
+            <div class="ms-3">
+              <h6 class="card-title text-body-secondary">
+                Awaiting Verification
+              </h6>
+              <h4 class="fw-bold text-dark mb-0">
+                {{ formatCurrency(paymentStats.awaitingVerification) }}
+              </h4>
             </div>
           </div>
         </div>
@@ -1694,63 +1706,54 @@ export default {
 
       <!-- Pending Remittance -->
       <div class="col-lg-3 col-md-6 mb-3">
-        <div class="card p-0 h-100 border-0 shadow-sm pending-remittance-card">
-          <div class="card-body position-relative">
-            <button
-              type="button"
-              class="btn btn-outline-secondary rounded-circle btn-sm pending-remittance-trigger"
-              :disabled="isSyncingRemittance"
-              title="Sync and view remittance records"
-              @click="openPendingRemittanceModal"
-            >
+        <button
+          type="button"
+          class="btn btn-light card p-0 h-100 w-100 border-0 shadow-sm text-start"
+          :disabled="isSyncingRemittance"
+          title="Sync and view remittance records"
+          @click="openPendingRemittanceModal"
+        >
+          <div class="card-body d-flex flex-row align-items-center">
+            <div class="my-auto">
               <span
                 v-if="isSyncingRemittance"
-                class="spinner-border spinner-border-sm"
+                class="spinner-border spinner-border-sm text-primary"
                 role="status"
                 aria-hidden="true"
               ></span>
-              <i v-else class="bi bi-eye"></i>
-            </button>
-            <div class="d-flex align-items-center justify-content-center">
-              <div
-                class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center"
-                style="width: 60px; height: 60px"
-              >
-                <i class="bi bi-bank fs-4"></i>
-              </div>
-              <div class="ms-3">
-                <h6 class="card-title text-body-secondary">
-                  Pending Remittance
-                </h6>
-                <h3 class="fw-bold text-dark mb-0">
-                  {{ formatCurrency(paymentStats.pendingRemittance) }}
-                </h3>
-              </div>
+              <i v-else class="bi bi-bank fs-4 text-primary"></i>
+            </div>
+
+            <div class="ms-3">
+              <h6 class="card-title text-body-secondary mb-1">
+                Pending Remittance
+              </h6>
+              <h4 class="fw-bold text-dark mb-0">
+                {{ formatCurrency(paymentStats.pendingRemittance) }}
+              </h4>
             </div>
           </div>
-        </div>
+        </button>
       </div>
 
       <!-- Today’s Revenue -->
       <div class="col-lg-3 col-md-6 mb-3">
         <div class="card p-0 h-100 border-0 shadow-sm">
-          <div class="card-body">
-            <div class="d-flex align-items-center justify-content-center">
-              <div
-                class="bg-info-subtle text-info rounded-circle d-flex align-items-center justify-content-center"
-                style="width: 60px; height: 60px"
-              >
-                <i class="bi bi-calendar-check fs-4"></i>
-              </div>
-              <div class="ms-3">
-                <h6 class="card-title text-body-secondary">Today’s Revenue</h6>
-                <h3 class="fw-bold text-dark mb-0">
-                  {{ formatCurrency(paymentStats.todaysRevenue) }}
-                </h3>
-                <small class="text-body-tertiary">{{
-                  new Date().toLocaleDateString()
-                }}</small>
-              </div>
+          <div class="card-body d-flex flex-row">
+            <div class="my-auto">
+              <i
+                class="bi bi-calendar-check-fill fs-4 text-info text-start"
+              ></i>
+            </div>
+
+            <div class="ms-3">
+              <h6 class="card-title text-body-secondary">Today’s Revenue</h6>
+              <h4 class="fw-bold text-dark mb-0">
+                {{ formatCurrency(paymentStats.todaysRevenue) }}
+              </h4>
+              <small class="text-body-tertiary">{{
+                new Date().toLocaleDateString()
+              }}</small>
             </div>
           </div>
         </div>
@@ -1903,7 +1906,7 @@ export default {
         </div>
 
         <template v-else>
-          <div class="table-responsive d-none d-lg-block">
+          <div class="d-none d-lg-block">
             <table class="table table-hover mb-0 align-middle payments-table">
               <thead class="table-light">
                 <tr>
@@ -2004,7 +2007,7 @@ export default {
                               <i class="bi bi-eye me-1"></i>View
                             </a>
                           </li>
-                          <li v-if="payment.receiptUrl">
+                          <li v-if="canPreviewReceipt(payment)">
                             <a
                               class="dropdown-item"
                               href="#"
@@ -2103,7 +2106,7 @@ export default {
                             ><i class="bi bi-eye me-1"></i>View</a
                           >
                         </li>
-                        <li v-if="payment.receiptUrl">
+                        <li v-if="canPreviewReceipt(payment)">
                           <a
                             class="dropdown-item"
                             href="#"
@@ -2308,23 +2311,6 @@ export default {
   border-radius: 14px;
   padding: 0.85rem 1rem;
 }
-
-.pending-remittance-card {
-  overflow: hidden;
-}
-
-.pending-remittance-trigger {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  z-index: 2;
-  text-decoration: none;
-}
-
-/* .pending-remittance-trigger:hover,
-.pending-remittance-trigger:focus {
-  color: var(--staff-primary);
-} */
 
 :deep(.payment-details-swal) {
   max-height: 90vh;

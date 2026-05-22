@@ -563,7 +563,7 @@ export default {
                   class="small text-danger d-flex flex-wrap align-items-center gap-2"
                 >
                   <span>
-                    <i class="bi bi-exclamation-octagon me-1"></i>Payment Rejected...
+                    <i class="bi bi-exclamation-octagon me-1"></i>Payment Rejected
                   </span>
                   <button
                     type="button"

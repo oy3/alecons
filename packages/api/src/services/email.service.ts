@@ -772,6 +772,111 @@ export class EmailService {
     }
   }
 
+  async sendManualPaymentRejectedEmail(
+    email: string,
+    firstName: string,
+    options: {
+      paymentName: string;
+      amount: number;
+      reference: string;
+      reason?: string;
+      rejectedAt?: Date;
+      portalUrl?: string;
+    },
+  ): Promise<void> {
+    const formattedAmount = new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: "NGN",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Number(options.amount || 0));
+
+    const formattedRejectedAt = options.rejectedAt
+      ? new Intl.DateTimeFormat("en-NG", {
+        year: "numeric",
+        month: "long",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(options.rejectedAt))
+      : "N/A";
+
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Manual Transfer Payment Rejected - ALECONS",
+      html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Manual Transfer Payment Rejected</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
+                        .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
+                        .header { background-color: #2d7d7d; color: white; text-align: center; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }
+                        .message { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                        .details { background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                        .next-step { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                        .button { display: inline-block; background-color: #2d7d7d; color: white !important; padding: 10px 18px; text-decoration: none; border-radius: 6px; font-weight: bold; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>Payment Update</h1>
+                        </div>
+
+                        <h2>Dear ${firstName},</h2>
+
+                        <div class="message">
+                            <p><strong>Your uploaded manual transfer receipt could not be approved by the school.</strong></p>
+                            <p>Please review the rejection reason below and submit a corrected payment receipt if you still need to complete this payment.</p>
+                        </div>
+
+                        <div class="details">
+                            <p><strong>Payment:</strong> ${options.paymentName}</p>
+                            <p><strong>Amount:</strong> ${formattedAmount}</p>
+                            <p><strong>Reference:</strong> ${options.reference}</p>
+                            <p><strong>Rejected At:</strong> ${formattedRejectedAt}</p>
+                            <p><strong>Reason:</strong> ${options.reason || "The payment receipt did not meet verification requirements."}</p>
+                        </div>
+
+                        <div class="next-step">
+                            <h4>What to do next</h4>
+                            <ul>
+                                <li>Review the rejection reason carefully</li>
+                                <li>Make sure the payment details and uploaded receipt are correct</li>
+                                <li>Return to your portal and submit a new receipt for the same fee if payment is still outstanding</li>
+                            </ul>
+                        </div>
+
+                        ${options.portalUrl
+          ? `<p><a href="${options.portalUrl}" class="button">Open Portal</a></p>`
+          : ""}
+
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
+                            Email: admissions@alecons.edu.ng<br>
+                            Phone: +234 916 000 8679</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `,
+    };
+
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Manual payment rejection email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send manual payment rejection email to ${email}:`, error);
+      throw error;
+    }
+  }
+
   async sendMatriculationEmail(
     email: string,
     firstName: string,

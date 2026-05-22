@@ -312,6 +312,7 @@ export default {
         successful: "bg-success-subtle text-success-emphasis",
         pending: "bg-warning-subtle text-warning-emphasis",
         failed: "bg-danger-subtle text-danger-emphasis",
+        rejected: "bg-danger-subtle text-danger-emphasis",
         cancelled: "bg-secondary-subtle text-secondary-emphasis",
       };
       return statusClasses[status] || "bg-light text-dark";
@@ -403,7 +404,9 @@ export default {
       if (!metadata || typeof metadata !== "object") return "";
 
       return Object.entries(metadata)
-        .filter(([, value]) => value !== undefined && value !== null && value !== "")
+        .filter(
+          ([, value]) => value !== undefined && value !== null && value !== "",
+        )
         .slice(0, 4)
         .map(([key, value]) => {
           let normalizedValue = value;
@@ -649,7 +652,9 @@ export default {
             startDate: secondarySchool?.startDate || "",
             endDate: secondarySchool?.endDate || "",
           },
-          examinations: examinations.length ? examinations : [createEmptyExamination()],
+          examinations: examinations.length
+            ? examinations
+            : [createEmptyExamination()],
           nextOfKin: {
             name: nextOfKin?.name || "",
             phone: nextOfKin?.phone || "",
@@ -660,7 +665,8 @@ export default {
           isJambExempt: application?.isJambExempt === true,
           jambRegistrationNumber: application?.jambRegistrationNumber || "",
           jambScore:
-            application?.jambScore !== undefined && application?.jambScore !== null
+            application?.jambScore !== undefined &&
+            application?.jambScore !== null
               ? String(application.jambScore)
               : "",
         },
@@ -699,7 +705,8 @@ export default {
 
         if (!response.success || !response.data?.application) {
           throw new Error(
-            response.message || "Failed to load application details for editing",
+            response.message ||
+              "Failed to load application details for editing",
           );
         }
 
@@ -800,9 +807,9 @@ export default {
     },
 
     addExaminationSubject(examIndex) {
-      this.editApplicationForm.academicInfo.examinations[examIndex].subjects.push(
-        createEmptyExamSubject(),
-      );
+      this.editApplicationForm.academicInfo.examinations[
+        examIndex
+      ].subjects.push(createEmptyExamSubject());
     },
 
     removeExaminationSubject(examIndex, subjectIndex) {
@@ -847,10 +854,10 @@ export default {
             ...this.editApplicationForm.academicInfo.nextOfKin,
           },
           isJambExempt: this.editApplicationForm.academicInfo.isJambExempt,
-          jambRegistrationNumber:
-            this.editApplicationForm.academicInfo.isJambExempt
-              ? undefined
-              : this.editApplicationForm.academicInfo.jambRegistrationNumber,
+          jambRegistrationNumber: this.editApplicationForm.academicInfo
+            .isJambExempt
+            ? undefined
+            : this.editApplicationForm.academicInfo.jambRegistrationNumber,
           jambScore: this.editApplicationForm.academicInfo.isJambExempt
             ? undefined
             : this.editApplicationForm.academicInfo.jambScore,
@@ -894,7 +901,9 @@ export default {
 
         await this.loadApplications();
 
-        if (this.selectedApplicationId === this.editApplicationForm.applicationId) {
+        if (
+          this.selectedApplicationId === this.editApplicationForm.applicationId
+        ) {
           await this.reloadSelectedApplicationDetails();
         }
 
@@ -1759,62 +1768,84 @@ export default {
                       {{ formatDate(app.submittedAt) }}
                     </td>
                     <td>
-                        <div class="dropdown">
-                          <a  href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"
-                            class="btn btn-link text-dark dropdown-toggle no-caret"
-                          >
-                            <i class="bi bi-three-dots-vertical fs-5"></i>
+                      <div class="dropdown">
+                        <a
+                          href="#"
+                          role="button"
+                          data-bs-toggle="dropdown"
+                          aria-expanded="false"
+                          class="btn btn-link text-dark dropdown-toggle no-caret"
+                        >
+                          <i class="bi bi-three-dots-vertical fs-5"></i>
                         </a>
-                          <ul class="dropdown-menu">
-                            <li v-if="authStore.hasPermission('applications', 'view')">
-                              <a
-                                class="dropdown-item"
-                                href=""
-                                @click.prevent="viewApplication(app)"
-                              >
-                                <i class="bi bi-eye me-2"></i> View Details</a
-                              >
-                            </li>
-                            <li v-if="authStore.hasPermission('applications', 'edit') && canModifyApplication(app)">
-                              <a
-                                class="dropdown-item"
-                                href=""
-                                @click.prevent="openEditApplication(app)"
-                              >
-                                <i class="bi bi-pencil-square me-2"></i> Edit Application
-                              </a>
-                            </li>
-                            <li v-if="authStore.hasPermission('applications', 'delete') && canModifyApplication(app)">
-                              <a
-                                href=""
-                                class="dropdown-item"
-                                @click.prevent="deleteApplication(app)"
-                              >
-                                <i class="bi bi-trash me-2"></i> Delete Application
-                              </a>
-                            </li>
-                            <li v-if="app.status === 'completed'" class="">
-                              <a
-                                class="dropdown-item"
-                                href="#"
-                                @click.prevent="handleMatriculationAction(app)"
-                              >
-                                <i
-                                  class="bi bi-envelope text-success me-2"
-                                  v-if="app.matriculationNumber"
-                                ></i>
-                                <i
-                                  class="bi bi-arrow-repeat text-primary me-2"
-                                  v-else
-                                ></i>
-                                {{
-                                  app.matriculationNumber
-                                    ? "Send matric no."
-                                    : "Recover matric no."
-                                }}
-                              </a>
-                            </li>
-                            <!-- 
+                        <ul class="dropdown-menu">
+                          <li
+                            v-if="
+                              authStore.hasPermission('applications', 'view')
+                            "
+                          >
+                            <a
+                              class="dropdown-item"
+                              href=""
+                              @click.prevent="viewApplication(app)"
+                            >
+                              <i class="bi bi-eye me-2"></i> View Details</a
+                            >
+                          </li>
+                          <li
+                            v-if="
+                              authStore.hasPermission('applications', 'edit') &&
+                              canModifyApplication(app)
+                            "
+                          >
+                            <a
+                              class="dropdown-item"
+                              href=""
+                              @click.prevent="openEditApplication(app)"
+                            >
+                              <i class="bi bi-pencil-square me-2"></i> Edit
+                              Application
+                            </a>
+                          </li>
+                          <li
+                            v-if="
+                              authStore.hasPermission(
+                                'applications',
+                                'delete',
+                              ) && canModifyApplication(app)
+                            "
+                          >
+                            <a
+                              href=""
+                              class="dropdown-item"
+                              @click.prevent="deleteApplication(app)"
+                            >
+                              <i class="bi bi-trash me-2"></i> Delete
+                              Application
+                            </a>
+                          </li>
+                          <li v-if="app.status === 'completed'" class="">
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="handleMatriculationAction(app)"
+                            >
+                              <i
+                                class="bi bi-envelope text-success me-2"
+                                v-if="app.matriculationNumber"
+                              ></i>
+                              <i
+                                class="bi bi-arrow-repeat text-primary me-2"
+                                v-else
+                              ></i>
+                              {{
+                                app.matriculationNumber
+                                  ? "Send matric no."
+                                  : "Recover matric no."
+                              }}
+                            </a>
+                          </li>
+                          <!-- 
                             <li>
                               <a
                                 class="dropdown-item"
@@ -1877,9 +1908,8 @@ export default {
                                 >Rejected
                               </a>
                             </li> -->
-                          </ul>
-                        </div>
-       
+                        </ul>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
@@ -2013,7 +2043,10 @@ export default {
                         <i class="bi bi-eye me-1"></i>Details
                       </button>
                       <button
-                        v-if="authStore.hasPermission('applications', 'edit') && canModifyApplication(app)"
+                        v-if="
+                          authStore.hasPermission('applications', 'edit') &&
+                          canModifyApplication(app)
+                        "
                         type="button"
                         class="btn btn-sm btn-outline-secondary"
                         @click="openEditApplication(app)"
@@ -2021,7 +2054,10 @@ export default {
                         <i class="bi bi-pencil-square me-1"></i>Edit
                       </button>
                       <button
-                        v-if="authStore.hasPermission('applications', 'delete') && canModifyApplication(app)"
+                        v-if="
+                          authStore.hasPermission('applications', 'delete') &&
+                          canModifyApplication(app)
+                        "
                         type="button"
                         class="btn btn-sm btn-outline-danger"
                         @click="deleteApplication(app)"
@@ -2160,7 +2196,9 @@ export default {
                           type="file"
                           class="form-control"
                           accept=".jpg,.jpeg,image/jpeg"
-                          :disabled="isUploadingProfilePhoto || isSavingApplication"
+                          :disabled="
+                            isUploadingProfilePhoto || isSavingApplication
+                          "
                           @change="handleEditProfileUpload"
                         />
                         <div class="form-text">
@@ -2171,7 +2209,8 @@ export default {
                           v-if="pendingProfileUpload.originalName"
                           class="small text-success mt-2"
                         >
-                          Ready to apply: {{ pendingProfileUpload.originalName }}
+                          Ready to apply:
+                          {{ pendingProfileUpload.originalName }}
                         </div>
                       </div>
                     </div>
@@ -2317,7 +2356,9 @@ export default {
                     <div class="col-md-6">
                       <label class="form-label">Primary School</label>
                       <input
-                        v-model="editApplicationForm.academicInfo.primarySchool.name"
+                        v-model="
+                          editApplicationForm.academicInfo.primarySchool.name
+                        "
                         type="text"
                         class="form-control"
                       />
@@ -2325,7 +2366,10 @@ export default {
                     <div class="col-md-3">
                       <label class="form-label">Primary Start</label>
                       <input
-                        v-model="editApplicationForm.academicInfo.primarySchool.startDate"
+                        v-model="
+                          editApplicationForm.academicInfo.primarySchool
+                            .startDate
+                        "
                         type="text"
                         class="form-control"
                       />
@@ -2333,7 +2377,9 @@ export default {
                     <div class="col-md-3">
                       <label class="form-label">Primary End</label>
                       <input
-                        v-model="editApplicationForm.academicInfo.primarySchool.endDate"
+                        v-model="
+                          editApplicationForm.academicInfo.primarySchool.endDate
+                        "
                         type="text"
                         class="form-control"
                       />
@@ -2341,7 +2387,9 @@ export default {
                     <div class="col-md-6">
                       <label class="form-label">Secondary School</label>
                       <input
-                        v-model="editApplicationForm.academicInfo.secondarySchool.name"
+                        v-model="
+                          editApplicationForm.academicInfo.secondarySchool.name
+                        "
                         type="text"
                         class="form-control"
                       />
@@ -2349,7 +2397,10 @@ export default {
                     <div class="col-md-3">
                       <label class="form-label">Secondary Start</label>
                       <input
-                        v-model="editApplicationForm.academicInfo.secondarySchool.startDate"
+                        v-model="
+                          editApplicationForm.academicInfo.secondarySchool
+                            .startDate
+                        "
                         type="text"
                         class="form-control"
                       />
@@ -2357,7 +2408,10 @@ export default {
                     <div class="col-md-3">
                       <label class="form-label">Secondary End</label>
                       <input
-                        v-model="editApplicationForm.academicInfo.secondarySchool.endDate"
+                        v-model="
+                          editApplicationForm.academicInfo.secondarySchool
+                            .endDate
+                        "
                         type="text"
                         class="form-control"
                       />
@@ -2366,7 +2420,9 @@ export default {
                 </div>
 
                 <div class="col-12">
-                  <div class="d-flex justify-content-between align-items-center mb-3">
+                  <div
+                    class="d-flex justify-content-between align-items-center mb-3"
+                  >
                     <h6 class="fw-bold text-staff-primary mb-0">
                       Examination Records
                     </h6>
@@ -2380,11 +2436,14 @@ export default {
                   </div>
 
                   <div
-                    v-for="(exam, examIndex) in editApplicationForm.academicInfo.examinations"
+                    v-for="(exam, examIndex) in editApplicationForm.academicInfo
+                      .examinations"
                     :key="`exam-${examIndex}`"
                     class="border rounded-4 p-3 mb-3"
                   >
-                    <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div
+                      class="d-flex justify-content-between align-items-center mb-3"
+                    >
                       <h6 class="mb-0">Exam {{ examIndex + 1 }}</h6>
                       <button
                         type="button"
@@ -2447,7 +2506,9 @@ export default {
                         <button
                           type="button"
                           class="btn btn-outline-danger w-100"
-                          @click="removeExaminationSubject(examIndex, subjectIndex)"
+                          @click="
+                            removeExaminationSubject(examIndex, subjectIndex)
+                          "
                         >
                           Remove
                         </button>
@@ -2470,7 +2531,9 @@ export default {
                     <div class="col-md-6">
                       <label class="form-label">Name</label>
                       <input
-                        v-model="editApplicationForm.academicInfo.nextOfKin.name"
+                        v-model="
+                          editApplicationForm.academicInfo.nextOfKin.name
+                        "
                         type="text"
                         class="form-control"
                       />
@@ -2478,7 +2541,9 @@ export default {
                     <div class="col-md-6">
                       <label class="form-label">Phone</label>
                       <input
-                        v-model="editApplicationForm.academicInfo.nextOfKin.phone"
+                        v-model="
+                          editApplicationForm.academicInfo.nextOfKin.phone
+                        "
                         type="text"
                         class="form-control"
                       />
@@ -2486,7 +2551,9 @@ export default {
                     <div class="col-md-6">
                       <label class="form-label">Email</label>
                       <input
-                        v-model="editApplicationForm.academicInfo.nextOfKin.email"
+                        v-model="
+                          editApplicationForm.academicInfo.nextOfKin.email
+                        "
                         type="email"
                         class="form-control"
                       />
@@ -2494,7 +2561,10 @@ export default {
                     <div class="col-md-6">
                       <label class="form-label">Relationship</label>
                       <input
-                        v-model="editApplicationForm.academicInfo.nextOfKin.relationship"
+                        v-model="
+                          editApplicationForm.academicInfo.nextOfKin
+                            .relationship
+                        "
                         type="text"
                         class="form-control"
                       />
@@ -2502,7 +2572,9 @@ export default {
                     <div class="col-12">
                       <label class="form-label">Address</label>
                       <textarea
-                        v-model="editApplicationForm.academicInfo.nextOfKin.address"
+                        v-model="
+                          editApplicationForm.academicInfo.nextOfKin.address
+                        "
                         class="form-control"
                         rows="2"
                       ></textarea>
@@ -2517,20 +2589,32 @@ export default {
                       <div class="form-check">
                         <input
                           id="staffEditJambExempt"
-                          v-model="editApplicationForm.academicInfo.isJambExempt"
+                          v-model="
+                            editApplicationForm.academicInfo.isJambExempt
+                          "
                           type="checkbox"
                           class="form-check-input"
                         />
-                        <label class="form-check-label" for="staffEditJambExempt">
+                        <label
+                          class="form-check-label"
+                          for="staffEditJambExempt"
+                        >
                           JAMB details do not apply to this applicant
                         </label>
                       </div>
                     </div>
-                    <template v-if="!editApplicationForm.academicInfo.isJambExempt">
+                    <template
+                      v-if="!editApplicationForm.academicInfo.isJambExempt"
+                    >
                       <div class="col-md-6">
-                        <label class="form-label">JAMB Registration Number</label>
+                        <label class="form-label"
+                          >JAMB Registration Number</label
+                        >
                         <input
-                          v-model="editApplicationForm.academicInfo.jambRegistrationNumber"
+                          v-model="
+                            editApplicationForm.academicInfo
+                              .jambRegistrationNumber
+                          "
                           type="text"
                           class="form-control"
                         />
@@ -2564,7 +2648,11 @@ export default {
             <button
               type="button"
               class="btn btn-staff-primary"
-              :disabled="isPreparingEditApplication || isSavingApplication || isUploadingProfilePhoto"
+              :disabled="
+                isPreparingEditApplication ||
+                isSavingApplication ||
+                isUploadingProfilePhoto
+              "
               @click="saveApplicationEdits"
             >
               <span
@@ -3266,23 +3354,31 @@ export default {
                     </div>
                   </div>
 
-                  <div class="card border-0 shadow-sm mb-4">
+                  <div class="card border-0 shadow-sm mb-4 p-0">
                     <div class="card-body">
                       <div
                         class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"
                       >
                         <h6 class="section-title mb-0">Audit Trail</h6>
                         <span class="badge bg-light text-dark"
-                          >{{ selectedApplication.auditTrail?.length || 0 }} events</span
+                          >{{
+                            selectedApplication.auditTrail?.length || 0
+                          }}
+                          events</span
                         >
                       </div>
 
                       <div
-                        v-if="getSortedAuditTrail(selectedApplication.auditTrail).length"
+                        v-if="
+                          getSortedAuditTrail(selectedApplication.auditTrail)
+                            .length
+                        "
                         class="audit-trail-list"
                       >
                         <div
-                          v-for="(entry, index) in getSortedAuditTrail(selectedApplication.auditTrail)"
+                          v-for="(entry, index) in getSortedAuditTrail(
+                            selectedApplication.auditTrail,
+                          )"
                           :key="`${entry.createdAt || index}-${entry.action || index}`"
                           class="audit-entry"
                         >
@@ -3291,7 +3387,9 @@ export default {
                           >
                             <div>
                               <div class="fw-semibold text-dark">
-                                {{ entry.description || formatLabel(entry.action) }}
+                                {{
+                                  entry.description || formatLabel(entry.action)
+                                }}
                               </div>
                               <div class="small text-muted">
                                 {{ getAuditActorName(entry) }}
@@ -3305,7 +3403,10 @@ export default {
                             </span>
                           </div>
 
-                          <div v-if="entry.action" class="audit-entry-meta mt-2">
+                          <div
+                            v-if="entry.action"
+                            class="audit-entry-meta mt-2"
+                          >
                             {{ formatLabel(entry.action) }}
                           </div>
                           <div
@@ -3323,7 +3424,7 @@ export default {
                     </div>
                   </div>
 
-                  <div class="card border-0 shadow-sm mb-4">
+                  <div class="card border-0 shadow-sm mb-4 p-0">
                     <div class="card-body">
                       <h6 class="section-title">Payments Summary</h6>
                       <div class="payment-summary-grid">
@@ -3343,7 +3444,7 @@ export default {
                           <span class="summary-value">{{
                             selectedPaymentHistory.failedCount
                           }}</span>
-                          <span class="summary-label">Failed</span>
+                          <span class="summary-label">Failed / Rejected</span>
                         </div>
                         <div class="summary-tile secondary-tile">
                           <span class="summary-value">{{
@@ -3458,7 +3559,14 @@ export default {
                                 <i class="bi bi-receipt me-1"></i>Receipt
                               </button>
 
-                              <template v-if="canReviewManualTransfer(payment)">
+                              <template
+                                v-if="
+                                  authStore.hasPermission(
+                                    'payments',
+                                    'manage',
+                                  ) && canReviewManualTransfer(payment)
+                                "
+                              >
                                 <button
                                   type="button"
                                   class="btn btn-sm btn-success"
@@ -3495,7 +3603,7 @@ export default {
                               <span
                                 v-else-if="
                                   payment.method === 'manual_transfer' &&
-                                  payment.status === 'failed'
+                                  payment.status === 'rejected'
                                 "
                                 class="badge bg-danger-subtle text-danger-emphasis align-self-center"
                               >
@@ -3728,6 +3836,10 @@ code {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  height: 23rem;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-right: 0.25rem;
 }
 
 .audit-entry {

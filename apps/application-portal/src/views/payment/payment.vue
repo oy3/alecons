@@ -317,6 +317,76 @@ export default {
       this.selectedReceipt = fee;
     },
 
+    escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    },
+
+    formatDateTime(date) {
+      if (!date) {
+        return "N/A";
+      }
+
+      const parsedDate = new Date(date);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return "N/A";
+      }
+
+      return parsedDate.toLocaleString("en-NG", {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    },
+
+    showRejectedPaymentDetails(fee) {
+      const rejection = fee?.latestRejectedManualTransfer;
+      if (!rejection) {
+        return;
+      }
+
+      const destinationParts = [
+        rejection.destinationAccountName,
+        rejection.destinationBankName,
+        rejection.destinationAccountNumber,
+      ].filter(Boolean);
+
+      const receiptHtml = rejection.receiptUrl
+        ? `<a href="${this.escapeHtml(rejection.receiptUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary btn-sm mt-2"><i class="bi bi-receipt me-1"></i>View Uploaded Receipt</a>`
+        : `<div class="small text-muted mt-2">No receipt link available.</div>`;
+
+      const html = `
+        <div class="text-start">
+          <div class="mb-3">
+            <div class="fw-bold">${this.escapeHtml(fee.name)}</div>
+            <div class="text-muted small">Reference: ${this.escapeHtml(rejection.reference || "N/A")}</div>
+          </div>
+          <div class="mb-2"><strong>Amount:</strong> ${this.escapeHtml(this.formatCurrency(rejection.amount || fee.amount || 0))}</div>
+          <div class="mb-2"><strong>Paid At:</strong> ${this.escapeHtml(this.formatDateTime(rejection.paidAt))}</div>
+          <div class="mb-2"><strong>Rejected At:</strong> ${this.escapeHtml(this.formatDateTime(rejection.rejectedAt))}</div>
+          <div class="mb-2"><strong>Paid To:</strong> ${this.escapeHtml(destinationParts.join(" • ") || "N/A")}</div>
+          <div class="mb-2"><strong>Receipt Uploaded:</strong> ${this.escapeHtml(this.formatDateTime(rejection.receiptUploadedAt))}</div>
+          <div class="mb-2"><strong>Status:</strong> ${this.escapeHtml(this.getStatusText(rejection.status))}</div>
+          <div class="mb-2"><strong>Reason:</strong><div class="mt-1 text-danger">${this.escapeHtml(rejection.verificationRemarks || rejection.remarks || "No rejection reason was provided.")}</div></div>
+          ${receiptHtml}
+        </div>
+      `;
+
+      Swal.fire({
+        title: "Rejected Payment Details",
+        html,
+        confirmButtonText: "Close",
+        confirmButtonColor: "#1a5f5f",
+        width: 640,
+      });
+    },
+
     downloadReceipt(fee) {
       this.openReceiptPreview(fee);
     },
@@ -488,6 +558,21 @@ export default {
               <div class="d-grid">
                 <span>{{ fee.name }}</span>
                 <span class="fw-bold">{{ formatCurrency(fee.amount) }}</span>
+                <div
+                  v-if="fee.latestRejectedManualTransfer"
+                  class="small text-danger d-flex flex-wrap align-items-center gap-2"
+                >
+                  <span>
+                    <i class="bi bi-exclamation-octagon me-1"></i>Payment Rejected...
+                  </span>
+                  <button
+                    type="button"
+                    class="btn btn-link btn-sm text-danger p-0 text-decoration-underline"
+                    @click="showRejectedPaymentDetails(fee)"
+                  >
+                    View why
+                  </button>
+                </div>
                 <small v-if="!isPaymentAvailable(fee)" class="text-warning"
                   ><i class="bi bi-info-circle"></i> Not available yet</small
                 >

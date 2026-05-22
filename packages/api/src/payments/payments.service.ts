@@ -45,6 +45,24 @@ export interface PaymentSummary {
     manualTransferDetails?: ManualTransferDetails;
     paystackDestinationAccount?: DestinationAccountSummary | null;
     manualTransferDestinationAccount?: DestinationAccountSummary | null;
+    latestRejectedManualTransfer?: RejectedManualTransferSummary;
+}
+
+export interface RejectedManualTransferSummary {
+    id: string;
+    reference: string;
+    amount: number;
+    status: PaymentStatus;
+    paidAt?: Date;
+    rejectedAt?: Date;
+    receiptUrl?: string;
+    receiptOriginalName?: string;
+    receiptUploadedAt?: Date;
+    remarks?: string;
+    verificationRemarks?: string;
+    destinationAccountName?: string;
+    destinationBankName?: string;
+    destinationAccountNumber?: string;
 }
 
 export interface ManualTransferDetails {
@@ -176,6 +194,30 @@ export class PaymentsService {
         return payment.status === PaymentStatus.PENDING
             && payment.method === PaymentMethod.MANUAL_TRANSFER
             && !!payment.receiptUrl;
+    }
+
+    private isManualTransferRejected(payment: Partial<StudentPayment>): boolean {
+        return payment.status === PaymentStatus.REJECTED
+            && payment.method === PaymentMethod.MANUAL_TRANSFER;
+    }
+
+    private toRejectedManualTransferSummary(payment: Partial<StudentPayment> & { _id?: Types.ObjectId | string }): RejectedManualTransferSummary {
+        return {
+            id: payment._id?.toString() || '',
+            reference: payment.reference || '',
+            amount: Number(payment.amount || 0),
+            status: payment.status as PaymentStatus,
+            paidAt: payment.paidAt,
+            rejectedAt: payment.rejectedAt,
+            receiptUrl: payment.receiptUrl,
+            receiptOriginalName: payment.receiptOriginalName,
+            receiptUploadedAt: payment.receiptUploadedAt,
+            remarks: payment.remarks,
+            verificationRemarks: payment.verificationRemarks,
+            destinationAccountName: payment.destinationAccountName,
+            destinationBankName: payment.destinationBankName,
+            destinationAccountNumber: payment.destinationAccountNumber,
+        };
     }
 
     private buildPaymentReference(): string {
@@ -714,7 +756,7 @@ export class PaymentsService {
         const studentPayments = await this.studentPaymentModel
             .find({
                 userId: userObjectId,
-                status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING] }
+                status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING, PaymentStatus.REJECTED] }
             })
             .populate('paymentId')
             .lean();
@@ -726,6 +768,7 @@ export class PaymentsService {
 
         const successfulPaymentsById = new Map<string, any>();
         const pendingManualPaymentsById = new Map<string, any>();
+        const rejectedManualPaymentsById = new Map<string, any>();
 
         studentPayments.forEach((studentPayment: any) => {
             const linkedPaymentId = studentPayment.paymentId?._id?.toString();
@@ -742,6 +785,14 @@ export class PaymentsService {
                 const existingPending = pendingManualPaymentsById.get(linkedPaymentId);
                 if (!existingPending || new Date(studentPayment.createdAt || 0).getTime() > new Date(existingPending.createdAt || 0).getTime()) {
                     pendingManualPaymentsById.set(linkedPaymentId, studentPayment);
+                }
+                return;
+            }
+
+            if (this.isManualTransferRejected(studentPayment)) {
+                const existingRejected = rejectedManualPaymentsById.get(linkedPaymentId);
+                if (!existingRejected || new Date(studentPayment.rejectedAt || studentPayment.updatedAt || studentPayment.createdAt || 0).getTime() > new Date(existingRejected.rejectedAt || existingRejected.updatedAt || existingRejected.createdAt || 0).getTime()) {
+                    rejectedManualPaymentsById.set(linkedPaymentId, studentPayment);
                 }
             }
         });
@@ -804,6 +855,7 @@ export class PaymentsService {
                     manualTransferDestinationAccount,
                 });
             } else {
+                const rejectedManualPayment = rejectedManualPaymentsById.get(paymentId);
                 unpaidFees.push({
                     id: paymentId,
                     name: payment.name,
@@ -814,6 +866,9 @@ export class PaymentsService {
                     manualTransferDetails,
                     paystackDestinationAccount,
                     manualTransferDestinationAccount,
+                    latestRejectedManualTransfer: rejectedManualPayment
+                        ? this.toRejectedManualTransferSummary(rejectedManualPayment)
+                        : undefined,
                 });
             }
         });
@@ -2385,7 +2440,7 @@ export class PaymentsService {
         // Get student's successful payments for this session
         let studentPaymentQuery: any = {
             userId: userObjectId,
-            status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING] }
+            status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING, PaymentStatus.REJECTED] }
         };
 
         if (academicSessionId) {
@@ -2437,6 +2492,7 @@ export class PaymentsService {
 
         const successfulPaymentsById = new Map<string, any>();
         const pendingManualPaymentsById = new Map<string, any>();
+        const rejectedManualPaymentsById = new Map<string, any>();
 
         studentPayments.forEach((studentPayment: any) => {
             const linkedPaymentId = studentPayment.paymentId?._id?.toString();
@@ -2453,6 +2509,14 @@ export class PaymentsService {
                 const existingPending = pendingManualPaymentsById.get(linkedPaymentId);
                 if (!existingPending || new Date(studentPayment.createdAt || 0).getTime() > new Date(existingPending.createdAt || 0).getTime()) {
                     pendingManualPaymentsById.set(linkedPaymentId, studentPayment);
+                }
+                return;
+            }
+
+            if (this.isManualTransferRejected(studentPayment)) {
+                const existingRejected = rejectedManualPaymentsById.get(linkedPaymentId);
+                if (!existingRejected || new Date(studentPayment.rejectedAt || studentPayment.updatedAt || studentPayment.createdAt || 0).getTime() > new Date(existingRejected.rejectedAt || existingRejected.updatedAt || existingRejected.createdAt || 0).getTime()) {
+                    rejectedManualPaymentsById.set(linkedPaymentId, studentPayment);
                 }
             }
         });
@@ -2532,6 +2596,7 @@ export class PaymentsService {
         // Then, add unpaid fees from currently active payments
         activePaymentsForUnpaid.forEach(payment => {
             const paymentId = payment._id.toString();
+            const rejectedManualPayment = rejectedManualPaymentsById.get(paymentId);
             const paystackDestinationAccount = this.toDestinationAccountSummary(
                 destinationAccountsMap.get(payment.paystackDestinationAccountId?.toString?.() || ''),
             );
@@ -2554,6 +2619,9 @@ export class PaymentsService {
                     manualTransferDetails,
                     paystackDestinationAccount,
                     manualTransferDestinationAccount,
+                    latestRejectedManualTransfer: rejectedManualPayment
+                        ? this.toRejectedManualTransferSummary(rejectedManualPayment)
+                        : undefined,
                 });
             }
         });
@@ -2725,7 +2793,7 @@ export class PaymentsService {
                 .reduce((sum, payment) => sum + payment.amount, 0),
             successfulCount: mappedPayments.filter(payment => payment.status === PaymentStatus.SUCCESSFUL).length,
             pendingCount: mappedPayments.filter(payment => payment.status === PaymentStatus.PENDING).length,
-            failedCount: mappedPayments.filter(payment => payment.status === PaymentStatus.FAILED).length,
+            failedCount: mappedPayments.filter(payment => [PaymentStatus.FAILED, PaymentStatus.REJECTED].includes(payment.status)).length,
             cancelledCount: mappedPayments.filter(payment => payment.status === PaymentStatus.CANCELLED).length,
         };
     }
@@ -3033,13 +3101,41 @@ export class PaymentsService {
             throw new Error('Only pending manual transfer payments can be rejected');
         }
 
-        studentPayment.status = PaymentStatus.FAILED;
+        studentPayment.status = PaymentStatus.REJECTED;
         studentPayment.remarks = 'Manual transfer receipt rejected by staff';
         studentPayment.verificationRemarks = remarks || 'Manual transfer rejected by staff';
         studentPayment.rejectedBy = new Types.ObjectId(staffId);
         studentPayment.rejectedAt = new Date();
 
         await studentPayment.save();
+
+        try {
+            const [user, payment] = await Promise.all([
+                this.userModel.findById(studentPayment.userId).lean(),
+                this.paymentModel.findById(studentPayment.paymentId).lean(),
+            ]);
+
+            if (user?.email) {
+                const portalUrl = user.role === UserRole.STUDENT
+                    ? (process.env.STUDENT_PORTAL_URL || process.env.FRONTEND_URL)
+                    : (process.env.APPLICATION_PORTAL_URL || process.env.FRONTEND_URL);
+
+                await this.emailService.sendManualPaymentRejectedEmail(
+                    user.email,
+                    user.firstName || 'Applicant',
+                    {
+                        paymentName: payment?.name || 'Payment',
+                        amount: studentPayment.amount,
+                        reference: studentPayment.reference,
+                        rejectedAt: studentPayment.rejectedAt,
+                        reason: studentPayment.verificationRemarks,
+                        portalUrl,
+                    },
+                );
+            }
+        } catch (error) {
+            this.logger.error('Failed to send manual payment rejection email:', error instanceof Error ? error.message : error);
+        }
 
         return {
             id: studentPayment._id.toString(),

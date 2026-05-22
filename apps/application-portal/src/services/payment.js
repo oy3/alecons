@@ -279,6 +279,7 @@ class PaymentService {
             successful: "bg-success",
             pending: "bg-warning text-dark",
             failed: "bg-danger",
+            rejected: "bg-danger",
             cancelled: "bg-secondary",
         };
 
@@ -290,6 +291,7 @@ class PaymentService {
             successful: "Successful",
             pending: "Pending Verification",
             failed: "Failed",
+            rejected: "Rejected",
             cancelled: "Cancelled",
         };
 

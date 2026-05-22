@@ -36,6 +36,7 @@ const statusOptions = [
   { value: "pending", label: "Pending" },
   { value: "successful", label: "Successful" },
   { value: "failed", label: "Failed" },
+  { value: "rejected", label: "Rejected" },
   { value: "cancelled", label: "Cancelled" },
 ];
 
@@ -1313,6 +1314,7 @@ export default {
         successful: "bg-success-subtle text-success-emphasis",
         pending: "bg-warning-subtle text-warning-emphasis",
         failed: "bg-danger-subtle text-danger-emphasis",
+        rejected: "bg-danger-subtle text-danger-emphasis",
         cancelled: "bg-secondary-subtle text-secondary-emphasis",
       };
       return classes[status] || "bg-light text-dark";

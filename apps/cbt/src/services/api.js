@@ -13,6 +13,27 @@ const apiClient = axios.create({
     }
 })
 
+const PUBLIC_AUTH_ENDPOINTS = new Set([
+    '/auth/login',
+    '/auth/staff/login',
+    '/auth/register',
+    '/auth/forgot-password',
+    '/auth/verify-email',
+    '/auth/resend-verification'
+])
+
+const isPublicAuthRequest = (config) => {
+    const url = config?.url || ''
+
+    if (!url) {
+        return false
+    }
+
+    return Array.from(PUBLIC_AUTH_ENDPOINTS).some((endpoint) =>
+        url === endpoint || url.startsWith(`${endpoint}?`)
+    )
+}
+
 // Debug logging (only in development/staging)
 logger.info('Environment Variables Debug:', {
     VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
@@ -33,7 +54,7 @@ if (Environment.isDebugMode()) {
 apiClient.interceptors.request.use(
     (config) => {
         const token = authStore.token || localStorage.getItem('cbt_auth_token')
-        if (token) {
+        if (token && !isPublicAuthRequest(config)) {
             config.headers.Authorization = `Bearer ${token}`
         }
         return config
@@ -47,8 +68,14 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
-            authStore.logout()
+        const hasStoredToken = !!(authStore.token || localStorage.getItem('cbt_auth_token'))
+
+        if (
+            error.response?.status === 401 &&
+            hasStoredToken &&
+            !isPublicAuthRequest(error.config)
+        ) {
+            authStore.handleUnauthorized()
         }
         return Promise.reject(error)
     }
@@ -61,12 +88,11 @@ export const apiService = {
             if (Environment.isDebugMode()) {
                 logger.info('CBT login attempt:', {
                     email: credentials.email,
-                    userType: credentials.userType,
                     environment: Environment.current()
                 })
             }
 
-            // Only send email and password to API (userType not expected by backend)
+            // Role is derived from the authenticated user record on the backend.
             const loginPayload = {
                 email: credentials.email,
                 password: credentials.password
@@ -99,7 +125,7 @@ export const apiService = {
             logger.error('CBT login failed:', errorDetails)
             return {
                 success: false,
-                message: error.response?.data?.message || 'Login failed'
+                message: error.response?.data?.message || error.message || 'Login failed'
             }
         }
     },

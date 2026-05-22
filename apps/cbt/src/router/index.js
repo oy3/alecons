@@ -15,6 +15,7 @@ export default [
         component: Login,
         meta: {
             requiresAuth: false,
+            idlePolicy: 'none',
             title: 'Login - CBT Portal'
         }
     },
@@ -24,6 +25,7 @@ export default [
         component: Dashboard,
         meta: {
             requiresAuth: true,
+            idlePolicy: 'protected',
             title: 'Dashboard - CBT Portal'
         }
     },
@@ -33,6 +35,7 @@ export default [
         component: ExamInterface,
         meta: {
             requiresAuth: true,
+            idlePolicy: 'exam',
             title: 'Exam - CBT Portal',
             fullscreen: true
         }
@@ -43,6 +46,7 @@ export default [
         component: ExamResults,
         meta: {
             requiresAuth: true,
+            idlePolicy: 'protected',
             title: 'Results - CBT Portal'
         }
     },
@@ -52,6 +56,7 @@ export default [
         component: Unauthorized,
         meta: {
             requiresAuth: false,
+            idlePolicy: 'none',
             title: 'Access Denied'
         }
     }

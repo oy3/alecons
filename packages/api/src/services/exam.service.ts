@@ -963,7 +963,7 @@ export class ExamService {
                 }
 
                 filter.$or = orConditions;
-            } else if (userRole === "staff") {
+            } else if (userRole === "staff" || userRole === "admin") {
                 filter["target.type"] = { $in: ["staff", "custom"] };
             }
 
@@ -2784,7 +2784,7 @@ export class ExamService {
                 }
 
                 filter.$or = orConditions;
-            } else if (userRole === "staff") {
+            } else if (userRole === "staff" || userRole === "admin") {
                 filter["target.type"] = { $in: ["staff", "custom"] };
             }
 

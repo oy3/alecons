@@ -1,12 +1,295 @@
 <template>
   <div id="app">
     <router-view />
+    <IdleSessionModal
+      v-if="isIdleModalVisible"
+      :mode="idleModalMode"
+      :grace-seconds-remaining="graceSecondsRemaining"
+      @continue="handleIdleContinue"
+      @logout="handleIdleLogout"
+    />
   </div>
 </template>
 
 <script>
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import IdleSessionModal from './components/IdleSessionModal.vue'
+import { authStore } from './stores/auth.js'
+import { examStore } from './stores/exam.js'
+import { apiService } from './services/api.js'
+import { logger } from '@shared/utils/logger'
+
+const IDLE_WARNING_MS = 15 * 60 * 1000
+const NON_EXAM_GRACE_SECONDS = 60
+const EXAM_WARNING_SUPPRESSION_SECONDS = 5 * 60
+const ACTIVITY_THROTTLE_MS = 1000
+const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click', 'mousemove']
+
 export default {
-  name: 'App'
+  name: 'App',
+  components: {
+    IdleSessionModal
+  },
+  setup() {
+    const route = useRoute()
+    const isIdleModalVisible = ref(false)
+    const idleModalMode = ref('protected')
+    const graceSecondsRemaining = ref(NON_EXAM_GRACE_SECONDS)
+    const lastTrackedActivityAt = ref(Date.now())
+
+    let idleWarningTimer = null
+    let graceLogoutTimer = null
+    let graceCountdownTimer = null
+
+    const isProtectedRoute = computed(() => {
+      return Boolean(authStore.isAuthenticated && route.meta?.requiresAuth)
+    })
+
+    const hasActiveExamSession = computed(() => {
+      return Boolean(
+        route.meta?.idlePolicy === 'exam' &&
+        examStore.currentExamId &&
+        examStore.currentAttemptId &&
+        !examStore.isSubmitted
+      )
+    })
+
+    const isExamWarningSuppressed = computed(() => {
+      return Boolean(
+        hasActiveExamSession.value &&
+        examStore.timeRemaining > 0 &&
+        examStore.timeRemaining <= EXAM_WARNING_SUPPRESSION_SECONDS
+      )
+    })
+
+    const activeIdleMode = computed(() => {
+      if (!isProtectedRoute.value) {
+        return 'none'
+      }
+
+      if (route.meta?.idlePolicy === 'exam') {
+        if (!hasActiveExamSession.value || isExamWarningSuppressed.value) {
+          return 'none'
+        }
+
+        return 'exam'
+      }
+
+      return 'protected'
+    })
+
+    const clearIdleWarningTimer = () => {
+      if (idleWarningTimer) {
+        clearTimeout(idleWarningTimer)
+        idleWarningTimer = null
+      }
+    }
+
+    const clearGraceWindow = () => {
+      if (graceLogoutTimer) {
+        clearTimeout(graceLogoutTimer)
+        graceLogoutTimer = null
+      }
+
+      if (graceCountdownTimer) {
+        clearInterval(graceCountdownTimer)
+        graceCountdownTimer = null
+      }
+    }
+
+    const unlockBodyScroll = () => {
+      document.body.classList.remove('idle-modal-open')
+    }
+
+    const lockBodyScroll = () => {
+      document.body.classList.add('idle-modal-open')
+    }
+
+    const hideIdleModal = () => {
+      isIdleModalVisible.value = false
+      clearGraceWindow()
+      unlockBodyScroll()
+    }
+
+    const clearAllIdleTimers = () => {
+      clearIdleWarningTimer()
+      clearGraceWindow()
+    }
+
+    const armIdleWarningTimer = () => {
+      clearIdleWarningTimer()
+
+      if (activeIdleMode.value === 'none' || isIdleModalVisible.value) {
+        return
+      }
+
+      idleWarningTimer = window.setTimeout(() => {
+        if (activeIdleMode.value === 'none') {
+          clearIdleWarningTimer()
+          return
+        }
+
+        if (
+          activeIdleMode.value === 'exam' &&
+          (examStore.isSubmitted || examStore.timeRemaining <= EXAM_WARNING_SUPPRESSION_SECONDS)
+        ) {
+          clearIdleWarningTimer()
+          return
+        }
+
+        idleModalMode.value = activeIdleMode.value
+        isIdleModalVisible.value = true
+        lockBodyScroll()
+
+        if (activeIdleMode.value === 'protected') {
+          const graceDeadline = Date.now() + NON_EXAM_GRACE_SECONDS * 1000
+          graceSecondsRemaining.value = NON_EXAM_GRACE_SECONDS
+
+          clearGraceWindow()
+          graceCountdownTimer = window.setInterval(() => {
+            const secondsLeft = Math.max(
+              0,
+              Math.ceil((graceDeadline - Date.now()) / 1000)
+            )
+
+            graceSecondsRemaining.value = secondsLeft
+
+            if (secondsLeft <= 0) {
+              clearGraceWindow()
+            }
+          }, 250)
+
+          graceLogoutTimer = window.setTimeout(() => {
+            logger.info('Idle session grace window expired - logging out user')
+            hideIdleModal()
+            authStore.logout()
+          }, NON_EXAM_GRACE_SECONDS * 1000)
+        }
+      }, IDLE_WARNING_MS)
+    }
+
+    const registerActivity = ({ force = false, source = 'user' } = {}) => {
+      if (activeIdleMode.value === 'none' || isIdleModalVisible.value) {
+        return
+      }
+
+      const now = Date.now()
+      if (!force && now - lastTrackedActivityAt.value < ACTIVITY_THROTTLE_MS) {
+        return
+      }
+
+      lastTrackedActivityAt.value = now
+      armIdleWarningTimer()
+
+      if (source !== 'mousemove') {
+        logger.debug('Idle session activity registered', {
+          source,
+          mode: activeIdleMode.value
+        })
+      }
+    }
+
+    const handleUserActivity = (event) => {
+      registerActivity({ source: event.type })
+    }
+
+    const sendExamHeartbeat = async () => {
+      if (!examStore.currentExamId || !examStore.currentAttemptId) {
+        return
+      }
+
+      try {
+        await apiService.sendHeartbeat(
+          examStore.currentExamId,
+          examStore.currentAttemptId
+        )
+      } catch (error) {
+        logger.warn('Failed to send heartbeat while resuming idle exam session', error)
+      }
+    }
+
+    const handleIdleContinue = async () => {
+      const mode = idleModalMode.value
+
+      hideIdleModal()
+      lastTrackedActivityAt.value = Date.now()
+
+      if (mode === 'exam') {
+        await sendExamHeartbeat()
+      }
+
+      armIdleWarningTimer()
+    }
+
+    const handleIdleLogout = () => {
+      hideIdleModal()
+      authStore.logout()
+    }
+
+    watch(
+      activeIdleMode,
+      (newMode, oldMode) => {
+        if (newMode === oldMode) {
+          return
+        }
+
+        hideIdleModal()
+        clearIdleWarningTimer()
+
+        if (newMode !== 'none') {
+          lastTrackedActivityAt.value = Date.now()
+          armIdleWarningTimer()
+          return
+        }
+
+        clearAllIdleTimers()
+      },
+      { immediate: true }
+    )
+
+    watch(
+      () => route.fullPath,
+      () => {
+        if (activeIdleMode.value !== 'none' && !isIdleModalVisible.value) {
+          registerActivity({ force: true, source: 'route-change' })
+        }
+      }
+    )
+
+    watch(
+      () => examStore.isSubmitted,
+      (isSubmitted) => {
+        if (isSubmitted) {
+          hideIdleModal()
+          clearAllIdleTimers()
+        }
+      }
+    )
+
+    onMounted(() => {
+      ACTIVITY_EVENTS.forEach((eventName) => {
+        window.addEventListener(eventName, handleUserActivity, { passive: true })
+      })
+    })
+
+    onUnmounted(() => {
+      ACTIVITY_EVENTS.forEach((eventName) => {
+        window.removeEventListener(eventName, handleUserActivity)
+      })
+
+      clearAllIdleTimers()
+      unlockBodyScroll()
+    })
+
+    return {
+      graceSecondsRemaining,
+      handleIdleContinue,
+      handleIdleLogout,
+      idleModalMode,
+      isIdleModalVisible
+    }
+  }
 }
 </script>
 
@@ -15,6 +298,10 @@ export default {
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background-color: #f8f9fa;
+}
+
+body.idle-modal-open {
+  overflow: hidden;
 }
 
 /* Full-screen exam mode */

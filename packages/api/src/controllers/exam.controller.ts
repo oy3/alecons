@@ -78,7 +78,7 @@ export class ExamController {
     }
 
     @Get("available")
-    @Roles("student", "applicant", "staff")
+    @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({ summary: "Get available exams for current user" })
     @ApiResponse({
         status: 200,
@@ -123,7 +123,7 @@ export class ExamController {
     }
 
     @Get("history")
-    @Roles("student", "applicant", "staff")
+    @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({
         summary: "Get exam history (completed, graded, missed) for current user",
     })
@@ -201,7 +201,7 @@ export class ExamController {
     }
 
     @Post(":examId/start")
-    @Roles("student", "applicant", "staff")
+    @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({ summary: "Start an exam with password verification" })
     @ApiResponse({ status: 200, description: "Exam started successfully" })
     async startExam(
@@ -309,7 +309,7 @@ export class ExamController {
     }
 
     @Get(":examId/questions")
-    @Roles("student", "applicant", "staff")
+    @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({ summary: "Get exam questions for active attempt" })
     @ApiResponse({
         status: 200,
@@ -364,7 +364,7 @@ export class ExamController {
     }
 
     @Post(":examId/save-answers")
-    @Roles("student", "applicant", "staff")
+    @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({ summary: "Auto-save exam answers" })
     @ApiResponse({ status: 200, description: "Answers saved successfully" })
     async saveAnswers(
@@ -408,7 +408,7 @@ export class ExamController {
     }
 
     @Post(":examId/submit")
-    @Roles("student", "applicant", "staff")
+    @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({ summary: "Submit exam for grading" })
     @ApiResponse({ status: 200, description: "Exam submitted successfully" })
     async submitExam(
@@ -465,7 +465,7 @@ export class ExamController {
     }
 
     @Post(":examId/heartbeat")
-    @Roles("student", "applicant", "staff")
+    @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({ summary: "Record exam session heartbeat" })
     @ApiResponse({ status: 200, description: "Heartbeat recorded successfully" })
     async recordHeartbeat(
@@ -506,7 +506,7 @@ export class ExamController {
     }
 
     @Post(":examId/security-violation")
-    @Roles("student", "applicant", "staff")
+    @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({ summary: "Record security violation during exam" })
     @ApiResponse({
         status: 200,
@@ -562,7 +562,7 @@ export class ExamController {
     }
 
     @Get(":examId/attempts/:attemptId")
-    @Roles("student", "applicant", "staff")
+    @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({ summary: "Get exam attempt details with answers and timing" })
     @ApiResponse({
         status: 200,
@@ -648,7 +648,7 @@ export class ExamController {
     }
 
     @Get("user/history")
-    @Roles("student", "applicant", "staff")
+    @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({ summary: "Get user exam history" })
     @ApiResponse({
         status: 200,

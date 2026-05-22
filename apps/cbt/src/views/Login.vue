@@ -1,6 +1,6 @@
 <template>
-  <div class="container py-5">
-    <div class="row justify-content-center">
+  <div class="container">
+    <div class="row justify-content-center align-items-center vh-100">
       <div class="col-md-6">
         <div class="card shadow">
           <div class="card-header bg-primary text-white text-center">
@@ -11,48 +11,6 @@
           </div>
           <div class="card-body p-5">
             <form @submit.prevent="handleLogin">
-              <!-- User Type Selection -->
-              <div class="mb-4">
-                <label class="form-label">Login as:</label>
-                <div class="btn-group w-100" role="group">
-                  <input 
-                    id="student" 
-                    v-model="userType" 
-                    type="radio" 
-                    class="btn-check" 
-                    value="student"
-                  >
-                  <label class="btn btn-outline-primary" for="student">
-                    <i class="bi bi-person me-1"></i>
-                    Student
-                  </label>
-
-                  <input 
-                    id="applicant" 
-                    v-model="userType" 
-                    type="radio" 
-                    class="btn-check" 
-                    value="applicant"
-                  >
-                  <label class="btn btn-outline-primary" for="applicant">
-                    <i class="bi bi-person-plus me-1"></i>
-                    Applicant
-                  </label>
-
-                  <input 
-                    id="staff" 
-                    v-model="userType" 
-                    type="radio" 
-                    class="btn-check" 
-                    value="staff"
-                  >
-                  <label class="btn btn-outline-primary" for="staff">
-                    <i class="bi bi-person-badge me-1"></i>
-                    Staff
-                  </label>
-                </div>
-              </div>
-
               <!-- Email Input -->
               <div class="mb-3">
                 <label for="email" class="form-label">
@@ -143,7 +101,6 @@ export default {
   setup() {
     const router = useRouter()
     
-    const userType = ref('student')
     const email = ref('')
     const password = ref('')
     const showPassword = ref(false)
@@ -187,8 +144,7 @@ export default {
         
         const result = await authStore.login(
           email.value.trim(),
-          password.value,
-          userType.value
+          password.value
         )
 
         if (result.success) {
@@ -228,7 +184,6 @@ export default {
     }
 
     return {
-      userType,
       email,
       password,
       showPassword,
@@ -252,11 +207,6 @@ export default {
   border-radius: 15px 15px 0 0 !important;
 }
 
-.btn-group .btn-check:checked + .btn {
-  background-color: var(--primary-color);
-  border-color: var(--primary-color);
-}
-
 .input-group .btn {
   border-left: none;
 }
@@ -277,16 +227,6 @@ export default {
 .btn-primary:hover {
   background-color: var(--secondary-color);
   border-color: var(--secondary-color);
-}
-
-.btn-outline-primary {
-  color: var(--primary-color);
-  border-color: var(--primary-color);
-}
-
-.btn-outline-primary:hover {
-  background-color: var(--primary-color);
-  border-color: var(--primary-color);
 }
 
 .alert {

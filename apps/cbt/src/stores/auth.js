@@ -8,6 +8,13 @@ export const authStore = reactive({
     isAuthenticated: false,
     isLoading: false,
 
+    clearSession() {
+        this.user = null
+        this.token = null
+        this.isAuthenticated = false
+        localStorage.removeItem('cbt_auth_token')
+    },
+
     async initialize() {
         this.isLoading = true
         try {
@@ -20,21 +27,21 @@ export const authStore = reactive({
                     this.user = response.data.user
                     this.isAuthenticated = true
                 } else {
-                    this.logout()
+                    this.clearSession()
                 }
             }
         } catch (error) {
             logger.error('Auth initialization error:', error)
-            this.logout()
+            this.clearSession()
         } finally {
             this.isLoading = false
         }
     },
 
-    async login(email, password, userType = 'student') {
+    async login(email, password) {
         try {
             this.isLoading = true
-            const response = await apiService.login({ email, password, userType })
+            const response = await apiService.login({ email, password })
 
             // Backend returns direct object: { access_token, user, application, applicationId }
             if (response.access_token && response.user) {
@@ -44,21 +51,32 @@ export const authStore = reactive({
                 localStorage.setItem('cbt_auth_token', this.token)
                 return { success: true }
             } else {
-                return { success: false, message: 'Invalid response format from server' }
+                return {
+                    success: false,
+                    message: response?.message || 'Login failed. Please check your credentials and try again.'
+                }
             }
         } catch (error) {
             logger.error('Login error:', error)
-            return { success: false, message: 'Login failed. Please try again.' }
+            return {
+                success: false,
+                message: error?.message || 'Login failed. Please try again.'
+            }
         } finally {
             this.isLoading = false
         }
     },
 
+    handleUnauthorized() {
+        this.clearSession()
+
+        if (window.location.pathname !== '/cbt/login') {
+            window.location.href = '/cbt/login'
+        }
+    },
+
     logout() {
-        this.user = null
-        this.token = null
-        this.isAuthenticated = false
-        localStorage.removeItem('cbt_auth_token')
+        this.clearSession()
         window.location.href = '/cbt/login'
     },
 

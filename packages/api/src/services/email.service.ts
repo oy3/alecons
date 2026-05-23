@@ -1329,7 +1329,7 @@ export class EmailService {
     const mailOptions = {
       from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: `✅ Exam Completed: ${examTitle} - ALECONS`,
+      subject: `Exam Completed: ${examTitle} - ALECONS`,
       html: `
                 <!DOCTYPE html>
                 <html>

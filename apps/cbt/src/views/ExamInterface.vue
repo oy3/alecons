@@ -1295,15 +1295,15 @@ export default {
         <!-- Navigation Buttons -->
         <div>
           <button
-            class="btn btn-outline-secondary me-2"
+            class="btn btn-primary me-2"
             :disabled="currentQuestionIndex === 0"
             @click="previousQuestion"
           >
             <i class="bi bi-arrow-left me-1"></i>
-            Previous
+            Prev
           </button>
           <button
-            class="btn btn-outline-secondary"
+            class="btn btn-primary"
             :disabled="currentQuestionIndex === questions.length - 1"
             @click="nextQuestion"
           >

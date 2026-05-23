@@ -258,6 +258,10 @@ export default {
         this.errors.title = 'Title is required'
       }
 
+      if (!this.form.description.trim()) {
+        this.errors.description = 'Description is required'
+      }
+
       if (!this.form.academicSession) {
         this.errors.academicSession = 'Academic session is required'
       }
@@ -359,7 +363,6 @@ export default {
         }
 
         this.$emit('save', examData)
-        this.close()
       } catch (error) {
         logger.error('Error saving exam:', error)
         Swal.fire('Error', 'Failed to save exam', 'error')
@@ -451,9 +454,12 @@ export default {
                 </div>
 
                 <div class="mb-3">
-                  <label for="description" class="form-label">Description</label>
-                  <textarea v-model="form.description" id="description" class="form-control" rows="3"
-                    placeholder="Brief description of the exam"></textarea>
+                  <label for="description" class="form-label">Description <span class="text-danger">*</span></label>
+                  <textarea v-model="form.description" id="description" class="form-control"
+                    :class="{ 'is-invalid': errors.description }" rows="3"
+                    placeholder="Brief description of the exam"
+                    @input="clearFieldError('description')"></textarea>
+                  <div v-if="errors.description" class="invalid-feedback">{{ errors.description }}</div>
                 </div>
 
                 <div class="row">

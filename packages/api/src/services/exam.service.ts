@@ -2258,9 +2258,22 @@ export class ExamService {
                 },
             });
 
+            const normalizedTitle = createExamDto.title?.trim();
+            const normalizedDescription = createExamDto.description?.trim();
+
+            if (!normalizedTitle) {
+                throw new BadRequestException("Exam title is required");
+            }
+
+            if (!normalizedDescription) {
+                throw new BadRequestException("Exam description is required");
+            }
+
             // Process and validate the data
             const processedData = {
                 ...createExamDto,
+                title: normalizedTitle,
+                description: normalizedDescription,
                 // Ensure academicSession is ObjectId
                 academicSession: new Types.ObjectId(createExamDto.academicSession),
                 // Ensure examTimestamp is Date
@@ -2337,6 +2350,26 @@ export class ExamService {
         updatedBy: string
     ): Promise<ExamDocument> {
         try {
+            if (updateExamDto.title !== undefined) {
+                const normalizedTitle = updateExamDto.title?.trim();
+
+                if (!normalizedTitle) {
+                    throw new BadRequestException("Exam title is required");
+                }
+
+                updateExamDto.title = normalizedTitle;
+            }
+
+            if (updateExamDto.description !== undefined) {
+                const normalizedDescription = updateExamDto.description?.trim();
+
+                if (!normalizedDescription) {
+                    throw new BadRequestException("Exam description is required");
+                }
+
+                updateExamDto.description = normalizedDescription;
+            }
+
             // Process and validate the data similar to create
             const processedData = {
                 ...updateExamDto,

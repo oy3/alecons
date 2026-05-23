@@ -138,7 +138,7 @@ export default {
           this.totalExams = response.total || response.exams?.length || 0;
           logger.info("Exams loaded successfully:", this.exams.length, "exams");
           
-          // Load grading status for completed exams
+          // Load grading status for exams that can still be graded or regraded
           this.loadGradingStatusForExams();
         } else {
           logger.error("API returned unsuccessful response:", response);
@@ -226,16 +226,18 @@ export default {
         return;
       }
 
-      // Load grading status for completed exams in parallel
-      const completedExams = this.exams.filter(exam => exam.status === 'completed');
-      if (completedExams.length === 0) {
-        logger.info('No completed exams found, skipping grading status check');
+      // Load grading status for completed and graded exams in parallel
+      const gradeableExams = this.exams.filter((exam) =>
+        ['completed', 'graded'].includes(exam.status)
+      );
+      if (gradeableExams.length === 0) {
+        logger.info('No completed or graded exams found, skipping grading status check');
         return;
       }
 
-      logger.info(`Loading grading status for ${completedExams.length} completed exams`);
+      logger.info(`Loading grading status for ${gradeableExams.length} completed/graded exams`);
       
-      const statusPromises = completedExams.map(exam => this.loadGradingStatus(exam._id));
+      const statusPromises = gradeableExams.map(exam => this.loadGradingStatus(exam._id));
       
       try {
         await Promise.all(statusPromises);
@@ -245,20 +247,18 @@ export default {
       }
     },
 
-    async gradeExam(exam) {
-      // Get grading status to determine the appropriate action
-      const status = await this.loadGradingStatus(exam._id);
-      
-      const isRegrade = status && status.recommendedAction === 'regrade-all';
+    async runGradingAction(exam, action) {
+      const isRegrade = action === 'regrade';
       const actionText = isRegrade ? 'regrade' : 'grade';
       const actionTextCap = isRegrade ? 'Regrade' : 'Grade';
+      const actionScope = isRegrade ? 'all fully graded attempts' : 'all pending submitted attempts';
 
       const result = await Swal.fire({
-        title: `${actionTextCap} All Attempts`,
-        text: `This will ${actionText} all attempts for "${exam.title}". Continue?`,
+        title: `${actionTextCap} Exam Attempts`,
+        text: `This will ${actionText} ${actionScope} for "${exam.title}". Continue?`,
         icon: "question",
         showCancelButton: true,
-        confirmButtonText: `Yes, ${actionTextCap} All`,
+        confirmButtonText: `Yes, ${actionTextCap}`,
         cancelButtonText: "Cancel",
         confirmButtonColor: "#1a5f5f",
       });
@@ -267,7 +267,7 @@ export default {
         // Show loading indicator
         const loadingAlert = Swal.fire({
           title: `${actionTextCap}ing in Progress...`,
-          text: `Please wait while we ${actionText} all attempts for "${exam.title}"`,
+          text: `Please wait while we ${actionText} ${actionScope} for "${exam.title}"`,
           icon: "info",
           allowOutsideClick: false,
           allowEscapeKey: false,
@@ -325,20 +325,22 @@ export default {
       }
     },
 
-    getGradingButtonText(exam) {
+    shouldShowGradeButton(exam) {
+      if (exam.status !== 'completed') return false;
+
       const status = this.examGradingStatuses[exam._id];
-      if (!status) return 'Grade All';
-      
-      return status.recommendedAction === 'regrade-all' ? 'Regrade All' : 'Grade All';
+      if (!status) return true;
+
+      return status.canGrade;
     },
 
-    shouldShowGradingButton(exam) {
-      if (exam.status !== 'completed') return false;
-      
+    shouldShowRegradeButton(exam) {
+      if (exam.status !== 'graded') return false;
+
       const status = this.examGradingStatuses[exam._id];
-      if (!status) return true; // Show button while loading status
-      
-      return status.canGrade || status.canRegrade;
+      if (!status) return true;
+
+      return status.canRegrade;
     },
 
     async releaseResults(exam) {
@@ -806,10 +808,16 @@ export default {
                           Statistics
                         </button>
                       </li>
-                      <li v-if="shouldShowGradingButton(exam)">
-                        <button class="dropdown-item" @click="gradeExam(exam)">
+                      <li v-if="shouldShowGradeButton(exam)">
+                        <button class="dropdown-item" @click="runGradingAction(exam, 'grade')">
                           <i class="bi bi-check-circle me-2"></i>
-                          {{ getGradingButtonText(exam) }}
+                          Grade All Pending
+                        </button>
+                      </li>
+                      <li v-if="shouldShowRegradeButton(exam)">
+                        <button class="dropdown-item" @click="runGradingAction(exam, 'regrade')">
+                          <i class="bi bi-arrow-repeat me-2"></i>
+                          Regrade All Final
                         </button>
                       </li>
                       <li v-if="exam.status === 'graded'">

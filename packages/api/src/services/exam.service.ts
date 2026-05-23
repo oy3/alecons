@@ -1013,7 +1013,7 @@ export class ExamService {
 
                     // Count terminal attempts
                     const terminalAttempts = attempts.filter((a) =>
-                        ["submitted", "auto-submitted", "graded"].includes(a.status)
+                        ["submitted", "auto-submitted", "partially-graded", "graded"].includes(a.status)
                     );
                     const inProgressAttempt = attempts.find(
                         (a) => a.status === "in-progress"
@@ -1312,9 +1312,9 @@ export class ExamService {
                 }
             }
 
-            // Count terminal attempts (submitted, auto-submitted, graded)
+            // Count terminal attempts (submitted, auto-submitted, partially-graded, graded)
             const terminalAttempts = userAttempts.filter((a) =>
-                ["submitted", "auto-submitted", "graded"].includes(a.status)
+                ["submitted", "auto-submitted", "partially-graded", "graded"].includes(a.status)
             );
 
             // Check attempt limit
@@ -1554,14 +1554,16 @@ export class ExamService {
         // Send exam completion email (non-blocking)
         this.sendCompletionEmailAsync(userId, exam, submittedAt, isAutoSubmitted);
 
+        const gradingMode = exam.gradingMode === "auto" ? "auto" : "manual";
+
         // Handle grading based on exam's grading mode
-        if (exam.gradingMode === "auto") {
+        if (gradingMode === "auto") {
             // Queue automatic grading (non-blocking)
             this.queueGradingAsync(attemptId, examId, userId);
         } else {
             // Manual grading - will be done by staff later
             this.logger.log(
-                `Exam ${examId} requires ${exam.gradingMode} grading - awaiting staff action`
+                `Exam ${examId} requires ${gradingMode} grading - awaiting staff action`
             );
         }
     }
@@ -1634,7 +1636,7 @@ export class ExamService {
                     `Grading queue unavailable for attempt ${attemptId} - falling back to synchronous grading`
                 );
                 // Fallback to synchronous grading
-                await this.gradingService.gradeExam(attemptId, userId);
+                await this.gradingService.gradeExam(attemptId);
                 this.logger.log(
                     `Fallback synchronous grading completed for attempt ${attemptId}`
                 );
@@ -1650,7 +1652,7 @@ export class ExamService {
 
             try {
                 // Fallback to synchronous grading
-                await this.gradingService.gradeExam(attemptId, userId);
+                await this.gradingService.gradeExam(attemptId);
                 this.logger.log(
                     `Fallback synchronous grading completed for attempt ${attemptId}`
                 );
@@ -1817,11 +1819,31 @@ export class ExamService {
                 `Looking for completed attempts for exam: ${examId}, includeAlreadyGraded: ${includeAlreadyGraded}`
             );
 
-            // Find all attempts that are completed (submitted or auto-submitted)
+            const exam = await this.examModel
+                .findById(examId)
+                .select("status gradingMode")
+                .lean();
+
+            if (!exam) {
+                throw new NotFoundException("Exam not found");
+            }
+
+            const requiredExamStatus = includeAlreadyGraded ? "graded" : "completed";
+            if (exam.status !== requiredExamStatus) {
+                this.logger.log(
+                    `Exam ${examId} is ${exam.status}; expected ${requiredExamStatus} for this grading action`
+                );
+                return [];
+            }
+
+            const targetStatuses = includeAlreadyGraded
+                ? ["graded"]
+                : ["submitted", "auto-submitted"];
+
             const attempts = await this.attemptModel
                 .find({
                     examId: new Types.ObjectId(examId),
-                    status: { $in: ["submitted", "auto-submitted"] },
+                    status: { $in: targetStatuses },
                     isValid: true,
                 })
                 .lean();
@@ -1830,15 +1852,6 @@ export class ExamService {
                 `Found ${attempts.length} completed attempts for exam ${examId}`
             );
 
-            if (includeAlreadyGraded) {
-                // For regrading, return all completed attempts regardless of existing results
-                this.logger.log(
-                    `Returning all ${attempts.length} attempts for regrading`
-                );
-                return attempts as unknown as ExamAttemptDocument[];
-            }
-
-            // For initial grading, filter out attempts that already have results
             const attemptsWithoutResults = [];
             for (const attempt of attempts) {
                 const existingResult = await this.resultModel
@@ -1847,12 +1860,22 @@ export class ExamService {
                     })
                     .lean();
 
-                if (!existingResult) {
+                if (!includeAlreadyGraded && !existingResult) {
                     attemptsWithoutResults.push(attempt);
                     this.logger.debug(`Attempt ${attempt._id} needs grading`);
+                } else if (
+                    includeAlreadyGraded &&
+                    existingResult?.gradingStatus === "completed"
+                ) {
+                    attemptsWithoutResults.push(attempt);
+                    this.logger.debug(
+                        `Attempt ${attempt._id} is eligible for regrading`
+                    );
                 } else {
                     this.logger.debug(
-                        `Attempt ${attempt._id} already has result ${existingResult._id}`
+                        includeAlreadyGraded
+                            ? `Attempt ${attempt._id} is not eligible for regrading`
+                            : `Attempt ${attempt._id} already has result ${existingResult?._id}`
                     );
                 }
             }
@@ -1885,6 +1908,8 @@ export class ExamService {
         status: string;
         totalAttempts: number;
         completedAttempts: number;
+        pendingAttempts: number;
+        partialAttempts: number;
         gradedAttempts: number;
         canGrade: boolean;
         canRegrade: boolean;
@@ -1904,58 +1929,42 @@ export class ExamService {
                 })
                 .lean();
 
-            // Get completed attempts
             const completedAttempts = allAttempts.filter(
                 (attempt) =>
-                    ["submitted", "auto-submitted"].includes(attempt.status) &&
+                    ["submitted", "auto-submitted", "partially-graded", "graded"].includes(attempt.status) &&
                     attempt.isValid
             );
 
-            // Get graded attempts (those with results)
-            const gradedAttempts = [];
-            for (const attempt of completedAttempts) {
-                const result = await this.resultModel
-                    .findOne({
-                        attemptId: attempt._id,
-                    })
-                    .lean();
-                if (result) {
-                    gradedAttempts.push(attempt);
-                }
-            }
+            const pendingAttempts = completedAttempts.filter((attempt) =>
+                ["submitted", "auto-submitted"].includes(attempt.status)
+            );
 
-            // Determine recommended action
+            const partialAttempts = completedAttempts.filter(
+                (attempt) => attempt.status === "partially-graded"
+            );
+
+            const gradedAttempts = completedAttempts.filter(
+                (attempt) => attempt.status === "graded"
+            );
+
             let recommendedAction: "grade-all" | "regrade-all" | "none" = "none";
-            let canGrade = false;
-            let canRegrade = false;
+            const gradingMode = exam.gradingMode === "auto" ? "auto" : "manual";
+            const canGrade = exam.status === "completed" && pendingAttempts.length > 0;
+            const canRegrade = exam.status === "graded" && gradedAttempts.length > 0;
 
-            if (exam.status === "completed" && completedAttempts.length > 0) {
-                if (exam.gradingMode === "auto" && gradedAttempts.length > 0) {
-                    // Auto mode with existing results = show regrade button
-                    recommendedAction = "regrade-all";
-                    canRegrade = true;
-                } else if (
-                    exam.gradingMode === "manual" &&
-                    gradedAttempts.length < completedAttempts.length
-                ) {
-                    // Manual mode with ungraded attempts = show grade button
-                    recommendedAction = "grade-all";
-                    canGrade = true;
-                } else if (
-                    exam.gradingMode === "manual" &&
-                    gradedAttempts.length === completedAttempts.length
-                ) {
-                    // Manual mode with all attempts graded = show regrade button
-                    recommendedAction = "regrade-all";
-                    canRegrade = true;
-                }
+            if (canGrade) {
+                recommendedAction = "grade-all";
+            } else if (canRegrade) {
+                recommendedAction = "regrade-all";
             }
 
             return {
-                gradingMode: exam.gradingMode,
+                gradingMode,
                 status: exam.status,
                 totalAttempts: allAttempts.length,
                 completedAttempts: completedAttempts.length,
+                pendingAttempts: pendingAttempts.length,
+                partialAttempts: partialAttempts.length,
                 gradedAttempts: gradedAttempts.length,
                 canGrade,
                 canRegrade,
@@ -2043,7 +2052,7 @@ export class ExamService {
                         .findOne({
                             examId: new Types.ObjectId(examId),
                             userId: new Types.ObjectId(userId),
-                            status: { $in: ["submitted", "auto-submitted", "graded"] },
+                            status: { $in: ["submitted", "auto-submitted", "partially-graded", "graded"] },
                         })
                         .sort({ submittedAt: -1 }) // Get most recent attempt
                         .lean();
@@ -2091,7 +2100,9 @@ export class ExamService {
 
                 // Calculate statistics
                 const totalStudents = results.length;
-                const gradedResults = results; // All results are graded once they exist
+                const gradedResults = results.filter(
+                    (result) => result.gradingStatus === 'completed'
+                );
                 const averageScore = gradedResults.length > 0
                     ? Math.round(gradedResults.reduce((sum, r) => sum + r.percentage, 0) / gradedResults.length)
                     : 0;
@@ -2768,7 +2779,7 @@ export class ExamService {
             const userAttempts = await this.attemptModel
                 .find({
                     userId: new Types.ObjectId(userId),
-                    status: { $in: ["submitted", "auto-submitted", "graded"] },
+                    status: { $in: ["submitted", "auto-submitted", "partially-graded", "graded"] },
                 })
                 .populate("examId")
                 .sort({ submittedAt: -1 })
@@ -3607,13 +3618,15 @@ export class ExamService {
                         continue;
                     }
 
+                    const gradingMode = exam.gradingMode === "auto" ? "auto" : "manual";
+
                     // Handle grading based on exam's grading mode
-                    if (exam.gradingMode === "auto") {
+                    if (gradingMode === "auto") {
                         // Queue automatic grading immediately
                         this.logger.log(`Queueing automatic grading for auto-submitted attempt ${attempt._id}`);
                         await this.queueGradingAsync(attempt._id.toString(), attempt.examId.toString(), attempt.userId.toString());
                     } else {
-                        this.logger.log(`Auto-submitted attempt ${attempt._id} requires ${exam.gradingMode} grading - awaiting staff action`);
+                        this.logger.log(`Auto-submitted attempt ${attempt._id} requires ${gradingMode} grading - awaiting staff action`);
                     }
 
                     // Send completion email for auto-submitted attempt

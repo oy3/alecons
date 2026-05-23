@@ -38,11 +38,14 @@ export class ExamResult {
     @Prop({ min: 0, max: 100 })
     percentage: number;
 
-    @Prop({ enum: ['pass', 'fail'], required: true })
-    status: 'pass' | 'fail';
+    @Prop({ enum: ['pass', 'fail'] })
+    status?: 'pass' | 'fail';
 
     @Prop({ enum: ['auto', 'manual', 'partial'], required: true })
     gradingType: 'auto' | 'manual' | 'partial'; // partial = mix of auto and manual
+
+    @Prop({ enum: ['partial', 'completed'], required: true })
+    gradingStatus: 'partial' | 'completed';
 
     @Prop({
         type: [{
@@ -96,7 +99,7 @@ export class ExamResult {
     @Prop({
         type: [{
             action: { type: String, enum: ['graded', 'regraded', 'released', 'retracted'], required: true },
-            performedBy: { type: Types.ObjectId, ref: 'User', required: true },
+            performedBy: { type: Types.ObjectId, ref: 'User' },
             performedAt: { type: Date, default: Date.now },
             method: { type: String, enum: ['auto', 'manual'], required: true },
             previousStatus: { type: String, enum: ['pass', 'fail'] },
@@ -109,7 +112,7 @@ export class ExamResult {
     })
     gradingHistory: Array<{
         action: 'graded' | 'regraded' | 'released' | 'retracted';
-        performedBy: Types.ObjectId;
+        performedBy?: Types.ObjectId;
         performedAt: Date;
         method: 'auto' | 'manual';
         previousStatus?: 'pass' | 'fail';

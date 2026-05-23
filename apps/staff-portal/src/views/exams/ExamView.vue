@@ -105,11 +105,11 @@ export default {
       <div class="row">
         <div class="col-12">
           <div class="card p-0">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <h4 class="card-title">{{ exam?.title || 'Loading...' }}</h4>
-              <button class="btn btn-secondary" @click="goBack">
-                <i class="bi bi-arrow-left"></i> Back to Exams
-              </button>
+            <div class="card-header d-flex align-items-center">
+              <a href="" @click.prevent="goBack" class="me-4 text-dark">
+               <i class="bi bi-chevron-left"></i>
+               </a>
+              <h5 class="card-title mb-0">{{ exam?.title || 'Loading...' }}</h5>
             </div>
             <div class="card-body">
               <div v-if="loading" class="text-center py-5">

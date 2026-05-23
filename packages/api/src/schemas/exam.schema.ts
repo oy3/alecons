@@ -60,7 +60,7 @@ export class Exam {
     @Prop({ default: false })
     randomizeOptions: boolean;
 
-    @Prop({ enum: ['auto', 'manual'], default: 'auto' })
+    @Prop({ enum: ['auto', 'manual'], default: 'manual' })
     gradingMode: 'auto' | 'manual';
 
     @Prop({

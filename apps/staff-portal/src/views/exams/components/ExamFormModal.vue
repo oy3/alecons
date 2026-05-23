@@ -36,6 +36,7 @@ export default {
         attemptLimit: 1,
         totalMark: 100,
         cutOffMark: 50,
+        gradingMode: 'manual',
         randomizeQuestions: false,
         randomizeOptions: false,
         security: {
@@ -200,6 +201,7 @@ export default {
           attemptLimit: this.exam.attemptLimit || 1,
           totalMark: this.exam.totalMark || 100,
           cutOffMark: this.exam.cutOffMark || 50,
+          gradingMode: this.exam.gradingMode === 'auto' ? 'auto' : 'manual',
           randomizeQuestions: this.exam.randomizeQuestions || false,
           randomizeOptions: this.exam.randomizeOptions || false,
           security: {
@@ -232,6 +234,7 @@ export default {
         attemptLimit: 1,
         totalMark: 100,
         cutOffMark: 50,
+        gradingMode: 'manual',
         randomizeQuestions: false,
         randomizeOptions: false,
         security: {
@@ -339,6 +342,7 @@ export default {
           attemptLimit: Number(this.form.attemptLimit),
           totalMark: Number(this.form.totalMark),
           cutOffMark: Number(this.form.cutOffMark),
+          gradingMode: this.form.gradingMode,
           randomizeQuestions: this.form.randomizeQuestions,
           randomizeOptions: this.form.randomizeOptions,
           security: this.form.security
@@ -607,6 +611,25 @@ export default {
                 </div>
 
                 <div class="row">
+                  <div class="col-12 mb-3">
+                    <div class="form-check form-switch border rounded p-3">
+                      <input
+                        v-model="form.gradingMode"
+                        class="form-check-input"
+                        type="checkbox"
+                        id="gradingMode"
+                        true-value="auto"
+                        false-value="manual"
+                      />
+                      <label class="form-check-label fw-semibold" for="gradingMode">
+                        Auto Grade Submitted Attempts
+                      </label>
+                      <div class="form-text mb-0">
+                        When enabled, submitted and auto-submitted attempts are graded automatically. When disabled, staff must use Grade All after the exam is completed.
+                      </div>
+                    </div>
+                  </div>
+
                   <div class="col-md-6">
                     <div class="form-check mb-3">
                       <input v-model="form.randomizeQuestions" class="form-check-input" type="checkbox"

@@ -37,8 +37,8 @@ export class ExamAttempt {
     @Prop()
     submittedAt: Date;
 
-    @Prop({ enum: ['in-progress', 'submitted', 'auto-submitted', 'graded'], default: 'in-progress' })
-    status: 'in-progress' | 'submitted' | 'auto-submitted' | 'graded';
+    @Prop({ enum: ['in-progress', 'submitted', 'auto-submitted', 'partially-graded', 'graded'], default: 'in-progress' })
+    status: 'in-progress' | 'submitted' | 'auto-submitted' | 'partially-graded' | 'graded';
 
     @Prop({ default: Date.now })
     autoSavedAt: Date;

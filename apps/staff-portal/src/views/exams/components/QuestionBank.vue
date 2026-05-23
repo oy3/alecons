@@ -813,7 +813,7 @@ export default {
                         title="View Details"
                       >
                         <i class="bi bi-eye"></i>
-                      </button>
+                      </button> 
                       <button
                         v-if="canEditQuestions"
                         class="btn btn-sm btn-outline-success"
@@ -1121,7 +1121,7 @@ export default {
   font-size: 0.875rem;
 }
 
-.btn-group .btn {
+/* .btn-group .btn {
   padding: 0.25rem 0.5rem;
-}
+} */
 </style>

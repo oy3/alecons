@@ -17,10 +17,11 @@ export interface QuestionResult {
     questionId: string;
     userAnswer: any;
     correctAnswer: any;
-    isCorrect: boolean;
-    marksAwarded: number;
-    maxMarks: number;
+    isCorrect?: boolean;
+    pointsAwarded: number;
+    maxPoints: number;
     explanation?: string;
+    requiresManualGrading?: boolean;
 }
 
 @Injectable()
@@ -39,7 +40,6 @@ export class GradingService {
         try {
             this.logger.log(`Starting grading for attempt: ${attemptId}`);
 
-            // Get attempt with exam details
             const attempt = await this.attemptModel
                 .findById(attemptId)
                 .lean();
@@ -48,9 +48,17 @@ export class GradingService {
                 throw new Error('Attempt not found');
             }
 
+            if (!['submitted', 'auto-submitted', 'partially-graded', 'graded'].includes(attempt.status)) {
+                throw new Error(`Attempt ${attemptId} is not eligible for grading from status: ${attempt.status}`);
+            }
+
+            const exam = await this.examModel.findById(attempt.examId).lean();
+            if (!exam) {
+                throw new Error(`Exam not found for attempt ${attemptId}`);
+            }
+
             this.logger.debug(`Found attempt for user ${attempt.userId}, exam ${attempt.examId}`);
 
-            // Get all questions for the exam - examId in attempt is already an ObjectId
             const questions = await this.questionModel
                 .find({ examId: attempt.examId })
                 .lean();
@@ -62,11 +70,11 @@ export class GradingService {
 
             this.logger.log(`Found ${questions.length} questions for exam ${attempt.examId}`);
 
-            // Process each question and calculate scores
             const questionResults: QuestionResult[] = [];
             let correctAnswers = 0;
             let totalScore = 0;
             let maxScore = 0;
+            let requiresManualGrading = false;
 
             for (const question of questions) {
                 const userAnswer = attempt.answers.find(a =>
@@ -74,56 +82,47 @@ export class GradingService {
                 );
 
                 const result = this.gradeQuestion(question as unknown as QuestionDocument, userAnswer);
-
                 questionResults.push(result);
+
+                if (result.requiresManualGrading) {
+                    requiresManualGrading = true;
+                }
 
                 if (result.isCorrect) {
                     correctAnswers++;
                 }
 
-                totalScore += result.marksAwarded;
-                maxScore += result.maxMarks;
+                totalScore += result.pointsAwarded;
+                maxScore += result.maxPoints;
             }
 
-            // Update the total questions count to match what was actually processed
             const totalQuestions = questions.length;
-
-            // Calculate percentage and determine pass/fail
             const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-            const exam = attempt.examId as any;
+            const normalizedPercentage = Math.round(percentage * 100) / 100;
+            const gradingStatus = requiresManualGrading ? 'partial' : 'completed';
+            const gradingType = requiresManualGrading ? 'partial' : 'auto';
+            const status = gradingStatus === 'completed'
+                ? (totalScore >= (exam.cutOffMark ?? 0) ? 'pass' : 'fail')
+                : undefined;
 
-            // Use the exam's cutOffMark to determine pass/fail
-            // cutOffMark is absolute score, passingPercentage might be percentage
-            let passingThreshold = 50; // Default fallback
+            this.logger.debug(`Score calculation: ${totalScore}/${maxScore} = ${normalizedPercentage}%. Cut-off mark: ${exam.cutOffMark}. Grading status: ${gradingStatus}. Result status: ${status || 'pending manual grading'}`);
 
-            if (exam.cutOffMark && exam.totalMark) {
-                // If cutOffMark is set, calculate percentage from it
-                passingThreshold = (exam.cutOffMark / exam.totalMark) * 100;
-            } else if (exam.passingPercentage) {
-                // Use passingPercentage if available
-                passingThreshold = exam.passingPercentage;
-            }
-
-            const status = percentage >= passingThreshold ? 'pass' : 'fail';
-
-            this.logger.debug(`Score calculation: ${totalScore}/${maxScore} = ${percentage}%. Passing threshold: ${passingThreshold}%. Status: ${status}`);
-
-            // Update or create result document
             const resultData = {
                 examId: attempt.examId,
                 userId: attempt.userId,
                 attemptId: attempt._id,
                 totalQuestions,
-                questionsAttempted: attempt.answers.filter(a => a.selected).length,
+                questionsAttempted: attempt.answers.filter(a => a.selected || a.answeredAt).length,
                 correctAnswers,
                 totalScore,
                 maxScore,
-                percentage: Math.round(percentage * 100) / 100,
+                percentage: normalizedPercentage,
                 status,
-                gradingType: 'auto',
+                gradingType,
+                gradingStatus,
                 questionResults,
                 gradedAt: new Date(),
-                released: true // Auto-release for objective questions
+                gradedBy: gradedBy ? new Types.ObjectId(gradedBy) : undefined,
             };
 
             const existingResult = await this.resultModel.findOne({
@@ -131,22 +130,27 @@ export class GradingService {
             });
 
             let result: ExamResultDocument;
-            const gradingHistoryEntry = {
+            const gradingHistoryEntry: any = {
                 action: existingResult ? 'regraded' : 'graded',
-                performedBy: gradedBy ? new Types.ObjectId(gradedBy) : null,
                 performedAt: new Date(),
-                method: 'auto',
+                method: gradedBy ? 'manual' : 'auto',
                 previousStatus: existingResult?.status,
                 newStatus: status,
                 previousScore: existingResult?.totalScore,
                 newScore: totalScore,
-                notes: existingResult ? 'Automatic regrading via regrade-all action' : 'Initial automatic grading'
+                notes: requiresManualGrading
+                    ? (existingResult ? 'Updated partial grading; essay/manual questions still require staff scoring' : 'Initial partial grading created from objective questions only')
+                    : (existingResult ? 'Result regraded and fully completed' : 'Initial grading completed automatically')
             };
 
+            if (gradedBy) {
+                gradingHistoryEntry.performedBy = new Types.ObjectId(gradedBy);
+            }
+
             if (existingResult) {
-                // Update existing result and add to history
                 const updateData = {
                     ...resultData,
+                    released: existingResult.released ?? false,
                     $push: { gradingHistory: gradingHistoryEntry }
                 };
 
@@ -156,19 +160,26 @@ export class GradingService {
                     { new: true }
                 );
 
-                this.logger.log(`Regraded existing result for attempt ${attemptId}. Previous: ${existingResult.totalScore}/${existingResult.maxScore} (${existingResult.percentage}%) -> New: ${totalScore}/${maxScore} (${percentage}%)`);
+                this.logger.log(`Regraded existing result for attempt ${attemptId}. Previous: ${existingResult.totalScore}/${existingResult.maxScore} (${existingResult.percentage}%) -> New: ${totalScore}/${maxScore} (${normalizedPercentage}%)`);
             } else {
-                // Create new result with initial history entry
                 const newResultData = {
                     ...resultData,
+                    released: false,
                     gradingHistory: [gradingHistoryEntry]
                 };
 
                 result = new this.resultModel(newResultData);
                 await result.save();
 
-                this.logger.log(`Created new result for attempt ${attemptId}. Score: ${totalScore}/${maxScore} (${percentage}%)`);
+                this.logger.log(`Created new result for attempt ${attemptId}. Score: ${totalScore}/${maxScore} (${normalizedPercentage}%)`);
             }
+
+            const nextAttemptStatus = gradingStatus === 'completed' ? 'graded' : 'partially-graded';
+            await this.attemptModel.findByIdAndUpdate(attemptId, {
+                status: nextAttemptStatus,
+            });
+
+            await this.syncExamGradingStatus(exam._id.toString());
 
             return result;
 
@@ -179,19 +190,24 @@ export class GradingService {
     }
 
     private gradeQuestion(question: QuestionDocument, userAnswer: any): QuestionResult {
-        const maxMarks = question.mark || 1;
+        const maxPoints = question.mark || 1;
         let isCorrect = false;
-        let marksAwarded = 0;
+        let pointsAwarded = 0;
 
-        if (!userAnswer || !userAnswer.selected) {
-            // No answer provided
+        const hasAnswer = Boolean(userAnswer) && (
+            Array.isArray(userAnswer?.selected)
+                ? userAnswer.selected.length > 0
+                : userAnswer?.selected !== undefined && userAnswer?.selected !== null && userAnswer?.selected !== ''
+        );
+
+        if (!hasAnswer) {
             return {
                 questionId: question._id.toString(),
                 userAnswer: null,
                 correctAnswer: question.answer,
                 isCorrect: false,
-                marksAwarded: 0,
-                maxMarks,
+                pointsAwarded: 0,
+                maxPoints,
                 explanation: question.metadata?.learningObjective || ''
             };
         }
@@ -206,16 +222,14 @@ export class GradingService {
                 break;
 
             case 'essay':
-                // Essays require manual grading
-                marksAwarded = 0;
                 return {
                     questionId: question._id.toString(),
                     userAnswer: userAnswer.text || userAnswer.selected,
                     correctAnswer: 'Manual grading required',
-                    isCorrect: false,
-                    marksAwarded: 0,
-                    maxMarks,
-                    explanation: 'This question requires manual grading'
+                    pointsAwarded: 0,
+                    maxPoints,
+                    explanation: 'This question requires manual grading',
+                    requiresManualGrading: true
                 };
 
             default:
@@ -223,17 +237,42 @@ export class GradingService {
                 break;
         }
 
-        marksAwarded = isCorrect ? maxMarks : 0;
+        pointsAwarded = isCorrect ? maxPoints : 0;
 
         return {
             questionId: question._id.toString(),
             userAnswer: userAnswer.selected || userAnswer.text,
             correctAnswer: question.answer,
             isCorrect,
-            marksAwarded,
-            maxMarks,
+            pointsAwarded,
+            maxPoints,
             explanation: question.metadata?.learningObjective || ''
         };
+    }
+
+    private async syncExamGradingStatus(examId: string): Promise<void> {
+        const exam = await this.examModel.findById(examId).lean();
+
+        if (!exam || !['completed', 'graded'].includes(exam.status)) {
+            return;
+        }
+
+        const completedAttempts = await this.attemptModel
+            .find({
+                examId: new Types.ObjectId(examId),
+                status: { $in: ['submitted', 'auto-submitted', 'partially-graded', 'graded'] },
+                isValid: true,
+            })
+            .lean();
+
+        const nextExamStatus = completedAttempts.length > 0 && completedAttempts.every((attempt) => attempt.status === 'graded')
+            ? 'graded'
+            : 'completed';
+
+        if (exam.status !== nextExamStatus) {
+            await this.examModel.findByIdAndUpdate(examId, { status: nextExamStatus });
+            this.logger.log(`Updated exam ${examId} status from ${exam.status} to ${nextExamStatus} based on grading progress`);
+        }
     }
 
     private gradeMCQ(question: QuestionDocument, userAnswer: any): boolean {
@@ -265,11 +304,10 @@ export class GradingService {
         try {
             this.logger.log(`Starting batch grading for exam: ${examId}`);
 
-            // Get all submitted attempts for the exam
             const attempts = await this.attemptModel
                 .find({
                     examId: new Types.ObjectId(examId),
-                    status: 'submitted'
+                    status: { $in: ['submitted', 'auto-submitted'] }
                 })
                 .lean();
 
@@ -293,7 +331,7 @@ export class GradingService {
     async calculateExamStatistics(examId: string): Promise<any> {
         try {
             const results = await this.resultModel
-                .find({ examId: new Types.ObjectId(examId) })
+                .find({ examId: new Types.ObjectId(examId), gradingStatus: 'completed' })
                 .lean();
 
             if (!results.length) {
@@ -349,7 +387,16 @@ export class GradingService {
 
     async releaseResults(examId: string, releaseAll: boolean = true): Promise<void> {
         try {
-            const filter: any = { examId: new Types.ObjectId(examId) };
+            const exam = await this.examModel.findById(examId).lean();
+            if (!exam) {
+                throw new Error(`Exam not found: ${examId}`);
+            }
+
+            if (exam.status !== 'graded') {
+                throw new Error('Only graded exams can have results released');
+            }
+
+            const filter: any = { examId: new Types.ObjectId(examId), gradingStatus: 'completed' };
 
             if (!releaseAll) {
                 filter.gradingType = 'auto'; // Only release auto-graded results

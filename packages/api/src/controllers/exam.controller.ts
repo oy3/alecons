@@ -966,9 +966,9 @@ export class ExamController {
             const attempts = await this.examService.getCompletedAttemptsForGrading(examId, true);
             const userAttempt = attempts.find(attempt => attempt.userId.toString() === userId);
 
-            if (!userAttempt || !['submitted', 'auto-submitted'].includes(userAttempt.status)) {
+            if (!userAttempt || userAttempt.status !== 'graded') {
                 throw new HttpException(
-                    "No completed attempt found for this user",
+                    "No graded attempt found for this user",
                     HttpStatus.NOT_FOUND
                 );
             }

@@ -5,11 +5,6 @@ import PaystackPop from "@paystack/inline-js";
 class PaymentService {
     constructor() {
         this.paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-        this.paystackEnabled =
-            import.meta.env.VITE_PAYMENT_PAYSTACK_ENABLED !== "false" &&
-            !!this.paystackPublicKey;
-        this.manualTransferEnabled =
-            import.meta.env.VITE_PAYMENT_MANUAL_TRANSFER_ENABLED !== "false";
         this.serverPaymentMethods = {
             paystackEnabled: true,
             manualTransferEnabled: true,
@@ -25,10 +20,8 @@ class PaymentService {
     getAvailablePaymentMethods() {
         return {
             paystackEnabled:
-                this.paystackEnabled && this.serverPaymentMethods.paystackEnabled,
-            manualTransferEnabled:
-                this.manualTransferEnabled &&
-                this.serverPaymentMethods.manualTransferEnabled,
+                !!this.paystackPublicKey && this.serverPaymentMethods.paystackEnabled,
+            manualTransferEnabled: this.serverPaymentMethods.manualTransferEnabled,
             manualTransferDetails: this.manualTransferDetails,
         };
     }

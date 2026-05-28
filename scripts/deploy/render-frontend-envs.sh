@@ -35,8 +35,6 @@ require_var VITE_PAYSTACK_PUBLIC_KEY
 export VITE_API_URL="${VITE_API_URL:-$VITE_APP_API_URL}"
 export VITE_API_BASE_URL="${VITE_API_BASE_URL:-$VITE_APP_API_URL}"
 export VITE_SOCKET_URL="${VITE_SOCKET_URL:-$VITE_API_BASE_URL}"
-export VITE_PAYMENT_PAYSTACK_ENABLED="${VITE_PAYMENT_PAYSTACK_ENABLED:-true}"
-export VITE_PAYMENT_MANUAL_TRANSFER_ENABLED="${VITE_PAYMENT_MANUAL_TRANSFER_ENABLED:-true}"
 export VITE_APP_ENV="${VITE_APP_ENV:-production}"
 export VITE_APP_DEBUG="${VITE_APP_DEBUG:-false}"
 export VITE_APP_CBT_URL="${VITE_APP_CBT_URL:-https://cbt.alecons.edu.ng}"
@@ -57,15 +55,11 @@ write_env_file "$ROOT_DIR/apps/website/.env.production" \
 write_env_file "$ROOT_DIR/apps/application-portal/.env.production" \
     VITE_APP_API_URL \
     VITE_APP_STUDENT_PORTAL_URL \
-    VITE_PAYSTACK_PUBLIC_KEY \
-    VITE_PAYMENT_PAYSTACK_ENABLED \
-    VITE_PAYMENT_MANUAL_TRANSFER_ENABLED
+    VITE_PAYSTACK_PUBLIC_KEY
 
 write_env_file "$ROOT_DIR/apps/student-portal/.env.production" \
     VITE_APP_API_URL \
-    VITE_PAYSTACK_PUBLIC_KEY \
-    VITE_PAYMENT_PAYSTACK_ENABLED \
-    VITE_PAYMENT_MANUAL_TRANSFER_ENABLED
+    VITE_PAYSTACK_PUBLIC_KEY
 
 write_env_file "$ROOT_DIR/apps/staff-portal/.env.production" \
     VITE_API_URL \

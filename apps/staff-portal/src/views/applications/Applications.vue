@@ -1840,7 +1840,7 @@ export default {
                               ></i>
                               {{
                                 app.matriculationNumber
-                                  ? "Send matric no."
+                                  ? "Resend matric email"
                                   : "Recover matric no."
                               }}
                             </a>

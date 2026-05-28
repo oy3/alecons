@@ -33,12 +33,8 @@ export default {
       );
     },
     canUseManualTransfer() {
-      const details = this.selectedManualTransferDetails;
-      return (
-        this.paymentMethods.manualTransferEnabled &&
-        details.accountName &&
-        details.accountNumber &&
-        details.bankName
+      return (this.unpaidFees || []).some((fee) =>
+        this.canUseManualTransferForFee(fee),
       );
     },
     canUsePaystack() {

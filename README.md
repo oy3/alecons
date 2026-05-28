@@ -260,23 +260,16 @@ The API depends on these external services in production:
 - DigitalOcean Spaces for uploaded files and payment receipts
 
 ### Payment Configuration
-Manual transfer and Paystack visibility are now controlled in two layers:
-
-1. **Frontend build-time defaults** in:
-   - `apps/application-portal/.env.example`
-   - `apps/student-portal/.env.example`
-2. **Backend session controls** managed from the staff portal per academic session
+Manual transfer and Paystack availability are controlled from backend session controls managed in the staff portal per academic session.
 
 Frontend payment-related env values:
 
 ```bash
 VITE_PAYSTACK_PUBLIC_KEY=pk_live_or_test_key
-VITE_PAYMENT_PAYSTACK_ENABLED=true
-VITE_PAYMENT_MANUAL_TRANSFER_ENABLED=true
 ```
 
 Notes:
-- If a method is disabled in session controls, the portal hides or blocks it even when the frontend env flag is `true`.
+- The Paystack public key is still required on the frontend to launch Paystack checkout when the session control enables Paystack.
 - Manual transfer receipt uploads depend on the API Spaces configuration being valid in production.
 - Manual transfer bank details and Paystack destination routing are configured from destination accounts in the staff Payments screen, not frontend env files.
 - Pending manual transfer payments show separately from unpaid fees until staff verification is completed.

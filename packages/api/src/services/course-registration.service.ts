@@ -378,7 +378,7 @@ export class CourseRegistrationService {
         if (!courseRegistrationControl?.active) {
             return {
                 eligible: false,
-                reason: `Course registration is currently disabled for ${academicSession.sessionYear}.`,
+                reason: `Course registration is currently closed for ${academicSession.sessionYear}.`,
                 session: academicSession,
             };
         }

@@ -30,6 +30,11 @@ export default {
     currentRegistration() {
       return this.registrationContext?.registration || null;
     },
+    savedRegistrationCourses() {
+      return (this.currentRegistration?.items || [])
+        .map((item) => item.programCourse)
+        .filter(Boolean);
+    },
     isCurrentSelectedPeriod() {
       const currentLevel = Number(this.registrationContext?.student?.currentLevel) || 1;
       const currentSemester = Number(this.registrationContext?.student?.currentSemester) || 1;
@@ -81,13 +86,18 @@ export default {
       );
     },
     displayedCourses() {
-      if (this.isCurrentSelectedPeriod) {
+      if (this.canEditRegistration) {
         return this.availableCourses;
       }
 
-      return (this.currentRegistration?.items || [])
-        .map((item) => item.programCourse)
-        .filter(Boolean);
+      return this.savedRegistrationCourses;
+    },
+    showClosedRegistrationPlaceholder() {
+      return (
+        this.isCurrentSelectedPeriod &&
+        !this.canEditRegistration &&
+        !this.currentRegistration
+      );
     },
     filteredDisplayedCourses() {
       const query = this.courseSearchQuery.trim().toLowerCase();
@@ -177,6 +187,36 @@ export default {
         this.eligibility.reason ||
         `Course registration for ${this.selectedPeriodLabel.toLowerCase()} is ${this.eligibility.eligible ? "open" : "currently unavailable"}.`
       );
+    },
+    emptyStateTitle() {
+      if (this.showClosedRegistrationPlaceholder) {
+        return "Course Registration Not Open";
+      }
+
+      return this.isCurrentSelectedPeriod
+        ? "No Courses Registered"
+        : "No Registration Found";
+    },
+    emptyStateMessage() {
+      if (this.showClosedRegistrationPlaceholder) {
+        return (
+          this.eligibility.reason ||
+          `Course registration is currently unavailable for ${this.selectedPeriodLabel.toLowerCase()}.`
+        );
+      }
+
+      return this.isCurrentSelectedPeriod
+        ? "You haven't registered for any courses yet."
+        : "There is no course registration for this level and semester yet.";
+    },
+    emptyStateDetail() {
+      if (this.showClosedRegistrationPlaceholder) {
+        return "Courses will appear here once registration opens, or when you already have a saved registration for this semester.";
+      }
+
+      return this.isCurrentSelectedPeriod
+        ? "No courses are available yet for your current level and semester."
+        : "Historical registrations will appear here when data exists.";
     },
     canEditRegistration() {
       if (!this.isCurrentSelectedPeriod || !this.eligibility.eligible) {
@@ -572,29 +612,11 @@ export default {
             class="courses-empty-state text-center"
           >
             <i class="bi bi-book text-muted" style="font-size: 4rem"></i>
-            <h5 class="text-muted mt-4 mb-3">
-              {{
-                isCurrentSelectedPeriod
-                  ? "No Courses Registered"
-                  : "No Registration Found"
-              }}
-            </h5>
-            <p class="text-muted">
-              {{
-                isCurrentSelectedPeriod
-                  ? "You haven't registered for any courses yet."
-                  : "There is no course registration for this level and semester yet."
-              }}
-            </p>
-            <p class="text-muted small">
-              {{
-                isCurrentSelectedPeriod
-                  ? "No courses are available yet for your current level and semester."
-                  : "Historical registrations will appear here when data exists."
-              }}
-            </p>
+            <h5 class="text-muted mt-4 mb-3">{{ emptyStateTitle }}</h5>
+            <p class="text-muted">{{ emptyStateMessage }}</p>
+            <p class="text-muted small">{{ emptyStateDetail }}</p>
             <button
-              v-if="isCurrentSelectedPeriod"
+              v-if="canEditRegistration"
               class="btn btn-primary mt-3"
               :disabled="!canSubmitRegistration"
             >

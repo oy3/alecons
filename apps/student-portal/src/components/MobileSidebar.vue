@@ -1,9 +1,10 @@
-x<script lang="js">
+x
+<script lang="js">
 import BrandLogo from "./BrandLogo.vue";
 import { useAuthStore } from "../stores/auth.js";
-import { useRouter } from 'vue-router';
-import { onMounted } from 'vue';
-import { logger } from '@shared/utils/logger';
+import { useRouter } from "vue-router";
+import { onMounted } from "vue";
+import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
 
 export default {
@@ -43,35 +44,38 @@ export default {
       // Use setTimeout to ensure navigation completes first
       setTimeout(() => {
         try {
-          const offcanvasElement = document.getElementById('mobileSidebar');
+          const offcanvasElement = document.getElementById("mobileSidebar");
           if (offcanvasElement) {
             // Try to get existing instance first
-            let offcanvas = window.bootstrap?.Offcanvas?.getInstance(offcanvasElement);
-            
+            let offcanvas =
+              window.bootstrap?.Offcanvas?.getInstance(offcanvasElement);
+
             // If no instance exists, create one
             if (!offcanvas && window.bootstrap?.Offcanvas) {
               offcanvas = new window.bootstrap.Offcanvas(offcanvasElement);
             }
-            
+
             // Hide the offcanvas
             if (offcanvas) {
               offcanvas.hide();
             } else {
               // Fallback: manually trigger Bootstrap's dismiss
-              const closeButton = offcanvasElement.querySelector('[data-bs-dismiss="offcanvas"]');
+              const closeButton = offcanvasElement.querySelector(
+                '[data-bs-dismiss="offcanvas"]',
+              );
               if (closeButton) {
                 closeButton.click();
               }
             }
           }
         } catch (error) {
-          logger.error('Error closing mobile sidebar:', error);
+          logger.error("Error closing mobile sidebar:", error);
           // Fallback: try to close via CSS class manipulation
-          const offcanvasElement = document.getElementById('mobileSidebar');
+          const offcanvasElement = document.getElementById("mobileSidebar");
           if (offcanvasElement) {
-            offcanvasElement.classList.remove('show');
-            document.body.classList.remove('offcanvas-open');
-            const backdrop = document.querySelector('.offcanvas-backdrop');
+            offcanvasElement.classList.remove("show");
+            document.body.classList.remove("offcanvas-open");
+            const backdrop = document.querySelector(".offcanvas-backdrop");
             if (backdrop) {
               backdrop.remove();
             }
@@ -91,9 +95,9 @@ export default {
     return {
       auth,
       logout,
-      closeOffcanvas
+      closeOffcanvas,
     };
-  }
+  },
 };
 </script>
 
@@ -116,13 +120,20 @@ export default {
         aria-label="Close"
       ></button>
     </div>
-    
+
     <div class="offcanvas-body p-0">
       <nav class="nav flex-column p-3">
         <!-- User Info -->
-        <div class="d-flex align-items-center mb-4 p-3 bg-dark bg-opacity-50 rounded">
+        <div
+          class="d-flex align-items-center mb-4 p-3 bg-dark bg-opacity-50 rounded"
+        >
           <img
-            :src="auth.user?.profileImageUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(auth.userName) + '&background=2d7d7d&color=fff'"
+            :src="
+              auth.profileImageUrl  ||
+              'https://ui-avatars.com/api/?name=' +
+                encodeURIComponent(auth.userName) +
+                '&background=2d7d7d&color=fff'
+            "
             width="50"
             height="50"
             alt="Profile"
@@ -142,68 +153,68 @@ export default {
           active-class="active"
           @click="closeOffcanvas"
         >
-          <i class="bi bi-house-door h5 me-3 mb-0"></i> 
+          <i class="bi bi-house-door h5 me-3 mb-0"></i>
           <span>Dashboard</span>
         </router-link>
-        
+
         <router-link
           to="/academics"
           class="nav-link text-white py-3 acon-mobile-link rounded mb-2"
           active-class="active"
           @click="closeOffcanvas"
         >
-          <i class="bi bi-book h5 me-3 mb-0"></i> 
+          <i class="bi bi-book h5 me-3 mb-0"></i>
           <span>Academics</span>
         </router-link>
-        
+
         <router-link
           to="/resources"
           class="nav-link text-white py-3 acon-mobile-link rounded mb-2"
           active-class="active"
           @click="closeOffcanvas"
         >
-          <i class="bi bi-collection h5 me-3 mb-0"></i> 
+          <i class="bi bi-collection h5 me-3 mb-0"></i>
           <span>Resources</span>
         </router-link>
-        
+
         <router-link
           to="/finance"
           class="nav-link text-white py-3 acon-mobile-link rounded mb-2"
           active-class="active"
           @click="closeOffcanvas"
         >
-          <i class="bi bi-credit-card h5 me-3 mb-0"></i> 
+          <i class="bi bi-credit-card h5 me-3 mb-0"></i>
           <span>Finance</span>
         </router-link>
-        
+
         <router-link
           to="/tenancy-agreement"
           class="nav-link text-white py-3 acon-mobile-link rounded mb-2"
           active-class="active"
           @click="closeOffcanvas"
         >
-          <i class="bi bi-file-text h5 me-3 mb-0"></i> 
+          <i class="bi bi-file-text h5 me-3 mb-0"></i>
           <span>Tenancy Agreement</span>
         </router-link>
-        
+
         <router-link
           to="/settings"
           class="nav-link text-white py-3 acon-mobile-link rounded mb-2"
           active-class="active"
           @click="closeOffcanvas"
         >
-          <i class="bi bi-gear h5 me-3 mb-0"></i> 
+          <i class="bi bi-gear h5 me-3 mb-0"></i>
           <span>Settings</span>
         </router-link>
 
-        <hr class="border-light my-4">
+        <hr class="border-light my-4" />
 
         <!-- Logout -->
         <button
           @click="logout"
           class="nav-link text-white py-3 acon-mobile-link rounded btn btn-link text-decoration-none text-start w-100"
         >
-          <i class="bi bi-box-arrow-right h5 me-3 mb-0"></i> 
+          <i class="bi bi-box-arrow-right h5 me-3 mb-0"></i>
           <span>Logout</span>
         </button>
       </nav>
@@ -212,7 +223,6 @@ export default {
 </template>
 
 <style scoped>
-
 .acon-mobile-link {
   transition: all 0.3s ease;
   display: flex;

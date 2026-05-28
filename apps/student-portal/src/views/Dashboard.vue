@@ -304,16 +304,16 @@ export default {
     <!-- Finance Alert for Outstanding Payments -->
     <div class="row mb-4" v-if="hasOutstandingPayments && !isLoadingFinance">
       <div class="col-12">
-        <div class="alert alert-warning d-flex align-items-center" role="alert">
-          <i class="bi bi-exclamation-triangle-fill me-3 fs-5"></i>
+        <div class="alert alert-warning d-sm-flex gap-3 align-items-center" role="alert">
           <div class="flex-grow-1">
+          <i class="bi bi-exclamation-triangle-fill me-3 fs-5"></i>
             <strong>Outstanding Payment Notice</strong><br>
             <span class="small">
               You have {{ paymentSummary?.unpaidFees?.length || 0 }} unpaid fee(s) totaling 
               <strong>{{ formatCurrency(accountBalance) }}</strong>. 
             </span>
           </div>
-          <router-link to="/finance" class="btn btn-warning btn-sm ms-3">
+          <router-link to="/finance" class="btn btn-warning btn-sm">
             <i class="bi bi-credit-card me-1"></i>Pay Now
           </router-link>
         </div>

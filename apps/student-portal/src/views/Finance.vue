@@ -583,7 +583,7 @@ export default {
     },
 
     getPaymentReference(payment) {
-      return payment.reference || "Not generated";
+      return payment.reference || "n/a";
     },
 
     showPaymentOptions() {
@@ -748,13 +748,15 @@ export default {
           <div class="card-body">
             <div class="d-flex align-items-center">
               <div class="flex-shrink-0">
-                <div class="bg-primary bg-opacity-10 rounded-3 p-3">
-                  <i class="bi bi-currency-exchange text-white fs-4"></i>
+                <div class="bg-primary-subtle bg-opacity-10 rounded-3 p-3">
+                  <i
+                    class="bi bi-currency-exchange text-primary-emphasis fs-4"
+                  ></i>
                 </div>
               </div>
               <div class="flex-grow-1 ms-3">
                 <h6 class="fw-bold text-dark mb-1">Total Paid</h6>
-                <h4 class="fw-bold text-primary mb-0">
+                <h4 class="fw-bold text-primary-emphasis mb-0">
                   {{ formatCurrency(totalPaidThisYear) }}
                 </h4>
                 <small class="text-muted">Selected session</small>
@@ -799,8 +801,8 @@ export default {
               </div>
               <div class="flex-grow-1 ms-3">
                 <h6 class="fw-bold text-dark mb-1">Next Due</h6>
-                <h4 class="fw-bold text-info mb-0">N/A</h4>
-                <small class="text-muted">N/A</small>
+                <h4 class="fw-bold text-info mb-0">-</h4>
+                <small class="text-muted">-</small>
               </div>
             </div>
           </div>
@@ -962,19 +964,41 @@ export default {
                       </div>
                     </td>
                     <td class="py-3 d-none d-md-table-cell">
-                      <span class="fw-bold text-warning">{{
+                      <span class="fw-bold text-warning-emphasis">{{
                         formatCurrency(unpaidFee.amount)
                       }}</span>
                     </td>
                     <td class="py-3">
                       <span class="badge bg-warning">Pending</span>
+                      <div class="d-sm-none mt-2">
+                        <button
+                          class="btn btn-sm btn-success d-flex align-items-center px-3 py-1"
+                          @click="
+                            makePaymentFromModal(
+                              unpaidFee.id,
+                              unpaidFee.paymentCode,
+                            )
+                          "
+                          :disabled="
+                            isPaymentLoading ||
+                            !hasAvailablePaymentMethodsForFee(unpaidFee)
+                          "
+                        >
+                          <span
+                            v-if="isPaymentLoading"
+                            class="spinner-border spinner-border-sm me-1"
+                          ></span>
+                          <i v-else class="bi bi-wallet2 me-1"></i>
+                          Pay
+                        </button>
+                      </div>
                     </td>
                     <td class="py-3 d-none d-lg-table-cell">
-                      <small class="text-muted">Not generated</small>
+                      <small class="text-muted">n/a</small>
                     </td>
                     <td class="py-3 d-none d-sm-table-cell">
                       <button
-                        class="btn btn-sm btn-success px-3 py-2"
+                        class="btn btn-sm btn-success d-flex align-items-center px-3 py-1"
                         @click="
                           makePaymentFromModal(
                             unpaidFee.id,
@@ -991,7 +1015,7 @@ export default {
                           class="spinner-border spinner-border-sm me-1"
                         ></span>
                         <i v-else class="bi bi-wallet2 me-1"></i>
-                        Pay Now
+                        Pay
                       </button>
                     </td>
                   </tr>
@@ -1029,39 +1053,59 @@ export default {
             <h5 class="fw-bold mb-0">Payment Summary</h5>
           </div>
           <div class="card-body">
-            <!-- Paid Fees -->
-            <div
-              v-for="paidFee in paymentSummary?.paidFees || []"
-              :key="paidFee.id"
-              class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
-            >
-              <span class="text-muted">{{ paidFee.name }}</span>
-              <span class="fw-bold text-dark">{{
-                formatCurrency(paidFee.amount)
-              }}</span>
-            </div>
+            <div class="payment-summary-list mb-3">
+              <!-- Paid Fees -->
+              <div
+                v-for="paidFee in paymentSummary?.paidFees || []"
+                :key="paidFee.id"
+                class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
+              >
+                <span class="text-muted">{{ paidFee.name }}</span>
+                <span class="fw-bold text-dark">{{
+                  formatCurrency(paidFee.amount)
+                }}</span>
+              </div>
 
-            <!-- Unpaid Fees -->
-            <div
-              v-for="pendingFee in paymentSummary?.pendingFees || []"
-              :key="`pending-summary-${pendingFee.reference}`"
-              class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
-            >
-              <span class="text-muted">{{ pendingFee.name }}</span>
-              <span class="fw-bold text-warning">{{
-                formatCurrency(pendingFee.amount)
-              }}</span>
-            </div>
+              <!-- Unpaid Fees -->
+              <div
+                v-for="pendingFee in paymentSummary?.pendingFees || []"
+                :key="`pending-summary-${pendingFee.reference}`"
+                class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
+              >
+                <span class="text-muted">{{ pendingFee.name }}</span>
+                <span class="fw-bold text-warning">{{
+                  formatCurrency(pendingFee.amount)
+                }}</span>
+              </div>
 
-            <div
-              v-for="unpaidFee in paymentSummary?.unpaidFees || []"
-              :key="unpaidFee.id"
-              class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
-            >
-              <span class="text-muted">{{ unpaidFee.name }}</span>
-              <span class="fw-bold text-warning">{{
-                formatCurrency(unpaidFee.amount)
-              }}</span>
+              <div
+                v-for="unpaidFee in paymentSummary?.unpaidFees || []"
+                :key="unpaidFee.id"
+                class="payment-summary-item d-flex justify-content-between py-2 border-bottom"
+              >
+                <span class="text-muted">{{ unpaidFee.name }}</span>
+                <span class="fw-bold text-warning">{{
+                  formatCurrency(unpaidFee.amount)
+                }}</span>
+              </div>
+
+              <!-- Empty State -->
+              <div
+                v-if="
+                  (paymentSummary?.paidFees?.length || 0) === 0 &&
+                  (paymentSummary?.unpaidFees?.length || 0) === 0 &&
+                  (paymentSummary?.pendingFees?.length || 0) === 0
+                "
+                class="text-center py-4"
+              >
+                <i
+                  class="bi bi-receipt text-muted mb-3"
+                  style="font-size: 2rem"
+                ></i>
+                <p class="text-muted mb-0">
+                  No payment information available for the selected session.
+                </p>
+              </div>
             </div>
 
             <!-- Summary -->
@@ -1069,7 +1113,7 @@ export default {
               class="payment-summary-item d-flex justify-content-between py-3 bg-light rounded mt-2"
             >
               <span class="fw-bold">Total Paid</span>
-              <span class="fw-bold text-success fs-5">{{
+              <span class="fw-bold text-primary-emphasis fs-5">{{
                 formatCurrency(paymentSummary?.totalPaid || 0)
               }}</span>
             </div>
@@ -1086,29 +1130,12 @@ export default {
 
             <div
               v-if="(paymentSummary?.totalUnpaid || 0) > 0"
-              class="payment-summary-item d-flex justify-content-between py-2 text-warning"
+              class="payment-summary-item d-flex justify-content-between py-2 text-primary small"
             >
               <span class="fw-bold">Outstanding</span>
               <span class="fw-bold">{{
                 formatCurrency(paymentSummary?.totalUnpaid || 0)
               }}</span>
-            </div>
-
-            <!-- Empty State -->
-            <div
-              v-if="
-                (paymentSummary?.paidFees?.length || 0) === 0 &&
-                (paymentSummary?.unpaidFees?.length || 0) === 0
-              "
-              class="text-center py-4"
-            >
-              <i
-                class="bi bi-receipt text-muted mb-3"
-                style="font-size: 2rem"
-              ></i>
-              <p class="text-muted mb-0">
-                No payment information available for the selected session.
-              </p>
             </div>
           </div>
         </div>
@@ -1231,7 +1258,7 @@ export default {
               "
               class="table-responsive outstanding-payments-table-wrap"
             >
-              <table class="table table-hover align-middle mb-0">
+              <table class="table align-middle mb-0">
                 <thead class="table-light">
                   <tr>
                     <th class="fw-bold">Payment Description</th>
@@ -1249,19 +1276,19 @@ export default {
                         <div class="fw-bold text-dark">
                           {{ unpaidFee.name }}
                         </div>
-                        <small class="text-muted">{{
-                          unpaidFee.description
-                        }}</small>
+                        <small class="text-muted">
+                          {{ unpaidFee.description }}
+                        </small>
                       </div>
                     </td>
                     <td class="py-3 text-end">
-                      <span class="fw-bold text-warning fs-5">
+                      <span class="fw-bold text-warning">
                         {{ formatCurrency(unpaidFee.amount) }}
                       </span>
                     </td>
                     <td class="py-3 text-center">
                       <button
-                        class="btn btn-success px-4 py-2"
+                        class="btn btn-success btn-sm"
                         @click="openPaymentMethodStep(unpaidFee)"
                         :disabled="
                           isPaymentLoading ||
@@ -1270,9 +1297,9 @@ export default {
                       >
                         <span
                           v-if="isPaymentLoading"
-                          class="spinner-border spinner-border-sm me-2"
+                          class="spinner-border spinner-border-sm me-1"
                         ></span>
-                        <i v-else class="bi bi-wallet2 me-2"></i>
+                        <i v-else class="bi bi-credit-card me-1"></i>
                         Pay Now
                       </button>
                     </td>
@@ -1282,7 +1309,7 @@ export default {
                   <tr>
                     <th class="py-3">Total Outstanding</th>
                     <th class="py-3 text-end">
-                      <span class="fw-bold text-danger fs-4">
+                      <span class="fw-bold text-danger fs-5">
                         {{ formatCurrency(paymentSummary?.totalUnpaid || 0) }}
                       </span>
                     </th>
@@ -1652,6 +1679,12 @@ export default {
   border-bottom: none !important;
 }
 
+.payment-summary-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
 .card {
   transition: transform 0.2s ease-in-out;
 }
@@ -1933,6 +1966,10 @@ code {
   .modal-dialog {
     max-width: none;
     margin: 0.75rem;
+  }
+
+  .payment-summary-list {
+    max-height: 200px;
   }
 
   .modal-content {

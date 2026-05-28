@@ -713,10 +713,10 @@ export default {
                 >
                   <div class="d-flex gap-2">
                     <button
-                      class="btn btn-sm btn-primary"
+                      class="btn btn-sm btn-info"
                       @click="saveDraft"
                       :disabled="
-                        !canEditRegistration || isSavingDraft || isSubmitting
+                        !canEditRegistration || isSavingDraft || isSubmitting || !canSubmitRegistration
                       "
                     >
                       <span

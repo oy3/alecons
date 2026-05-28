@@ -287,32 +287,6 @@ export default {
           paymentCode = payment?.paymentCode || "";
         }
 
-        if (tenancyAgreementService.isAccommodationPayment(paymentCode)) {
-          logger.info("Checking tenancy agreement for accommodation payment");
-
-          const eligibilityCheck =
-            await tenancyAgreementService.canMakeAccommodationPayment();
-
-          if (!eligibilityCheck.canPay) {
-            const result = await Swal.fire({
-              icon: "warning",
-              title: "Tenancy Agreement Required",
-              text: "You must complete and sign the tenancy agreement before making accommodation fee payments.",
-              showCancelButton: true,
-              confirmButtonText: "Sign Agreement",
-              cancelButtonText: "Cancel",
-              confirmButtonColor: "#28a745",
-              cancelButtonColor: "#6c757d",
-            });
-
-            if (result.isConfirmed) {
-              this.$router.push("/tenancy-agreement");
-            }
-
-            return;
-          }
-        }
-
         this.isPaymentLoading = true;
         logger.info("Initiating payment:", paymentId);
 
@@ -369,7 +343,7 @@ export default {
       }
     },
 
-    openPaymentMethodStep(fee) {
+    async openPaymentMethodStep(fee) {
       if (!this.hasAvailablePaymentMethodsForFee(fee)) {
         Swal.fire({
           icon: "info",
@@ -378,6 +352,32 @@ export default {
           confirmButtonText: "OK",
         });
         return;
+      }
+
+      if (tenancyAgreementService.isAccommodationPayment(fee?.paymentCode)) {
+        logger.info("Checking tenancy agreement for accommodation payment");
+
+        const eligibilityCheck =
+          await tenancyAgreementService.canMakeAccommodationPayment();
+
+        if (!eligibilityCheck.canPay) {
+          const result = await Swal.fire({
+            icon: "warning",
+            title: "Tenancy Agreement Required",
+            text: "You must complete and sign the tenancy agreement before making accommodation fee payments.",
+            showCancelButton: true,
+            confirmButtonText: "Sign Agreement",
+            cancelButtonText: "Cancel",
+            confirmButtonColor: "#28a745",
+            cancelButtonColor: "#6c757d",
+          });
+
+          if (result.isConfirmed) {
+            this.$router.push("/tenancy-agreement");
+          }
+
+          return;
+        }
       }
 
       this.selectedFee = fee;
@@ -677,18 +677,17 @@ export default {
               ><span class="d-sm-none">Export</span>
             </button>
             <button
+              v-if="hasOutstandingPayments"
               class="btn btn-success btn-sm"
               @click="showPaymentOptions"
               :disabled="
                 isLoading ||
-                !hasOutstandingPayments ||
                 !hasAvailablePaymentMethods
               "
-              v-if="hasOutstandingPayments"
             >
-              <i class="bi bi-credit-card me-1"></i
-              ><span class="d-none d-sm-inline">Make Payment</span
-              ><span class="d-sm-none">Pay</span>
+              <i class="bi bi-credit-card me-1"></i>
+              <span class="d-none d-sm-inline">Make Payment</span>
+              <span class="d-sm-none">Pay</span>
             </button>
           </div>
         </div>
@@ -960,13 +959,35 @@ export default {
                     </td>
                     <td class="py-3">
                       <span class="badge bg-warning">Pending</span>
+                      <div class="d-sm-none mt-2">
+                        <button
+                          class="btn btn-sm btn-success"
+                          @click="
+                            makePaymentFromModal(
+                              unpaidFee.id,
+                              unpaidFee.paymentCode,
+                            )
+                          "
+                          :disabled="
+                            isPaymentLoading ||
+                            !hasAvailablePaymentMethodsForFee(unpaidFee)
+                          "
+                        >
+                          <span
+                            v-if="isPaymentLoading"
+                            class="spinner-border spinner-border-sm me-1"
+                          ></span>
+                          <i v-else class="bi bi-wallet2 me-1"></i>
+                          Pay
+                        </button>
+                      </div>
                     </td>
                     <td class="py-3 d-none d-lg-table-cell">
                       <small class="text-muted">Not generated</small>
                     </td>
                     <td class="py-3 d-none d-sm-table-cell">
                       <button
-                        class="btn btn-sm btn-success px-3 py-2"
+                        class="btn btn-sm btn-success"
                         @click="
                           makePaymentFromModal(
                             unpaidFee.id,
@@ -983,7 +1004,7 @@ export default {
                           class="spinner-border spinner-border-sm me-1"
                         ></span>
                         <i v-else class="bi bi-wallet2 me-1"></i>
-                        Pay Now
+                        Pay
                       </button>
                     </td>
                   </tr>

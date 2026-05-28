@@ -1515,7 +1515,7 @@ export class EmailService {
     gradedAt: Date,
   ): Promise<void> {
     try {
-      const subject = `📊 Exam Results Released - ${examTitle}`;
+      const subject = `Exam Results Released - ${examTitle}`;
       const statusColor = status === "pass" ? "#28a745" : "#dc3545";
       const statusText = status === "pass" ? "PASSED" : "FAILED";
       const resultMessage =
@@ -1535,14 +1535,11 @@ export class EmailService {
                 <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
                     <!-- Header -->
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
-                        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">ALECONS</h1>
-                        <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Alebiosu College of Nursing Sciences</p>
+                        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">📊 Your Exam Results Are Ready!</h1>
                     </div>
 
                     <!-- Content -->
-                    <div style="padding: 40px 30px;">
-                        <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">📊 Your Exam Results Are Ready!</h2>
-                        
+                    <div style="padding: 40px 30px;">                  
                         <p style="color: #666666; line-height: 1.6; margin: 0 0 20px 0; font-size: 16px;">
                             Dear ${firstName},
                         </p>
@@ -1611,7 +1608,8 @@ export class EmailService {
                         
                         <p style="color: #666666; line-height: 1.6; margin: 20px 0 0 0; font-size: 16px;">
                             Best regards,<br>
-                            <strong>The ALECONS Academic Team</strong>
+                            <strong>Academics Office</strong> <br>
+                            <span>Alebiosu College of Nursing Sciences</span>
                         </p>
                     </div>
 

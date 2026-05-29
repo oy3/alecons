@@ -3,9 +3,13 @@ import { useAuthStore } from "../../../stores/auth.js";
 import { apiService } from "../../../services/api.js";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
+import ManualScoringModal from "./ManualScoringModal.vue";
 
 export default {
   name: "ExamResults",
+  components: {
+    ManualScoringModal,
+  },
   setup() {
     const authStore = useAuthStore();
     return { authStore };
@@ -29,17 +33,41 @@ export default {
       // UI State
       loading: false,
       error: null,
+      showManualScoringModal: false,
+      selectedResult: null,
     };
   },
   computed: {
+    selectedExam() {
+      return this.exams.find((exam) => exam._id === this.selectedExamId) || null;
+    },
+
+    canReleaseResults() {
+      return Boolean(
+        this.selectedExam &&
+          this.selectedExam.status === "graded" &&
+          this.results.some((result) => result.gradingStatus === "completed")
+      );
+    },
+
+    releaseHelpText() {
+      if (!this.selectedExamId) return "";
+      if (!this.selectedExam) return "";
+      if (this.selectedExam.status === "graded") {
+        return "Release emails are sent only for fully completed results.";
+      }
+
+      return "Release becomes available only after all pending manual scoring is finalized and the exam moves to graded.";
+    },
+
     filteredResults() {
       let filtered = [...this.results];
 
       // Filter by status
       if (this.statusFilter) {
-        filtered = filtered.filter(
-          (result) => result.status === this.statusFilter
-        );
+        filtered = filtered.filter((result) => {
+          return this.getResultFilterValue(result) === this.statusFilter;
+        });
       }
 
       // Filter by search term
@@ -168,6 +196,16 @@ export default {
         const response = await apiService.getExamResults(this.selectedExamId);
         logger.info("Exam results response:", response);
 
+        if (response.exam?._id) {
+          const examIndex = this.exams.findIndex((exam) => exam._id === response.exam._id);
+          if (examIndex >= 0) {
+            this.exams.splice(examIndex, 1, {
+              ...this.exams[examIndex],
+              ...response.exam,
+            });
+          }
+        }
+
         this.results = response.results || [];
         this.statistics = response.statistics || {
           totalStudents: 0,
@@ -251,6 +289,82 @@ export default {
       }
     },
 
+    getResultFilterValue(result) {
+      if (result?.status === "pass") return "pass";
+      if (result?.status === "fail") return "fail";
+      if (result?.gradingStatus === "partial") return "partial";
+      return "unknown";
+    },
+
+    getOutcomeLabel(result) {
+      if (result?.status === "pass") return "Pass";
+      if (result?.status === "fail") return "Fail";
+      if (result?.gradingStatus === "partial") return "Pending Manual";
+      return "Pending";
+    },
+
+    getOutcomeBadgeClass(result) {
+      if (result?.status === "pass") return "bg-success";
+      if (result?.status === "fail") return "bg-danger";
+      return "bg-warning text-dark";
+    },
+
+    getGradingStatusLabel(result) {
+      if (result?.gradingStatus === "completed") return "Completed";
+      if (result?.gradingStatus === "partial") return "Partial";
+      return "Pending";
+    },
+
+    getGradingStatusClass(result) {
+      if (result?.gradingStatus === "completed") return "bg-success";
+      if (result?.gradingStatus === "partial") return "bg-warning text-dark";
+      return "bg-secondary";
+    },
+
+    getReleaseStatusLabel(result) {
+      return result?.released ? "Released" : "Hidden";
+    },
+
+    getReleaseStatusClass(result) {
+      return result?.released ? "bg-primary" : "bg-light text-dark border";
+    },
+
+    formatScore(result) {
+      const earned = result?.totalScore ?? result?.correctAnswers ?? 0;
+      const total = result?.maxScore ?? result?.totalQuestions ?? 0;
+      const percentage = result?.percentage ?? 0;
+      return `${earned}/${total} (${percentage}%)`;
+    },
+
+    supportsManualReview(result) {
+      if (!result) return false;
+
+      return (
+        result.gradingType === "partial" ||
+        result.gradingType === "manual" ||
+        result.gradingStatus === "partial" ||
+        result.questionResults?.some(
+          (questionResult) => questionResult.correctAnswer === "Manual grading required"
+        )
+      );
+    },
+
+    getManualReviewActionLabel(result) {
+      return result?.gradingStatus === "partial" ? "Review / Score" : "Review Scores";
+    },
+
+    canRegradeResult(result) {
+      return result?.gradingStatus === "completed" && Boolean(result?.status);
+    },
+
+    canToggleResultRelease(result) {
+      return result?.gradingStatus === "completed";
+    },
+
+    getResultReleaseActionLabel(result) {
+      return result?.released ? "Retract Result" : "Release Result";
+    },
+
     getStatusClass(status) {
       switch (status?.toLowerCase()) {
         case "pass":
@@ -330,6 +444,16 @@ export default {
     },
 
     async releaseResults() {
+      if (!this.canReleaseResults) {
+        await Swal.fire({
+          title: "Release Unavailable",
+          text: this.releaseHelpText || "This exam must be fully graded before results can be released.",
+          icon: "info",
+          confirmButtonColor: "#007bff",
+        });
+        return;
+      }
+
       const { isConfirmed } = await Swal.fire({
         title: "Release Results?",
         text: "This will make all exam results visible to students and send email notifications to each student with their results. Are you sure?",
@@ -347,7 +471,7 @@ export default {
 
       try {
         this.loading = true;
-        await apiService.post(`/exams/${this.selectedExamId}/release-results`);
+        await apiService.releaseExamResults(this.selectedExamId);
 
         await Swal.fire({
           title: "Success!",
@@ -388,6 +512,14 @@ export default {
       const gradedAt = result.gradedAt
         ? this.formatDate(result.gradedAt)
         : "Not available";
+      const outcomeLabel = this.getOutcomeLabel(result);
+      const outcomeClass = this.getOutcomeBadgeClass(result).includes("warning")
+        ? "warning"
+        : result.status === "pass"
+        ? "success"
+        : result.status === "fail"
+        ? "danger"
+        : "secondary";
 
       const htmlContent = `
         <div class="text-start">
@@ -406,24 +538,26 @@ export default {
           <div class="row mb-3">
             <div class="col-5"><strong>Score:</strong></div>
             <div class="col-7">
-              <span class="badge bg-${
-                result.status === "pass" ? "success" : "danger"
-              } fs-6">
-                ${result.correctAnswers}/${result.totalQuestions} (${
-        result.percentage
-      }%)
+              <span class="badge bg-secondary fs-6">
+                ${this.formatScore(result)}
               </span>
             </div>
           </div>
           <div class="row mb-3">
-            <div class="col-5"><strong>Status:</strong></div>
+            <div class="col-5"><strong>Outcome:</strong></div>
             <div class="col-7">
-              <span class="badge bg-${
-                result.status === "pass" ? "success" : "danger"
-              }">
-                ${result.status.toUpperCase()}
+              <span class="badge bg-${outcomeClass}">
+                ${outcomeLabel}
               </span>
             </div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-5"><strong>Grading Status:</strong></div>
+            <div class="col-7">${this.getGradingStatusLabel(result)}</div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-5"><strong>Release Status:</strong></div>
+            <div class="col-7">${this.getReleaseStatusLabel(result)}</div>
           </div>
           <div class="row mb-3">
             <div class="col-5"><strong>Submitted:</strong></div>
@@ -458,6 +592,87 @@ export default {
           this.downloadResult(result);
         }
       });
+    },
+
+    openManualScoring(result) {
+      this.selectedResult = result;
+      this.showManualScoringModal = true;
+    },
+
+    closeManualScoringModal() {
+      this.showManualScoringModal = false;
+      this.selectedResult = null;
+    },
+
+    async handleManualScoresSaved() {
+      this.closeManualScoringModal();
+      await this.loadExamResults();
+    },
+
+    async toggleResultRelease(result) {
+      if (!this.canToggleResultRelease(result)) {
+        await Swal.fire({
+          title: "Release Unavailable",
+          text: "Only fully completed results can be released to students.",
+          icon: "info",
+          confirmButtonColor: "#007bff",
+        });
+        return;
+      }
+
+      const isReleasing = !result?.released;
+      const studentName = this.getUserDisplayName(result.userId);
+
+      const { isConfirmed } = await Swal.fire({
+        title: isReleasing ? "Release This Result?" : "Retract This Result?",
+        text: isReleasing
+          ? `This will make ${studentName}'s result visible and send a result email to the student.`
+          : `This will hide ${studentName}'s result from the student portal.`,
+        icon: isReleasing ? "warning" : "question",
+        showCancelButton: true,
+        confirmButtonColor: "#007bff",
+        cancelButtonColor: "#6c757d",
+        confirmButtonText: isReleasing ? "Yes, release it" : "Yes, retract it",
+        cancelButtonText: "Cancel",
+      });
+
+      if (!isConfirmed) {
+        return;
+      }
+
+      try {
+        this.loading = true;
+
+        if (isReleasing) {
+          await apiService.releaseSingleExamResult(this.selectedExamId, result._id);
+        } else {
+          await apiService.retractSingleExamResult(this.selectedExamId, result._id);
+        }
+
+        await Swal.fire({
+          title: "Success!",
+          text: isReleasing
+            ? "The selected result has been released to the student."
+            : "The selected result has been retracted successfully.",
+          icon: "success",
+          confirmButtonColor: "#007bff",
+          timer: 3000,
+          timerProgressBar: true,
+        });
+
+        await this.loadExamResults();
+      } catch (error) {
+        logger.error("Failed to toggle result release:", error);
+
+        await Swal.fire({
+          title: "Error!",
+          text: error.message || "Failed to update result release status. Please try again.",
+          icon: "error",
+          confirmButtonColor: "#007bff",
+        });
+      } finally {
+        this.loading = false;
+      }
     },
 
     async downloadResult(result) {
@@ -514,6 +729,16 @@ export default {
       });
 
       if (!isConfirmed) {
+        return;
+      }
+
+      if (!this.canRegradeResult(result)) {
+        await Swal.fire({
+          title: "Regrade Unavailable",
+          text: "Only fully completed results can be regraded.",
+          icon: "info",
+          confirmButtonColor: "#007bff",
+        });
         return;
       }
 
@@ -575,13 +800,16 @@ export default {
         <button
           class="btn btn-acon-primary"
           @click="releaseResults"
-          :disabled="filteredResults.length === 0"
+          :disabled="filteredResults.length === 0 || !canReleaseResults"
         >
           <i class="bi bi-send me-1"></i>
           Release Results
         </button>
       </div>
     </div>
+    <p v-if="selectedExamId && releaseHelpText" class="text-muted small mb-4">
+      {{ releaseHelpText }}
+    </p>
 
     <!-- Search and Filters -->
     <div class="row mb-4">
@@ -603,9 +831,10 @@ export default {
       </div>
       <div class="col-md-2">
         <select v-model="statusFilter" class="form-select">
-          <option value="">All Status</option>
+          <option value="">All Outcomes</option>
           <option value="pass">Pass</option>
           <option value="fail">Fail</option>
+          <option value="partial">Pending Manual</option>
         </select>
       </div>
       <div class="col-md-6">
@@ -733,8 +962,9 @@ export default {
                     title="Sorted by highest to lowest score"
                   ></i>
                 </th>
-                <th>Grade</th>
-                <th>Status</th>
+                <th>Outcome</th>
+                <th>Grading</th>
+                <th>Release</th>
                 <th>Submitted</th>
                 <th>Actions</th>
               </tr>
@@ -769,20 +999,21 @@ export default {
                 </td>
                 <td>
                   <span class="fw-semibold">{{ result.percentage }}%</span>
-                  <small class="text-muted d-block"
-                    >{{ result.correctAnswers }}/{{
-                      result.totalQuestions
-                    }}</small
-                  >
+                  <small class="text-muted d-block">{{ formatScore(result) }}</small>
                 </td>
                 <td>
-                  <span class="badge" :class="getGradeClass(result.status)">
-                    {{ result.status.toUpperCase() }}
+                  <span class="badge" :class="getOutcomeBadgeClass(result)">
+                    {{ getOutcomeLabel(result) }}
                   </span>
                 </td>
                 <td>
-                  <span class="badge" :class="getStatusClass(result.status)">
-                    {{ result.status }}
+                  <span class="badge" :class="getGradingStatusClass(result)">
+                    {{ getGradingStatusLabel(result) }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge" :class="getReleaseStatusClass(result)">
+                    {{ getReleaseStatusLabel(result) }}
                   </span>
                 </td>
                 <td>
@@ -801,11 +1032,20 @@ export default {
                       Actions
                     </button>
                     <ul class="dropdown-menu">
+                      <li v-if="supportsManualReview(result)">
+                        <a
+                          class="dropdown-item"
+                          href="#"
+                          @click.prevent="openManualScoring(result)"
+                        >
+                          <i class="bi bi-journal-check me-2"></i>{{ getManualReviewActionLabel(result) }}
+                        </a>
+                      </li>
                       <li>
                         <a
                           class="dropdown-item"
                           href="#"
-                          @click="viewDetails(result)"
+                          @click.prevent="viewDetails(result)"
                         >
                           <i class="bi bi-eye me-2"></i>View Details
                         </a>
@@ -814,17 +1054,28 @@ export default {
                         <a
                           class="dropdown-item"
                           href="#"
-                          @click="downloadResult(result)"
+                          @click.prevent="downloadResult(result)"
                         >
                           <i class="bi bi-download me-2"></i>Download PDF
                         </a>
                       </li>
-                      <li><hr class="dropdown-divider" /></li>
-                      <li>
+                      <li v-if="canToggleResultRelease(result)"><hr class="dropdown-divider" /></li>
+                      <li v-if="canToggleResultRelease(result)">
+                        <a
+                          class="dropdown-item"
+                          :class="result.released ? 'text-danger' : 'text-primary'"
+                          href="#"
+                          @click.prevent="toggleResultRelease(result)"
+                        >
+                          <i class="bi me-2" :class="result.released ? 'bi-eye-slash' : 'bi-send'"></i>{{ getResultReleaseActionLabel(result) }}
+                        </a>
+                      </li>
+                      <li v-if="canRegradeResult(result)"><hr class="dropdown-divider" /></li>
+                      <li v-if="canRegradeResult(result)">
                         <a
                           class="dropdown-item text-warning"
                           href="#"
-                          @click="regrade(result)"
+                          @click.prevent="regrade(result)"
                         >
                           <i class="bi bi-arrow-clockwise me-2"></i>Regrade
                         </a>
@@ -876,6 +1127,14 @@ export default {
         </div>
       </div>
     </div>
+
+    <ManualScoringModal
+      :show="showManualScoringModal"
+      :exam-id="selectedExamId"
+      :result="selectedResult"
+      @close="closeManualScoringModal"
+      @saved="handleManualScoresSaved"
+    />
   </div>
 </template>
 
@@ -898,5 +1157,9 @@ export default {
 
 .exam-results {
   min-height: 400px;
+}
+
+.page-link {
+  cursor: pointer;
 }
 </style>

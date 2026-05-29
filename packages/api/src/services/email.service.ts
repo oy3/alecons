@@ -1508,8 +1508,8 @@ export class EmailService {
     email: string,
     firstName: string,
     examTitle: string,
-    score: number,
-    totalQuestions: number,
+    earnedScore: number,
+    maxScore: number,
     percentage: number,
     status: string,
     gradedAt: Date,
@@ -1559,7 +1559,7 @@ export class EmailService {
                             
                             <div style="margin-bottom: 15px;">
                                 <span style="color: #666666; font-size: 14px; display: inline-block; width: 120px;">Score:</span>
-                                <span style="color: #333333; font-weight: bold; font-size: 18px;">${score}/${totalQuestions} (${percentage}%)</span>
+                              <span style="color: #333333; font-weight: bold; font-size: 18px;">${earnedScore}/${maxScore} (${percentage}%)</span>
                             </div>
                             
                             <div style="margin-bottom: 15px;">

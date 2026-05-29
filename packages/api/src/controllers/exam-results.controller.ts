@@ -103,8 +103,8 @@ export class ExamResultsController {
             result.user.email || 'Unknown Student' : 'Unknown Student';
 
         const examTitle = result.exam?.title || 'Unknown Exam';
-        const score = result.score || 0;
-        const totalQuestions = result.totalQuestions || 0;
+        const score = result.score ?? result.totalScore ?? 0;
+        const maxScore = result.maxScore ?? result.totalQuestions ?? 0;
         const percentage = result.percentage || 0;
         const status = result.status || 'Unknown';
         const gradedAt = result.gradedAt ? new Date(result.gradedAt).toLocaleString() : 'Not available';
@@ -237,7 +237,7 @@ export class ExamResultsController {
                 </div>
 
                 <div class="score-section">
-                    <div class="score-display">${score}/${totalQuestions}</div>
+                    <div class="score-display">${score}/${maxScore}</div>
                     <div style="font-size: 18px; margin-bottom: 15px;">${percentage}%</div>
                     <div class="status-badge">${status}</div>
                 </div>

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Question, QuestionDocument } from '../schemas/question.schema';
@@ -22,6 +22,12 @@ export interface QuestionResult {
     maxPoints: number;
     explanation?: string;
     requiresManualGrading?: boolean;
+}
+
+interface ManualScoreUpdate {
+    questionId: string;
+    pointsAwarded: number;
+    feedback?: string;
 }
 
 @Injectable()
@@ -189,6 +195,287 @@ export class GradingService {
         }
     }
 
+    async getManualReviewPayload(examId: string, resultId: string): Promise<any> {
+        const { exam, result, attempt, questions } = await this.getManualReviewContext(examId, resultId);
+        const attemptAnswers = ((attempt.answers || []) as any[]);
+        const questionResults = ((result.questionResults || []) as any[]);
+        const attemptAnswerMap = new Map(
+            attemptAnswers.map((answer: any) => [answer.questionId.toString(), answer])
+        );
+        const questionResultMap = new Map(
+            questionResults.map((questionResult: any) => [questionResult.questionId.toString(), questionResult])
+        );
+
+        let manualQuestionCount = 0;
+        let pendingManualQuestionCount = 0;
+
+        const reviewQuestions = questions.map((question) => {
+            const questionId = question._id.toString();
+            const questionResult: any = questionResultMap.get(questionId);
+            const attemptAnswer: any = attemptAnswerMap.get(questionId);
+            const requiresManualScoring = question.type === 'essay';
+            const manuallyScored = requiresManualScoring
+                ? Boolean(questionResult?.gradedAt || questionResult?.gradedBy)
+                : true;
+
+            if (requiresManualScoring) {
+                manualQuestionCount++;
+                if (!manuallyScored) {
+                    pendingManualQuestionCount++;
+                }
+            }
+
+            return {
+                questionId,
+                order: question.order,
+                type: question.type,
+                questionText: question.questionText,
+                options: question.options || null,
+                metadata: question.metadata || null,
+                maxPoints: question.mark,
+                userAnswer: questionResult?.userAnswer ?? attemptAnswer?.selected ?? null,
+                correctAnswer: requiresManualScoring ? null : (questionResult?.correctAnswer ?? question.answer),
+                isCorrect: questionResult?.isCorrect,
+                pointsAwarded: questionResult?.pointsAwarded ?? 0,
+                feedback: questionResult?.feedback || '',
+                gradedAt: questionResult?.gradedAt || null,
+                gradedBy: questionResult?.gradedBy || null,
+                requiresManualScoring,
+                canEditScore: requiresManualScoring,
+                isScored: manuallyScored,
+            };
+        });
+
+        return {
+            exam: {
+                _id: exam._id,
+                title: exam.title,
+                description: exam.description,
+                status: exam.status,
+                cutOffMark: exam.cutOffMark,
+                totalMark: exam.totalMark,
+                gradingMode: exam.gradingMode,
+            },
+            student: result.userId,
+            attempt: {
+                _id: attempt._id,
+                status: attempt.status,
+                startedAt: attempt.startedAt,
+                submittedAt: attempt.submittedAt,
+                timeSpent: attempt.timeSpent,
+                securityViolations: attempt.securityViolations?.length || 0,
+            },
+            result: {
+                _id: result._id,
+                status: result.status,
+                gradingStatus: result.gradingStatus,
+                gradingType: result.gradingType,
+                totalScore: result.totalScore,
+                maxScore: result.maxScore,
+                percentage: result.percentage,
+                released: result.released,
+                overallFeedback: result.overallFeedback || '',
+                gradedAt: result.gradedAt,
+                gradedBy: result.gradedBy || null,
+            },
+            summary: {
+                totalQuestions: questions.length,
+                manualQuestionCount,
+                pendingManualQuestionCount,
+                canFinalize: manualQuestionCount > 0 && pendingManualQuestionCount === 0,
+            },
+            questions: reviewQuestions,
+        };
+    }
+
+    async saveManualScores(
+        examId: string,
+        resultId: string,
+        payload: {
+            questionUpdates?: ManualScoreUpdate[];
+            overallFeedback?: string;
+            finalize?: boolean;
+        },
+        gradedBy: string
+    ): Promise<ExamResultDocument> {
+        const { exam, result, attempt, questions } = await this.getManualReviewContext(examId, resultId);
+        const questionUpdates = payload?.questionUpdates || [];
+        const finalize = Boolean(payload?.finalize);
+        const graderObjectId = new Types.ObjectId(gradedBy);
+        const now = new Date();
+
+        const essayQuestions = questions.filter((question) => question.type === 'essay');
+        if (essayQuestions.length === 0) {
+            throw new BadRequestException('This result has no essay questions to score manually');
+        }
+
+        const essayQuestionIds = new Set(essayQuestions.map((question) => question._id.toString()));
+        const updateMap = new Map<string, ManualScoreUpdate>();
+
+        for (const update of questionUpdates) {
+            if (!update?.questionId) {
+                throw new BadRequestException('Each manual score update must include a questionId');
+            }
+
+            if (updateMap.has(update.questionId)) {
+                throw new BadRequestException(`Duplicate manual score update for question ${update.questionId}`);
+            }
+
+            if (!essayQuestionIds.has(update.questionId)) {
+                throw new BadRequestException(`Question ${update.questionId} is not eligible for manual scoring`);
+            }
+
+            const matchingQuestion = essayQuestions.find(
+                (question) => question._id.toString() === update.questionId
+            );
+            if (!matchingQuestion) {
+                throw new BadRequestException(`Question ${update.questionId} was not found`);
+            }
+
+            if (typeof update.pointsAwarded !== 'number' || Number.isNaN(update.pointsAwarded)) {
+                throw new BadRequestException(`Question ${update.questionId} must include a numeric pointsAwarded value`);
+            }
+
+            if (update.pointsAwarded < 0 || update.pointsAwarded > matchingQuestion.mark) {
+                throw new BadRequestException(
+                    `Question ${update.questionId} score must be between 0 and ${matchingQuestion.mark}`
+                );
+            }
+
+            updateMap.set(update.questionId, update);
+        }
+
+        const attemptAnswers = ((attempt.answers || []) as any[]);
+        const questionResults = ((result.questionResults || []) as any[]);
+        const attemptAnswerMap = new Map(
+            attemptAnswers.map((answer: any) => [answer.questionId.toString(), answer])
+        );
+        const questionResultMap = new Map(
+            questionResults.map((questionResult: any) => [questionResult.questionId.toString(), questionResult])
+        );
+
+        const updatedQuestionResults = questions.map((question) => {
+            const questionId = question._id.toString();
+            const existingResult: any = questionResultMap.get(questionId);
+            const attemptAnswer: any = attemptAnswerMap.get(questionId);
+            const nextQuestionResult: any = existingResult
+                ? { ...existingResult }
+                : {
+                    questionId: question._id,
+                    userAnswer: attemptAnswer?.selected ?? null,
+                    correctAnswer: question.type === 'essay' ? 'Manual grading required' : question.answer,
+                    pointsAwarded: 0,
+                    maxPoints: question.mark,
+                    isCorrect: question.type === 'essay' ? undefined : false,
+                };
+
+            nextQuestionResult.questionId = question._id;
+            nextQuestionResult.userAnswer = nextQuestionResult.userAnswer ?? attemptAnswer?.selected ?? null;
+            nextQuestionResult.maxPoints = question.mark;
+
+            if (question.type !== 'essay') {
+                return nextQuestionResult;
+            }
+
+            const update = updateMap.get(questionId);
+            if (!update) {
+                return nextQuestionResult;
+            }
+
+            nextQuestionResult.correctAnswer = 'Manual grading required';
+            nextQuestionResult.isCorrect = undefined;
+            nextQuestionResult.pointsAwarded = update.pointsAwarded;
+            nextQuestionResult.feedback = update.feedback?.trim() || '';
+            nextQuestionResult.gradedAt = now;
+            nextQuestionResult.gradedBy = graderObjectId;
+
+            return nextQuestionResult;
+        });
+
+        const allEssayQuestionsScored = essayQuestions.every((question) => {
+            const questionResult = updatedQuestionResults.find(
+                (candidate) => candidate.questionId.toString() === question._id.toString()
+            );
+
+            return Boolean(questionResult?.gradedAt || questionResult?.gradedBy);
+        });
+
+        if (finalize && !allEssayQuestionsScored) {
+            throw new BadRequestException('All essay questions must be scored before finalizing this result');
+        }
+
+        const totalScore = updatedQuestionResults.reduce(
+            (sum, questionResult) => sum + (questionResult.pointsAwarded || 0),
+            0
+        );
+        const maxScore = questions.reduce((sum, question) => sum + (question.mark || 0), 0);
+        const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+        const normalizedPercentage = Math.round(percentage * 100) / 100;
+        const gradingStatus = finalize ? 'completed' : 'partial';
+        const hasObjectiveQuestions = questions.some((question) => question.type !== 'essay');
+        const gradingType = hasObjectiveQuestions ? 'partial' : 'manual';
+        const status = gradingStatus === 'completed'
+            ? (totalScore >= (exam.cutOffMark ?? 0) ? 'pass' : 'fail')
+            : undefined;
+        const correctAnswers = updatedQuestionResults.filter((questionResult) => questionResult.isCorrect).length;
+        const questionsAttempted = attemptAnswers.filter((answer: any) => {
+            if (Array.isArray(answer.selected)) {
+                return answer.selected.length > 0;
+            }
+
+            return answer.selected !== undefined && answer.selected !== null && answer.selected !== '';
+        }).length;
+
+        const gradingHistoryEntry: any = {
+            action: 'regraded',
+            performedBy: graderObjectId,
+            performedAt: now,
+            method: 'manual',
+            previousStatus: result.status,
+            newStatus: status,
+            previousScore: result.totalScore,
+            newScore: totalScore,
+            notes: finalize
+                ? 'Manual essay scoring completed'
+                : 'Manual essay scoring progress saved',
+        };
+
+        const updatedResult = await this.resultModel.findByIdAndUpdate(
+            resultId,
+            {
+                $set: {
+                    totalQuestions: questions.length,
+                    questionsAttempted,
+                    correctAnswers,
+                    totalScore,
+                    maxScore,
+                    percentage: normalizedPercentage,
+                    status,
+                    gradingType,
+                    gradingStatus,
+                    questionResults: updatedQuestionResults,
+                    overallFeedback: payload?.overallFeedback?.trim() || '',
+                    gradedAt: now,
+                    gradedBy: graderObjectId,
+                    released: result.released ?? false,
+                },
+                $push: {
+                    gradingHistory: gradingHistoryEntry,
+                },
+            },
+            { new: true }
+        );
+
+        const nextAttemptStatus = finalize ? 'graded' : 'partially-graded';
+        await this.attemptModel.findByIdAndUpdate(result.attemptId, {
+            status: nextAttemptStatus,
+        });
+
+        await this.syncExamGradingStatus(examId);
+
+        return updatedResult;
+    }
+
     private gradeQuestion(question: QuestionDocument, userAnswer: any): QuestionResult {
         const maxPoints = question.mark || 1;
         let isCorrect = false;
@@ -273,6 +560,47 @@ export class GradingService {
             await this.examModel.findByIdAndUpdate(examId, { status: nextExamStatus });
             this.logger.log(`Updated exam ${examId} status from ${exam.status} to ${nextExamStatus} based on grading progress`);
         }
+    }
+
+    private async getManualReviewContext(examId: string, resultId: string): Promise<any> {
+        const exam = await this.examModel.findById(examId).lean();
+        if (!exam) {
+            throw new NotFoundException('Exam not found');
+        }
+
+        const result = await this.resultModel
+            .findById(resultId)
+            .populate('userId', 'firstName lastName email')
+            .lean();
+
+        if (!result) {
+            throw new NotFoundException('Exam result not found');
+        }
+
+        if (result.examId.toString() !== examId) {
+            throw new BadRequestException('Result does not belong to the specified exam');
+        }
+
+        const attempt = await this.attemptModel.findById(result.attemptId).lean();
+        if (!attempt) {
+            throw new NotFoundException('Exam attempt not found for this result');
+        }
+
+        const questions = await this.questionModel
+            .find({ examId: new Types.ObjectId(examId) })
+            .sort({ order: 1, createdAt: 1 })
+            .lean();
+
+        if (!questions.length) {
+            throw new NotFoundException('No questions found for this exam');
+        }
+
+        return {
+            exam,
+            result,
+            attempt,
+            questions,
+        };
     }
 
     private gradeMCQ(question: QuestionDocument, userAnswer: any): boolean {
@@ -422,26 +750,7 @@ export class GradingService {
             // Send notification emails to students
             const emailPromises = results.map(async (result) => {
                 try {
-                    const user = result.userId as any;
-                    const exam = result.examId as any;
-
-                    if (!user || !user.email) {
-                        this.logger.warn(`No email found for user in result ${result._id}`);
-                        return;
-                    }
-
-                    await this.emailService.sendExamResultEmail(
-                        user.email,
-                        user.firstName || 'Student',
-                        exam?.title || 'Unknown Exam',
-                        result.correctAnswers || 0,
-                        result.totalQuestions || 0,
-                        result.percentage || 0,
-                        result.status || 'unknown',
-                        result.gradedAt || new Date()
-                    );
-
-                    this.logger.log(`Exam result email sent to ${user.email} for exam: ${exam?.title}`);
+                    await this.sendResultReleaseEmail(result as any);
                 } catch (emailError) {
                     this.logger.error(`Failed to send exam result email for result ${result._id}:`, emailError.message);
                     // Don't throw here - we want to continue sending other emails
@@ -459,6 +768,58 @@ export class GradingService {
         }
     }
 
+    async releaseSingleResult(examId: string, resultId: string, releasedBy?: string): Promise<ExamResultDocument> {
+        try {
+            const result = await this.resultModel
+                .findOne({ _id: new Types.ObjectId(resultId), examId: new Types.ObjectId(examId) })
+                .populate('userId', 'firstName lastName email')
+                .populate('examId', 'title')
+                .lean();
+
+            if (!result) {
+                throw new NotFoundException(`Result not found for exam ${examId}`);
+            }
+
+            if (result.gradingStatus !== 'completed') {
+                throw new BadRequestException('Only fully completed results can be released');
+            }
+
+            if (result.released) {
+                return await this.resultModel.findById(resultId);
+            }
+
+            const performerId = releasedBy ? new Types.ObjectId(releasedBy) : undefined;
+            const updatedResult = await this.resultModel.findByIdAndUpdate(
+                resultId,
+                {
+                    $set: { released: true },
+                    $push: {
+                        gradingHistory: {
+                            action: 'released',
+                            performedBy: performerId,
+                            performedAt: new Date(),
+                            method: 'manual',
+                            previousStatus: result.status,
+                            newStatus: result.status,
+                            previousScore: result.totalScore,
+                            newScore: result.totalScore,
+                            notes: 'Result released to student',
+                        },
+                    },
+                },
+                { new: true }
+            );
+
+            await this.sendResultReleaseEmail(result as any);
+
+            this.logger.log(`Released single result ${resultId} for exam ${examId}`);
+            return updatedResult;
+        } catch (error) {
+            this.logger.error(`Error releasing result ${resultId} for exam ${examId}:`, error.message);
+            throw error;
+        }
+    }
+
     async retractResults(examId: string): Promise<void> {
         try {
             await this.resultModel.updateMany(
@@ -472,5 +833,72 @@ export class GradingService {
             this.logger.error(`Error retracting results for exam ${examId}:`, error.message);
             throw error;
         }
+    }
+
+    async retractSingleResult(examId: string, resultId: string, retractedBy?: string): Promise<ExamResultDocument> {
+        try {
+            const result = await this.resultModel
+                .findOne({ _id: new Types.ObjectId(resultId), examId: new Types.ObjectId(examId) })
+                .lean();
+
+            if (!result) {
+                throw new NotFoundException(`Result not found for exam ${examId}`);
+            }
+
+            if (!result.released) {
+                return await this.resultModel.findById(resultId);
+            }
+
+            const performerId = retractedBy ? new Types.ObjectId(retractedBy) : undefined;
+            const updatedResult = await this.resultModel.findByIdAndUpdate(
+                resultId,
+                {
+                    $set: { released: false },
+                    $push: {
+                        gradingHistory: {
+                            action: 'retracted',
+                            performedBy: performerId,
+                            performedAt: new Date(),
+                            method: 'manual',
+                            previousStatus: result.status,
+                            newStatus: result.status,
+                            previousScore: result.totalScore,
+                            newScore: result.totalScore,
+                            notes: 'Result retracted from student',
+                        },
+                    },
+                },
+                { new: true }
+            );
+
+            this.logger.log(`Retracted single result ${resultId} for exam ${examId}`);
+            return updatedResult;
+        } catch (error) {
+            this.logger.error(`Error retracting result ${resultId} for exam ${examId}:`, error.message);
+            throw error;
+        }
+    }
+
+    private async sendResultReleaseEmail(result: any): Promise<void> {
+        const user = result.userId as any;
+        const exam = result.examId as any;
+
+        if (!user || !user.email) {
+            this.logger.warn(`No email found for user in result ${result._id}`);
+            return;
+        }
+
+        await this.emailService.sendExamResultEmail(
+            user.email,
+            user.firstName || 'Student',
+            exam?.title || 'Unknown Exam',
+            result.totalScore ?? result.correctAnswers ?? 0,
+            result.maxScore ?? result.totalQuestions ?? 0,
+            result.percentage || 0,
+            result.status || 'unknown',
+            result.gradedAt || new Date()
+        );
+
+        this.logger.log(`Exam result email sent to ${user.email} for exam: ${exam?.title}`);
     }
 }

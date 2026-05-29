@@ -3810,8 +3810,9 @@ export class ExamService {
                 user: result.userId,
                 exam: result.examId,
                 attempt: result.attemptId,
-                score: result.correctAnswers, // Use correctAnswers as score for display
+                score: result.totalScore ?? result.correctAnswers ?? 0,
                 totalScore: result.totalScore,
+                maxScore: result.maxScore,
                 totalQuestions: result.totalQuestions,
                 percentage: result.percentage,
                 status: result.status,

@@ -69,7 +69,7 @@ export default {
             questionText: newQuestion.questionText || '',
             type: newQuestion.type || '',
             options: options,
-            answer: answer,
+            answer: answer ?? this.getDefaultAnswer(newQuestion.type),
             mark: newQuestion.mark || 1,
             difficulty: newQuestion.metadata?.difficulty?.toLowerCase() || ''
           }
@@ -95,13 +95,16 @@ export default {
     }
   },
   methods: {
+    getDefaultAnswer(type = this.form.type) {
+      return type === 'multi' ? [] : null
+    },
     resetForm() {
       this.createModeId = Math.random().toString(36).substr(2, 9) // Generate new ID for fresh editor
       this.form = {
         questionText: '',
         type: '',
         options: [],
-        answer: null,
+        answer: this.getDefaultAnswer(''),
         mark: 1,
         difficulty: ''
       }
@@ -109,7 +112,7 @@ export default {
     },
     handleTypeChange() {
       this.form.options = []
-      this.form.answer = null
+      this.form.answer = this.getDefaultAnswer(this.form.type)
       
       if (['mcq', 'multi'].includes(this.form.type)) {
         // Initialize with 2 empty options for multiple choice

@@ -128,6 +128,10 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { logger } from '@shared/utils/logger'
 
+const SECOND = 1000
+const MINUTE = 60 * SECOND
+const HOUR = 60 * MINUTE
+
 export default {
   name: 'ExamCard',
   props: {
@@ -147,35 +151,50 @@ export default {
     const currentTime = ref(new Date())
     let countdownTimer = null
 
-    // Update current time every 30 seconds for upcoming exams
+    const getCountdownInterval = (timeUntilExam) => {
+      if (timeUntilExam <= MINUTE) {
+        return SECOND
+      }
+
+      if (timeUntilExam <= 5 * MINUTE) {
+        return 10000
+      }
+
+      return 30000
+    }
+
+    const scheduleCountdownTick = () => {
+      if (props.type !== 'upcoming' || !props.exam.examTimestamp) {
+        return
+      }
+
+      const timeUntilExam = new Date(props.exam.examTimestamp) - new Date()
+
+      if (timeUntilExam <= 0) {
+        currentTime.value = new Date()
+        logger.info(`ExamCard: Exam ${props.exam.id} (${props.exam.title}) became available - emitting event to parent`)
+        emit('examBecameAvailable', props.exam.id)
+        stopCountdownTimer()
+        return
+      }
+
+      countdownTimer = setTimeout(() => {
+        currentTime.value = new Date()
+        scheduleCountdownTick()
+      }, getCountdownInterval(timeUntilExam))
+    }
+
     const startCountdownTimer = () => {
       if (props.type === 'upcoming' && props.exam.examTimestamp) {
-        // Check how close the exam is
-        const timeUntilExam = new Date(props.exam.examTimestamp) - new Date()
-        
-        // If exam is very close (within 5 minutes), update every 10 seconds for accuracy
-        // Otherwise, update every 30 seconds
-        const updateInterval = timeUntilExam <= 5 * 60 * 1000 ? 10000 : 30000
-        
-        countdownTimer = setInterval(() => {
-          currentTime.value = new Date()
-          
-          // If exam time has passed, emit event to parent to refresh data
-          const newTimeUntil = new Date(props.exam.examTimestamp) - new Date()
-          if (newTimeUntil <= 0) {
-            // Exam should now be available - notify parent to refresh
-            logger.info(`ExamCard: Exam ${props.exam.id} (${props.exam.title}) became available - emitting event to parent`)
-            emit('examBecameAvailable', props.exam.id)
-            stopCountdownTimer()
-          }
-        }, updateInterval)
+        currentTime.value = new Date()
+        scheduleCountdownTick()
       }
     }
 
     // Cleanup timer
     const stopCountdownTimer = () => {
       if (countdownTimer) {
-        clearInterval(countdownTimer)
+        clearTimeout(countdownTimer)
         countdownTimer = null
       }
     }
@@ -234,9 +253,14 @@ export default {
       const diff = examTime - currentTime.value // Use reactive currentTime
       
       if (diff <= 0) return 'now'
+
+      if (diff < MINUTE) {
+        const seconds = Math.max(1, Math.ceil(diff / SECOND))
+        return `in ${seconds} second${seconds !== 1 ? 's' : ''}`
+      }
       
-      const hours = Math.floor(diff / (1000 * 60 * 60))
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      const hours = Math.floor(diff / HOUR)
+      const minutes = Math.floor((diff % HOUR) / MINUTE)
       
       if (hours > 24) {
         const days = Math.floor(hours / 24)

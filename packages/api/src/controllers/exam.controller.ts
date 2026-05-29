@@ -647,6 +647,156 @@ export class ExamController {
         }
     }
 
+    @Get(":examId/results/:resultId/review")
+    @Roles("staff", "admin")
+    @ApiOperation({ summary: "Get manual scoring review payload for a result" })
+    @ApiResponse({ status: 200, description: "Manual review payload retrieved successfully" })
+    async getManualReviewPayload(
+        @Param("examId") examId: string,
+        @Param("resultId") resultId: string,
+        @Request() req
+    ): Promise<any> {
+        try {
+            const review = await this.gradingService.getManualReviewPayload(examId, resultId);
+
+            return {
+                success: true,
+                data: review,
+            };
+        } catch (error) {
+            this.logger.error(
+                `Error getting manual review payload for exam ${examId}, result ${resultId}:`,
+                error.message
+            );
+            throw new HttpException(
+                error.message || "Failed to get manual review payload",
+                error.status || HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Put(":examId/results/:resultId/manual-score")
+    @Roles("staff", "admin")
+    @ApiOperation({ summary: "Save manual essay scores for a result" })
+    @ApiResponse({ status: 200, description: "Manual scoring saved successfully" })
+    async saveManualScores(
+        @Param("examId") examId: string,
+        @Param("resultId") resultId: string,
+        @Body()
+        body: {
+            questionUpdates?: Array<{
+                questionId: string;
+                pointsAwarded: number;
+                feedback?: string;
+            }>;
+            overallFeedback?: string;
+            finalize?: boolean;
+        },
+        @Request() req
+    ): Promise<any> {
+        try {
+            const graderId = req.user.userId || req.user.id || req.user._id;
+            const result = await this.gradingService.saveManualScores(
+                examId,
+                resultId,
+                body,
+                graderId
+            );
+
+            return {
+                success: true,
+                message: body?.finalize
+                    ? "Manual scoring finalized successfully"
+                    : "Manual scoring saved successfully",
+                data: {
+                    resultId: result._id,
+                    gradingStatus: result.gradingStatus,
+                    gradingType: result.gradingType,
+                    status: result.status,
+                    totalScore: result.totalScore,
+                    maxScore: result.maxScore,
+                    percentage: result.percentage,
+                    released: result.released,
+                },
+            };
+        } catch (error) {
+            this.logger.error(
+                `Error saving manual scores for exam ${examId}, result ${resultId}:`,
+                error.message
+            );
+            throw new HttpException(
+                error.message || "Failed to save manual scores",
+                error.status || HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Post(":examId/results/:resultId/release")
+    @Roles("staff", "admin")
+    @ApiOperation({ summary: "Release a single exam result to a student" })
+    @ApiResponse({ status: 200, description: "Result released successfully" })
+    async releaseSingleResult(
+        @Param("examId") examId: string,
+        @Param("resultId") resultId: string,
+        @Request() req
+    ): Promise<any> {
+        try {
+            const actorId = req.user.userId || req.user.id || req.user._id;
+            const result = await this.gradingService.releaseSingleResult(examId, resultId, actorId);
+
+            return {
+                success: true,
+                message: "Result released successfully",
+                data: {
+                    resultId: result._id,
+                    released: result.released,
+                },
+            };
+        } catch (error) {
+            this.logger.error(
+                `Error releasing single result ${resultId} for exam ${examId}:`,
+                error.message
+            );
+            throw new HttpException(
+                error.message || "Failed to release result",
+                error.status || HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Post(":examId/results/:resultId/retract")
+    @Roles("staff", "admin")
+    @ApiOperation({ summary: "Retract a single exam result from a student" })
+    @ApiResponse({ status: 200, description: "Result retracted successfully" })
+    async retractSingleResult(
+        @Param("examId") examId: string,
+        @Param("resultId") resultId: string,
+        @Request() req
+    ): Promise<any> {
+        try {
+            const actorId = req.user.userId || req.user.id || req.user._id;
+            const result = await this.gradingService.retractSingleResult(examId, resultId, actorId);
+
+            return {
+                success: true,
+                message: "Result retracted successfully",
+                data: {
+                    resultId: result._id,
+                    released: result.released,
+                },
+            };
+        } catch (error) {
+            this.logger.error(
+                `Error retracting single result ${resultId} for exam ${examId}:`,
+                error.message
+            );
+            throw new HttpException(
+                error.message || "Failed to retract result",
+                error.status || HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
     @Get("user/history")
     @Roles("student", "applicant", "staff", "admin")
     @ApiOperation({ summary: "Get user exam history" })
@@ -1484,11 +1634,14 @@ export class ExamController {
             const submittedAt = result.attemptId?.submittedAt ?
                 new Date(result.attemptId.submittedAt).toLocaleString() : 'Not submitted';
 
+            const earnedScore = result.totalScore ?? result.correctAnswers ?? 0;
+            const maxScore = result.maxScore ?? result.totalQuestions ?? 0;
+
             return `
                 <tr>
                     <td>${studentName}</td>
                     <td>${result.userId?.email || 'N/A'}</td>
-                    <td style="text-align: center;">${result.correctAnswers}/${result.totalQuestions}</td>
+                    <td style="text-align: center;">${earnedScore}/${maxScore}</td>
                     <td style="text-align: center;">${result.percentage}%</td>
                     <td style="text-align: center;">
                         <span style="

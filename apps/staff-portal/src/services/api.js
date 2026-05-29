@@ -871,6 +871,31 @@ class StaffApiService {
         return this.makeRequest(`/exam-results/${resultId}`)
     }
 
+    async getManualReviewPayload(examId, resultId) {
+        return this.makeRequest(`/exams/${examId}/results/${resultId}/review`, {
+            method: 'GET',
+        })
+    }
+
+    async saveManualExamScores(examId, resultId, payload = {}) {
+        return this.makeRequest(`/exams/${examId}/results/${resultId}/manual-score`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        })
+    }
+
+    async releaseSingleExamResult(examId, resultId) {
+        return this.makeRequest(`/exams/${examId}/results/${resultId}/release`, {
+            method: 'POST',
+        })
+    }
+
+    async retractSingleExamResult(examId, resultId) {
+        return this.makeRequest(`/exams/${examId}/results/${resultId}/retract`, {
+            method: 'POST',
+        })
+    }
+
     async regradeUserExam(examId, userId) {
         return this.makeRequest(`/exams/${examId}/regrade-user`, {
             method: 'POST',

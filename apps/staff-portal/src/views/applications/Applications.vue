@@ -1912,7 +1912,7 @@ export default {
                           </li>
                           <li
                             v-if="
-                              authStore.hasPermission('applications', 'edit') &&
+                              authStore.hasPermission('applications', 'approve') &&
                               canSendAdmissionLetter(app)
                             "
                           >

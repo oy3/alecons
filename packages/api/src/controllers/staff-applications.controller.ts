@@ -2223,6 +2223,152 @@ export class StaffApplicationsController {
         }
     }
 
+    @Patch(':id/send-admission-letter')
+    @ApiOperation({ summary: 'Send or resend provisional admission letter for an admitted application' })
+    @ApiResponse({ status: 200, description: 'Provisional admission letter processed successfully' })
+    async sendAdmissionLetter(
+        @Param('id') id: string,
+        @Request() req,
+    ) {
+        try {
+            this.logger.log('Sending provisional admission letter for application:', { id });
+
+            const application = await this.applicationModel.findById(id)
+                .populate('userId')
+                .populate({
+                    path: 'programId',
+                    select: 'name code programTypeId programModeId',
+                    populate: [
+                        { path: 'programTypeId', select: 'type description' },
+                        { path: 'programModeId', select: 'mode description' },
+                    ],
+                })
+                .populate('entryAcademicSession')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            if (application.admissionDecision !== AdmissionDecision.GRANTED) {
+                throw new HttpException(
+                    { success: false, message: 'Admission letter can only be sent for admitted applications' },
+                    HttpStatus.BAD_REQUEST
+                );
+            }
+
+            const context = this.buildAdmissionLetterContext(application);
+
+            let pdfBuffer: Buffer | null = null;
+            let mode: 'resent' | 'generated' = 'resent';
+
+            if (application.admissionLetter) {
+                try {
+                    pdfBuffer = await this.uploadService.getFileBufferByUrl(application.admissionLetter);
+                    if (!pdfBuffer || pdfBuffer.length === 0) {
+                        mode = 'generated';
+                    }
+                } catch (fetchError) {
+                    this.logger.warn('Failed to fetch existing admission letter buffer, falling back to regeneration:', {
+                        applicationId: id,
+                        error: fetchError.message,
+                    });
+                    mode = 'generated';
+                }
+            } else {
+                mode = 'generated';
+            }
+
+            if (mode === 'generated') {
+                const { acceptanceFeeInWords, acceptanceFeeAmount } = await this.getAcceptanceFeeDetails();
+
+                pdfBuffer = await this.admissionLetterPdfService.generateAdmissionLetter({
+                    studentFirstName: context.user.firstName || '',
+                    studentLastName: context.user.lastName || '',
+                    studentFullName: `${context.user.firstName || ''} ${context.user.lastName || ''}`.trim(),
+                    programName: context.programName,
+                    programType: context.programTypeCode,
+                    academicSession: context.academicSessionName,
+                    acceptanceFee: acceptanceFeeInWords,
+                    acceptanceFeeAmount,
+                    admissionDate: application.admissionDate || new Date(),
+                });
+
+                const folderIdentifier = application.applicationNumber || application._id.toString();
+                const timestamp = Date.now();
+                const pdfFileName = `provisional_offer_${timestamp}.pdf`;
+
+                const mockFile = {
+                    buffer: pdfBuffer,
+                    originalname: pdfFileName,
+                    mimetype: 'application/pdf',
+                    size: pdfBuffer.length,
+                } as Express.Multer.File;
+
+                const uploadResult = await this.uploadService.uploadToSpaces(
+                    mockFile,
+                    folderIdentifier,
+                    'admission_letter',
+                    false
+                );
+
+                application.admissionLetter = uploadResult.url;
+            }
+
+            await this.emailService.sendProvisionalAdmissionLetterFocusedEmail(
+                context.user.email,
+                context.user.firstName,
+                pdfBuffer as Buffer,
+                context.programName,
+                context.academicSessionName
+            );
+
+            this.appendAuditEntry(application, {
+                action: mode === 'generated' ? 'admission_letter_generated_and_sent' : 'admission_letter_resent',
+                description: mode === 'generated'
+                    ? 'Provisional admission letter was generated, saved, and sent to the student.'
+                    : 'Existing provisional admission letter was resent to the student.',
+                actor: req.user,
+                metadata: {
+                    mode,
+                    recipientEmail: context.user.email,
+                    admissionLetterUrl: application.admissionLetter,
+                },
+            });
+
+            await application.save();
+
+            return {
+                success: true,
+                message: mode === 'generated'
+                    ? 'Provisional admission letter generated and sent successfully'
+                    : 'Provisional admission letter resent successfully',
+                data: {
+                    mode,
+                    admissionLetterUrl: application.admissionLetter,
+                },
+            };
+        } catch (error) {
+            this.logger.error('Error sending provisional admission letter:', error.message);
+
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to send provisional admission letter',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
     @Patch(':id/exam-score')
     @ApiOperation({ summary: 'Update entrance exam score' })
     @ApiResponse({ status: 200, description: 'Exam score updated successfully' })
@@ -2628,6 +2774,73 @@ export class StaffApplicationsController {
      * Helper method to convert numbers to words (Nigerian Naira context)
      * Supports numbers up to millions
      */
+    private buildAdmissionLetterContext(application: any): {
+        user: any;
+        programName: string;
+        programTypeCode: string;
+        academicSessionName: string;
+    } {
+        const user = application.userId as any;
+        const program = application.programId as any;
+        const programType = program?.programTypeId as any;
+        const academicSession = application.entryAcademicSession as any;
+
+        if (!user || !user.email || !program || !programType || !academicSession) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Missing required data for admission letter delivery.',
+                },
+                HttpStatus.BAD_REQUEST
+            );
+        }
+
+        const academicSessionName = academicSession?.sessionYear || academicSession?.name || '';
+        const programTypeCode = programType?.type || programType?.code || programType?.name || '';
+        const programName = program?.name || '';
+
+        if (!academicSessionName || !programTypeCode || !programName) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to extract required admission letter details from application data.',
+                },
+                HttpStatus.BAD_REQUEST
+            );
+        }
+
+        return {
+            user,
+            programName,
+            programTypeCode,
+            academicSessionName,
+        };
+    }
+
+    private async getAcceptanceFeeDetails(): Promise<{ acceptanceFeeInWords: string; acceptanceFeeAmount: string }> {
+        let acceptanceFeeInWords = '';
+        let acceptanceFeeAmount = '';
+
+        try {
+            const acceptanceFeePayment = await this.paymentModel.findOne({
+                paymentCode: 'acceptanceFee',
+                active: true,
+            });
+
+            if (acceptanceFeePayment) {
+                acceptanceFeeAmount = acceptanceFeePayment.amount.toLocaleString('en-NG', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                });
+                acceptanceFeeInWords = this.numberToWords(acceptanceFeePayment.amount);
+            }
+        } catch (error) {
+            this.logger.error('Error fetching acceptance fee for admission letter:', error.message);
+        }
+
+        return { acceptanceFeeInWords, acceptanceFeeAmount };
+    }
+
     private numberToWords(num: number): string {
         if (num === 0) return 'Zero';
 

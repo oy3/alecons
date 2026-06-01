@@ -697,6 +697,82 @@ export class EmailService {
     }
   }
 
+  async sendProvisionalAdmissionLetterFocusedEmail(
+    email: string,
+    firstName: string,
+    pdfBuffer: Buffer,
+    programName: string,
+    academicSession: string,
+  ): Promise<void> {
+    const safeName = (firstName || "Student").replace(/\s+/g, "_");
+
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Your Provisional Admission Letter - ALECONS",
+      attachments: [
+        {
+          filename: `Provisional_Admission_Letter_${safeName}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        },
+      ],
+      html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Your Provisional Admission Letter</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
+                        .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
+                        .header { background-color: #1a5f5f; color: white; text-align: center; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }
+                        .info-box { background-color: #e9f7f7; border: 1px solid #b9e1e1; color: #124747; padding: 16px; border-radius: 6px; margin: 20px 0; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h2 style="margin: 0;">Provisional Admission Letter</h2>
+                        </div>
+
+                        <p>Dear ${firstName},</p>
+
+                        <p>Your provisional admission letter for <strong>${programName}</strong> (${academicSession} Academic Session) is attached to this email.</p>
+
+                        <div class="info-box">
+                            <p style="margin: 0;"><strong>Please download and keep this document for your records.</strong></p>
+                        </div>
+
+                        <p>If you need support, contact the Admissions Office.</p>
+
+                        <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
+                            <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                            Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
+                            Email: admissions@alecons.edu.ng<br>
+                            Phone: +234 916 000 8679</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `,
+    };
+
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(
+        `Focused provisional admission letter email sent successfully to ${email}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send focused provisional admission letter email to ${email}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
   async sendRejectionEmail(
     email: string,
     firstName: string,

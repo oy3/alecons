@@ -252,6 +252,8 @@ export default {
                 .filter(Boolean)
                 .join(" ") || "N/A",
             status: app.status,
+            admissionDecision: app.admissionDecision,
+            admissionLetterUrl: app.admissionLetter || "",
             currentStage: app.currentStage,
             profileImageUrl: app.profileImageUrl,
             submittedAt: app.createdAt,
@@ -1408,6 +1410,69 @@ export default {
       logger.info("Filters reset successfully");
     },
 
+    canSendAdmissionLetter(application) {
+      return application?.admissionDecision === "admitted";
+    },
+
+    async sendAdmissionLetter(application) {
+      try {
+        const result = await this.$swal.fire({
+          icon: "question",
+          title: "Send Admission Letter",
+          text: `Send provisional admission letter to ${application.applicantName}? If it does not exist yet, it will be generated and saved automatically.`,
+          showCancelButton: true,
+          confirmButtonText: "Send Letter",
+          cancelButtonText: "Cancel",
+          confirmButtonColor: "#1a5f5f",
+          cancelButtonColor: "#6c757d",
+        });
+
+        if (!result.isConfirmed) {
+          return;
+        }
+
+        this.$swal.fire({
+          title: "Sending Admission Letter...",
+          text: "Please wait while we prepare and send the provisional admission letter.",
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          didOpen: () => {
+            this.$swal.showLoading();
+          },
+        });
+
+        const response = await apiService.sendAdmissionLetter(application.id);
+        const mode = response?.data?.mode;
+
+        await this.$swal.fire({
+          icon: "success",
+          title: "Admission Letter Sent",
+          text:
+            mode === "generated"
+              ? "Provisional admission letter was generated and sent successfully."
+              : "Provisional admission letter was resent successfully.",
+          confirmButtonColor: "#1a5f5f",
+        });
+
+        await this.loadApplications();
+
+        if (this.selectedApplicationId === application.id) {
+          await this.reloadSelectedApplicationDetails();
+        }
+      } catch (error) {
+        logger.error("Failed to send admission letter:", error);
+
+        await this.$swal.fire({
+          icon: "error",
+          title: "Send Failed",
+          text:
+            error.message ||
+            "An error occurred while sending the provisional admission letter.",
+          confirmButtonColor: "#dc3545",
+        });
+      }
+    },
+
     async sendMatriculationEmail(application) {
       try {
         // Show confirmation dialog
@@ -1845,6 +1910,20 @@ export default {
                               }}
                             </a>
                           </li>
+                          <li
+                            v-if="
+                              authStore.hasPermission('applications', 'edit') &&
+                              canSendAdmissionLetter(app)
+                            "
+                          >
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="sendAdmissionLetter(app)"
+                            >
+                              <i class="bi bi-envelope-paper me-2"></i>Send Admission Letter
+                            </a>
+                          </li>
                           <!-- 
                             <li>
                               <a
@@ -2063,6 +2142,17 @@ export default {
                         @click="deleteApplication(app)"
                       >
                         <i class="bi bi-trash me-1"></i>Delete
+                      </button>
+                      <button
+                        v-if="
+                          authStore.hasPermission('applications', 'edit') &&
+                          canSendAdmissionLetter(app)
+                        "
+                        type="button"
+                        class="btn btn-sm btn-outline-staff-primary"
+                        @click="sendAdmissionLetter(app)"
+                      >
+                        <i class="bi bi-envelope-paper me-1"></i>Send Letter
                       </button>
                       <button
                         v-if="app.status === 'completed'"

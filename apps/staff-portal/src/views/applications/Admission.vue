@@ -326,6 +326,7 @@ export default {
             },
             entryAcademicSession: app.entryAcademicSession,
             profileImageUrl: app.profileImageUrl,
+            admissionLetterUrl: app.admissionLetterUrl || app.admissionLetter || "",
             submittedAt: app.createdAt,
             lastUpdated: app.updatedAt,
           }));

@@ -285,6 +285,12 @@ class StaffApiService {
         })
     }
 
+    async sendAdmissionLetter(id) {
+        return this.makeRequest(`/staff/applications/${id}/send-admission-letter`, {
+            method: 'PATCH',
+        })
+    }
+
     async generateMatriculationNumber(id) {
         return this.makeRequest(`/staff/applications/${id}/generate-matric`, {
             method: 'PATCH',

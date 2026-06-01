@@ -293,6 +293,56 @@ export class UploadService {
         }
     }
 
+    private async streamBodyToBuffer(body: any): Promise<Buffer> {
+        if (!body) {
+            return Buffer.alloc(0);
+        }
+
+        if (Buffer.isBuffer(body)) {
+            return body;
+        }
+
+        if (typeof body.transformToByteArray === 'function') {
+            const bytes = await body.transformToByteArray();
+            return Buffer.from(bytes);
+        }
+
+        const chunks: Buffer[] = [];
+        for await (const chunk of body) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+
+        return Buffer.concat(chunks);
+    }
+
+    async getFileBufferByKey(key: string): Promise<Buffer> {
+        try {
+            const command = new GetObjectCommand({
+                Bucket: this.bucketName,
+                Key: key,
+            });
+
+            const response = await this.s3Client.send(command);
+            return await this.streamBodyToBuffer(response.Body);
+        } catch (error) {
+            this.logger.error('Failed to fetch file buffer from Spaces:', {
+                key,
+                error: error.message,
+            });
+            throw new BadRequestException(`Failed to fetch file from storage: ${error.message}`);
+        }
+    }
+
+    async getFileBufferByUrl(url?: string | null): Promise<Buffer | null> {
+        const key = this.extractKeyFromUrl(url);
+
+        if (!key) {
+            return null;
+        }
+
+        return this.getFileBufferByKey(key);
+    }
+
     async deleteByUrl(url?: string | null): Promise<void> {
         const key = this.extractKeyFromUrl(url);
 

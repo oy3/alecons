@@ -3,6 +3,7 @@ import Swal from "sweetalert2";
 import { useAuthStore } from "../../stores/auth.js";
 import { apiService } from "../../services/api.js";
 import { logger } from "@shared/utils/logger";
+import { toTitleCase } from "@shared/utils/string";
 
 const createDefaultFilters = () => ({
   search: "",
@@ -1069,7 +1070,8 @@ export default {
     },
 
     getUserDisplayName(payment) {
-      return payment.userName || "Unknown User";
+      const displayName = payment?.userName || "Unknown User";
+      return toTitleCase(displayName);
     },
 
     getIdentifierLabel(payment) {
@@ -2378,11 +2380,11 @@ export default {
 }
 
 .user-cell {
-  min-width: 210px;
+  min-width: 180px;
 }
 
 .program-cell {
-  min-width: 100px;
+  min-width: 80px;
 }
 
 .payment-reference {
@@ -2392,7 +2394,7 @@ export default {
   border-radius: 6px;
   padding: 0.35rem 0.5rem;
   display: inline-block;
-  max-width: 180px;
+  max-width: 150px;
   overflow-wrap: anywhere;
 }
 

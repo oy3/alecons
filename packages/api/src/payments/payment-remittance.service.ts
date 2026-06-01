@@ -476,8 +476,6 @@ export class PaymentRemittanceService {
                                 $concat: [
                                     { $ifNull: ['$user.firstName', ''] },
                                     ' ',
-                                    { $ifNull: ['$user.otherName', ''] },
-                                    ' ',
                                     { $ifNull: ['$user.lastName', ''] },
                                 ],
                             },

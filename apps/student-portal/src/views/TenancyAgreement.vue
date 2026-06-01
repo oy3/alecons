@@ -8,6 +8,11 @@ export default {
   name: "TenancyAgreement",
   data() {
     return {
+      configuredSchoolAddress:
+        (import.meta.env.VITE_APP_SCHOOL_ADDRESS || "").trim(),
+      configuredTenancyStartDate:
+        (import.meta.env.VITE_APP_TENANCY_START_DATE || "").trim(),
+
       // Form data
       formData: {
         tenantName: "",
@@ -58,6 +63,8 @@ export default {
       this.formData.residentialAddress = authStore.application.address || "";
     }
 
+    this.applyConfiguredTenancyValues();
+
     await this.checkAgreementStatus();
     this.isLoading = false;
   },
@@ -93,6 +100,98 @@ export default {
   },
 
   methods: {
+    parseIsoDate(dateString) {
+      if (!dateString || typeof dateString !== "string") {
+        return null;
+      }
+
+      const parts = dateString.split("-").map(Number);
+      if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+        return null;
+      }
+
+      const [year, month, day] = parts;
+      const date = new Date(year, month - 1, day);
+
+      if (
+        date.getFullYear() !== year ||
+        date.getMonth() !== month - 1 ||
+        date.getDate() !== day
+      ) {
+        return null;
+      }
+
+      date.setHours(0, 0, 0, 0);
+      return date;
+    },
+
+    formatDateForInput(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    },
+
+    getTodayDate() {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return today;
+    },
+
+    getTenancyConfiguration() {
+      const schoolAddress = this.configuredSchoolAddress;
+      const envStartDate = this.configuredTenancyStartDate;
+
+      if (!schoolAddress) {
+        return {
+          valid: false,
+          message:
+            "Tenancy configuration error: VITE_APP_SCHOOL_ADDRESS is missing.",
+        };
+      }
+
+      if (!envStartDate) {
+        return {
+          valid: false,
+          message:
+            "Tenancy configuration error: VITE_APP_TENANCY_START_DATE is missing.",
+        };
+      }
+
+      const configuredStartDate = this.parseIsoDate(envStartDate);
+      if (!configuredStartDate) {
+        return {
+          valid: false,
+          message:
+            "Tenancy configuration error: VITE_APP_TENANCY_START_DATE must use YYYY-MM-DD format.",
+        };
+      }
+
+      const today = this.getTodayDate();
+      const startDate = configuredStartDate > today ? configuredStartDate : today;
+      // End date is always 1 year from the env-configured start date, regardless of when the student signs.
+      const endDate = new Date(configuredStartDate);
+      endDate.setFullYear(endDate.getFullYear() + 1);
+
+      return {
+        valid: true,
+        schoolAddress,
+        tenancyStartDate: this.formatDateForInput(startDate),
+        tenancyEndDate: this.formatDateForInput(endDate),
+      };
+    },
+
+    applyConfiguredTenancyValues() {
+      const config = this.getTenancyConfiguration();
+      if (!config.valid) {
+        return;
+      }
+
+      this.formData.hostelAddress = config.schoolAddress;
+      this.formData.tenancyStartDate = config.tenancyStartDate;
+      this.formData.tenancyEndDate = config.tenancyEndDate;
+    },
+
     async checkAgreementStatus() {
       try {
         const response = await tenancyAgreementService.getAgreementStatus();
@@ -115,6 +214,17 @@ export default {
 
     validateForm() {
       this.errors = {};
+
+      const tenancyConfig = this.getTenancyConfiguration();
+      if (!tenancyConfig.valid) {
+        this.errors.hostelAddress = tenancyConfig.message;
+        this.errors.tenancyStartDate = tenancyConfig.message;
+        this.errors.tenancyEndDate = tenancyConfig.message;
+        return false;
+      }
+
+      // Re-apply config values to prevent client-side tampering.
+      this.applyConfiguredTenancyValues();
 
       // Required field validation
       const requiredFields = {
@@ -165,11 +275,27 @@ export default {
 
       // Date validation
       if (this.formData.tenancyStartDate && this.formData.tenancyEndDate) {
-        const startDate = new Date(this.formData.tenancyStartDate);
-        const endDate = new Date(this.formData.tenancyEndDate);
+        const startDate = this.parseIsoDate(this.formData.tenancyStartDate);
+        const endDate = this.parseIsoDate(this.formData.tenancyEndDate);
+        const today = this.getTodayDate();
 
-        if (endDate <= startDate) {
+        if (!startDate) {
+          this.errors.tenancyStartDate =
+            "Tenancy start date is invalid. Expected YYYY-MM-DD.";
+        }
+
+        if (!endDate) {
+          this.errors.tenancyEndDate =
+            "Tenancy end date is invalid. Expected YYYY-MM-DD.";
+        }
+
+        if (startDate && endDate && endDate <= startDate) {
           this.errors.tenancyEndDate = "End date must be after start date";
+        }
+
+        if (endDate && endDate < today) {
+          this.errors.tenancyEndDate =
+            "Tenancy end date has passed. Please contact support.";
         }
       }
 
@@ -182,6 +308,20 @@ export default {
     },
 
     async submitAgreement() {
+      const tenancyConfig = this.getTenancyConfiguration();
+      if (!tenancyConfig.valid) {
+        Swal.fire({
+          icon: "error",
+          title: "Configuration Error",
+          text: tenancyConfig.message,
+          confirmButtonText: "OK",
+        });
+        return;
+      }
+
+      // Re-apply config values before submit.
+      this.applyConfiguredTenancyValues();
+
       if (!this.validateForm()) {
         Swal.fire({
           icon: "error",
@@ -623,7 +763,7 @@ export default {
                 id="hostelAddress"
                 v-model="formData.hostelAddress"
                 rows="2"
-                placeholder="Enter the hostel address"
+                readonly
               ></textarea>
               <div v-if="errors.hostelAddress" class="invalid-feedback">
                 {{ errors.hostelAddress }}
@@ -640,6 +780,7 @@ export default {
                 :class="{ 'is-invalid': errors.tenancyStartDate }"
                 id="tenancyStartDate"
                 v-model="formData.tenancyStartDate"
+                readonly
               />
               <div v-if="errors.tenancyStartDate" class="invalid-feedback">
                 {{ errors.tenancyStartDate }}
@@ -656,6 +797,7 @@ export default {
                 :class="{ 'is-invalid': errors.tenancyEndDate }"
                 id="tenancyEndDate"
                 v-model="formData.tenancyEndDate"
+                readonly
               />
               <div v-if="errors.tenancyEndDate" class="invalid-feedback">
                 {{ errors.tenancyEndDate }}

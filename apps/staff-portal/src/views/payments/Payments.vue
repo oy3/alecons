@@ -1358,6 +1358,13 @@ export default {
       );
     },
 
+    canReconcilePaystack(payment) {
+      return (
+        payment?.method === "paystack" &&
+        ["pending", "failed"].includes(payment?.status)
+      );
+    },
+
     isProcessingPayment(paymentId) {
       return this.processingPaymentId === paymentId;
     },
@@ -1562,6 +1569,69 @@ export default {
           icon: "error",
           title: "Rejection failed",
           text: error.message || "Failed to reject manual transfer payment.",
+          confirmButtonColor: "#1a5f5f",
+        });
+      } finally {
+        this.processingPaymentId = null;
+      }
+    },
+
+    async reconcilePaystackPayment(payment) {
+      try {
+        if (this.isProcessingPayment(payment._id)) {
+          return;
+        }
+
+        if (
+          !this.authStore.hasPermission("payments", "manage") &&
+          !this.authStore.hasPermission("payments", "edit")
+        ) {
+          await this.$swal.fire({
+            icon: "error",
+            title: "Access Denied",
+            text: "You do not have permission to reconcile payments.",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
+        const result = await this.$swal.fire({
+          title: "Reconcile payment?",
+          text: `This will re-check ${this.getReferenceDisplay(payment.reference)} with Paystack and update status if needed.`,
+          showCancelButton: true,
+          confirmButtonText: "Reconcile",
+          confirmButtonColor: "#1a5f5f",
+          cancelButtonColor: "#6c757d",
+        });
+
+        if (!result.isConfirmed) {
+          return;
+        }
+
+        this.processingPaymentId = payment._id;
+
+        const response = await apiService.reconcileStudentPayment(payment._id);
+
+        if (!response.success) {
+          throw new Error(response.message || "Failed to reconcile payment");
+        }
+
+        await Promise.all([this.loadPayments(), this.loadPaymentStats()]);
+
+        await this.$swal.fire({
+          icon: "success",
+          title: "Payment reconciled",
+          text:
+            response.message ||
+            "Payment status was refreshed using Paystack verification.",
+          confirmButtonColor: "#1a5f5f",
+        });
+      } catch (error) {
+        logger.error("Failed to reconcile payment:", error);
+        await this.$swal.fire({
+          icon: "error",
+          title: "Reconciliation failed",
+          text: error.message || "Failed to reconcile payment.",
           confirmButtonColor: "#1a5f5f",
         });
       } finally {
@@ -2036,6 +2106,24 @@ export default {
                               >Verify
                             </a>
                           </li>
+                          <li v-if="canReconcilePaystack(payment)">
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              :class="{
+                                disabled: isProcessingPayment(payment._id),
+                              }"
+                              :aria-disabled="isProcessingPayment(payment._id)"
+                              @click.prevent="reconcilePaystackPayment(payment)"
+                            >
+                              <span
+                                v-if="isProcessingPayment(payment._id)"
+                                class="spinner-border spinner-border-sm me-1"
+                              ></span>
+                              <i v-else class="bi bi-arrow-repeat me-1"></i
+                              >Reconcile
+                            </a>
+                          </li>
                           <li v-if="canReviewManualTransfer(payment)">
                             <a
                               class="dropdown-item text-danger"
@@ -2132,6 +2220,24 @@ export default {
                             ></span>
                             <i v-else class="bi bi-check-circle-fill me-1"></i
                             >Verify
+                          </a>
+                        </li>
+                        <li v-if="canReconcilePaystack(payment)">
+                          <a
+                            class="dropdown-item"
+                            href="#"
+                            @click.prevent="reconcilePaystackPayment(payment)"
+                            :class="{
+                              disabled: isProcessingPayment(payment._id),
+                            }"
+                            :aria-disabled="isProcessingPayment(payment._id)"
+                          >
+                            <span
+                              v-if="isProcessingPayment(payment._id)"
+                              class="spinner-border spinner-border-sm me-1"
+                            ></span>
+                            <i v-else class="bi bi-arrow-repeat me-1"></i
+                            >Reconcile
                           </a>
                         </li>
                         <li v-if="canReviewManualTransfer(payment)">

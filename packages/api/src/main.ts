@@ -9,8 +9,13 @@ async function bootstrap() {
 
     // Configure body parser with larger limits for questions with images
     const express = require('express');
-    app.use(express.json({ limit: '5mb' }));
-    app.use(express.urlencoded({ limit: '5mb', extended: true }));
+    const rawBodyBuffer = (req: any, _res: any, buffer: Buffer) => {
+        if (buffer && buffer.length) {
+            req.rawBody = buffer;
+        }
+    };
+    app.use(express.json({ limit: '5mb', verify: rawBodyBuffer }));
+    app.use(express.urlencoded({ limit: '5mb', extended: true, verify: rawBodyBuffer }));
 
     // Enable CORS
     const allowedOrigins = Array.from(

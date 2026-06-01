@@ -5,6 +5,9 @@ import {
     Body,
     Param,
     Request,
+    Req,
+    Headers,
+    HttpCode,
     UseGuards,
     HttpException,
     HttpStatus,
@@ -211,6 +214,44 @@ export interface UpdateDestinationAccountDto extends Partial<CreateDestinationAc
 
 export interface ManualPaymentReviewDto {
     remarks?: string;
+}
+
+@ApiTags("Paystack Webhooks")
+@Controller("payments")
+export class PaystackWebhookController {
+    private readonly logger = new Logger(PaystackWebhookController.name);
+
+    constructor(private readonly paymentsService: PaymentsService) { }
+
+    @Post("webhook/paystack")
+    @HttpCode(200)
+    async handlePaystackWebhook(
+        @Req() req: any,
+        @Headers("x-paystack-signature") signature?: string,
+    ) {
+        try {
+            const result = await this.paymentsService.processPaystackWebhook(
+                signature,
+                req?.rawBody,
+                req?.body,
+            );
+
+            return {
+                status: true,
+                data: result,
+            };
+        } catch (error) {
+            this.logger.error("Paystack webhook processing failed:", error?.message || error);
+            throw new HttpException(
+                {
+                    status: false,
+                    message: "Paystack webhook processing failed",
+                    error: error.message,
+                },
+                HttpStatus.BAD_REQUEST,
+            );
+        }
+    }
 }
 
 // Staff Payment Management Controller
@@ -985,6 +1026,63 @@ export class StaffPaymentsController {
                 {
                     success: false,
                     message: "Failed to reject manual transfer payment",
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Patch("student-payments/:id/reconcile")
+    @ApiOperation({ summary: "Reconcile a Paystack payment record against Paystack verify API" })
+    async reconcileStudentPayment(@Param("id") id: string) {
+        try {
+            const result = await this.paymentsService.reconcileStudentPaymentById(id);
+
+            return {
+                success: true,
+                data: result,
+                message: "Payment reconciled successfully",
+            };
+        } catch (error) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: "Failed to reconcile payment",
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Post("student-payments/reconcile-pending")
+    @ApiOperation({ summary: "Reconcile stale pending Paystack records" })
+    async reconcilePendingPaystackPayments(
+        @Body()
+        body: {
+            olderThanMinutes?: number;
+            batchSize?: number;
+            hardTimeoutHours?: number;
+        } = {},
+    ) {
+        try {
+            const result = await this.paymentsService.reconcilePendingPaystackPayments({
+                olderThanMinutes: body.olderThanMinutes,
+                batchSize: body.batchSize,
+                hardTimeoutHours: body.hardTimeoutHours,
+            });
+
+            return {
+                success: true,
+                data: result,
+                message: "Pending Paystack reconciliation completed",
+            };
+        } catch (error) {
+            throw new HttpException(
+                {
+                    success: false,
+                    message: "Failed to reconcile pending Paystack payments",
                     error: error.message,
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR,

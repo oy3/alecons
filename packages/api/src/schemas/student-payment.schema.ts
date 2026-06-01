@@ -116,6 +116,18 @@ export class StudentPayment {
     @Prop()
     accessCode?: string;
 
+    @Prop()
+    gatewayStatus?: string;
+
+    @Prop()
+    gatewayResponse?: string;
+
+    @Prop()
+    lastVerifiedAt?: Date;
+
+    @Prop({ default: 0 })
+    verificationAttempts?: number;
+
     @Prop({ enum: RemittanceStatus })
     remittanceStatus?: RemittanceStatus;
 

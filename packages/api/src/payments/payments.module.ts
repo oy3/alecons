@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { PaymentsController, StaffPaymentsController } from './payments.controller';
+import { PaymentsController, StaffPaymentsController, PaystackWebhookController } from './payments.controller';
 import { StudentPaymentsController } from './student-payments.controller';
 import { PaymentsService } from './payments.service';
 import { Payment, PaymentSchema } from '../schemas/payment.schema';
@@ -16,6 +16,7 @@ import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
 import { UploadModule } from '../modules/upload.module';
 import { PaymentRemittanceService } from './payment-remittance.service';
+import { PaymentsReconciliationScheduler } from './payments-reconciliation.scheduler';
 
 @Module({
     imports: [
@@ -32,8 +33,14 @@ import { PaymentRemittanceService } from './payment-remittance.service';
             { name: PaymentDestinationAccount.name, schema: PaymentDestinationAccountSchema },
         ]),
     ],
-    controllers: [PaymentsController, StaffPaymentsController, StudentPaymentsController],
-    providers: [PaymentsService, PaymentRemittanceService, MatriculationService, EmailService],
+    controllers: [PaymentsController, StaffPaymentsController, StudentPaymentsController, PaystackWebhookController],
+    providers: [
+        PaymentsService,
+        PaymentRemittanceService,
+        PaymentsReconciliationScheduler,
+        MatriculationService,
+        EmailService,
+    ],
     exports: [PaymentsService, PaymentRemittanceService],
 })
 export class PaymentsModule { }

@@ -554,6 +554,19 @@ class StaffApiService {
         })
     }
 
+    async reconcileStudentPayment(id) {
+        return this.makeRequest(`/staff/payments/student-payments/${id}/reconcile`, {
+            method: 'PATCH',
+        })
+    }
+
+    async reconcilePendingPaystackPayments(payload = {}) {
+        return this.makeRequest('/staff/payments/student-payments/reconcile-pending', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        })
+    }
+
     // Academic Sessions Management
     async getAcademicSessions(params = {}) {
         const queryParams = new URLSearchParams(params).toString()

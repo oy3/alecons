@@ -9,6 +9,7 @@ import Resources from '../views/Resources.vue'
 import Finance from '../views/Finance.vue'
 import Settings from '../views/Settings.vue'
 import TenancyAgreement from '../views/TenancyAgreement.vue'
+import PaymentVerification from '../views/PaymentVerification.vue'
 
 const routes = [
     {
@@ -68,6 +69,15 @@ const routes = [
         meta: {
             requiresAuth: true,
             title: 'Tenancy Agreement - Student Portal'
+        }
+    },
+    {
+        path: '/payment/verify/:reference',
+        name: 'PaymentVerification',
+        component: PaymentVerification,
+        meta: {
+            requiresAuth: true,
+            title: 'Payment Verification - Student Portal'
         }
     },
     {

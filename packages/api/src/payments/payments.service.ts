@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import * as crypto from 'crypto';
 import { Payment, PaymentDocument, PaymentAudience } from '../schemas/payment.schema';
 import {
     StudentPayment,
@@ -148,6 +149,17 @@ export interface PaystackInitializeResponse {
     authorization_url: string;
     access_code: string;
     reference: string;
+}
+
+interface PendingReconciliationSummary {
+    scanned: number;
+    reconciled: number;
+    markedSuccessful: number;
+    markedFailed: number;
+    stillPending: number;
+    timedOut: number;
+    errors: number;
+    runAt: string;
 }
 
 @Injectable()
@@ -1117,6 +1129,245 @@ export class PaymentsService {
         await studentPayment.save();
     }
 
+    private getPaystackStatus(transaction: any): string {
+        return String(transaction?.status || '').toLowerCase().trim();
+    }
+
+    private isPaystackSuccessStatus(status: string): boolean {
+        return status === 'success';
+    }
+
+    private isPaystackFailureStatus(status: string): boolean {
+        return ['failed', 'abandoned', 'reversed'].includes(status);
+    }
+
+    private async verifyPaystackTransaction(reference: string): Promise<any> {
+        if (!this.paystackSecretKey) {
+            throw new Error('PAYSTACK_SECRET_KEY is not configured');
+        }
+
+        const response = await fetch(`${this.paystackBaseUrl}/transaction/verify/${reference}`, {
+            headers: {
+                Authorization: `Bearer ${this.paystackSecretKey}`,
+            },
+        });
+
+        const data = await response.json();
+
+        if (!data.status) {
+            throw new Error(data.message || 'Failed to verify payment');
+        }
+
+        return data.data;
+    }
+
+    private async applyPaystackTransactionState(studentPayment: any, transaction: any): Promise<any> {
+        const paystackStatus = this.getPaystackStatus(transaction);
+        const now = new Date();
+        const previousStatus = studentPayment.status;
+
+        studentPayment.lastVerifiedAt = now;
+        studentPayment.verificationAttempts = (studentPayment.verificationAttempts || 0) + 1;
+        studentPayment.gatewayStatus = paystackStatus || transaction?.status;
+        studentPayment.gatewayResponse = transaction?.gateway_response || studentPayment.gatewayResponse;
+
+        if (this.isPaystackSuccessStatus(paystackStatus)) {
+            studentPayment.status = PaymentStatus.SUCCESSFUL;
+            studentPayment.remarks = 'Payment successful and verified';
+            studentPayment.paidAt = transaction?.paid_at ? new Date(transaction.paid_at) : (studentPayment.paidAt || now);
+            studentPayment.method = studentPayment.method || PaymentMethod.PAYSTACK;
+            studentPayment.channel = transaction.channel;
+            studentPayment.fee = transaction.fees ? (transaction.fees / 100) : (studentPayment.fee || 0);
+            studentPayment.gatewayId = transaction.id;
+            studentPayment.authorizationCode = transaction.authorization?.authorization_code;
+            this.markSuccessfulPaystackPaymentAwaitingRemittance(
+                studentPayment,
+                transaction.amount ? (transaction.amount / 100) : studentPayment.amount,
+            );
+        } else if (this.isPaystackFailureStatus(paystackStatus)) {
+            if (studentPayment.status !== PaymentStatus.SUCCESSFUL) {
+                studentPayment.status = PaymentStatus.FAILED;
+            }
+            studentPayment.remarks = `Payment ${paystackStatus || 'failed'}: ${transaction.gateway_response || 'Payment was not completed'}`;
+        } else {
+            if (studentPayment.status !== PaymentStatus.SUCCESSFUL) {
+                studentPayment.status = PaymentStatus.PENDING;
+                studentPayment.remarks = `Payment ${paystackStatus || 'pending'}: awaiting completion`;
+            }
+        }
+
+        await studentPayment.save();
+
+        if (
+            previousStatus !== PaymentStatus.SUCCESSFUL
+            && studentPayment.status === PaymentStatus.SUCCESSFUL
+        ) {
+            await this.updateApplicationStageAfterPayment(studentPayment.userId, studentPayment.paymentId);
+        }
+
+        return {
+            status: paystackStatus,
+            reference: transaction.reference,
+            amount: transaction.amount,
+            channel: transaction.channel,
+            paid_at: transaction.paid_at,
+            gateway_response: transaction.gateway_response,
+        };
+    }
+
+    async reconcileStudentPaymentById(studentPaymentId: string): Promise<any> {
+        if (!Types.ObjectId.isValid(studentPaymentId)) {
+            throw new Error('Invalid payment record ID');
+        }
+
+        const studentPayment = await this.studentPaymentModel.findById(studentPaymentId);
+        if (!studentPayment) {
+            throw new Error('Payment record not found');
+        }
+
+        if ((studentPayment.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
+            throw new Error('Only Paystack payments can be reconciled');
+        }
+
+        const transaction = await this.verifyPaystackTransaction(studentPayment.reference);
+        const result = await this.applyPaystackTransactionState(studentPayment, transaction);
+
+        return {
+            ...result,
+            internalStatus: studentPayment.status,
+            paymentId: studentPayment._id.toString(),
+            lastVerifiedAt: studentPayment.lastVerifiedAt,
+        };
+    }
+
+    async reconcilePendingPaystackPayments(options: {
+        olderThanMinutes?: number;
+        batchSize?: number;
+        hardTimeoutHours?: number;
+    } = {}): Promise<PendingReconciliationSummary> {
+        const olderThanMinutes = Math.max(1, Number(options.olderThanMinutes || 10));
+        const batchSize = Math.max(1, Number(options.batchSize || 100));
+        const hardTimeoutHours = Math.max(1, Number(options.hardTimeoutHours || 24));
+
+        const olderThanDate = new Date(Date.now() - olderThanMinutes * 60 * 1000);
+        const hardTimeoutDate = new Date(Date.now() - hardTimeoutHours * 60 * 60 * 1000);
+
+        const candidates = await this.studentPaymentModel.find({
+            status: PaymentStatus.PENDING,
+            $or: [
+                { method: PaymentMethod.PAYSTACK },
+                { method: { $exists: false } },
+            ],
+            createdAt: { $lt: olderThanDate },
+        })
+            .sort({ createdAt: 1 })
+            .limit(batchSize);
+
+        const summary: PendingReconciliationSummary = {
+            scanned: candidates.length,
+            reconciled: 0,
+            markedSuccessful: 0,
+            markedFailed: 0,
+            stillPending: 0,
+            timedOut: 0,
+            errors: 0,
+            runAt: new Date().toISOString(),
+        };
+
+        for (const candidate of candidates) {
+            try {
+                const transaction = await this.verifyPaystackTransaction(candidate.reference);
+                await this.applyPaystackTransactionState(candidate, transaction);
+
+                summary.reconciled += 1;
+                if (candidate.status === PaymentStatus.SUCCESSFUL) {
+                    summary.markedSuccessful += 1;
+                } else if (candidate.status === PaymentStatus.FAILED) {
+                    summary.markedFailed += 1;
+                } else {
+                    summary.stillPending += 1;
+                }
+
+                if (
+                    candidate.status === PaymentStatus.PENDING
+                    && candidate.createdAt
+                    && new Date(candidate.createdAt).getTime() < hardTimeoutDate.getTime()
+                ) {
+                    candidate.status = PaymentStatus.FAILED;
+                    candidate.remarks = `Payment timed out after ${hardTimeoutHours} hour(s) without completion`;
+                    await candidate.save();
+                    summary.markedFailed += 1;
+                    summary.stillPending = Math.max(0, summary.stillPending - 1);
+                    summary.timedOut += 1;
+                }
+            } catch (error) {
+                summary.errors += 1;
+                this.logger.error(
+                    `Failed to reconcile pending Paystack payment ${candidate.reference}: ${error instanceof Error ? error.message : error}`,
+                );
+
+                if (
+                    candidate.createdAt
+                    && new Date(candidate.createdAt).getTime() < hardTimeoutDate.getTime()
+                ) {
+                    candidate.status = PaymentStatus.FAILED;
+                    candidate.remarks = `Payment timed out after ${hardTimeoutHours} hour(s) without completion`;
+                    candidate.lastVerifiedAt = new Date();
+                    await candidate.save();
+                    summary.markedFailed += 1;
+                    summary.timedOut += 1;
+                }
+            }
+        }
+
+        return summary;
+    }
+
+    async processPaystackWebhook(
+        signature: string | undefined,
+        rawBody: Buffer | undefined,
+        payload: any,
+    ): Promise<{ event: string; reference?: string; reconciled: boolean }> {
+        if (!this.paystackSecretKey) {
+            throw new Error('PAYSTACK_SECRET_KEY is not configured');
+        }
+
+        if (!signature || !rawBody) {
+            throw new Error('Missing Paystack webhook signature or raw body');
+        }
+
+        const hash = crypto
+            .createHmac('sha512', this.paystackSecretKey)
+            .update(rawBody)
+            .digest('hex');
+
+        if (hash !== signature) {
+            throw new Error('Invalid Paystack webhook signature');
+        }
+
+        const event = String(payload?.event || '').toLowerCase();
+        const reference = payload?.data?.reference;
+
+        if (!reference) {
+            return { event, reconciled: false };
+        }
+
+        const studentPayment = await this.studentPaymentModel.findOne({ reference });
+        if (!studentPayment) {
+            this.logger.warn(`Paystack webhook received unknown reference: ${reference}`);
+            return { event, reference, reconciled: false };
+        }
+
+        if ((studentPayment.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
+            return { event, reference, reconciled: false };
+        }
+
+        const transaction = await this.verifyPaystackTransaction(reference);
+        await this.applyPaystackTransactionState(studentPayment, transaction);
+
+        return { event, reference, reconciled: true };
+    }
+
     private markSuccessfulPaystackPaymentAwaitingRemittance(studentPayment: any, amount?: number) {
         if ((studentPayment.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
             return;
@@ -1130,20 +1381,7 @@ export class PaymentsService {
     }
 
     async verifyPayment(reference: string): Promise<any> {
-        // Verify with Paystack
-        const response = await fetch(`${this.paystackBaseUrl}/transaction/verify/${reference}`, {
-            headers: {
-                'Authorization': `Bearer ${this.paystackSecretKey}`,
-            }
-        });
-
-        const data = await response.json();
-
-        if (!data.status) {
-            throw new Error(data.message || 'Failed to verify payment');
-        }
-
-        const transaction = data.data;
+        const transaction = await this.verifyPaystackTransaction(reference);
 
         // Find the student payment record
         const studentPayment = await this.studentPaymentModel.findOne({ reference });
@@ -1151,40 +1389,7 @@ export class PaymentsService {
             throw new Error('Payment record not found');
         }
 
-        // Update payment status based on Paystack response
-        if (transaction.status === 'success') {
-            studentPayment.status = PaymentStatus.SUCCESSFUL;
-            studentPayment.remarks = 'Payment successful and verified';
-            studentPayment.paidAt = new Date();
-            studentPayment.method = studentPayment.method || PaymentMethod.PAYSTACK;
-            studentPayment.channel = transaction.channel;
-            studentPayment.fee = transaction.fees ? (transaction.fees / 100) : 0; // Convert from kobo to naira
-            studentPayment.gatewayId = transaction.id;
-            studentPayment.authorizationCode = transaction.authorization?.authorization_code;
-            this.markSuccessfulPaystackPaymentAwaitingRemittance(
-                studentPayment,
-                transaction.amount ? (transaction.amount / 100) : studentPayment.amount,
-            );
-
-            await studentPayment.save();
-
-            // Update application stage after successful payment
-            await this.updateApplicationStageAfterPayment(studentPayment.userId, studentPayment.paymentId);
-
-        } else {
-            studentPayment.status = PaymentStatus.FAILED;
-            studentPayment.remarks = `Payment failed: ${transaction.gateway_response}`;
-            await studentPayment.save();
-        }
-
-        return {
-            status: transaction.status,
-            reference: transaction.reference,
-            amount: transaction.amount,
-            channel: transaction.channel,
-            paid_at: transaction.paid_at,
-            gateway_response: transaction.gateway_response
-        };
+        return this.applyPaystackTransactionState(studentPayment, transaction);
     }
 
     /**
@@ -1241,26 +1446,13 @@ export class PaymentsService {
      * Mark old pending payments as failed (can be called periodically)
      */
     async markAbandonedPaymentsAsFailed(): Promise<void> {
-        const thirtyMinutesAgo = new Date(Date.now() - (30 * 60 * 1000));
+        const summary = await this.reconcilePendingPaystackPayments({
+            olderThanMinutes: 10,
+            batchSize: 200,
+            hardTimeoutHours: 24,
+        });
 
-        const result = await this.studentPaymentModel.updateMany(
-            {
-                status: PaymentStatus.PENDING,
-                $or: [
-                    { method: PaymentMethod.PAYSTACK },
-                    { method: { $exists: false } },
-                ],
-                createdAt: { $lt: thirtyMinutesAgo }
-            },
-            {
-                $set: {
-                    status: PaymentStatus.FAILED,
-                    remarks: 'Payment timed out - user did not complete payment within 30 minutes'
-                }
-            }
-        );
-
-        this.logger.log(`Marked ${result.modifiedCount} abandoned payments as failed`);
+        this.logger.log(`Reconciled pending payments run summary: ${JSON.stringify(summary)}`);
     }
 
     /**
@@ -2395,6 +2587,10 @@ export class PaymentsService {
                             receiptUploadedAt: 1,
                             verificationRemarks: 1,
                             remarks: 1,
+                            gatewayStatus: 1,
+                            gatewayResponse: 1,
+                            lastVerifiedAt: 1,
+                            verificationAttempts: 1,
                             rejectedBy: {
                                 firstName: '$rejectedByUser.firstName',
                                 lastName: '$rejectedByUser.lastName',

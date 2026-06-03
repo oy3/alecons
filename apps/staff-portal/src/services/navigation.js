@@ -24,6 +24,12 @@ export const staffNavigationItems = [
         module: 'academics',
     },
     {
+        title: 'Course Registrations',
+        icon: 'bi-journal-check',
+        route: '/course-registrations',
+        module: 'courseRegistrations',
+    },
+    {
         title: 'Exams',
         icon: 'bi-file-text',
         route: '/exams',

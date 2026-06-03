@@ -1262,7 +1262,7 @@ export default {
                 <thead class="table-light">
                   <tr>
                     <th class="fw-bold">Payment Description</th>
-                    <th class="fw-bold text-end">Amount</th>
+                    <th class="fw-bold text-start">Amount</th>
                     <th class="fw-bold text-center">Action</th>
                   </tr>
                 </thead>
@@ -1281,7 +1281,7 @@ export default {
                         </small>
                       </div>
                     </td>
-                    <td class="py-3 text-end">
+                    <td class="py-3 text-start">
                       <span class="fw-bold text-warning">
                         {{ formatCurrency(unpaidFee.amount) }}
                       </span>
@@ -1305,7 +1305,7 @@ export default {
                     </td>
                   </tr>
                 </tbody>
-                <tfoot class="table-light">
+                <!-- <tfoot class="table-light">
                   <tr>
                     <th class="py-3">Total Outstanding</th>
                     <th class="py-3 text-end">
@@ -1315,7 +1315,7 @@ export default {
                     </th>
                     <th class="py-3"></th>
                   </tr>
-                </tfoot>
+                </tfoot> -->
               </table>
             </div>
 

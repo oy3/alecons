@@ -33,6 +33,10 @@ async function seedStaffData() {
                         permissions: ['view', 'create', 'edit', 'delete', 'manage']
                     },
                     {
+                        module: 'courseRegistrations',
+                        permissions: ['view', 'review', 'approve', 'reject', 'manage']
+                    },
+                    {
                         module: 'applications',
                         permissions: ['view', 'review', 'approve', 'reject', 'manage']
                     },
@@ -73,6 +77,10 @@ async function seedStaffData() {
                         permissions: ['view', 'review', 'approve', 'reject']
                     },
                     {
+                        module: 'courseRegistrations',
+                        permissions: ['view', 'review', 'approve', 'reject']
+                    },
+                    {
                         module: 'settings',
                         permissions: ['view']
                     },
@@ -99,6 +107,10 @@ async function seedStaffData() {
                     {
                         module: 'applications',
                         permissions: ['view', 'review']
+                    },
+                    {
+                        module: 'courseRegistrations',
+                        permissions: ['view']
                     },
                     {
                         module: 'settings',

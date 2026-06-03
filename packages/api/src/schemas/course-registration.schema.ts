@@ -10,6 +10,13 @@ export enum CourseRegistrationStatus {
     REJECTED = 'rejected',
 }
 
+export enum CourseRegistrationHistoryAction {
+    SUBMITTED = 'submitted',
+    RESUBMITTED = 'resubmitted',
+    APPROVED = 'approved',
+    REJECTED = 'rejected',
+}
+
 @Schema({ _id: false })
 export class CourseRegistrationItem {
     @Prop({ type: Types.ObjectId, ref: 'ProgramCourse', required: true })
@@ -17,6 +24,72 @@ export class CourseRegistrationItem {
 }
 
 export const CourseRegistrationItemSchema = SchemaFactory.createForClass(CourseRegistrationItem);
+
+@Schema({ _id: false })
+export class CourseRegistrationHistorySnapshotItem {
+    @Prop({ type: Types.ObjectId, ref: 'ProgramCourse', required: true })
+    programCourseId: Types.ObjectId;
+
+    @Prop()
+    courseCode?: string;
+
+    @Prop()
+    courseTitle?: string;
+
+    @Prop()
+    units?: number;
+
+    @Prop()
+    category?: string;
+}
+
+export const CourseRegistrationHistorySnapshotItemSchema = SchemaFactory.createForClass(CourseRegistrationHistorySnapshotItem);
+
+@Schema({ _id: false })
+export class CourseRegistrationHistorySnapshot {
+    @Prop({ required: true, default: 0 })
+    totalUnits: number;
+
+    @Prop({ required: true, default: 0 })
+    courseCount: number;
+
+    @Prop({ type: [CourseRegistrationHistorySnapshotItemSchema], default: [] })
+    items: CourseRegistrationHistorySnapshotItem[];
+}
+
+export const CourseRegistrationHistorySnapshotSchema = SchemaFactory.createForClass(CourseRegistrationHistorySnapshot);
+
+@Schema({ _id: false })
+export class CourseRegistrationHistoryEntry {
+    @Prop({ required: true, enum: CourseRegistrationHistoryAction })
+    action: CourseRegistrationHistoryAction;
+
+    @Prop({ enum: CourseRegistrationStatus })
+    fromStatus?: CourseRegistrationStatus;
+
+    @Prop({ required: true, enum: CourseRegistrationStatus })
+    toStatus: CourseRegistrationStatus;
+
+    @Prop({ type: Types.ObjectId, ref: 'User' })
+    performedBy?: Types.ObjectId;
+
+    @Prop()
+    actorRole?: string;
+
+    @Prop()
+    comment?: string;
+
+    @Prop({ required: true, min: 1 })
+    submissionVersion: number;
+
+    @Prop({ type: CourseRegistrationHistorySnapshotSchema, required: true })
+    snapshot: CourseRegistrationHistorySnapshot;
+
+    @Prop({ type: Date, default: Date.now })
+    createdAt: Date;
+}
+
+export const CourseRegistrationHistoryEntrySchema = SchemaFactory.createForClass(CourseRegistrationHistoryEntry);
 
 @Schema({ timestamps: true })
 export class CourseRegistration {
@@ -41,6 +114,9 @@ export class CourseRegistration {
     @Prop({ required: true, default: 0 })
     totalUnits: number;
 
+    @Prop({ required: true, default: 0 })
+    submissionVersion: number;
+
     @Prop({ required: true, enum: CourseRegistrationStatus, default: CourseRegistrationStatus.DRAFT })
     status: CourseRegistrationStatus;
 
@@ -55,6 +131,9 @@ export class CourseRegistration {
 
     @Prop()
     reviewComment?: string;
+
+    @Prop({ type: [CourseRegistrationHistoryEntrySchema], default: [] })
+    workflowHistory: CourseRegistrationHistoryEntry[];
 }
 
 export const CourseRegistrationSchema = SchemaFactory.createForClass(CourseRegistration);

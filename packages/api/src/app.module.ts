@@ -17,6 +17,7 @@ import { ExamModule } from './modules/exam.module';
 import { StaffDashboardModule } from './modules/staff-dashboard.module';
 import { UserManagementModule } from './modules/user-management.module';
 import { StudentModule } from './modules/student.module';
+import { CourseRegistrationManagementModule } from './modules/course-registration-management.module';
 import { CoursesModule } from './courses/courses.module';
 import { StaffApplicationsController } from './controllers/staff-applications.controller';
 import { ExamResultsController } from './controllers/exam-results.controller';
@@ -88,6 +89,7 @@ import * as multer from 'multer';
         StaffDashboardModule,
         UserManagementModule,
         StudentModule,
+        CourseRegistrationManagementModule,
     ],
     controllers: [AppController, StaffApplicationsController, ExamResultsController],
     providers: [AppService, EmailService, MatriculationService, ContentSanitizationService, AdmissionLetterPdfService],

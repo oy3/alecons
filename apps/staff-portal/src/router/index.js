@@ -44,6 +44,12 @@ const routes = [
         meta: { requiresAuth: true, module: 'academics' }
     },
     {
+        path: '/course-registrations',
+        name: 'CourseRegistrations',
+        component: () => import('../views/course-registrations/CourseRegistrations.vue'),
+        meta: { requiresAuth: true, module: 'courseRegistrations' }
+    },
+    {
         path: '/exams',
         name: 'ExamManagement',
         component: () => import('../views/exams/ExamManagement.vue'),

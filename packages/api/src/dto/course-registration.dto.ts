@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { ArrayUnique, IsArray, IsIn, IsInt, IsMongoId, IsOptional, Min } from 'class-validator';
+import { ArrayUnique, IsArray, IsIn, IsInt, IsMongoId, IsOptional, IsString, Min } from 'class-validator';
 
 const parseOptionalInt = ({ value }) => {
     if (value === undefined || value === null || value === '') {
@@ -56,4 +56,11 @@ export class SubmitCourseRegistrationDto {
     @ArrayUnique()
     @IsMongoId({ each: true })
     items: string[];
+}
+
+export class ReviewCourseRegistrationDto {
+    @ApiPropertyOptional({ description: 'Reviewer comment or correction notes' })
+    @IsOptional()
+    @IsString()
+    reviewComment?: string;
 }

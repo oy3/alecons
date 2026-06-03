@@ -1,4 +1,5 @@
 <script>
+import { Popover } from "bootstrap";
 import { useAuthStore } from "../stores/auth.js";
 import { apiService } from "../services/api.js";
 import Swal from "sweetalert2";
@@ -17,6 +18,7 @@ export default {
       selectedCourseIds: [],
       courseSearchQuery: "",
       feedback: null,
+      reviewReasonPopover: null,
     };
   },
   setup() {
@@ -36,14 +38,19 @@ export default {
         .filter(Boolean);
     },
     isCurrentSelectedPeriod() {
-      const currentLevel = Number(this.registrationContext?.student?.currentLevel) || 1;
-      const currentSemester = Number(this.registrationContext?.student?.currentSemester) || 1;
+      const currentLevel =
+        Number(this.registrationContext?.student?.currentLevel) || 1;
+      const currentSemester =
+        Number(this.registrationContext?.student?.currentSemester) || 1;
       const selectedLevel =
-        Number(this.selectedLevel || this.registrationContext?.student?.selectedLevel) ||
-        currentLevel;
+        Number(
+          this.selectedLevel ||
+            this.registrationContext?.student?.selectedLevel,
+        ) || currentLevel;
       const selectedSemester =
         Number(
-          this.selectedSemester || this.registrationContext?.student?.selectedSemester,
+          this.selectedSemester ||
+            this.registrationContext?.student?.selectedSemester,
         ) || currentSemester;
 
       return (
@@ -135,8 +142,10 @@ export default {
       return this.filteredDisplayedCourses.length;
     },
     registrationPeriodOptions() {
-      const programType = this.registrationContext?.program?.programType || "Level";
-      const currentLevel = Number(this.registrationContext?.student?.currentLevel) || 1;
+      const programType =
+        this.registrationContext?.program?.programType || "Level";
+      const currentLevel =
+        Number(this.registrationContext?.student?.currentLevel) || 1;
       const durationYears = Math.max(
         Number(this.registrationContext?.program?.durationYears) || 0,
         currentLevel,
@@ -163,7 +172,9 @@ export default {
         this.registrationContext?.student?.currentLevel ||
         1;
       const semester =
-        this.selectedSemester || this.registrationContext?.student?.selectedSemester || 1;
+        this.selectedSemester ||
+        this.registrationContext?.student?.selectedSemester ||
+        1;
 
       return `${level}-${semester}`;
     },
@@ -258,9 +269,18 @@ export default {
       }
       return "bg-warning-subtle text-warning";
     },
+    showReviewReason() {
+      return (
+        ["approved", "rejected"].includes(this.currentRegistration?.status) &&
+        !!this.currentRegistration?.reviewComment
+      );
+    },
   },
   async mounted() {
     await this.loadRegistrationContext();
+  },
+  beforeUnmount() {
+    this.disposeReviewPopover();
   },
   methods: {
     async loadRegistrationContext() {
@@ -287,6 +307,9 @@ export default {
         this.selectedSemester =
           response.data.student?.selectedSemester || this.selectedSemester || 1;
         this.initializeSelections();
+        this.$nextTick(() => {
+          this.initializeReviewPopover();
+        });
       } catch (error) {
         logger.error(
           "Academics: failed to load course registration context",
@@ -299,6 +322,72 @@ export default {
       } finally {
         this.isLoading = false;
       }
+    },
+    disposeReviewPopover() {
+      if (this.reviewReasonPopover) {
+        this.reviewReasonPopover.dispose();
+        this.reviewReasonPopover = null;
+      }
+    },
+    initializeReviewPopover() {
+      this.disposeReviewPopover();
+
+      if (!this.showReviewReason) {
+        return;
+      }
+
+      const trigger = this.$refs.reviewReasonTrigger;
+      if (!trigger) {
+        return;
+      }
+
+      this.reviewReasonPopover = new Popover(trigger, {
+        container: "body",
+        placement: "bottom",
+        trigger: "focus",
+        html: true,
+        sanitize: false,
+        title: "Review Reason",
+        content: this.getReviewPopoverContent(),
+      });
+    },
+    escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    },
+    getReviewerName() {
+      const reviewer = this.currentRegistration?.reviewedBy;
+      if (!reviewer) {
+        return "Course advisor";
+      }
+
+      return [reviewer.firstName, reviewer.lastName]
+        .filter(Boolean)
+        .join(" ");
+    },
+    getReviewedAtLabel() {
+      if (!this.currentRegistration?.reviewedAt) {
+        return "Not available";
+      }
+
+      return new Date(this.currentRegistration.reviewedAt).toLocaleString();
+    },
+    getReviewPopoverContent() {
+      const comment = this.escapeHtml(this.currentRegistration?.reviewComment || "No review comment provided.");
+      const reviewer = this.escapeHtml(this.getReviewerName());
+      const reviewedAt = this.escapeHtml(this.getReviewedAtLabel());
+
+      return `
+        <div class="small">
+          <div class="mb-2">${comment}</div>
+          <div class="text-muted"><strong>Reviewed by:</strong> ${reviewer}</div>
+          <div class="text-muted"><strong>Reviewed at:</strong> ${reviewedAt}</div>
+        </div>
+      `;
     },
     initializeSelections() {
       if (this.currentRegistration?.items?.length) {
@@ -625,8 +714,10 @@ export default {
           </div>
 
           <div v-else class="courses-table-layout">
-            <div class="courses-toolbar p-3">
-              <div class="input-group">
+            <div
+              class="p-3 d-flex gap-3 align-items-center justify-content-between"
+            >
+              <div class="input-group w-75">
                 <span class="input-group-text bg-white border-end-0">
                   <i class="bi bi-search"></i>
                 </span>
@@ -636,6 +727,26 @@ export default {
                   v-model.trim="courseSearchQuery"
                   placeholder="Search here..."
                 />
+              </div>
+              <div class="py-2 d-grid gap-2">
+                <span
+                  v-if="currentRegistration"
+                  class="badge rounded-pill p-2"
+                  :class="statusBadgeClass"
+                >
+                  {{ formatStatus(currentRegistration.status) }}
+                </span>
+                <button
+                  type="button"
+                  ref="reviewReasonTrigger"
+                  v-if="showReviewReason"
+                  class="btn btn-sm btn-link p-0 border-0 shadow-none small link-primary link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover"
+                  data-bs-container="body"
+                  data-bs-toggle="popover"
+                  data-bs-placement="bottom"
+                >
+                  View reason
+                </button>
               </div>
             </div>
             <div
@@ -738,7 +849,10 @@ export default {
                       class="btn btn-sm btn-info"
                       @click="saveDraft"
                       :disabled="
-                        !canEditRegistration || isSavingDraft || isSubmitting || !canSubmitRegistration
+                        !canEditRegistration ||
+                        isSavingDraft ||
+                        isSubmitting ||
+                        !canSubmitRegistration
                       "
                     >
                       <span
@@ -759,15 +873,6 @@ export default {
                       Submit
                     </button>
                   </div>
-                </div>
-                <div v-else class="py-2">
-                  <span
-                    v-if="currentRegistration"
-                    class="badge rounded-pill p-2"
-                    :class="statusBadgeClass"
-                  >
-                    {{ formatStatus(currentRegistration.status) }}
-                  </span>
                 </div>
               </div>
             </template>

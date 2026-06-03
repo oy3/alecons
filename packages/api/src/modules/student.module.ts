@@ -9,6 +9,7 @@ import { UploadService } from '../services/upload.service';
 import { Student, StudentSchema } from '../schemas/student.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
+import { Program, ProgramSchema } from '../schemas/program.schema';
 import { ProgramCourse, ProgramCourseSchema } from '../schemas/program-course.schema';
 import { CourseRegistration, CourseRegistrationSchema } from '../schemas/course-registration.schema';
 import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
@@ -21,6 +22,7 @@ import { TenancyAgreement, TenancyAgreementSchema } from '../schemas/tenancy-agr
             { name: Student.name, schema: StudentSchema },
             { name: User.name, schema: UserSchema },
             { name: Application.name, schema: ApplicationSchema },
+            { name: Program.name, schema: ProgramSchema },
             { name: ProgramCourse.name, schema: ProgramCourseSchema },
             { name: CourseRegistration.name, schema: CourseRegistrationSchema },
             { name: AcademicSession.name, schema: AcademicSessionSchema },
@@ -30,6 +32,6 @@ import { TenancyAgreement, TenancyAgreementSchema } from '../schemas/tenancy-agr
     ],
     controllers: [StudentController, StudentCourseRegistrationController],
     providers: [StudentService, CourseRegistrationService, TenancyAgreementService, UploadService],
-    exports: [StudentService, TenancyAgreementService] // Export so other modules can use them
+    exports: [StudentService, TenancyAgreementService, CourseRegistrationService] // Export so other modules can use them
 })
 export class StudentModule { }

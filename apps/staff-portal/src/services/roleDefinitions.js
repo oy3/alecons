@@ -39,6 +39,16 @@ export const MODULE_DEFINITIONS = {
             { value: 'manage', label: 'Manage All' },
         ],
     },
+    courseRegistrations: {
+        label: 'Course Registrations',
+        permissions: [
+            { value: 'view', label: 'View' },
+            { value: 'review', label: 'Review' },
+            { value: 'approve', label: 'Approve' },
+            { value: 'reject', label: 'Reject' },
+            { value: 'manage', label: 'Manage All' },
+        ],
+    },
     exams: {
         label: 'Exams',
         permissions: [

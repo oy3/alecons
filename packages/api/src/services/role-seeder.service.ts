@@ -37,6 +37,10 @@ export class RoleSeederService implements OnModuleInit {
                             permissions: ['view', 'create', 'read', 'update', 'delete', 'approve', 'export', 'manage']
                         },
                         {
+                            module: 'courseRegistrations',
+                            permissions: ['view', 'review', 'approve', 'reject', 'manage']
+                        },
+                        {
                             module: 'exams',
                             permissions: ['view', 'create', 'edit', 'delete', 'publish', 'manage']
                         },
@@ -60,6 +64,10 @@ export class RoleSeederService implements OnModuleInit {
                             permissions: ['view', 'create', 'read', 'edit', 'approve', 'export']
                         },
                         {
+                            module: 'courseRegistrations',
+                            permissions: ['view', 'review', 'approve', 'reject']
+                        },
+                        {
                             module: 'reports',
                             permissions: ['view', 'export']
                         }
@@ -79,6 +87,10 @@ export class RoleSeederService implements OnModuleInit {
                             permissions: ['view', 'read']
                         },
                         {
+                            module: 'courseRegistrations',
+                            permissions: ['view']
+                        },
+                        {
                             module: 'reports',
                             permissions: ['view']
                         }
@@ -92,6 +104,10 @@ export class RoleSeederService implements OnModuleInit {
                         {
                             module: 'applications',
                             permissions: ['view', 'read', 'edit']
+                        },
+                        {
+                            module: 'courseRegistrations',
+                            permissions: ['view']
                         },
                         {
                             module: 'reports',

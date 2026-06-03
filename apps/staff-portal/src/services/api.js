@@ -655,6 +655,40 @@ class StaffApiService {
         return this.makeRequest(`/programs/management${queryString ? `?${queryString}` : ''}`)
     }
 
+    async getAdvisorCourseRegistrationPrograms() {
+        return this.makeRequest('/staff/course-registrations/programs')
+    }
+
+    async getAdvisorCourseRegistrations(params = {}) {
+        const queryString = new URLSearchParams(
+            Object.entries(params).reduce((acc, [key, value]) => {
+                if (value !== undefined && value !== null && value !== '') {
+                    acc[key] = String(value)
+                }
+                return acc
+            }, {})
+        ).toString()
+        return this.makeRequest(`/staff/course-registrations${queryString ? `?${queryString}` : ''}`)
+    }
+
+    async getAdvisorCourseRegistration(id) {
+        return this.makeRequest(`/staff/course-registrations/${id}`)
+    }
+
+    async approveAdvisorCourseRegistration(id, payload = {}) {
+        return this.makeRequest(`/staff/course-registrations/${id}/approve`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+        })
+    }
+
+    async rejectAdvisorCourseRegistration(id, payload = {}) {
+        return this.makeRequest(`/staff/course-registrations/${id}/reject`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+        })
+    }
+
     async getProgram(id) {
         return this.makeRequest(`/programs/${id}`)
     }

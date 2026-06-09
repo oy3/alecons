@@ -48,6 +48,7 @@ export VITE_ENABLE_DEV_TOOLS="${VITE_ENABLE_DEV_TOOLS:-false}"
 write_env_file "$ROOT_DIR/apps/website/.env.production" \
     VITE_APP_FULL_NAME \
     VITE_APP_SITE_URL \
+    VITE_API_BASE_URL \
     VITE_APP_PHONE \
     VITE_APP_APPLICATION_PORTAL_URL \
     VITE_APP_STUDENT_PORTAL_URL \

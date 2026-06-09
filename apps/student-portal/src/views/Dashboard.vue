@@ -36,7 +36,7 @@ export default {
         },
         
         balanceStatusText() {
-            return this.hasOutstandingPayments ? 'Outstanding Payments' : 'All paid';
+            return this.hasOutstandingPayments ? 'Outstanding' : 'All paid';
         },
         
         balanceStatusClass() {

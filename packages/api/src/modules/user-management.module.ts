@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { UserManagementController } from '../controllers/user-management.controller';
+import { PublicVerificationController } from '../controllers/public-verification.controller';
 import { RolesController } from '../controllers/roles.controller';
 import { UserManagementService } from '../services/user-management.service';
+import { PublicVerificationService } from '../services/public-verification.service';
 import { RolesService } from '../services/roles.service';
 import { RoleSeederService } from '../services/role-seeder.service';
 import { User, UserSchema } from '../schemas/user.schema';
@@ -26,8 +28,8 @@ import { EmailService } from '../services/email.service';
             { name: Department.name, schema: DepartmentSchema }
         ])
     ],
-    controllers: [UserManagementController, RolesController],
-    providers: [UserManagementService, RolesService, RoleSeederService, EmailService],
-    exports: [UserManagementService, RolesService]
+    controllers: [UserManagementController, PublicVerificationController, RolesController],
+    providers: [UserManagementService, PublicVerificationService, RolesService, RoleSeederService, EmailService],
+    exports: [UserManagementService, PublicVerificationService, RolesService]
 })
 export class UserManagementModule { }

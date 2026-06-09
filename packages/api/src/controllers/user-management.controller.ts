@@ -17,6 +17,7 @@ import { RolesGuard } from "../guards/roles.guard";
 import { Roles } from "../decorators/roles.decorator";
 import { UserRole } from "../schemas/user.schema";
 import { UserManagementService } from "../services/user-management.service";
+import { PublicVerificationService } from "../services/public-verification.service";
 import { CreateUserDto } from "../dto/create-user.dto";
 import { UpdateUserDto } from "../dto/update-user.dto";
 import { CreateStaffDto } from "../dto/create-staff.dto";
@@ -28,7 +29,10 @@ import { UpdateStaffDto } from "../dto/update-staff.dto";
 export class UserManagementController {
     private readonly logger = new Logger(UserManagementController.name);
 
-    constructor(private readonly userManagementService: UserManagementService) { }
+    constructor(
+        private readonly userManagementService: UserManagementService,
+        private readonly publicVerificationService: PublicVerificationService,
+    ) { }
 
     @Get()
     async getUsers(
@@ -102,6 +106,22 @@ export class UserManagementController {
             throw new HttpException(
                 { message: "Failed to fetch user", error: error.message },
                 HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Get(':id/public-verification')
+    async getUserPublicVerification(@Param('id') id: string) {
+        try {
+            return await this.publicVerificationService.ensureVerificationDetailsForUser(id);
+        } catch (error) {
+            this.logger.error('Get user public verification failed:', error);
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw new HttpException(
+                { message: 'Failed to fetch public verification details', error: error.message },
+                error.status || HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
     }

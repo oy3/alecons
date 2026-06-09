@@ -11,6 +11,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { EmailService } from '../services/email.service';
 import { ApplicationNumberService } from '../services/application-number.service';
 import { ProgramDriftService } from '../services/program-drift.service';
+import { PublicVerificationService } from '../services/public-verification.service';
 import { ApplicationEligibilityService } from '../services/application-eligibility.service';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
@@ -59,6 +60,7 @@ import { AcademicSessionsModule } from '../modules/academic-sessions.module';
         EmailService,
         ApplicationNumberService,
         ProgramDriftService,
+        PublicVerificationService,
         ApplicationEligibilityService,
         StudentService,
     ],

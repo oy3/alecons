@@ -313,6 +313,10 @@ class StaffApiService {
         return this.makeRequest(`/staff/users/${id}`)
     }
 
+    async getUserPublicVerification(id) {
+        return this.makeRequest(`/staff/users/${id}/public-verification`)
+    }
+
     async updateUser(id, userData) {
         return this.makeRequest(`/staff/users/${id}`, {
             method: 'PATCH',
@@ -379,6 +383,12 @@ class StaffApiService {
         return this.makeRequest('/admin/application-numbers/program-drift/repair', {
             method: 'POST',
             body: JSON.stringify({ apply, sampleLimit }),
+        })
+    }
+
+    async backfillPublicVerificationTokens() {
+        return this.makeRequest('/admin/application-numbers/public-verification/backfill', {
+            method: 'POST',
         })
     }
 

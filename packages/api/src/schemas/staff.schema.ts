@@ -22,6 +22,12 @@ export class Staff {
 
     @Prop({ default: true })
     isActive: boolean;
+
+    @Prop({ unique: true, sparse: true, index: true })
+    publicVerificationToken?: string;
+
+    @Prop({ default: true })
+    publicVerificationEnabled: boolean;
 }
 
 export const StaffSchema = SchemaFactory.createForClass(Staff);

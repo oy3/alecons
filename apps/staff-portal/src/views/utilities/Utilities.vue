@@ -12,6 +12,7 @@ export default {
       isLoading: false,
       isRepairingCounter: false,
       isRepairingProgramDrift: false,
+      isBackfillingVerificationTokens: false,
       counterStats: null,
       counterRecord: null,
       programDriftSummary: null,
@@ -31,6 +32,14 @@ export default {
           variant: 'warning',
           description: 'Remove legacy program type/mode fields from Application and Student records and report broken program links so programId remains the only source of truth.',
           actionLabel: 'Inspect & Repair Drift'
+        },
+        {
+          id: 'public-verification-backfill',
+          title: 'Public Verification Token Backfill',
+          icon: 'bi-upc-scan',
+          variant: 'success',
+          description: 'Generate missing public verification tokens for existing student and staff records so ID card QR codes can be issued without opening each profile individually.',
+          actionLabel: 'Backfill Tokens'
         },
         {
           id: 'future-utilities',
@@ -397,6 +406,66 @@ export default {
       } finally {
         this.isRepairingProgramDrift = false
       }
+    },
+    async runPublicVerificationBackfill() {
+      const result = await Swal.fire({
+        title: 'Generate Missing Verification Tokens?',
+        html: `
+          <div class="text-start utility-confirmation">
+            <p class="small text-muted mb-2">This utility creates public verification tokens for existing students with matric numbers and staff with staff IDs when their token is still missing.</p>
+            <ul class="small mb-0">
+              <li>Existing tokens are left unchanged.</li>
+              <li>Only records missing a token are updated.</li>
+              <li>Generated tokens power QR links like <strong>https://alecons.edu.ng/verify/v1/&lt;token&gt;</strong>.</li>
+            </ul>
+          </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Generate Tokens',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#1a5f5f',
+        customClass: {
+          popup: 'utility-swal-popup'
+        }
+      })
+
+      if (!result.isConfirmed) {
+        return
+      }
+
+      try {
+        this.isBackfillingVerificationTokens = true
+
+        const response = await apiService.backfillPublicVerificationTokens()
+        if (!response.success) {
+          throw new Error(response.error || 'Public verification token backfill failed')
+        }
+
+        const summary = response.data || {}
+
+        await Swal.fire({
+          icon: summary.totalTokensGenerated ? 'success' : 'info',
+          title: summary.totalTokensGenerated ? 'Backfill Complete' : 'No Tokens Needed',
+          html: `
+            <ul class="text-start mb-0">
+              <li>Student tokens generated: <strong>${summary.studentTokensGenerated || 0}</strong></li>
+              <li>Staff tokens generated: <strong>${summary.staffTokensGenerated || 0}</strong></li>
+              <li>Total tokens generated: <strong>${summary.totalTokensGenerated || 0}</strong></li>
+            </ul>
+          `,
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Public verification token backfill failed:', error)
+        await Swal.fire({
+          icon: 'error',
+          title: 'Backfill Failed',
+          text: error.message || 'Unable to backfill public verification tokens.'
+        })
+      } finally {
+        this.isBackfillingVerificationTokens = false
+      }
     }
   }
 }
@@ -423,7 +492,7 @@ export default {
             {{ session.sessionYear }}
           </option>
         </select>
-        <button class="btn btn-outline-secondary" :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift" @click="loadUtilityState">
+        <button class="btn btn-outline-secondary" :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift || isBackfillingVerificationTokens" @click="loadUtilityState">
           <i class="bi bi-arrow-clockwise me-2"></i>
           Refresh
         </button>
@@ -538,7 +607,7 @@ export default {
               <button
                 v-if="utility.id === 'application-counter-repair'"
                 class="btn btn-primary"
-                :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift"
+                :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift || isBackfillingVerificationTokens"
                 @click="runCounterRepair"
               >
                 <span v-if="isRepairingCounter" class="spinner-border spinner-border-sm me-2"></span>
@@ -549,12 +618,23 @@ export default {
               <button
                 v-else-if="utility.id === 'program-drift-repair'"
                 class="btn btn-warning"
-                :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift"
+                :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift || isBackfillingVerificationTokens"
                 @click="runProgramDriftRepair"
               >
                 <span v-if="isRepairingProgramDrift" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-diagram-3 me-2"></i>
                 {{ isRepairingProgramDrift ? 'Repairing...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'public-verification-backfill'"
+                class="btn btn-success"
+                :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift || isBackfillingVerificationTokens"
+                @click="runPublicVerificationBackfill"
+              >
+                <span v-if="isBackfillingVerificationTokens" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-upc-scan me-2"></i>
+                {{ isBackfillingVerificationTokens ? 'Generating...' : utility.actionLabel }}
               </button>
 
               <button v-else class="btn btn-outline-secondary" disabled>

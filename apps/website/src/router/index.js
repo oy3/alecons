@@ -8,6 +8,7 @@ import Faculty from "../views/Faculty.vue";
 import PrivacyPolicy from "../views/PrivacyPolicy.vue";
 import TermsOfService from "../views/TermsOfService.vue";
 import Accessibility from "../views/Accessibility.vue";
+import VerifyIdentity from "../views/VerifyIdentity.vue";
 
 const routes = [
   {
@@ -54,6 +55,11 @@ const routes = [
     path: "/accessibility",
     name: "Accessibility",
     component: Accessibility,
+  },
+  {
+    path: "/verify/v1/:token",
+    name: "VerifyIdentity",
+    component: VerifyIdentity,
   },
 ];
 

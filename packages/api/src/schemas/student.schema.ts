@@ -46,6 +46,12 @@ export class Student {
 
     @Prop()
     profileImageUrl?: string; // Profile image stored in Digital Ocean Spaces
+
+    @Prop({ unique: true, sparse: true, index: true })
+    publicVerificationToken?: string;
+
+    @Prop({ default: true })
+    publicVerificationEnabled: boolean;
 }
 
 export const StudentSchema = SchemaFactory.createForClass(Student);

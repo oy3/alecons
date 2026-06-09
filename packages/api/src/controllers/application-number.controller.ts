@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { ApplicationNumberService } from '../services/application-number.service';
 import { ProgramDriftService } from '../services/program-drift.service';
+import { PublicVerificationService } from '../services/public-verification.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('admin/application-numbers')
@@ -9,6 +10,7 @@ export class ApplicationNumberController {
     constructor(
         private readonly appNumberService: ApplicationNumberService,
         private readonly programDriftService: ProgramDriftService,
+        private readonly publicVerificationService: PublicVerificationService,
     ) { }
 
     /**
@@ -159,6 +161,25 @@ export class ApplicationNumberController {
                 sampleLimit,
             });
 
+            return {
+                success: true,
+                data: result,
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    }
+
+    /**
+     * Generate missing public verification tokens for existing student and staff records.
+     */
+    @Post('public-verification/backfill')
+    async backfillPublicVerificationTokens() {
+        try {
+            const result = await this.publicVerificationService.backfillVerificationTokens();
             return {
                 success: true,
                 data: result,

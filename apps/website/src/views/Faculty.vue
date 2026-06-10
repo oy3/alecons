@@ -46,7 +46,7 @@ export default {
       departments: [
         {
           name: "Nursing Sciences",
-          head: "Dr. Olaopa",
+          head: "Dr. Olatunji Olaopa",
           facultyMembers: 8,
           description:
             "Core nursing education covering medical-surgical, pediatric, maternal, and psychiatric nursing.",
@@ -89,7 +89,7 @@ export default {
             .href,
         },
         {
-          name: "Dr. Olaopa",
+          name: "Dr. Olatunji Olaopa",
           role: "HOD Nursing",
           qualifications: "",
           department: "Nursing Sciences",
@@ -99,7 +99,7 @@ export default {
           bio: "Dr. Olaopa leads the nursing unit with a strong focus on foundational training, helping students build confident clinical and academic skills from the start.",
           email: "hod.nursing@alecons.edu.ng",
           phone: "",
-          image: "https://placehold.co/100x100?text=IMG",
+          image: new URL("../assets/img/olaopa.svg", import.meta.url).href,
         },
         {
           name: "Mr. Tunji Kehinde",
@@ -130,7 +130,7 @@ export default {
             .href,
         },
         {
-          name: "Mrs. Osho",
+          name: "Mrs. Olukemi Osho",
           role: "Hostel Matron",
           qualifications: "",
           department: "Student Affairs",
@@ -143,7 +143,7 @@ export default {
           image: new URL("../assets/img/osho.svg", import.meta.url).href,
         },
         {
-          name: "Dr. Wura Owolabi",
+          name: "Dr. Wuraola Owolabi",
           role: "Lecturer",
           qualifications: "",
           department: "Basic Medical Sciences",
@@ -153,10 +153,11 @@ export default {
           bio: "Dr. Owolabi teaches core biomedical subjects and helps students connect scientific principles with practical nursing and patient care applications.",
           email: "wuraowolabi@alecons.edu.ng",
           phone: "",
-          image: "https://placehold.co/100x100?text=IMG",
+          image: new URL("../assets/img/wuraola-owolabi.svg", import.meta.url)
+            .href,
         },
         {
-          name: "Mr. Olaoba",
+          name: "Mr. Samuel Olaoba",
           role: "Lecturer",
           qualifications: "",
           department: "Basic Medical Sciences",
@@ -179,10 +180,11 @@ export default {
           bio: "Mrs. Johnson supports students with practical instruction in emergency care while reinforcing responsible citizenship and professional conduct in training.",
           email: "adeolajohnson@alecons.edu.ng",
           phone: "",
-          image: "https://placehold.co/100x100?text=IMG",
+          image: new URL("../assets/img/adeola-johnson.svg", import.meta.url)
+            .href,
         },
         {
-          name: "Mr. Taofeek",
+          name: "Mr. Mohammed Taofeek",
           role: "Lecturer",
           qualifications: "",
           department: "Basic Medical Sciences",
@@ -435,7 +437,7 @@ export default {
               :disabled="currentPage === 1"
               @click="goToPreviousPage"
             >
-              Previous
+              Prev
             </button>
           </li>
           <li

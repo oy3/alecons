@@ -295,11 +295,11 @@ export default {
               src="../assets/img/yewande-akute.svg"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
               style="width: 200px; height: 200px"
-              alt="Dr. Adebayo Oluwaseun"
+              alt="Mrs. Yewande Akute"
             />
             <div class="card-body">
               <h5 class="card-title acon-text-primary fw-bold">
-                Mrs. Yewande I. Akute
+                Mrs. Yewande Akute
               </h5>
               <h6 class="acon-text-secondary">Provost</h6>
               <!-- TODO: Update credentials for Provost when we have them -->
@@ -310,13 +310,13 @@ export default {
         <div class="col">
           <div class="card border-0 shadow h-100 p-3">
             <img
-              src="https://placehold.co/200?text=IMG"
+              src="../assets/img/olaopa.svg"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
               style="width: 200px; height: 200px"
-              alt="Dr. Adebayo Oluwaseun"
+              alt="Dr. Olatunji Olaopa"
             />
             <div class="card-body">
-              <h5 class="card-title acon-text-primary fw-bold">Dr. Olaopa</h5>
+              <h5 class="card-title acon-text-primary fw-bold">Dr. Olatunji Olaopa</h5>
               <h6 class="acon-text-secondary">HOD Nursing</h6>
               <!-- TODO: Update credentials for HOD Nursing when we have them -->
               <!-- <p class="card-text fw-ligt text-secondary">MSN, RN, CNE</p> -->
@@ -329,7 +329,7 @@ export default {
               src="../assets/img/tunji-kehinde.svg"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
               style="width: 200px; height: 200px"
-              alt="Dr. Adebayo Oluwaseun"
+              alt="Mr. Tunji Kehinde"
             />
             <div class="card-body">
               <h5 class="card-title acon-text-primary fw-bold">

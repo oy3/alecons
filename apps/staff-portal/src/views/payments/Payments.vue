@@ -2336,7 +2336,7 @@ export default {
                 :disabled="currentPage === 1"
                 @click="currentPage = currentPage - 1"
               >
-                Previous
+                Prev
               </button>
             </li>
             <li

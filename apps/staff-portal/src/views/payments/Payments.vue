@@ -57,6 +57,7 @@ export default {
     return {
       isLoading: true,
       exportingFormat: "",
+      isApplyingFilterPreset: false,
       paymentStats: {
         totalRevenue: 0,
         awaitingVerification: 0,
@@ -107,6 +108,41 @@ export default {
         String(value || "").trim(),
       );
     },
+    isTotalRevenueFilterActive() {
+      return (
+        !this.filters.search.trim() &&
+        !this.filters.dateFrom &&
+        !this.filters.dateTo &&
+        this.filters.status === "successful" &&
+        !this.filters.paymentId &&
+        !this.filters.method &&
+        !this.filters.programId
+      );
+    },
+    isAwaitingVerificationFilterActive() {
+      return (
+        !this.filters.search.trim() &&
+        !this.filters.dateFrom &&
+        !this.filters.dateTo &&
+        this.filters.status === "pending" &&
+        !this.filters.paymentId &&
+        !this.filters.method &&
+        !this.filters.programId
+      );
+    },
+    isTodaysRevenueFilterActive() {
+      const today = this.getTodayFilterValue();
+
+      return (
+        !this.filters.search.trim() &&
+        this.filters.dateFrom === today &&
+        this.filters.dateTo === today &&
+        this.filters.status === "successful" &&
+        !this.filters.paymentId &&
+        !this.filters.method &&
+        !this.filters.programId
+      );
+    },
   },
   watch: {
     "filters.search"() {
@@ -142,6 +178,14 @@ export default {
     },
   },
   methods: {
+    getTodayFilterValue() {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, "0");
+      const day = String(today.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    },
+
     buildPaymentQueryParams(overrides = {}) {
       const params = {
         page: this.currentPage,
@@ -182,6 +226,10 @@ export default {
     },
 
     handleFilterChange() {
+      if (this.isApplyingFilterPreset) {
+        return;
+      }
+
       const shouldReloadImmediately = this.currentPage === 1;
       this.currentPage = 1;
 
@@ -191,6 +239,10 @@ export default {
     },
 
     handleAcademicSessionFilterChange() {
+      if (this.isApplyingFilterPreset) {
+        return;
+      }
+
       const shouldReloadImmediately = this.currentPage === 1;
       this.currentPage = 1;
 
@@ -303,6 +355,47 @@ export default {
           pendingRemittance: 0,
         };
       }
+    },
+
+    applyPaymentFilterPreset(preset = {}) {
+      if (this.searchTimeout) {
+        clearTimeout(this.searchTimeout);
+        this.searchTimeout = null;
+      }
+
+      const preservedAcademicSessionId = this.filters.academicSessionId;
+      const shouldReloadImmediately = this.currentPage === 1;
+
+      this.isApplyingFilterPreset = true;
+      this.filters = {
+        ...createDefaultFilters(),
+        academicSessionId: preservedAcademicSessionId,
+        ...preset,
+      };
+      this.currentPage = 1;
+      this.isApplyingFilterPreset = false;
+
+      if (shouldReloadImmediately) {
+        void this.loadPayments();
+      }
+    },
+
+    showAwaitingVerificationPayments() {
+      this.applyPaymentFilterPreset({ status: "pending" });
+    },
+
+    showSuccessfulPayments() {
+      this.applyPaymentFilterPreset({ status: "successful" });
+    },
+
+    showTodaysRevenuePayments() {
+      const today = this.getTodayFilterValue();
+
+      this.applyPaymentFilterPreset({
+        status: "successful",
+        dateFrom: today,
+        dateTo: today,
+      });
     },
 
     buildRemittanceQueryParams(stateOverrides = {}) {
@@ -1642,15 +1735,18 @@ export default {
     },
 
     resetFilters() {
+      this.isApplyingFilterPreset = true;
+      this.filters = createDefaultFilters();
+      this.currentPage = 1;
+      this.isApplyingFilterPreset = false;
+      void this.loadPaymentStats();
+
       if (this.searchTimeout) {
         clearTimeout(this.searchTimeout);
         this.searchTimeout = null;
       }
 
-      this.filters = createDefaultFilters();
-      this.currentPage = 1;
-      void this.loadPaymentStats();
-      this.loadPayments();
+      void this.loadPayments();
     },
 
     async refreshPayments() {
@@ -1741,8 +1837,16 @@ export default {
     <div class="row mb-4" v-if="authStore.hasPermission('payments', 'manage')">
       <!-- Total Revenue -->
       <div class="col-lg-3 col-md-6 mb-3">
-        <div class="card p-0 h-100 border-0 shadow-sm">
-          <div class="card-body d-flex flex-row">
+        <button
+          type="button"
+          class="btn btn-light card p-0 h-100 w-100 border-0 shadow-sm text-start stats-filter-card"
+          :class="{ active: isTotalRevenueFilterActive }"
+          :disabled="isLoading"
+          :aria-pressed="isTotalRevenueFilterActive"
+          title="Show all successful payments"
+          @click="showSuccessfulPayments"
+        >
+          <div class="card-body d-flex flex-row align-items-center">
             <div class="my-auto">
               <i class="bi bi-piggy-bank-fill fs-4 text-success"></i>
             </div>
@@ -1753,13 +1857,21 @@ export default {
               </h4>
             </div>
           </div>
-        </div>
+        </button>
       </div>
 
       <!-- Awaiting Verification -->
       <div class="col-lg-3 col-md-6 mb-3">
-        <div class="card p-0 h-100 border-0 shadow-sm">
-          <div class="card-body d-flex flex-row">
+        <button
+          type="button"
+          class="btn btn-light card p-0 h-100 w-100 border-0 shadow-sm text-start stats-filter-card"
+          :class="{ active: isAwaitingVerificationFilterActive }"
+          :disabled="isLoading"
+          :aria-pressed="isAwaitingVerificationFilterActive"
+          title="Show payments awaiting verification"
+          @click="showAwaitingVerificationPayments"
+        >
+          <div class="card-body d-flex flex-row align-items-center">
             <div class="my-auto">
               <i class="bi bi-hourglass-split fs-4 text-warning"></i>
             </div>
@@ -1773,7 +1885,7 @@ export default {
               </h4>
             </div>
           </div>
-        </div>
+        </button>
       </div>
 
       <!-- Pending Remittance -->
@@ -1810,8 +1922,16 @@ export default {
 
       <!-- Today’s Revenue -->
       <div class="col-lg-3 col-md-6 mb-3">
-        <div class="card p-0 h-100 border-0 shadow-sm">
-          <div class="card-body d-flex flex-row">
+        <button
+          type="button"
+          class="btn btn-light card p-0 h-100 w-100 border-0 shadow-sm text-start stats-filter-card"
+          :class="{ active: isTodaysRevenueFilterActive }"
+          :disabled="isLoading"
+          :aria-pressed="isTodaysRevenueFilterActive"
+          title="Show today’s successful payments"
+          @click="showTodaysRevenuePayments"
+        >
+          <div class="card-body d-flex flex-row align-items-center">
             <div class="my-auto">
               <i
                 class="bi bi-calendar-check-fill fs-4 text-info text-start"
@@ -1828,7 +1948,7 @@ export default {
               }}</small>
             </div>
           </div>
-        </div>
+        </button>
       </div>
     </div>
 
@@ -2369,6 +2489,40 @@ export default {
 </template>
 
 <style scoped>
+.stats-filter-card {
+  position: relative;
+  overflow: hidden;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.stats-filter-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+  transition: background-color 0.2s ease;
+}
+
+.stats-filter-card.active {
+  background-color: var(--bs-secondary-bg);
+  box-shadow:
+    inset 0 0 0 1px rgba(108, 117, 125, 0.2),
+    0 0.35rem 1rem rgba(15, 23, 42, 0.08) !important;
+}
+
+.stats-filter-card.active::after {
+  background: rgba(108, 117, 125, 0.08);
+}
+
+.stats-filter-card.active .card-title,
+.stats-filter-card.active small {
+  color: var(--bs-body-color) !important;
+}
+
 .payments-table th {
   font-weight: 600;
   color: var(--staff-primary);

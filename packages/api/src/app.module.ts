@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bull';
@@ -38,13 +38,31 @@ import { ContentSanitizationService } from './services/content-sanitization.serv
 import { AdmissionLetterPdfService } from './services/admission-letter-pdf.service';
 import * as multer from 'multer';
 
+const defaultEnvFilePath = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
+const envFilePath = process.env.API_ENV_FILE
+    ? [process.env.API_ENV_FILE, defaultEnvFilePath]
+    : defaultEnvFilePath;
+
 @Module({
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
-            envFilePath: process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development',
+            envFilePath,
         }),
-        MongooseModule.forRoot(process.env.DATABASE_URL),
+        MongooseModule.forRootAsync({
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService) => {
+                const databaseUrl = configService.get<string>('DATABASE_URL');
+
+                if (!databaseUrl) {
+                    throw new Error('DATABASE_URL is required');
+                }
+
+                return {
+                    uri: databaseUrl,
+                };
+            },
+        }),
         MongooseModule.forFeature([
             { name: Application.name, schema: ApplicationSchema },
             { name: Program.name, schema: ProgramSchema },
@@ -64,12 +82,15 @@ import * as multer from 'multer';
                 limit: 100,
             },
         ]),
-        BullModule.forRoot({
-            redis: {
-                host: process.env.REDIS_HOST || 'localhost',
-                port: parseInt(process.env.REDIS_PORT) || 6379,
-                password: process.env.REDIS_PASSWORD,
-            },
+        BullModule.forRootAsync({
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService) => ({
+                redis: {
+                    host: configService.get<string>('REDIS_HOST') || 'localhost',
+                    port: parseInt(configService.get<string>('REDIS_PORT') || '6379', 10),
+                    password: configService.get<string>('REDIS_PASSWORD') || undefined,
+                },
+            }),
         }),
         ScheduleModule.forRoot(),
         MulterModule.register({

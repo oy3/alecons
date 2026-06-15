@@ -2,6 +2,7 @@
 import { RouterView } from 'vue-router';
 import Navbar from './components/Header.vue'
 import Footer from './components/Footer.vue';
+import campusImage from './assets/img/campus.jpg';
 
 const siteName = import.meta.env.VITE_APP_FULL_NAME || 'Alecons College of Nursing Sciences'
 const siteUrl = (import.meta.env.VITE_APP_SITE_URL || 'https://alecons.edu.ng').replace(/\/$/, '')
@@ -9,6 +10,16 @@ const siteNumber = import.meta.env.VITE_APP_PHONE || '+2349160008679'
 
 export default {
    metaInfo: {
+    meta: [
+      {
+        property: 'og:url',
+        content: siteUrl,
+      },
+      {
+        property: 'og:image',
+        content: campusImage,
+      },
+    ],
     script: [
       {
         type: 'application/ld+json',

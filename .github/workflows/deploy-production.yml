@@ -21,9 +21,14 @@ jobs:
     environment: production
     env:
       RELEASE_ID: ${{ github.sha }}
-      DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
-      DROPLET_USER: ${{ secrets.DROPLET_USER }}
-      DROPLET_PORT: ${{ secrets.DROPLET_PORT }}
+      DEPLOY_HOST: ${{ secrets.ROOTLAB_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.ROOTLAB_DEPLOY_USER }}
+      DEPLOY_PORT: "22"
+      DEPLOY_PATH: ${{ secrets.ROOTLAB_DEPLOY_PATH }}
+      DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.ROOTLAB_SSH_PRIVATE_KEY }}
+      PM2_APP_NAME: alecons-api
+      API_PORT: "8084"
+      ROOTLAB_API_ENV_FILE: ${{ vars.ROOTLAB_API_ENV_FILE }}
       VITE_APP_FULL_NAME: ${{ vars.VITE_APP_FULL_NAME }}
       VITE_APP_SITE_URL: ${{ vars.VITE_APP_SITE_URL }}
       VITE_APP_PHONE: ${{ vars.VITE_APP_PHONE }}
@@ -50,14 +55,14 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Validate deployment configuration
         shell: bash
         run: |
           set -euo pipefail
 
-          required_secrets=(DROPLET_HOST DROPLET_USER)
+          required_secrets=(DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DEPLOY_SSH_PRIVATE_KEY)
           for secret_name in "${required_secrets[@]}"; do
             if [[ -z "${!secret_name:-}" ]]; then
               echo "Missing required GitHub secret: ${secret_name}" >&2
@@ -144,20 +149,20 @@ jobs:
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.DROPLET_SSH_KEY }}
+          ssh-private-key: ${{ env.DEPLOY_SSH_PRIVATE_KEY }}
 
-      - name: Trust droplet host key
+      - name: Trust deploy host key
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
-          ssh-keyscan -p "${DROPLET_PORT:-22}" -H "$DROPLET_HOST" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
-      - name: Validate droplet deploy prerequisites
+      - name: Validate deploy host prerequisites
         shell: bash
         run: |
           set -euo pipefail
-          ssh -p "${DROPLET_PORT:-22}" "$DROPLET_USER@$DROPLET_HOST" '
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" '
             set -euo pipefail
 
             # If Google Chrome already exists, deploy can proceed without apt privileges.
@@ -174,8 +179,7 @@ jobs:
             if ! sudo -n /usr/bin/apt-get --version >/dev/null 2>&1; then
               echo "No browser is available for Puppeteer and deploy user cannot run apt-get without password." >&2
               echo "Run scripts/deploy/prepare-droplet.sh as root on the droplet to configure sudoers and Google Chrome." >&2
-              echo "In the current production setup, GitHub Actions connects as deploy." >&2
-              echo "Bootstrap the droplet as root, then re-run the workflow." >&2
+              echo "Bootstrap the server as root, then re-run the workflow." >&2
               exit 1
             fi
           '
@@ -184,20 +188,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -p "${DROPLET_PORT:-22}" "$DROPLET_USER@$DROPLET_HOST" "mkdir -p ~/tmp/alecons/$RELEASE_ID"
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p ~/tmp/alecons/$RELEASE_ID"
 
       - name: Upload deployment artifacts
         shell: bash
         run: |
           set -euo pipefail
-          scp -P "${DROPLET_PORT:-22}" release-artifacts/frontend-dist.tar.gz "$DROPLET_USER@$DROPLET_HOST:tmp/alecons/$RELEASE_ID/frontend-dist.tar.gz"
-          scp -P "${DROPLET_PORT:-22}" release-artifacts/api-release.tar.gz "$DROPLET_USER@$DROPLET_HOST:tmp/alecons/$RELEASE_ID/api-release.tar.gz"
+          scp -P "$DEPLOY_PORT" release-artifacts/frontend-dist.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:tmp/alecons/$RELEASE_ID/frontend-dist.tar.gz"
+          scp -P "$DEPLOY_PORT" release-artifacts/api-release.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:tmp/alecons/$RELEASE_ID/api-release.tar.gz"
 
-      - name: Deploy on droplet
+      - name: Deploy on host
         shell: bash
         run: |
           set -euo pipefail
-          ssh -p "${DROPLET_PORT:-22}" "$DROPLET_USER@$DROPLET_HOST" "RELEASE_ID='$RELEASE_ID' bash -s" < scripts/deploy/remote-deploy.sh
+          API_ENV_FILE_VALUE="${ROOTLAB_API_ENV_FILE:-$DEPLOY_PATH/shared/env/.env.production}"
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "RELEASE_ID='$RELEASE_ID' FRONTEND_RELEASES_ROOT='$DEPLOY_PATH/releases/frontend' API_ROOT='$DEPLOY_PATH/api' FRONTEND_LIVE_ROOT='$DEPLOY_PATH/current' API_ENV_FILE='$API_ENV_FILE_VALUE' PM2_APP_NAME='$PM2_APP_NAME' PORT='$API_PORT' bash -s" \
+            < scripts/deploy/remote-deploy.sh
 
       - name: Verify production endpoints
         shell: bash

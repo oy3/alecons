@@ -28,7 +28,6 @@ jobs:
       DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.ROOTLAB_SSH_PRIVATE_KEY }}
       PM2_APP_NAME: alecons-api
       API_PORT: "8084"
-      ROOTLAB_API_ENV_FILE: ${{ vars.ROOTLAB_API_ENV_FILE }}
       VITE_APP_FULL_NAME: ${{ vars.VITE_APP_FULL_NAME }}
       VITE_APP_SITE_URL: ${{ vars.VITE_APP_SITE_URL }}
       VITE_APP_PHONE: ${{ vars.VITE_APP_PHONE }}
@@ -165,8 +164,13 @@ jobs:
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" '
             set -euo pipefail
 
-            # If Google Chrome already exists, deploy can proceed without apt privileges.
-            if command -v google-chrome-stable >/dev/null 2>&1 || command -v google-chrome >/dev/null 2>&1; then
+            # If a supported system browser already exists, deploy can proceed
+            # without apt privileges.
+            if command -v google-chrome-stable >/dev/null 2>&1 \
+              || command -v google-chrome >/dev/null 2>&1 \
+              || [[ -x /opt/google/chrome/google-chrome ]] \
+              || [[ -x /usr/bin/google-chrome-stable ]] \
+              || [[ -x /usr/bin/google-chrome ]]; then
               exit 0
             fi
 
@@ -201,7 +205,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          API_ENV_FILE_VALUE="${ROOTLAB_API_ENV_FILE:-$DEPLOY_PATH/shared/env/.env.production}"
+           API_ENV_FILE_VALUE="$DEPLOY_PATH/shared/env/.env.production"
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
             "RELEASE_ID='$RELEASE_ID' FRONTEND_RELEASES_ROOT='$DEPLOY_PATH/releases/frontend' API_ROOT='$DEPLOY_PATH/api' FRONTEND_LIVE_ROOT='$DEPLOY_PATH/current' API_ENV_FILE='$API_ENV_FILE_VALUE' PM2_APP_NAME='$PM2_APP_NAME' PORT='$API_PORT' bash -s" \
             < scripts/deploy/remote-deploy.sh

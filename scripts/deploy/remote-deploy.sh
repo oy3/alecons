@@ -214,6 +214,11 @@ if [[ ! -d "$API_RELEASE_DIR/node_modules" ]]; then
     exit 1
 fi
 
+PREVIOUS_API_RELEASE=""
+if [[ -L "$API_CURRENT_LINK" ]]; then
+    PREVIOUS_API_RELEASE="$(readlink -f "$API_CURRENT_LINK" || true)"
+fi
+
 ln -sfn "$API_RELEASE_DIR" "$API_CURRENT_LINK"
 
 # Ensure a non-snap browser is present. Google Chrome is preferred because the
@@ -274,6 +279,14 @@ for attempt in {1..10}; do
     fi
     sleep 3
 done
+
+if [[ -n "$PREVIOUS_API_RELEASE" && -d "$PREVIOUS_API_RELEASE" ]]; then
+    echo "Health check failed. Rolling back API symlink to previous release: $PREVIOUS_API_RELEASE" >&2
+    ln -sfn "$PREVIOUS_API_RELEASE" "$API_CURRENT_LINK"
+    export ALECONS_API_CWD="$API_CURRENT_LINK"
+    pm2 startOrReload "$API_CURRENT_LINK/ecosystem.config.cjs" --update-env || true
+    pm2 save || true
+fi
 
 echo "Health check failed after deployment" >&2
 exit 1

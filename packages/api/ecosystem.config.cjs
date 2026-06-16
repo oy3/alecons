@@ -16,6 +16,7 @@ module.exports = {
             env: {
                 NODE_ENV: 'production',
                 PORT: process.env.PORT || 8084,
+                API_ENV_FILE: process.env.API_ENV_FILE,
                 PUPPETEER_EXECUTABLE_PATH:
                     process.env.PUPPETEER_EXECUTABLE_PATH || '/opt/google/chrome/google-chrome',
                 CHROME_PATH: process.env.CHROME_PATH,

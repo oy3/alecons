@@ -42,12 +42,16 @@ const defaultEnvFilePath = process.env.NODE_ENV === 'production' ? '.env.product
 const envFilePath = process.env.API_ENV_FILE
     ? [process.env.API_ENV_FILE, defaultEnvFilePath]
     : defaultEnvFilePath;
+const hasExternalApiEnvFile = Boolean(process.env.API_ENV_FILE);
 
 @Module({
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
             envFilePath,
+            // Prevent stale PM2-inherited vars (e.g. old OAuth creds) from
+            // overriding values in the deployed API env file.
+            ignoreEnvVars: hasExternalApiEnvFile,
         }),
         MongooseModule.forRootAsync({
             inject: [ConfigService],

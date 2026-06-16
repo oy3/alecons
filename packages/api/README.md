@@ -69,8 +69,8 @@ JWT_EXPIRATION=7d
 PORT=8000
 NODE_ENV=development
 
-# Frontend
-FRONTEND_URL=http://localhost:5173
+# Application Portal
+APPLICATION_PORTAL_URL=http://localhost:5174
 ```
 
 4. **Start the server:**

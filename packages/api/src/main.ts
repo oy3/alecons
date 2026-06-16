@@ -21,7 +21,6 @@ async function bootstrap() {
     const allowedOrigins = Array.from(
         new Set(
             [
-                process.env.FRONTEND_URL,
                 process.env.APPLICATION_PORTAL_URL,
                 process.env.CBT_PORTAL_URL,
                 process.env.STAFF_PORTAL_URL,
@@ -98,7 +97,6 @@ async function bootstrap() {
     // Log environment variables for debugging (only in development)
     if (process.env.NODE_ENV !== 'production') {
         logger.log('🐛 Environment variables loaded:');
-        logger.log(`   FRONTEND_URL: ${process.env.FRONTEND_URL}`);
         logger.log(`   APPLICATION_PORTAL_URL: ${process.env.APPLICATION_PORTAL_URL}`);
         logger.log(`   CBT_PORTAL_URL: ${process.env.CBT_PORTAL_URL}`);
         logger.log(`   STAFF_PORTAL_URL: ${process.env.STAFF_PORTAL_URL}`);

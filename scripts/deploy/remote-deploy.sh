@@ -25,6 +25,9 @@ FRONTEND_TARBALL="$REMOTE_PAYLOAD_DIR/frontend-dist.tar.gz"
 API_TARBALL="$REMOTE_PAYLOAD_DIR/api-release.tar.gz"
 FRONTEND_RELEASE_DIR="$FRONTEND_RELEASES_ROOT/$RELEASE_ID"
 API_RELEASE_DIR="$API_RELEASES_ROOT/$RELEASE_ID"
+STAGED_API_ENV_FILE="${STAGED_API_ENV_FILE:-}"
+PREVIOUS_API_ENV_FILE_BACKUP=""
+HAD_PREVIOUS_API_ENV_FILE="false"
 
 require_file() {
     local file_path="$1"
@@ -173,6 +176,20 @@ command -v curl >/dev/null 2>&1 || {
 
 require_file "$FRONTEND_TARBALL"
 require_file "$API_TARBALL"
+
+if [[ -n "$STAGED_API_ENV_FILE" ]]; then
+    require_file "$STAGED_API_ENV_FILE"
+    mkdir -p "$(dirname "$API_ENV_FILE")"
+
+    if [[ -f "$API_ENV_FILE" ]]; then
+        PREVIOUS_API_ENV_FILE_BACKUP="$REMOTE_PAYLOAD_DIR/previous-api.env.production"
+        cp "$API_ENV_FILE" "$PREVIOUS_API_ENV_FILE_BACKUP"
+        HAD_PREVIOUS_API_ENV_FILE="true"
+    fi
+
+    install -m 600 "$STAGED_API_ENV_FILE" "$API_ENV_FILE"
+fi
+
 require_file "$API_ENV_FILE"
 
 DEPLOY_PORT_OVERRIDE="$PORT"
@@ -285,6 +302,16 @@ done
 if [[ -n "$PREVIOUS_API_RELEASE" && -d "$PREVIOUS_API_RELEASE" ]]; then
     echo "Health check failed. Rolling back API symlink to previous release: $PREVIOUS_API_RELEASE" >&2
     ln -sfn "$PREVIOUS_API_RELEASE" "$API_CURRENT_LINK"
+
+    if [[ -n "$STAGED_API_ENV_FILE" ]]; then
+        if [[ "$HAD_PREVIOUS_API_ENV_FILE" == "true" && -n "$PREVIOUS_API_ENV_FILE_BACKUP" && -f "$PREVIOUS_API_ENV_FILE_BACKUP" ]]; then
+            echo "Restoring previous API environment file" >&2
+            install -m 600 "$PREVIOUS_API_ENV_FILE_BACKUP" "$API_ENV_FILE"
+        elif [[ "$HAD_PREVIOUS_API_ENV_FILE" == "false" ]]; then
+            rm -f "$API_ENV_FILE"
+        fi
+    fi
+
     export ALECONS_API_CWD="$API_CURRENT_LINK"
     pm2 startOrReload "$API_CURRENT_LINK/ecosystem.config.cjs" --update-env || true
     pm2 save || true

@@ -23,11 +23,20 @@ jobs:
       RELEASE_ID: ${{ github.sha }}
       DEPLOY_HOST: ${{ secrets.ROOTLAB_DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.ROOTLAB_DEPLOY_USER }}
-      DEPLOY_PORT: "22"
+      DEPLOY_PORT: ${{ secrets.ROOTLAB_DEPLOY_PORT }}
       DEPLOY_PATH: ${{ secrets.ROOTLAB_DEPLOY_PATH }}
       DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.ROOTLAB_SSH_PRIVATE_KEY }}
       PM2_APP_NAME: alecons-api
       API_PORT: "8084"
+      DATABASE_URL: ${{ secrets[format('{0}', 'DATABASE_URL')] }}
+      JWT_SECRET: ${{ secrets[format('{0}', 'JWT_SECRET')] }}
+      PAYSTACK_SECRET_KEY: ${{ secrets[format('{0}', 'PAYSTACK_SECRET_KEY')] }}
+      SPACES_KEY: ${{ secrets[format('{0}', 'SPACES_KEY')] }}
+      SPACES_SECRET: ${{ secrets[format('{0}', 'SPACES_SECRET')] }}
+      GOOGLE_CLIENT_ID: ${{ secrets[format('{0}', 'GOOGLE_CLIENT_ID')] }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets[format('{0}', 'GOOGLE_CLIENT_SECRET')] }}
+      GOOGLE_REFRESH_TOKEN: ${{ secrets[format('{0}', 'GOOGLE_REFRESH_TOKEN')] }}
+      REDIS_PASSWORD: ${{ secrets[format('{0}', 'REDIS_PASSWORD')] }}
       VITE_APP_FULL_NAME: ${{ vars.VITE_APP_FULL_NAME }}
       VITE_APP_SITE_URL: ${{ vars.VITE_APP_SITE_URL }}
       VITE_APP_PHONE: ${{ vars.VITE_APP_PHONE }}
@@ -45,6 +54,20 @@ jobs:
       VITE_APP_VERSION: ${{ vars.VITE_APP_VERSION }}
       VITE_LOG_LEVEL: ${{ vars.VITE_LOG_LEVEL }}
       VITE_ENABLE_DEV_TOOLS: ${{ vars.VITE_ENABLE_DEV_TOOLS }}
+      SPACES_BUCKET_NAME: ${{ vars[format('{0}', 'SPACES_BUCKET_NAME')] }}
+      SPACES_CDN_URL: ${{ vars[format('{0}', 'SPACES_CDN_URL')] }}
+      SPACES_ENDPOINT: ${{ vars[format('{0}', 'SPACES_ENDPOINT')] }}
+      SPACES_REGION: ${{ vars[format('{0}', 'SPACES_REGION')] }}
+      SMTP_USER: ${{ vars[format('{0}', 'SMTP_USER')] }}
+      REDIS_HOST: ${{ vars[format('{0}', 'REDIS_HOST')] }}
+      REDIS_PORT: ${{ vars[format('{0}', 'REDIS_PORT')] }}
+      JWT_EXPIRATION: ${{ vars[format('{0}', 'JWT_EXPIRATION')] }}
+      WEBSITE_URL: ${{ vars[format('{0}', 'WEBSITE_URL')] }}
+      APPLICATION_PORTAL_URL: ${{ vars[format('{0}', 'APPLICATION_PORTAL_URL')] }}
+      STUDENT_PORTAL_URL: ${{ vars[format('{0}', 'STUDENT_PORTAL_URL')] }}
+      STAFF_PORTAL_URL: ${{ vars[format('{0}', 'STAFF_PORTAL_URL')] }}
+      CBT_PORTAL_URL: ${{ vars[format('{0}', 'CBT_PORTAL_URL')] }}
+      PUPPETEER_EXECUTABLE_PATH: ${{ vars[format('{0}', 'PUPPETEER_EXECUTABLE_PATH')] }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -61,7 +84,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          required_secrets=(DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DEPLOY_SSH_PRIVATE_KEY)
+          required_secrets=(
+            DEPLOY_HOST
+            DEPLOY_USER
+            DEPLOY_PORT
+            DEPLOY_PATH
+            DEPLOY_SSH_PRIVATE_KEY
+            DATABASE_URL
+            JWT_SECRET
+            PAYSTACK_SECRET_KEY
+            SPACES_KEY
+            SPACES_SECRET
+            GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET
+            GOOGLE_REFRESH_TOKEN
+            REDIS_PASSWORD
+          )
           for secret_name in "${required_secrets[@]}"; do
             if [[ -z "${!secret_name:-}" ]]; then
               echo "Missing required GitHub secret: ${secret_name}" >&2
@@ -78,6 +116,9 @@ jobs:
             VITE_APP_STAFF_PORTAL_URL
             VITE_APP_API_URL
             VITE_PAYSTACK_PUBLIC_KEY
+            SPACES_BUCKET_NAME
+            SPACES_CDN_URL
+            SMTP_USER
           )
 
           for var_name in "${required_vars[@]}"; do
@@ -100,6 +141,10 @@ jobs:
       - name: Render frontend production env files
         shell: bash
         run: bash scripts/deploy/render-frontend-envs.sh "$GITHUB_WORKSPACE"
+
+      - name: Render backend production env file
+        shell: bash
+        run: bash scripts/deploy/render-backend-envs.sh "$GITHUB_WORKSPACE/release-artifacts/backend-env/.env.production"
 
       - name: Build frontend applications
         shell: bash
@@ -200,14 +245,16 @@ jobs:
           set -euo pipefail
           scp -P "$DEPLOY_PORT" release-artifacts/frontend-dist.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:tmp/alecons/$RELEASE_ID/frontend-dist.tar.gz"
           scp -P "$DEPLOY_PORT" release-artifacts/api-release.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:tmp/alecons/$RELEASE_ID/api-release.tar.gz"
+          scp -P "$DEPLOY_PORT" release-artifacts/backend-env/.env.production "$DEPLOY_USER@$DEPLOY_HOST:tmp/alecons/$RELEASE_ID/api.env.production"
 
       - name: Deploy on host
         shell: bash
         run: |
           set -euo pipefail
-           API_ENV_FILE_VALUE="$DEPLOY_PATH/shared/env/.env.production"
+          API_ENV_FILE_VALUE="$DEPLOY_PATH/shared/env/.env.production"
+          STAGED_API_ENV_FILE_VALUE="tmp/alecons/$RELEASE_ID/api.env.production"
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "RELEASE_ID='$RELEASE_ID' FRONTEND_RELEASES_ROOT='$DEPLOY_PATH/releases/frontend' API_ROOT='$DEPLOY_PATH/api' FRONTEND_LIVE_ROOT='$DEPLOY_PATH/current' API_ENV_FILE='$API_ENV_FILE_VALUE' PM2_APP_NAME='$PM2_APP_NAME' PORT='$API_PORT' bash -s" \
+            "RELEASE_ID='$RELEASE_ID' FRONTEND_RELEASES_ROOT='$DEPLOY_PATH/releases/frontend' API_ROOT='$DEPLOY_PATH/api' FRONTEND_LIVE_ROOT='$DEPLOY_PATH/current' API_ENV_FILE='$API_ENV_FILE_VALUE' STAGED_API_ENV_FILE='$STAGED_API_ENV_FILE_VALUE' PM2_APP_NAME='$PM2_APP_NAME' PORT='$API_PORT' bash -s" \
             < scripts/deploy/remote-deploy.sh
 
       - name: Verify production endpoints

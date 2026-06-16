@@ -305,7 +305,7 @@ export class EmailService {
                         </ol>
                         
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL}/dashboard" class="btn">Go to Dashboard</a>
+                            <a href="${process.env.APPLICATION_PORTAL_URL}/dashboard" class="btn">Go to Dashboard</a>
                         </div>
                         
                         <p>If you have any questions or need assistance, please contact our admissions office.</p>
@@ -1117,7 +1117,7 @@ export class EmailService {
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL
+                            <a href="${process.env.APPLICATION_PORTAL_URL
         }/dashboard" class="btn">Access Portal</a>
                         </div>
                         
@@ -1238,7 +1238,7 @@ export class EmailService {
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL
+                            <a href="${process.env.APPLICATION_PORTAL_URL
         }/dashboard" class="btn">Access Portal</a>
                         </div>
                         
@@ -1343,7 +1343,7 @@ export class EmailService {
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL}/dashboard" class="btn">Login Now</a>
+                            <a href="${process.env.APPLICATION_PORTAL_URL}/dashboard" class="btn">Login Now</a>
                         </div>
                         
                         <p><strong>Good luck with your exam!</strong> 🍀</p>
@@ -1489,7 +1489,7 @@ export class EmailService {
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="${process.env.FRONTEND_URL
+                            <a href="${process.env.APPLICATION_PORTAL_URL
         }/dashboard" class="btn">View Dashboard</a>
                         </div>
                         
@@ -1851,9 +1851,7 @@ export class EmailService {
                                 <p><strong>Staff ID:</strong> ${staffId}</p>
                                 <p><strong>Email:</strong> ${email}</p>
                                 <p><strong>Password:</strong> ${password}</p>
-                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL ||
-          process.env.FRONTEND_URL
-          }/staff</p>
+                                <p><strong>Portal URL:</strong> ${process.env.STAFF_PORTAL_URL}/staff</p>
                             </div>
                             
                             <div class="warning">
@@ -1949,9 +1947,7 @@ export class EmailService {
                             <p>If you did not request this password reset or have any concerns about your account security, please contact the IT department immediately.</p>
                             
                             <p><strong>Portal Access:</strong><br>
-                            ${process.env.APPLICATION_PORTAL_URL ||
-          process.env.FRONTEND_URL
-          }</p>
+                            ${process.env.APPLICATION_PORTAL_URL}</p>
                             
                             <div class="footer">
                                 <p><strong>Important:</strong> Delete this email after changing your password.</p>
@@ -2049,11 +2045,7 @@ export class EmailService {
                             </div>
                             
                             <p><strong>Portal Access:</strong><br>
-                            <a href="${process.env.STUDENT_PORTAL_URL ||
-          process.env.FRONTEND_URL
-          }">${process.env.STUDENT_PORTAL_URL ||
-          process.env.FRONTEND_URL
-          }</a></p>
+                            <a href="${process.env.STUDENT_PORTAL_URL}">${process.env.STUDENT_PORTAL_URL}</a></p>
                             
                             <div class="footer">
                                 <p><strong>Security Tip:</strong> Keep your password secure and never share it with anyone.</p>

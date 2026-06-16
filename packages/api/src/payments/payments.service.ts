@@ -3329,8 +3329,8 @@ export class PaymentsService {
 
             if (user?.email) {
                 const portalUrl = user.role === UserRole.STUDENT
-                    ? (process.env.STUDENT_PORTAL_URL || process.env.FRONTEND_URL)
-                    : (process.env.APPLICATION_PORTAL_URL || process.env.FRONTEND_URL);
+                    ? process.env.STUDENT_PORTAL_URL
+                    : process.env.APPLICATION_PORTAL_URL;
 
                 await this.emailService.sendManualPaymentRejectedEmail(
                     user.email,

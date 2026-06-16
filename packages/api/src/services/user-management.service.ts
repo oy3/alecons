@@ -20,6 +20,23 @@ import { UpdateStaffDto } from "../dto/update-staff.dto";
 export class UserManagementService {
     private readonly logger = new Logger(UserManagementService.name);
 
+    private getSafeErrorMessage(error: unknown): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+
+        if (
+            typeof error === "object" &&
+            error !== null &&
+            "message" in error &&
+            typeof (error as { message?: unknown }).message === "string"
+        ) {
+            return (error as { message: string }).message;
+        }
+
+        return String(error);
+    }
+
     constructor(
         @InjectModel(User.name) private userModel: Model<UserDocument>,
         @InjectModel(Staff.name) private staffModel: Model<StaffDocument>,
@@ -334,7 +351,10 @@ export class UserManagementService {
                 password
             );
         } catch (error) {
-            this.logger.error("Failed to send admin login credentials email:", error);
+            this.logger.error(
+                "Failed to send admin login credentials email:",
+                this.getSafeErrorMessage(error)
+            );
         }
 
         return {
@@ -603,7 +623,10 @@ export class UserManagementService {
                 newPassword
             );
         } catch (error) {
-            this.logger.error("Failed to send password reset email:", error);
+            this.logger.error(
+                "Failed to send password reset email:",
+                this.getSafeErrorMessage(error)
+            );
             // Rollback password change if email fails
             await this.userModel.findByIdAndUpdate(id, { passwordHash: user.passwordHash });
             throw new Error(

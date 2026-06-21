@@ -68,7 +68,10 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">Application Opens</h6>
-              <p class="acon-text-secondary">March 28, 2026</p>
+              <p class="acon-text-secondary">
+                March 28, 2026 <br />
+                August 15, 2026
+              </p>
             </div>
           </div>
         </div>
@@ -181,11 +184,12 @@ export default {
       <div
         class="bg-warning p-2 text-dark bg-opacity-25 mb-5 text-start border-start border-4 border-warning"
       >
-        <b>NOTE:</b> Only Direct entry JAMB candidates and graduates from <b>Community
-        Midwifery and Nursing</b> program should select <b>Full-Time (CM&N)</b> program
-        mode during registration. All other applicants should select the
-        <b>Full-Time</b> program mode. Please ensure you select the correct
-        program mode to avoid any issues with your application.
+        <b>NOTE:</b> Only Direct entry JAMB candidates and graduates from
+        <b>Community Midwifery and Nursing</b> program should select
+        <b>Full-Time (CM&N)</b> program mode during registration. All other
+        applicants should select the <b>Full-Time</b> program mode. Please
+        ensure you select the correct program mode to avoid any issues with your
+        application.
       </div>
 
       <div class="row gy-4">

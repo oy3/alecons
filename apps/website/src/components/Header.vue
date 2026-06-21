@@ -6,7 +6,7 @@ export default {
   data() {
     return {
       announcement:
-        "Admission for 2026/2027 session is open. Apply now! Do not miss this opportunity",
+        "Batch A Admissions for the 2026/2027 session is now closed. Stay tuned — Batch B 2026/2027 Admissions opens Mid-August 2026!",
     };
   },
   components: { Marquee },

@@ -11,7 +11,7 @@ import {
 import { Upload } from '@aws-sdk/lib-storage';
 import { SpacesConfig, SPACES_CONFIG } from '../config/spaces.config';
 import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 export interface UploadResult {
     url: string;
@@ -77,7 +77,7 @@ export class UploadService {
     generateFileKey(applicationNumber: string | null, originalName: string, fileType: string, isTemp: boolean = false): string {
         const fileExtension = path.extname(originalName).toLowerCase();
         const timestamp = Date.now();
-        const uniqueId = uuidv4().substring(0, 8);
+        const uniqueId = randomUUID().replace(/-/g, '').substring(0, 8);
 
         // Create a clean filename
         const baseFileName = `${fileType}_${timestamp}_${uniqueId}`;

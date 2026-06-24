@@ -64,5 +64,11 @@ export const staffNavigationItems = [
         icon: 'bi-gear',
         route: '/settings',
         module: 'settings',
+    },
+    {
+        title: 'ID Cards',
+        icon: 'bi-person-badge',
+        route: '/id-cards',
+        module: 'idCards',
     }
 ]

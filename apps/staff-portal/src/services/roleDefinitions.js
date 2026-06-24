@@ -100,6 +100,15 @@ export const MODULE_DEFINITIONS = {
             { value: 'manage', label: 'Manage All' },
         ],
     },
+    idCards: {
+        label: 'ID Cards',
+        permissions: [
+            { value: 'view', label: 'View' },
+            { value: 'generate', label: 'Generate' },
+            { value: 'export', label: 'Export' },
+            { value: 'manage', label: 'Manage All' },
+        ],
+    },
 }
 
 /**

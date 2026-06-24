@@ -79,6 +79,12 @@ const routes = [
         component: () => import('../views/utilities/Utilities.vue'),
         meta: { requiresAuth: true, module: 'utilities' }
     },
+    {
+        path: '/id-cards',
+        name: 'IdCards',
+        component: () => import('../views/id-cards/IdCardGenerator.vue'),
+        meta: { requiresAuth: true, module: 'idCards' }
+    },
     //   {
     //     path: '/reports',
     //     name: 'Reports',

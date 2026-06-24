@@ -18,6 +18,7 @@ import { StaffDashboardModule } from './modules/staff-dashboard.module';
 import { UserManagementModule } from './modules/user-management.module';
 import { StudentModule } from './modules/student.module';
 import { CourseRegistrationManagementModule } from './modules/course-registration-management.module';
+import { IdCardModule } from './modules/id-card.module';
 import { CoursesModule } from './courses/courses.module';
 import { StaffApplicationsController } from './controllers/staff-applications.controller';
 import { ExamResultsController } from './controllers/exam-results.controller';
@@ -115,6 +116,7 @@ const hasExternalApiEnvFile = Boolean(process.env.API_ENV_FILE);
         UserManagementModule,
         StudentModule,
         CourseRegistrationManagementModule,
+        IdCardModule,
     ],
     controllers: [AppController, StaffApplicationsController, ExamResultsController],
     providers: [AppService, EmailService, MatriculationService, ContentSanitizationService, AdmissionLetterPdfService],

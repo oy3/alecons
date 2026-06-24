@@ -1267,6 +1267,126 @@ class StaffApiService {
     async deleteUser(id) {
         return this.delete(`/staff/users/${id}`)
     }
+
+    // -------------------------------------------------------------------------
+    // ID Card Generation
+    // -------------------------------------------------------------------------
+
+    async getIdCardProgramTypes() {
+        return this.makeRequest('/staff/id-cards/filters/program-types')
+    }
+
+    async getIdCardProgramModes() {
+        return this.makeRequest('/staff/id-cards/filters/program-modes')
+    }
+
+    async getIdCardPrograms(filters = {}) {
+        const params = new URLSearchParams()
+        if (filters.programTypeId) params.append('programTypeId', filters.programTypeId)
+        if (filters.programModeId) params.append('programModeId', filters.programModeId)
+        const qs = params.toString()
+        return this.makeRequest(`/staff/id-cards/filters/programs${qs ? `?${qs}` : ''}`)
+    }
+
+    async getIdCardDepartments() {
+        return this.makeRequest('/staff/id-cards/filters/departments')
+    }
+
+    async getIdCardStaffDepartments() {
+        return this.makeRequest('/staff/id-cards/filters/staff-departments')
+    }
+
+    async getIdCardStudents(filters = {}) {
+        const params = new URLSearchParams()
+        if (filters.programId) params.append('programId', filters.programId)
+        if (filters.level) params.append('level', String(filters.level))
+        const qs = params.toString()
+        return this.makeRequest(`/staff/id-cards/students${qs ? `?${qs}` : ''}`)
+    }
+
+    async getIdCardStaff(filters = {}) {
+        const params = new URLSearchParams()
+        if (filters.department) params.append('department', filters.department)
+        const qs = params.toString()
+        return this.makeRequest(`/staff/id-cards/staff${qs ? `?${qs}` : ''}`)
+    }
+
+    async getStudentCardPreviewData(studentId) {
+        return this.makeRequest(`/staff/id-cards/student/${studentId}/preview-data`)
+    }
+
+    async getStaffCardPreviewData(staffId) {
+        return this.makeRequest(`/staff/id-cards/staff/${staffId}/preview-data`)
+    }
+
+    async getIdCardGenerationLog(userId) {
+        return this.makeRequest(`/staff/id-cards/log/${userId}`)
+    }
+
+    /**
+     * Export an ID card (PNG or PDF). Returns a Blob and triggers a download.
+     * @param {Object} params
+     * @param {'student'|'staff'} params.entityType
+     * @param {string} params.entityId
+     * @param {'front'|'back'} params.side
+     * @param {'png'|'pdf'} params.format
+     * @param {string} params.dateOfIssue  - ISO date string
+     * @param {string} [params.validUntil] - ISO date string (student only)
+     * @param {string} [params.dateOfBirth] - ISO date string (staff only)
+     * @param {string} [params.overridePhotoDataUrl] - data: URL for custom photo
+     * @param {string} [params.filenamePrefix] - prefix for downloaded filename
+     */
+    async exportIdCard(params) {
+        const {
+            entityType, entityId, side, format,
+            dateOfIssue, validUntil, dateOfBirth,
+            overridePhotoDataUrl, filenamePrefix,
+        } = params
+
+        const url = `${this.baseURL}/staff/id-cards/export`
+        const config = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                entityType, entityId, side, format,
+                dateOfIssue, validUntil, dateOfBirth, overridePhotoDataUrl,
+            }),
+        }
+        if (this.token) config.headers.Authorization = `Bearer ${this.token}`
+
+        logger.info('ID card export request:', { entityType, entityId, side, format })
+
+        const response = await fetch(url, config)
+        if (!response.ok) {
+            if (response.status === 401) {
+                this.handleTokenExpiration()
+                throw new Error('Authentication required for ID card export')
+            }
+            const errorData = await response.json().catch(() => ({}))
+            throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
+        }
+
+        const blob = await response.blob()
+        if (blob.size === 0) throw new Error('Generated ID card file is empty')
+
+        const prefix = filenamePrefix || entityId
+        const ext = format === 'pdf' ? 'pdf' : 'png'
+        const fileName = format === 'pdf'
+            ? `${prefix}-id-card.pdf`
+            : `${prefix}-id-card-${side}.png`
+
+        const downloadUrl = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(downloadUrl)
+
+        logger.info('ID card download successful:', { fileName, size: blob.size })
+        return { success: true, message: 'ID card downloaded successfully' }
+    }
 }
 
 export const apiService = new StaffApiService()

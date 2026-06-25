@@ -234,16 +234,16 @@ export default {
 /* Header */
 .card-header {
   position: relative;
-  height: 170px;
+  height: 190px;
   display: flex;
-  align-items: center;
-  padding: 16px 22px;
+  align-items: top;
+  padding: 30px 22px;
   flex-shrink: 0;
   overflow: hidden;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  background-color: #8b1515;
+  /* background-color: #8b1515; */
 }
 .header-logo {
   width: 100px;
@@ -274,10 +274,10 @@ export default {
 /* Watermark */
 .card-watermark {
   position: absolute;
-  right: -50px;
-  bottom: 100px;
-  width: 500px;
-  height: 500px;
+  right: -30px;
+  bottom: 120px;
+  width: 470px;
+  height: 470px;
   opacity: 0.06;
   pointer-events: none;
   z-index: 0;
@@ -358,7 +358,7 @@ export default {
 
 /* Fields */
 .fields-list {
-  margin-top: 20px;
+  margin-top: 30px;
 }
 .field-row {
   display: flex;
@@ -368,14 +368,14 @@ export default {
 .field-label {
   font-weight: 900;
   color: #1a1a1a;
-  width: 200px;
+  width: 220px;
   flex-shrink: 0;
-  font-size: 22px;
+  font-size: 23px;
 }
 .field-value {
   font-weight: 400;
   color: #1a1a1a;
-  font-size: 22px;
+  font-size: 23px;
 }
 
 /* Footer */

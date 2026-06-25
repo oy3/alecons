@@ -29,7 +29,7 @@
       <!-- ─── Body ─── -->
       <div class="card-body">
         <!-- Photo + badge -->
-        <div class="photo-row">
+        <div class="photo-row d-flex align-items-center">
           <div class="photo-frame">
             <!-- If we have a real photo -->
             <img
@@ -238,15 +238,15 @@ export default {
 .card-header {
   position: relative;
   background: #8b1515;
-  height: 140px;
+  height: 170px;
   display: flex;
   align-items: center;
   padding: 16px 22px;
   flex-shrink: 0;
 }
 .header-logo {
-  width: 74px;
-  height: 74px;
+  width: 100px;
+  height: 100px;
   object-fit: contain;
   z-index: 1;
   flex-shrink: 0;
@@ -257,15 +257,15 @@ export default {
 }
 .header-college {
   color: #fff;
-  font-size: 21px;
+  font-size: 28px;
   font-weight: 900;
   letter-spacing: 1px;
   line-height: 1.1;
 }
 .header-subtitle {
   color: rgba(255, 255, 255, 0.85);
-  font-size: 10.5px;
-  letter-spacing: 2px;
+  font-size: 20px;
+  letter-spacing: 4px;
   text-transform: uppercase;
   margin-top: 3px;
 }
@@ -281,10 +281,10 @@ export default {
 /* Watermark */
 .card-watermark {
   position: absolute;
-  right: 18px;
-  top: 155px;
-  width: 240px;
-  height: 240px;
+  right: -50px;
+  bottom: 100px;
+  width: 500px;
+  height: 500px;
   opacity: 0.06;
   pointer-events: none;
   z-index: 0;
@@ -308,9 +308,9 @@ export default {
   gap: 18px;
 }
 .photo-frame {
-  width: 220px;
-  height: 284px;
-  border: 2.5px solid #8b1515;
+  width: 170px;
+  height: 204px;
+  border: 1px solid #8b1515;
   border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
@@ -346,7 +346,7 @@ export default {
 .id-badge {
   background: #8b1515;
   color: #fff;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 1.5px;
   padding: 6px 22px;
@@ -355,7 +355,7 @@ export default {
 }
 .person-name {
   margin-top: 16px;
-  font-size: 26px;
+  font-size: 32px;
   font-weight: 900;
   color: #1a1a1a;
   line-height: 1.2;
@@ -375,14 +375,14 @@ export default {
 .field-label {
   font-weight: 900;
   color: #1a1a1a;
-  width: 180px;
+  width: 200px;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 22px;
 }
 .field-value {
   font-weight: 400;
   color: #1a1a1a;
-  font-size: 12px;
+  font-size: 22px;
 }
 
 /* Footer */
@@ -395,16 +395,16 @@ export default {
 .footer-wave {
   display: block;
   width: 100%;
-  height: 22px;
+  height: 60px;
 }
 .card-footer {
   background: #8b1515;
-  padding: 9px 20px;
+  padding: 20px 20px;
   text-align: center;
 }
 .footer-motto {
   color: rgba(255, 255, 255, 0.9);
-  font-size: 11px;
+  font-size: 18px;
   letter-spacing: 2px;
   font-weight: 500;
 }

@@ -3,13 +3,12 @@
   <div class="card-scale-wrapper" :style="wrapperStyle">
     <div class="id-card-front student" :style="cardStyle">
       <!-- ─── Header ─── -->
-      <div class="card-header">
+      <div class="card-header" :style="headerStyle">
         <img v-if="logoSrc" :src="logoSrc" class="header-logo" alt="Logo" />
         <div class="header-text">
           <div class="header-college">ALEBIOSU COLLEGE</div>
           <div class="header-subtitle">OF NURSING SCIENCES</div>
         </div>
-        <img :src="headerWaveSrc" class="header-wave" alt="" />
       </div>
 
       <!-- ─── Watermark ─── -->
@@ -158,6 +157,10 @@ export default {
     effectivePhotoSrc() {
       return this.localPhotoDataUrl || this.cardData?.photoUrl || null;
     },
+    headerStyle() {
+      if (!this.headerWaveSrc) return {};
+      return { backgroundImage: `url(${this.headerWaveSrc})` };
+    },
   },
 
   methods: {
@@ -237,6 +240,10 @@ export default {
   padding: 16px 22px;
   flex-shrink: 0;
   overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #8b1515;
 }
 .header-logo {
   width: 100px;
@@ -262,15 +269,6 @@ export default {
   letter-spacing: 4px;
   text-transform: uppercase;
   margin-top: 3px;
-}
-.header-wave {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: 0;
 }
 
 /* Watermark */

@@ -1328,7 +1328,7 @@ class StaffApiService {
      * @param {Object} params
      * @param {'student'|'staff'} params.entityType
      * @param {string} params.entityId
-     * @param {'front'|'back'} params.side
+      * @param {'front'|'back'|'both'} params.side
      * @param {'png'|'pdf'} params.format
      * @param {string} params.dateOfIssue  - ISO date string
      * @param {string} [params.validUntil] - ISO date string (student only)

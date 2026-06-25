@@ -34,12 +34,8 @@
             <div class="contact-line"><span class="contact-icon">🌐</span> www.alecons.edu.ng</div>
           </div>
           <div class="qr-area">
-            <div v-if="cardData.publicVerificationToken" class="qr-box">
-              <svg viewBox="0 0 100 100" width="80" height="80">
-                <rect width="100" height="100" fill="#f0f0f0" rx="4"/>
-                <text x="50" y="52" text-anchor="middle" font-size="8" fill="#888">QR Code</text>
-                <text x="50" y="64" text-anchor="middle" font-size="6" fill="#aaa">(generated on export)</text>
-              </svg>
+            <div v-if="qrCodeDataUrl" class="qr-box">
+              <img :src="qrCodeDataUrl" width="90" height="90" alt="Verification QR code" />
             </div>
             <div v-else class="qr-missing">
               <svg viewBox="0 0 100 100" width="80" height="80">
@@ -61,7 +57,8 @@
           <path :d="`M0,28 L0,14 C90,2 180,0 270,12 C360,24 450,20 ${BASE_W},8 L${BASE_W},28 Z`" fill="#8B1515" />
         </svg>
         <div class="back-footer">
-          <div class="barcode-placeholder">
+          <img v-if="barcodeDataUrl" :src="barcodeDataUrl" class="barcode-img" :alt="cardData.staffId" />
+          <div v-else class="barcode-placeholder">
             <span class="barcode-text">{{ cardData.staffId }}</span>
           </div>
           <div class="return-text">IF FOUND, PLEASE RETURN TO THE COLLEGE ADMINISTRATION</div>
@@ -73,6 +70,9 @@
 </template>
 
 <script>
+import QRCode from 'qrcode'
+import JsBarcode from 'jsbarcode'
+
 const BASE_W = 540
 const BASE_H = 856
 
@@ -85,14 +85,84 @@ export default {
     signatureSrc: { type: String, default: null },
   },
   data() {
-    return { BASE_W, BASE_H }
+    return {
+      BASE_W,
+      BASE_H,
+      qrCodeDataUrl: null,
+      barcodeDataUrl: null,
+    }
   },
+
+  watch: {
+    cardData: {
+      immediate: true,
+      deep: true,
+      handler() {
+        this.refreshCodes()
+      },
+    },
+  },
+
   computed: {
     wrapperStyle() {
       return { width: `${BASE_W * this.scale}px`, height: `${BASE_H * this.scale}px`, flexShrink: 0 }
     },
     cardStyle() {
       return { transform: `scale(${this.scale})`, transformOrigin: 'top left', width: `${BASE_W}px`, height: `${BASE_H}px` }
+    },
+  },
+
+  methods: {
+    async refreshCodes() {
+      await this.generateQrCode()
+      this.generateBarcode()
+    },
+
+    async generateQrCode() {
+      const url = this.cardData?.verificationUrl
+      if (!url) {
+        this.qrCodeDataUrl = null
+        return
+      }
+
+      try {
+        this.qrCodeDataUrl = await QRCode.toDataURL(url, {
+          margin: 1,
+          width: 90,
+          color: {
+            dark: '#1a1a1a',
+            light: '#ffffff',
+          },
+        })
+      } catch {
+        this.qrCodeDataUrl = null
+      }
+    },
+
+    generateBarcode() {
+      const rawValue = this.cardData?.staffId
+      if (!rawValue) {
+        this.barcodeDataUrl = null
+        return
+      }
+
+      try {
+        const normalizedValue = String(rawValue).replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+        JsBarcode(svg, normalizedValue, {
+          format: 'CODE128',
+          displayValue: false,
+          margin: 4,
+          width: 2,
+          height: 40,
+          background: '#ffffff',
+          lineColor: '#000000',
+        })
+        const svgString = new XMLSerializer().serializeToString(svg)
+        this.barcodeDataUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgString)))}`
+      } catch {
+        this.barcodeDataUrl = null
+      }
     },
   },
 }
@@ -128,6 +198,7 @@ export default {
 .footer-wave-svg { display: block; width: 100%; height: 28px; }
 .back-footer { background: #6E0F0F; padding: 10px 20px 8px; text-align: center; }
 .barcode-placeholder { background: #fff; display: inline-block; padding: 3px 12px; border-radius: 2px; }
+.barcode-img { height: 34px; background: #fff; padding: 2px 8px; display: inline-block; }
 .barcode-text { font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 2px; color: #1a1a1a; }
 .return-text { font-size: 9px; color: rgba(255,255,255,0.75); letter-spacing: 0.5px; margin-top: 4px; }
 </style>

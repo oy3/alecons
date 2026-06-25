@@ -257,6 +257,8 @@ import StudentIdCardFront from './components/StudentIdCardFront.vue'
 import StudentIdCardBack from './components/StudentIdCardBack.vue'
 import StaffIdCardFront from './components/StaffIdCardFront.vue'
 import StaffIdCardBack from './components/StaffIdCardBack.vue'
+import logoAsset from '@shared/assets/logo.png'
+import signatureAsset from '@shared/assets/provost-sign.png'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const addYears = (dateStr, years) => {
@@ -317,8 +319,8 @@ export default {
       exporting: null,    // 'front-png' | 'back-png' | 'pdf' | null
 
       // Assets (loaded as data URLs for preview)
-      logoSrc: null,
-      signatureSrc: null,
+      logoSrc: logoAsset,
+      signatureSrc: signatureAsset,
     }
   },
 
@@ -580,30 +582,16 @@ export default {
           ? this.filters.selectedStudentId
           : this.filters.selectedStaffId
 
-        // Export front page PDF
         await apiService.exportIdCard({
           entityType: this.filters.userType,
           entityId,
-          side: 'front',
+          side: 'both',
           format: 'pdf',
           dateOfIssue: this.exportOptions.dateOfIssue,
           validUntil: this.filters.userType === 'student' ? this.exportOptions.validUntil : undefined,
           dateOfBirth: this.filters.userType === 'staff' ? this.exportOptions.dateOfBirth : undefined,
           overridePhotoDataUrl: this.photoOverrideDataUrl || undefined,
-          filenamePrefix: `${this.filenamePrefix}-front`,
-        })
-
-        // Export back page PDF
-        await apiService.exportIdCard({
-          entityType: this.filters.userType,
-          entityId,
-          side: 'back',
-          format: 'pdf',
-          dateOfIssue: this.exportOptions.dateOfIssue,
-          validUntil: this.filters.userType === 'student' ? this.exportOptions.validUntil : undefined,
-          dateOfBirth: this.filters.userType === 'staff' ? this.exportOptions.dateOfBirth : undefined,
-          overridePhotoDataUrl: this.photoOverrideDataUrl || undefined,
-          filenamePrefix: `${this.filenamePrefix}-back`,
+          filenamePrefix: this.filenamePrefix,
         })
 
         // Refresh generation log

@@ -140,7 +140,7 @@ export class IdCardController {
         @Body() body: {
             entityType: 'student' | 'staff';
             entityId: string;
-            side: 'front' | 'back';
+            side: 'front' | 'back' | 'both';
             format: 'pdf' | 'png';
             dateOfIssue: string;
             validUntil?: string;

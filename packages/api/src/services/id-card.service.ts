@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
 import { JSDOM } from 'jsdom';
+import { PDFDocument } from 'pdf-lib';
 import { launchPuppeteerBrowser } from '../utils/puppeteer-launch.util';
 import { Student, StudentDocument } from '../schemas/student.schema';
 import { Staff, StaffDocument } from '../schemas/staff.schema';
@@ -27,7 +28,7 @@ import {
 } from '../schemas/id-card-log.schema';
 
 export type IdCardFormat = 'pdf' | 'png';
-export type IdCardSide = 'front' | 'back';
+export type IdCardSide = 'front' | 'back' | 'both';
 
 export interface StudentCardData {
     type: 'student';
@@ -313,34 +314,81 @@ export class IdCardService {
         const validUntilStr = validUntil ? this.formatCardDate(new Date(validUntil)) : null;
         const dobStr = dateOfBirth ? this.formatCardDate(new Date(dateOfBirth)) : null;
 
-        // Build HTML
-        let html: string;
-        if (side === 'front') {
-            html = entityType === 'student'
+        let buffer: Buffer;
+        if (side === 'both') {
+            if (format !== 'pdf') {
+                throw new BadRequestException('Both-side export is only supported for PDF format.');
+            }
+
+            const frontHtml = entityType === 'student'
                 ? this.buildStudentFrontHtml({
                     cardData: cardData as StudentCardData,
-                    photoSrc, logoSrc, issueDateStr, validUntilStr: validUntilStr ?? '',
+                    photoSrc,
+                    logoSrc,
+                    issueDateStr,
+                    validUntilStr: validUntilStr ?? '',
                 })
                 : this.buildStaffFrontHtml({
                     cardData: cardData as StaffCardData,
-                    photoSrc, logoSrc, issueDateStr, dobStr: dobStr ?? '',
+                    photoSrc,
+                    logoSrc,
+                    issueDateStr,
+                    dobStr: dobStr ?? '',
                 });
-        } else {
-            html = this.buildBackHtml({
-                entityType, logoSrc, signatureSrc, qrSvg,
+
+            const backHtml = this.buildBackHtml({
+                entityType,
+                logoSrc,
+                signatureSrc,
+                qrSvg,
                 barcodeBase64,
                 barcodeDisplayValue: entityType === 'student'
                     ? (cardData as StudentCardData).matricNumber
                     : (cardData as StaffCardData).staffId,
             });
-        }
 
-        // Render via Puppeteer
-        let buffer: Buffer;
-        if (format === 'png') {
-            buffer = await this.renderPng(html);
+            const [frontPng, backPng] = await Promise.all([
+                this.renderPng(frontHtml),
+                this.renderPng(backHtml),
+            ]);
+
+            buffer = await this.buildLandscapeBothSidesPdf(frontPng, backPng);
         } else {
-            buffer = await this.renderPdf(html);
+            let html: string;
+            if (side === 'front') {
+                html = entityType === 'student'
+                    ? this.buildStudentFrontHtml({
+                        cardData: cardData as StudentCardData,
+                        photoSrc,
+                        logoSrc,
+                        issueDateStr,
+                        validUntilStr: validUntilStr ?? '',
+                    })
+                    : this.buildStaffFrontHtml({
+                        cardData: cardData as StaffCardData,
+                        photoSrc,
+                        logoSrc,
+                        issueDateStr,
+                        dobStr: dobStr ?? '',
+                    });
+            } else {
+                html = this.buildBackHtml({
+                    entityType,
+                    logoSrc,
+                    signatureSrc,
+                    qrSvg,
+                    barcodeBase64,
+                    barcodeDisplayValue: entityType === 'student'
+                        ? (cardData as StudentCardData).matricNumber
+                        : (cardData as StaffCardData).staffId,
+                });
+            }
+
+            if (format === 'png') {
+                buffer = await this.renderPng(html);
+            } else {
+                buffer = await this.renderPdf(html);
+            }
         }
 
         // Record in log
@@ -397,6 +445,44 @@ export class IdCardService {
         } finally {
             if (browser) await browser.close();
         }
+    }
+
+    private async buildLandscapeBothSidesPdf(frontPng: Buffer, backPng: Buffer): Promise<Buffer> {
+        const pdfDoc = await PDFDocument.create();
+
+        // A4 landscape page to keep compatibility with common print workflows.
+        const pageWidth = 841.89;
+        const pageHeight = 595.28;
+        const margin = 24;
+        const gap = 24;
+
+        const page = pdfDoc.addPage([pageWidth, pageHeight]);
+        const frontImage = await pdfDoc.embedPng(frontPng);
+        const backImage = await pdfDoc.embedPng(backPng);
+
+        const maxCardHeight = pageHeight - (margin * 2);
+        const targetHeight = Math.min(maxCardHeight, frontImage.height);
+        const targetWidth = (targetHeight * frontImage.width) / frontImage.height;
+        const totalWidth = (targetWidth * 2) + gap;
+        const startX = (pageWidth - totalWidth) / 2;
+        const y = (pageHeight - targetHeight) / 2;
+
+        page.drawImage(frontImage, {
+            x: startX,
+            y,
+            width: targetWidth,
+            height: targetHeight,
+        });
+
+        page.drawImage(backImage, {
+            x: startX + targetWidth + gap,
+            y,
+            width: targetWidth,
+            height: targetHeight,
+        });
+
+        const bytes = await pdfDoc.save();
+        return Buffer.from(bytes);
     }
 
     // -------------------------------------------------------------------------

@@ -9,16 +9,7 @@
           <div class="header-college">ALEBIOSU COLLEGE</div>
           <div class="header-subtitle">OF NURSING SCIENCES</div>
         </div>
-        <svg
-          class="header-wave"
-          :viewBox="`0 0 ${BASE_W} 28`"
-          preserveAspectRatio="none"
-        >
-          <path
-            :d="`M0,28 L0,8 C90,28 180,32 270,18 C360,4 450,8 ${BASE_W},18 L${BASE_W},28 Z`"
-            fill="#fff"
-          />
-        </svg>
+        <img v-if="headerWaveSrc" :src="headerWaveSrc" class="header-wave" alt="" />
       </div>
 
       <!-- ─── Watermark ─── -->
@@ -116,6 +107,8 @@
 </template>
 
 <script>
+import headerWaveAsset from '@shared/assets/header-wave.svg'
+
 const BASE_W = 540;
 const BASE_H = 856;
 
@@ -140,6 +133,7 @@ export default {
     return {
       BASE_W,
       BASE_H,
+      headerWaveSrc: headerWaveAsset,
       localPhotoDataUrl: null,
       uid: Math.random().toString(36).slice(2, 8),
     };

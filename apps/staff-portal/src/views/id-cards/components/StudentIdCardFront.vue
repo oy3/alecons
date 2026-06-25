@@ -231,12 +231,12 @@ export default {
 /* Header */
 .card-header {
   position: relative;
-  background: #8b1515;
   height: 170px;
   display: flex;
   align-items: center;
   padding: 16px 22px;
   flex-shrink: 0;
+  overflow: hidden;
 }
 .header-logo {
   width: 100px;
@@ -265,11 +265,12 @@ export default {
 }
 .header-wave {
   position: absolute;
-  bottom: -1px;
+  top: 0;
   left: 0;
-  right: 0;
   width: 100%;
-  height: 28px;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
 }
 
 /* Watermark */

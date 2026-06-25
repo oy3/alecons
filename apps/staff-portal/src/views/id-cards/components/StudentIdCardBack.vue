@@ -431,7 +431,7 @@ export default {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  background-color: #6e0f0f;
+  /* background-color: #6e0f0f; */
 }
 .back-footer {
   padding: 10px 20px 8px;

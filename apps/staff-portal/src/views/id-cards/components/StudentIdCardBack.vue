@@ -56,6 +56,10 @@ export default {
         height: `${BASE_H}px`,
       };
     },
+    footerStyle() {
+      if (!this.footerWaveSrc) return {};
+      return { backgroundImage: `url(${this.footerWaveSrc})` };
+    },
   },
 
   methods: {
@@ -237,7 +241,7 @@ export default {
       </div>
 
       <!-- ─── Footer wave + barcode ─── -->
-      <div class="back-footer-area" :style="footerWaveSrc ? { backgroundImage: `url(${footerWaveSrc})` } : {}">
+      <div class="back-footer-area" :style="footerStyle">
         <div class="back-footer">
           <img
             v-if="barcodeDataUrl"
@@ -429,9 +433,10 @@ export default {
   left: 0;
   right: 0;
   background-size: cover;
-  background-position: center;
+  background-position: center top;
   background-repeat: no-repeat;
-  /* background-color: #6e0f0f; */
+  background-color: #6e0f0f;
+  padding-top: 30px;
 }
 .back-footer {
   padding: 10px 20px 8px;

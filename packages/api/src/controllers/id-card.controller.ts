@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     Body,
     Controller,
     Get,
@@ -139,7 +140,11 @@ export class IdCardController {
         },
         @Req() req: Request,
     ) {
-        const generatedByUserId = (req as any).user?.sub ?? (req as any).user?.userId ?? 'unknown';
+        const generatedByUserId = (req as any).user?.sub ?? (req as any).user?.userId;
+        
+        if (!generatedByUserId) {
+            throw new BadRequestException('User authentication required for ID card generation');
+        }
 
         const data = await this.idCardService.registerGeneration({
             entityType: body.entityType,

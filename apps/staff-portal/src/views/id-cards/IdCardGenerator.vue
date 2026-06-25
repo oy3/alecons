@@ -727,11 +727,31 @@ export default {
     async captureExportNode(node) {
       if (!node) throw new Error('Export surface not ready.')
       await this.waitForExportAssets(node)
+      await this.convertImagesToDataUrls(node)
       return html2canvas(node, {
-        useCORS: true,
+        allowTaint: false,
+        useCORS: false,
         backgroundColor: '#ffffff',
         scale: 2,
         logging: false,
+        onclone: (clonedDoc, clonedNode) => {
+          // Ensure SVGs have explicit dimensions for proper rendering
+          const originalSvgs = node.querySelectorAll('svg')
+          const clonedSvgs = clonedNode.querySelectorAll('svg')
+          
+          originalSvgs.forEach((originalSvg, index) => {
+            const clonedSvg = clonedSvgs[index]
+            if (clonedSvg) {
+              const rect = originalSvg.getBoundingClientRect()
+              clonedSvg.setAttribute('width', rect.width)
+              clonedSvg.setAttribute('height', rect.height)
+              // Preserve viewBox if it exists
+              if (originalSvg.hasAttribute('viewBox')) {
+                clonedSvg.setAttribute('viewBox', originalSvg.getAttribute('viewBox'))
+              }
+            }
+          })
+        }
       })
     },
 
@@ -751,6 +771,37 @@ export default {
           img.onerror = () => resolve()
         })
       }))
+    },
+
+    async convertImagesToDataUrls(node) {
+      const images = Array.from(node.querySelectorAll('img'))
+      await Promise.all(images.map(async (img) => {
+        // Skip if already a data URL
+        if (img.src.startsWith('data:')) return
+
+        try {
+          const dataUrl = await this.imageToDataUrl(img)
+          img.src = dataUrl
+        } catch (err) {
+          logger.warn('Failed to convert image to data URL', err)
+        }
+      }))
+    },
+
+    async imageToDataUrl(img) {
+      return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth || img.width
+        canvas.height = img.naturalHeight || img.height
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0)
+        try {
+          const dataUrl = canvas.toDataURL('image/png')
+          resolve(dataUrl)
+        } catch (err) {
+          reject(err)
+        }
+      })
     },
 
     downloadBlob(blob, fileName) {

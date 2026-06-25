@@ -883,6 +883,17 @@ export class IdCardService {
     }): Promise<void> {
         const now = new Date();
         try {
+            // Validate all IDs are valid ObjectIds before attempting conversion
+            if (!Types.ObjectId.isValid(opts.entityId)) {
+                throw new Error(`Invalid entityId: ${opts.entityId}`);
+            }
+            if (!Types.ObjectId.isValid(opts.userId)) {
+                throw new Error(`Invalid userId: ${opts.userId}`);
+            }
+            if (!Types.ObjectId.isValid(opts.generatedByUserId)) {
+                throw new Error(`Invalid generatedByUserId: ${opts.generatedByUserId}`);
+            }
+
             await this.idCardLogModel.findOneAndUpdate(
                 { entityId: new Types.ObjectId(opts.entityId), entityType: opts.entityType },
                 {

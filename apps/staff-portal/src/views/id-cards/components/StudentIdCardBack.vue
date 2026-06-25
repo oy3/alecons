@@ -432,10 +432,9 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  background-size: cover;
-  background-position: center top;
+  background-size: 100% 100%;
+  background-position: bottom;
   background-repeat: no-repeat;
-  background-color: #6e0f0f;
   padding-top: 30px;
 }
 .back-footer {

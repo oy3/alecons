@@ -9,7 +9,7 @@
           <div class="header-college">ALEBIOSU COLLEGE</div>
           <div class="header-subtitle">OF NURSING SCIENCES</div>
         </div>
-        <img v-if="headerWaveSrc" :src="headerWaveSrc" class="header-wave" alt="" />
+        <img :src="headerWaveSrc" class="header-wave" alt="" />
       </div>
 
       <!-- ─── Watermark ─── -->

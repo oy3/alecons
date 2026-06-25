@@ -71,6 +71,12 @@ export interface IdCardExportParams {
     generatedByUserId: string;
 }
 
+export interface IdCardGenerationParams {
+    entityType: 'student' | 'staff';
+    entityId: string;
+    generatedByUserId: string;
+}
+
 // ---------------------------------------------------------------------------
 // Card dimensions: 54mm × 85.6mm rendered at 10px/mm = 540×856 viewport
 // deviceScaleFactor: 2 for PNG → 1080×1712 output (≈500dpi – excellent print quality)
@@ -80,6 +86,57 @@ const CARD_H = 856;
 const CARD_SCALE = 2;
 const BRAND_RED = '#8B1515';
 const BRAND_RED_DARK = '#6E0F0F';
+
+interface FieldStyleConfig {
+    fontSizePx?: number;
+    fontWeight?: number;
+    widthPx?: number;
+}
+
+interface IdCardRenderingConfig {
+    studentFront?: {
+        headerHeightPx?: number;
+        personNameSizePx?: number;
+        fieldLabel?: FieldStyleConfig;
+        fieldValue?: FieldStyleConfig;
+        footerWaveHeightPx?: number;
+    };
+    staffFront?: {
+        fieldLabel?: FieldStyleConfig;
+        fieldValue?: FieldStyleConfig;
+    };
+}
+
+const DEFAULT_RENDER_CONFIG: IdCardRenderingConfig = {
+    studentFront: {
+        headerHeightPx: 140,
+        personNameSizePx: 26,
+        fieldLabel: {
+            fontSizePx: 12,
+            fontWeight: 900,
+            widthPx: 180,
+        },
+        fieldValue: {
+            fontSizePx: 12,
+            fontWeight: 400,
+        },
+        footerWaveHeightPx: 22,
+    },
+    staffFront: {
+        fieldLabel: {
+            fontSizePx: 12,
+            fontWeight: 900,
+            widthPx: 180,
+        },
+        fieldValue: {
+            fontSizePx: 12,
+            fontWeight: 400,
+        },
+    },
+};
+
+const STUDENT_FRONT_RENDER_STYLE = DEFAULT_RENDER_CONFIG.studentFront!;
+const STAFF_FRONT_RENDER_STYLE = DEFAULT_RENDER_CONFIG.staffFront!;
 
 @Injectable()
 export class IdCardService {
@@ -407,6 +464,23 @@ export class IdCardService {
         return this.idCardLogModel.findOne({ userId: new Types.ObjectId(userId) }).lean() as any;
     }
 
+    async registerGeneration(params: IdCardGenerationParams): Promise<IdCardLogDocument | null> {
+        const { entityType, entityId, generatedByUserId } = params;
+
+        const cardData = entityType === 'student'
+            ? await this.getStudentCardData(entityId)
+            : await this.getStaffCardData(entityId);
+
+        await this.recordGeneration({
+            entityType: entityType === 'student' ? IdCardEntityType.STUDENT : IdCardEntityType.STAFF,
+            entityId,
+            userId: cardData.userId,
+            generatedByUserId,
+        });
+
+        return this.getGenerationLog(cardData.userId);
+    }
+
     // -------------------------------------------------------------------------
     // Puppeteer rendering
     // -------------------------------------------------------------------------
@@ -497,6 +571,7 @@ export class IdCardService {
         validUntilStr: string;
     }): string {
         const { cardData, photoSrc, logoSrc, issueDateStr, validUntilStr } = opts;
+        const studentFront = STUDENT_FRONT_RENDER_STYLE;
         const photoEl = photoSrc
             ? `<img src="${photoSrc}" style="width:100%;height:100%;object-fit:cover;" alt="Photo">`
             : `<div style="width:100%;height:100%;background:#d0d0d0;display:flex;align-items:center;justify-content:center;">
@@ -505,7 +580,7 @@ export class IdCardService {
 
         return this.wrapCardHtml(`
       <div style="width:${CARD_W}px;height:${CARD_H}px;position:relative;background:#fff;font-family:Arial,Helvetica,sans-serif;overflow:hidden;">
-        ${this.headerHtml(logoSrc)}
+                ${this.headerHtml(logoSrc, studentFront.headerHeightPx ?? 140)}
         <!-- Watermark -->
         <div style="position:absolute;right:18px;top:155px;width:240px;height:240px;opacity:0.06;pointer-events:none;z-index:0;">
           ${logoSrc ? `<img src="${logoSrc}" style="width:100%;height:100%;object-fit:contain;" alt="">` : ''}
@@ -519,20 +594,20 @@ export class IdCardService {
             </div>
             <div style="flex:1;padding-top:6px;">
               <div style="background:${BRAND_RED};color:#fff;font-size:13px;font-weight:700;letter-spacing:1.5px;padding:6px 22px;border-radius:20px;text-align:center;display:inline-block;">STUDENT ID</div>
-              <div style="margin-top:16px;font-size:26px;font-weight:900;color:#1a1a1a;line-height:1.2;text-transform:uppercase;word-break:break-word;">${this.escHtml(cardData.formattedName)}</div>
+                            <div style="margin-top:16px;font-size:${studentFront.personNameSizePx ?? 26}px;font-weight:900;color:#1a1a1a;line-height:1.2;text-transform:uppercase;word-break:break-word;">${this.escHtml(cardData.formattedName)}</div>
             </div>
           </div>
           <!-- Fields -->
           <div style="margin-top:20px;">
-            ${this.fieldRow('MATRIC NO.:', cardData.matricNumber)}
-            ${this.fieldRow('DEPARTMENT:', cardData.department)}
-            ${this.fieldRow('PROGRAMME:', cardData.programme)}
-            ${this.fieldRow('ENTRY SESSION:', cardData.entrySession)}
-            ${this.fieldRow('DATE OF ISSUE:', issueDateStr)}
-            ${this.fieldRow('VALID UNTIL:', validUntilStr)}
+                        ${this.fieldRow('MATRIC NO.:', cardData.matricNumber, studentFront.fieldLabel, studentFront.fieldValue)}
+                        ${this.fieldRow('DEPARTMENT:', cardData.department, studentFront.fieldLabel, studentFront.fieldValue)}
+                        ${this.fieldRow('PROGRAMME:', cardData.programme, studentFront.fieldLabel, studentFront.fieldValue)}
+                        ${this.fieldRow('ENTRY SESSION:', cardData.entrySession, studentFront.fieldLabel, studentFront.fieldValue)}
+                        ${this.fieldRow('DATE OF ISSUE:', issueDateStr, studentFront.fieldLabel, studentFront.fieldValue)}
+                        ${this.fieldRow('VALID UNTIL:', validUntilStr, studentFront.fieldLabel, studentFront.fieldValue)}
           </div>
         </div>
-        ${this.footerHtml()}
+                ${this.footerHtml(studentFront.footerWaveHeightPx ?? 22)}
       </div>
     `);
     }
@@ -545,6 +620,7 @@ export class IdCardService {
         dobStr: string;
     }): string {
         const { cardData, photoSrc, logoSrc, issueDateStr, dobStr } = opts;
+        const staffFront = STAFF_FRONT_RENDER_STYLE;
         const photoEl = photoSrc
             ? `<img src="${photoSrc}" style="width:100%;height:100%;object-fit:cover;" alt="Photo">`
             : `<div style="width:100%;height:100%;background:#d0d0d0;display:flex;align-items:center;justify-content:center;">
@@ -573,11 +649,11 @@ export class IdCardService {
           </div>
           <!-- Fields -->
           <div style="margin-top:20px;">
-            ${this.fieldRow('STAFF ID NO.:', cardData.staffId)}
-            ${this.fieldRow('DESIGNATION:', cardData.designation)}
-            ${this.fieldRow('DEPARTMENT:', cardData.department)}
-            ${this.fieldRow('DATE OF BIRTH:', dobStr)}
-            ${this.fieldRow('DATE OF ISSUE:', issueDateStr)}
+                        ${this.fieldRow('STAFF ID NO.:', cardData.staffId, staffFront.fieldLabel, staffFront.fieldValue)}
+                        ${this.fieldRow('DESIGNATION:', cardData.designation, staffFront.fieldLabel, staffFront.fieldValue)}
+                        ${this.fieldRow('DEPARTMENT:', cardData.department, staffFront.fieldLabel, staffFront.fieldValue)}
+                        ${this.fieldRow('DATE OF BIRTH:', dobStr, staffFront.fieldLabel, staffFront.fieldValue)}
+                        ${this.fieldRow('DATE OF ISSUE:', issueDateStr, staffFront.fieldLabel, staffFront.fieldValue)}
           </div>
         </div>
         ${this.footerHtml()}
@@ -669,9 +745,9 @@ export class IdCardService {
     // Shared HTML fragments
     // -------------------------------------------------------------------------
 
-    private headerHtml(logoSrc: string | null): string {
+        private headerHtml(logoSrc: string | null, headerHeightPx = 140): string {
         return `
-      <div style="position:relative;background:${BRAND_RED};height:140px;display:flex;align-items:center;padding:16px 22px;">
+            <div style="position:relative;background:${BRAND_RED};height:${headerHeightPx}px;display:flex;align-items:center;padding:16px 22px;">
         ${logoSrc ? `<img src="${logoSrc}" style="width:74px;height:74px;object-fit:contain;z-index:1;flex-shrink:0;" alt="Logo">` : ''}
         <div style="margin-left:14px;z-index:1;">
           <div style="color:#fff;font-size:21px;font-weight:900;letter-spacing:1px;line-height:1.1;">ALEBIOSU COLLEGE</div>
@@ -684,10 +760,10 @@ export class IdCardService {
       </div>`;
     }
 
-    private footerHtml(): string {
+        private footerHtml(footerWaveHeightPx = 22): string {
         return `
       <div style="position:absolute;bottom:0;left:0;right:0;">
-        <svg viewBox="0 0 ${CARD_W} 22" preserveAspectRatio="none" style="display:block;width:100%;height:22px;">
+                <svg viewBox="0 0 ${CARD_W} 22" preserveAspectRatio="none" style="display:block;width:100%;height:${footerWaveHeightPx}px;">
           <path d="M0,22 L0,12 C90,0 180,-2 270,10 C360,22 450,18 ${CARD_W},6 L${CARD_W},22 Z" fill="${BRAND_RED}"/>
         </svg>
         <div style="background:${BRAND_RED};padding:9px 20px;text-align:center;">
@@ -696,11 +772,21 @@ export class IdCardService {
       </div>`;
     }
 
-    private fieldRow(label: string, value: string): string {
+    private fieldRow(label: string, value: string, labelStyle?: FieldStyleConfig, valueStyle?: FieldStyleConfig): string {
+        const resolvedLabel = {
+            fontSizePx: labelStyle?.fontSizePx ?? 12,
+            fontWeight: labelStyle?.fontWeight ?? 900,
+            widthPx: labelStyle?.widthPx ?? 180,
+        };
+        const resolvedValue = {
+            fontSizePx: valueStyle?.fontSizePx ?? 12,
+            fontWeight: valueStyle?.fontWeight ?? 400,
+        };
+
         return `
       <div style="display:flex;align-items:baseline;padding:5px 0;font-size:12.5px;">
-        <span style="font-weight:900;color:#1a1a1a;width:180px;flex-shrink:0;font-size:12px;">${this.escHtml(label)}</span>
-        <span style="font-weight:400;color:#1a1a1a;font-size:12px;">${this.escHtml(value)}</span>
+        <span style="font-weight:${resolvedLabel.fontWeight};color:#1a1a1a;width:${resolvedLabel.widthPx}px;flex-shrink:0;font-size:${resolvedLabel.fontSizePx}px;">${this.escHtml(label)}</span>
+        <span style="font-weight:${resolvedValue.fontWeight};color:#1a1a1a;font-size:${resolvedValue.fontSizePx}px;">${this.escHtml(value)}</span>
       </div>`;
     }
 

@@ -62,35 +62,35 @@
           </div>
           <div class="badge-name-area">
             <span class="id-badge">STUDENT ID</span>
-            <div class="person-name">{{ cardData.formattedName }}</div>
+            <div class="person-name" :style="{ fontSize: studentFrontStyles.personNameFontSize }">{{ cardData.formattedName }}</div>
           </div>
         </div>
 
         <!-- Fields -->
         <div class="fields-list">
           <div class="field-row">
-            <span class="field-label">MATRIC NO.:</span>
-            <span class="field-value">{{ cardData.matricNumber }}</span>
+            <span class="field-label" :style="studentFrontStyles.fieldLabel">MATRIC NO.:</span>
+            <span class="field-value" :style="studentFrontStyles.fieldValue">{{ cardData.matricNumber }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">DEPARTMENT:</span>
-            <span class="field-value">{{ cardData.department }}</span>
+            <span class="field-label" :style="studentFrontStyles.fieldLabel">DEPARTMENT:</span>
+            <span class="field-value" :style="studentFrontStyles.fieldValue">{{ cardData.department }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">PROGRAMME:</span>
-            <span class="field-value">{{ cardData.programme }}</span>
+            <span class="field-label" :style="studentFrontStyles.fieldLabel">PROGRAMME:</span>
+            <span class="field-value" :style="studentFrontStyles.fieldValue">{{ cardData.programme }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">ENTRY SESSION:</span>
-            <span class="field-value">{{ cardData.entrySession }}</span>
+            <span class="field-label" :style="studentFrontStyles.fieldLabel">ENTRY SESSION:</span>
+            <span class="field-value" :style="studentFrontStyles.fieldValue">{{ cardData.entrySession }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">DATE OF ISSUE:</span>
-            <span class="field-value">{{ formatDate(dateOfIssue) }}</span>
+            <span class="field-label" :style="studentFrontStyles.fieldLabel">DATE OF ISSUE:</span>
+            <span class="field-value" :style="studentFrontStyles.fieldValue">{{ formatDate(dateOfIssue) }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">VALID UNTIL:</span>
-            <span class="field-value">{{ formatDate(validUntil) }}</span>
+            <span class="field-label" :style="studentFrontStyles.fieldLabel">VALID UNTIL:</span>
+            <span class="field-value" :style="studentFrontStyles.fieldValue">{{ formatDate(validUntil) }}</span>
           </div>
         </div>
       </div>
@@ -118,6 +118,20 @@
 <script>
 const BASE_W = 540;
 const BASE_H = 856;
+const STUDENT_FRONT_STYLE = {
+  headerHeightPx: 140,
+  personNameSizePx: 26,
+  fieldLabel: {
+    widthPx: 180,
+    fontSizePx: 12,
+    fontWeight: 900,
+  },
+  fieldValue: {
+    fontSizePx: 12,
+    fontWeight: 400,
+  },
+  footerWaveHeightPx: 22,
+}
 
 export default {
   name: "StudentIdCardFront",
@@ -146,6 +160,24 @@ export default {
   },
 
   computed: {
+    studentFrontStyles() {
+      const fieldLabel = STUDENT_FRONT_STYLE.fieldLabel
+      const fieldValue = STUDENT_FRONT_STYLE.fieldValue
+
+      return {
+        personNameFontSize: `${STUDENT_FRONT_STYLE.personNameSizePx}px`,
+        fieldLabel: {
+          width: `${fieldLabel.widthPx}px`,
+          fontSize: `${fieldLabel.fontSizePx}px`,
+          fontWeight: fieldLabel.fontWeight,
+        },
+        fieldValue: {
+          fontSize: `${fieldValue.fontSizePx}px`,
+          fontWeight: fieldValue.fontWeight,
+        },
+      }
+    },
+
     wrapperStyle() {
       return {
         width: `${BASE_W * this.scale}px`,
@@ -159,6 +191,8 @@ export default {
         transformOrigin: "top left",
         width: `${BASE_W}px`,
         height: `${BASE_H}px`,
+        '--student-front-header-height': `${STUDENT_FRONT_STYLE.headerHeightPx}px`,
+        '--student-front-footer-wave-height': `${STUDENT_FRONT_STYLE.footerWaveHeightPx}px`,
       };
     },
     effectivePhotoSrc() {
@@ -238,7 +272,7 @@ export default {
 .card-header {
   position: relative;
   background: #8b1515;
-  height: 160px;
+  height: var(--student-front-header-height, 140px);
   display: flex;
   align-items: center;
   padding: 16px 22px;
@@ -355,7 +389,7 @@ export default {
 }
 .person-name {
   margin-top: 16px;
-  font-size: 34px;
+  font-size: 26px;
   font-weight: 900;
   color: #1a1a1a;
   line-height: 1.2;
@@ -373,17 +407,16 @@ export default {
   padding: 5px 0;
 }
 .field-label {
-  font-weight: 700;
+  font-weight: 900;
   color: #1a1a1a;
-  width: 240px;
+  width: 180px;
   flex-shrink: 0;
-  font-size: 24px;
-  font-family: sans-serif;
+  font-size: 12px;
 }
 .field-value {
   font-weight: 400;
   color: #1a1a1a;
-  font-size: 24px;
+  font-size: 12px;
 }
 
 /* Footer */
@@ -396,7 +429,7 @@ export default {
 .footer-wave {
   display: block;
   width: 100%;
-  height: 40px;
+  height: var(--student-front-footer-wave-height, 22px);
 }
 .card-footer {
   background: #8b1515;

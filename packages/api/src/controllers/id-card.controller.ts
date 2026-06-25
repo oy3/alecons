@@ -129,6 +129,27 @@ export class IdCardController {
         return { success: true, data };
     }
 
+    @Post('generate')
+    @ApiOperation({ summary: 'Mark an ID card as generated and update generation log' })
+    @ApiResponse({ status: 200, description: 'Generation log updated' })
+    async generateIdCard(
+        @Body() body: {
+            entityType: 'student' | 'staff';
+            entityId: string;
+        },
+        @Req() req: Request,
+    ) {
+        const generatedByUserId = (req as any).user?.sub ?? (req as any).user?.userId ?? 'unknown';
+
+        const data = await this.idCardService.registerGeneration({
+            entityType: body.entityType,
+            entityId: body.entityId,
+            generatedByUserId,
+        });
+
+        return { success: true, data };
+    }
+
     // -------------------------------------------------------------------------
     // Export
     // -------------------------------------------------------------------------

@@ -50,24 +50,24 @@
         <!-- Fields -->
         <div class="fields-list">
           <div class="field-row">
-            <span class="field-label">STAFF ID NO.:</span>
-            <span class="field-value">{{ cardData.staffId }}</span>
+            <span class="field-label" :style="staffFrontStyles.fieldLabel">STAFF ID NO.:</span>
+            <span class="field-value" :style="staffFrontStyles.fieldValue">{{ cardData.staffId }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">DESIGNATION:</span>
-            <span class="field-value">{{ cardData.designation }}</span>
+            <span class="field-label" :style="staffFrontStyles.fieldLabel">DESIGNATION:</span>
+            <span class="field-value" :style="staffFrontStyles.fieldValue">{{ cardData.designation }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">DEPARTMENT:</span>
-            <span class="field-value">{{ cardData.department }}</span>
+            <span class="field-label" :style="staffFrontStyles.fieldLabel">DEPARTMENT:</span>
+            <span class="field-value" :style="staffFrontStyles.fieldValue">{{ cardData.department }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">DATE OF BIRTH:</span>
-            <span class="field-value">{{ formatDate(dateOfBirth) }}</span>
+            <span class="field-label" :style="staffFrontStyles.fieldLabel">DATE OF BIRTH:</span>
+            <span class="field-value" :style="staffFrontStyles.fieldValue">{{ formatDate(dateOfBirth) }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">DATE OF ISSUE:</span>
-            <span class="field-value">{{ formatDate(dateOfIssue) }}</span>
+            <span class="field-label" :style="staffFrontStyles.fieldLabel">DATE OF ISSUE:</span>
+            <span class="field-value" :style="staffFrontStyles.fieldValue">{{ formatDate(dateOfIssue) }}</span>
           </div>
         </div>
       </div>
@@ -89,6 +89,17 @@
 <script>
 const BASE_W = 540
 const BASE_H = 856
+const STAFF_FRONT_STYLE = {
+  fieldLabel: {
+    widthPx: 180,
+    fontSizePx: 12,
+    fontWeight: 900,
+  },
+  fieldValue: {
+    fontSizePx: 12,
+    fontWeight: 400,
+  },
+}
 
 export default {
   name: 'StaffIdCardFront',
@@ -117,6 +128,23 @@ export default {
   },
 
   computed: {
+    staffFrontStyles() {
+      const fieldLabel = STAFF_FRONT_STYLE.fieldLabel
+      const fieldValue = STAFF_FRONT_STYLE.fieldValue
+
+      return {
+        fieldLabel: {
+          width: `${fieldLabel.widthPx}px`,
+          fontSize: `${fieldLabel.fontSizePx}px`,
+          fontWeight: fieldLabel.fontWeight,
+        },
+        fieldValue: {
+          fontSize: `${fieldValue.fontSizePx}px`,
+          fontWeight: fieldValue.fontWeight,
+        },
+      }
+    },
+
     wrapperStyle() {
       return {
         width: `${BASE_W * this.scale}px`,

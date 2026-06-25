@@ -95,6 +95,18 @@
             </div>
           </template>
 
+          <div class="col-12 col-md-3 d-flex align-items-end">
+            <button
+              class="btn btn-danger w-100"
+              :disabled="!canGeneratePreview"
+              @click="generatePreview"
+            >
+              <span v-if="generatingPreview" class="spinner-border spinner-border-sm me-1"></span>
+              <i v-else class="bi bi-magic me-1"></i>
+              Generate Preview
+            </button>
+          </div>
+
         </div><!-- /row -->
       </div>
     </div>
@@ -128,7 +140,7 @@
           <h6 class="fw-bold mb-3 text-muted text-uppercase small letter-spacing-1">Front</h6>
           <StudentIdCardFront
             v-if="filters.userType === 'student'"
-            :cardData="cardData"
+            :cardData="previewCardData"
             :dateOfIssue="exportOptions.dateOfIssue"
             :validUntil="exportOptions.validUntil"
             :scale="cardScale"
@@ -137,7 +149,7 @@
           />
           <StaffIdCardFront
             v-else
-            :cardData="cardData"
+            :cardData="previewCardData"
             :dateOfIssue="exportOptions.dateOfIssue"
             :dateOfBirth="exportOptions.dateOfBirth"
             :scale="cardScale"
@@ -151,14 +163,14 @@
           <h6 class="fw-bold mb-3 text-muted text-uppercase small letter-spacing-1">Back</h6>
           <StudentIdCardBack
             v-if="filters.userType === 'student'"
-            :cardData="cardData"
+            :cardData="previewCardData"
             :scale="cardScale"
             :logoSrc="logoSrc"
             :signatureSrc="signatureSrc"
           />
           <StaffIdCardBack
             v-else
-            :cardData="cardData"
+            :cardData="previewCardData"
             :scale="cardScale"
             :logoSrc="logoSrc"
             :signatureSrc="signatureSrc"
@@ -172,6 +184,19 @@
           <h6 class="fw-bold mb-3">
             <i class="bi bi-sliders me-2 text-danger"></i>Export Options
           </h6>
+
+          <div class="form-check form-switch mb-3">
+            <input
+              id="true-size-preview-toggle"
+              class="form-check-input"
+              type="checkbox"
+              :checked="previewMode === 'true-size'"
+              @change="onPreviewModeToggle"
+            />
+            <label class="form-check-label" for="true-size-preview-toggle">
+              True-size preview (matches export canvas scale)
+            </label>
+          </div>
 
           <div class="row g-3 mb-4">
 
@@ -237,12 +262,50 @@
         </div>
       </div>
 
+      <div class="export-stage" aria-hidden="true">
+        <div ref="frontExportNode" class="export-card-node">
+          <StudentIdCardFront
+            v-if="filters.userType === 'student'"
+            :cardData="previewCardData"
+            :dateOfIssue="exportOptions.dateOfIssue"
+            :validUntil="exportOptions.validUntil"
+            :scale="1"
+            :logoSrc="logoSrc"
+          />
+          <StaffIdCardFront
+            v-else
+            :cardData="previewCardData"
+            :dateOfIssue="exportOptions.dateOfIssue"
+            :dateOfBirth="exportOptions.dateOfBirth"
+            :scale="1"
+            :logoSrc="logoSrc"
+          />
+        </div>
+
+        <div ref="backExportNode" class="export-card-node">
+          <StudentIdCardBack
+            v-if="filters.userType === 'student'"
+            :cardData="previewCardData"
+            :scale="1"
+            :logoSrc="logoSrc"
+            :signatureSrc="signatureSrc"
+          />
+          <StaffIdCardBack
+            v-else
+            :cardData="previewCardData"
+            :scale="1"
+            :logoSrc="logoSrc"
+            :signatureSrc="signatureSrc"
+          />
+        </div>
+      </div>
+
     </template>
 
     <!-- Empty state -->
     <div v-else-if="filters.userType" class="text-center py-5 text-muted">
       <i class="bi bi-person-badge fs-1 d-block mb-2 opacity-25"></i>
-      <p class="mb-0">Select a {{ filters.userType }} to preview the ID card.</p>
+      <p class="mb-0">Select a {{ filters.userType }} and click Generate Preview.</p>
     </div>
 
   </div>
@@ -257,8 +320,15 @@ import StudentIdCardFront from './components/StudentIdCardFront.vue'
 import StudentIdCardBack from './components/StudentIdCardBack.vue'
 import StaffIdCardFront from './components/StaffIdCardFront.vue'
 import StaffIdCardBack from './components/StaffIdCardBack.vue'
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
 import logoAsset from '@shared/assets/logo.png'
 import signatureAsset from '@shared/assets/provost-sign.png'
+
+const ID_CARD_PREVIEW_SCALE = {
+  fit: 0.52,
+  trueSize: 1,
+}
 
 const today = () => new Date().toISOString().slice(0, 10)
 const addYears = (dateStr, years) => {
@@ -307,6 +377,7 @@ export default {
       cardData: null,
       generationLog: null,
       photoOverrideDataUrl: null,
+      generatingPreview: false,
 
       // Export options
       exportOptions: {
@@ -318,6 +389,9 @@ export default {
       // Export state
       exporting: null,    // 'front-png' | 'back-png' | 'pdf' | null
 
+      // Preview behavior
+      previewMode: 'fit', // 'fit' | 'true-size'
+
       // Assets (loaded as data URLs for preview)
       logoSrc: logoAsset,
       signatureSrc: signatureAsset,
@@ -326,8 +400,9 @@ export default {
 
   computed: {
     cardScale() {
-      // Responsive scale: ~0.52 on desktop, slightly smaller on mobile handled via CSS
-      return 0.52
+      return this.previewMode === 'true-size'
+        ? ID_CARD_PREVIEW_SCALE.trueSize
+        : ID_CARD_PREVIEW_SCALE.fit
     },
 
     availableLevels() {
@@ -335,6 +410,21 @@ export default {
       const prog = this.programs.find(p => p._id === this.filters.programId)
       if (!prog?.durationYears) return []
       return Array.from({ length: prog.durationYears }, (_, i) => i + 1)
+    },
+
+    previewCardData() {
+      if (!this.cardData) return null
+      return {
+        ...this.cardData,
+        photoUrl: this.photoOverrideDataUrl || this.cardData.photoUrl || null,
+      }
+    },
+
+    canGeneratePreview() {
+      const selectedId = this.filters.userType === 'student'
+        ? this.filters.selectedStudentId
+        : this.filters.selectedStaffId
+      return Boolean(this.filters.userType && selectedId && !this.generatingPreview)
     },
 
     exportBlockReasons() {
@@ -494,13 +584,42 @@ export default {
     // ── Selection handlers ──────────────────────────────────────────────────
 
     async onStudentSelected() {
-      if (!this.filters.selectedStudentId) { this.cardData = null; return }
-      await this.fetchCardData('student', this.filters.selectedStudentId)
+      this.cardData = null
+      this.generationLog = null
+      if (!this.filters.selectedStudentId) {
+        return
+      }
+      this.photoOverrideDataUrl = null
     },
 
     async onStaffSelected() {
-      if (!this.filters.selectedStaffId) { this.cardData = null; return }
-      await this.fetchCardData('staff', this.filters.selectedStaffId)
+      this.cardData = null
+      this.generationLog = null
+      if (!this.filters.selectedStaffId) {
+        return
+      }
+      this.photoOverrideDataUrl = null
+    },
+
+    async generatePreview() {
+      if (!this.canGeneratePreview) return
+
+      const entityType = this.filters.userType
+      const entityId = entityType === 'student'
+        ? this.filters.selectedStudentId
+        : this.filters.selectedStaffId
+
+      this.generatingPreview = true
+      try {
+        await this.fetchCardData(entityType, entityId)
+        const generateRes = await apiService.generateIdCard(entityType, entityId)
+        this.generationLog = generateRes?.data ?? this.generationLog
+      } catch (err) {
+        logger.error('ID card preview generation failed', err)
+        Swal.fire('Generation Failed', err.message || 'Failed to generate ID card preview.', 'error')
+      } finally {
+        this.generatingPreview = false
+      }
     },
 
     async fetchCardData(type, id) {
@@ -531,6 +650,10 @@ export default {
       }
     },
 
+    onPreviewModeToggle(event) {
+      this.previewMode = event?.target?.checked ? 'true-size' : 'fit'
+    },
+
     // ── Photo override ───────────────────────────────────────────────────────
 
     onPhotoOverride(dataUrl) {
@@ -545,26 +668,8 @@ export default {
       const key = `${side}-${format}`
       this.exporting = key
       try {
-        const entityId = this.filters.userType === 'student'
-          ? this.filters.selectedStudentId
-          : this.filters.selectedStaffId
-
-        await apiService.exportIdCard({
-          entityType: this.filters.userType,
-          entityId,
-          side,
-          format,
-          dateOfIssue: this.exportOptions.dateOfIssue,
-          validUntil: this.filters.userType === 'student' ? this.exportOptions.validUntil : undefined,
-          dateOfBirth: this.filters.userType === 'staff' ? this.exportOptions.dateOfBirth : undefined,
-          overridePhotoDataUrl: this.photoOverrideDataUrl || undefined,
-          filenamePrefix: this.filenamePrefix,
-        })
-
-        // Refresh generation log
-        if (this.cardData?.userId) {
-          const logRes = await apiService.getIdCardGenerationLog(this.cardData.userId)
-          this.generationLog = logRes.data
+        if (format === 'png') {
+          await this.exportPng(side)
         }
       } catch (err) {
         logger.error('ID card export failed', err)
@@ -578,33 +683,85 @@ export default {
       if (!this.canExport) return
       this.exporting = 'pdf'
       try {
-        const entityId = this.filters.userType === 'student'
-          ? this.filters.selectedStudentId
-          : this.filters.selectedStaffId
-
-        await apiService.exportIdCard({
-          entityType: this.filters.userType,
-          entityId,
-          side: 'both',
-          format: 'pdf',
-          dateOfIssue: this.exportOptions.dateOfIssue,
-          validUntil: this.filters.userType === 'student' ? this.exportOptions.validUntil : undefined,
-          dateOfBirth: this.filters.userType === 'staff' ? this.exportOptions.dateOfBirth : undefined,
-          overridePhotoDataUrl: this.photoOverrideDataUrl || undefined,
-          filenamePrefix: this.filenamePrefix,
-        })
-
-        // Refresh generation log
-        if (this.cardData?.userId) {
-          const logRes = await apiService.getIdCardGenerationLog(this.cardData.userId)
-          this.generationLog = logRes.data
-        }
+        await this.exportPdfBothSides()
       } catch (err) {
         logger.error('PDF export failed', err)
         Swal.fire('Export Failed', err.message || 'Failed to export PDF.', 'error')
       } finally {
         this.exporting = null
       }
+    },
+
+    async exportPng(side) {
+      const node = side === 'front' ? this.$refs.frontExportNode : this.$refs.backExportNode
+      const canvas = await this.captureExportNode(node)
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+      if (!blob) throw new Error('Failed to generate PNG export.')
+      const fileName = `${this.filenamePrefix}-id-card-${side}.png`
+      this.downloadBlob(blob, fileName)
+    },
+
+    async exportPdfBothSides() {
+      const frontCanvas = await this.captureExportNode(this.$refs.frontExportNode)
+      const backCanvas = await this.captureExportNode(this.$refs.backExportNode)
+
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const pageW = pdf.internal.pageSize.getWidth()
+      const pageH = pdf.internal.pageSize.getHeight()
+      const margin = 12
+      const gap = 10
+
+      const cardRatio = frontCanvas.width / frontCanvas.height
+      const maxCardH = pageH - (margin * 2)
+      const cardH = maxCardH
+      const cardW = cardH * cardRatio
+      const totalW = (cardW * 2) + gap
+      const startX = (pageW - totalW) / 2
+      const y = (pageH - cardH) / 2
+
+      pdf.addImage(frontCanvas.toDataURL('image/png'), 'PNG', startX, y, cardW, cardH)
+      pdf.addImage(backCanvas.toDataURL('image/png'), 'PNG', startX + cardW + gap, y, cardW, cardH)
+      pdf.save(`${this.filenamePrefix}-id-card.pdf`)
+    },
+
+    async captureExportNode(node) {
+      if (!node) throw new Error('Export surface not ready.')
+      await this.waitForExportAssets(node)
+      return html2canvas(node, {
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        scale: 2,
+        logging: false,
+      })
+    },
+
+    async waitForExportAssets(node) {
+      if (document.fonts?.ready) {
+        await document.fonts.ready
+      }
+
+      const images = Array.from(node.querySelectorAll('img'))
+      await Promise.all(images.map((img) => {
+        if (img.complete) {
+          if (img.decode) return img.decode().catch(() => {})
+          return Promise.resolve()
+        }
+        return new Promise((resolve) => {
+          img.onload = () => resolve()
+          img.onerror = () => resolve()
+        })
+      }))
+    },
+
+    downloadBlob(blob, fileName) {
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(downloadUrl)
     },
 
     // ── Utilities ────────────────────────────────────────────────────────────
@@ -626,6 +783,9 @@ export default {
       this.programs = []
       this.staffDepartments = []
       this.photoOverrideDataUrl = null
+      this.generatingPreview = false
+      this.cardData = null
+      this.generationLog = null
       this.exportOptions.dateOfIssue = today()
       this.exportOptions.validUntil = addYears(today(), 4)
       this.exportOptions.dateOfBirth = ''
@@ -653,5 +813,20 @@ export default {
 /* Make previews scroll horizontally on small screens */
 .preview-scroll {
   overflow-x: auto;
+}
+
+.export-stage {
+  position: fixed;
+  top: 0;
+  left: -20000px;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.export-card-node {
+  width: 540px;
+  height: 856px;
 }
 </style>

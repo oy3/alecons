@@ -2,6 +2,7 @@
 import QRCode from "qrcode";
 import JsBarcode from "jsbarcode";
 import footerWaveAsset from '@shared/assets/footer-wave.svg';
+import backHeaderWaveAsset from '@shared/assets/header-wave.svg';
 
 const BASE_W = 540;
 const BASE_H = 856;
@@ -24,6 +25,7 @@ export default {
     return {
       BASE_W,
       BASE_H,
+      backHeaderWaveSrc: backHeaderWaveAsset,
       footerWaveSrc: footerWaveAsset,
       qrCodeDataUrl: null,
       barcodeDataUrl: null,
@@ -55,6 +57,10 @@ export default {
         width: `${BASE_W}px`,
         height: `${BASE_H}px`,
       };
+    },
+    headerStyle() {
+      if (!this.backHeaderWaveSrc) return {};
+      return { backgroundImage: `url(${this.backHeaderWaveSrc})` };
     },
     footerStyle() {
       if (!this.footerWaveSrc) return {};
@@ -131,13 +137,10 @@ export default {
 <template>
   <div class="card-scale-wrapper" :style="wrapperStyle">
     <div class="id-card-back" :style="cardStyle">
-      <!-- ─── Diagonal lines background ─── -->
-      <div class="diagonal-bg"></div>
-
       <!-- ─── Content area ─── -->
       <div class="back-content">
         <!-- Logo + title -->
-        <div class="back-header">
+        <div class="back-header" :style="headerStyle">
           <img v-if="logoSrc" :src="logoSrc" class="back-logo" alt="Logo" />
           <div class="back-college">ALEBIOSU COLLEGE</div>
           <div class="back-subtitle">OF NURSING SCIENCES</div>
@@ -281,20 +284,6 @@ export default {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
 }
 
-.diagonal-bg {
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 12px,
-    rgba(0, 0, 0, 0.025) 12px,
-    rgba(0, 0, 0, 0.025) 13px
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
 .back-content {
   position: relative;
   z-index: 1;
@@ -302,8 +291,13 @@ export default {
 }
 
 .back-header {
+  position: relative;
   text-align: center;
   margin-bottom: 16px;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 .back-logo {
   width: 100px;

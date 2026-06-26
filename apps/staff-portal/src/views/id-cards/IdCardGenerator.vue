@@ -794,7 +794,20 @@ export default {
         canvas.width = img.naturalWidth || img.width
         canvas.height = img.naturalHeight || img.height
         const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('Canvas context unavailable'))
+          return
+        }
+
+        // Preserve CSS filters (e.g. grayscale watermark) in exported images.
+        const computedFilter = window.getComputedStyle(img).filter
+        if (computedFilter && computedFilter !== 'none') {
+          ctx.filter = computedFilter
+        }
         ctx.drawImage(img, 0, 0)
+
+        // Reset filter to avoid accidental carry-over.
+        ctx.filter = 'none'
         try {
           const dataUrl = canvas.toDataURL('image/png')
           resolve(dataUrl)

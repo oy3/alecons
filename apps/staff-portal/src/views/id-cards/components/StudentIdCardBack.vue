@@ -432,7 +432,7 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 150px;
+  height: 95px;
   z-index: 2;
   overflow: hidden;
   background-position: center;

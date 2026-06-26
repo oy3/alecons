@@ -1,7 +1,6 @@
 <script>
 import QRCode from "qrcode";
 import JsBarcode from "jsbarcode";
-import footerWaveAsset from '@shared/assets/footer-wave.svg';
 import backHeaderWaveAsset from '@shared/assets/back-header-wave.svg';
 
 const BASE_W = 540;
@@ -26,7 +25,6 @@ export default {
       BASE_W,
       BASE_H,
       backHeaderWaveSrc: backHeaderWaveAsset,
-      footerWaveSrc: footerWaveAsset,
       qrCodeDataUrl: null,
       barcodeDataUrl: null,
     };
@@ -61,15 +59,6 @@ export default {
     headerStyle() {
       if (!this.backHeaderWaveSrc) return {};
       return { backgroundImage: `url(${this.backHeaderWaveSrc})` };
-    },
-    footerStyle() {
-      if (!this.footerWaveSrc) return {};
-      return {
-        backgroundImage: `url(${this.footerWaveSrc})`,
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'center bottom',
-        backgroundSize: '100% 100%',
-      };
     },
   },
 
@@ -249,8 +238,8 @@ export default {
         </div>
       </div>
 
-      <!-- ─── Footer wave + barcode ─── -->
-      <div class="back-footer-area" :style="footerStyle">
+      <!-- ─── Footer + barcode ─── -->
+      <div class="back-footer-area">
         <div class="back-footer">
           <img
             v-if="barcodeDataUrl"

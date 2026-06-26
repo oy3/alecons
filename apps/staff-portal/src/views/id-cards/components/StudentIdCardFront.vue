@@ -279,7 +279,6 @@ export default {
   width: 470px;
   height: 470px;
   opacity: 0.06;
-  filter: grayscale(100%); 
   pointer-events: none;
   z-index: 0;
 }

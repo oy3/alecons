@@ -726,8 +726,29 @@ export default {
 
     async captureExportNode(node) {
       if (!node) throw new Error('Export surface not ready.')
+      logger.info('[Export] captureExportNode start', {
+        nodeTag: node.tagName,
+        nodeWidth: node.offsetWidth,
+        nodeHeight: node.offsetHeight,
+        imgCount: node.querySelectorAll('img').length,
+      })
       await this.waitForExportAssets(node)
       await this.convertImagesToDataUrls(node)
+
+      // Log final state of all images before html2canvas
+      const finalImgs = Array.from(node.querySelectorAll('img'))
+      finalImgs.forEach((img, i) => {
+        logger.info(`[Export] img[${i}] before html2canvas`, {
+          src: img.src?.substring(0, 80),
+          isDataUrl: img.src?.startsWith('data:'),
+          naturalWidth: img.naturalWidth,
+          naturalHeight: img.naturalHeight,
+          complete: img.complete,
+          display: window.getComputedStyle(img).display,
+          visibility: window.getComputedStyle(img).visibility,
+        })
+      })
+
       return html2canvas(node, {
         allowTaint: false,
         useCORS: true,
@@ -761,15 +782,33 @@ export default {
       }
 
       const images = Array.from(node.querySelectorAll('img'))
-      await Promise.all(images.map((img) => {
+      logger.info('[Export] waitForExportAssets', { imageCount: images.length })
+      images.forEach((img, i) => {
+        logger.info(`[Export] waitForAssets img[${i}]`, {
+          src: img.src?.substring(0, 80),
+          complete: img.complete,
+          naturalWidth: img.naturalWidth,
+          naturalHeight: img.naturalHeight,
+        })
+      })
+
+      await Promise.all(images.map((img, i) => {
         if (img.complete && img.naturalWidth > 0) {
+          logger.info(`[Export] img[${i}] already loaded OK`)
           if (img.decode) return img.decode().catch(() => {})
           return Promise.resolve()
         }
+        logger.info(`[Export] img[${i}] forcing reload (complete=${img.complete}, naturalWidth=${img.naturalWidth})`)
         // Force reload if image was not properly loaded (e.g. was in hidden container)
         return new Promise((resolve) => {
-          img.onload = () => resolve()
-          img.onerror = () => resolve()
+          img.onload = () => {
+            logger.info(`[Export] img[${i}] reload onload (naturalWidth=${img.naturalWidth})`)
+            resolve()
+          }
+          img.onerror = (err) => {
+            logger.error(`[Export] img[${i}] reload onerror`, err)
+            resolve()
+          }
           if (img.src) {
             const src = img.src
             img.src = ''
@@ -781,35 +820,58 @@ export default {
 
     async convertImagesToDataUrls(node) {
       const images = Array.from(node.querySelectorAll('img'))
-      await Promise.all(images.map(async (img) => {
+      logger.info('[Export] convertImagesToDataUrls', { imageCount: images.length })
+      await Promise.all(images.map(async (img, i) => {
+        const originalSrc = img.src
         // Skip if already a data URL
-        if (img.src.startsWith('data:')) return
+        if (img.src.startsWith('data:')) {
+          logger.info(`[Export] img[${i}] already data URL, skipping`)
+          return
+        }
 
+        logger.info(`[Export] img[${i}] converting`, { src: originalSrc?.substring(0, 100) })
         try {
           const dataUrl = await this.imageToDataUrl(img)
           if (dataUrl) {
             img.src = dataUrl
+            logger.info(`[Export] img[${i}] converted OK (length=${dataUrl.length})`)
+          } else {
+            logger.warn(`[Export] img[${i}] imageToDataUrl returned null`)
           }
         } catch (err) {
-          logger.warn('Failed to convert image to data URL', err)
+          logger.error(`[Export] img[${i}] FAILED to convert`, { src: originalSrc?.substring(0, 100), error: err.message })
         }
       }))
     },
 
     async imageToDataUrl(img) {
       const src = img.src
-      if (!src) return null
+      if (!src) {
+        logger.warn('[Export] imageToDataUrl called with no src')
+        return null
+      }
 
+      logger.info('[Export] imageToDataUrl fetching', { src: src.substring(0, 100) })
       // Fetch the image as blob and convert to data URL.
       // This avoids canvas taint issues with cross-origin images.
       const res = await fetch(src, { credentials: 'include' })
-      if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`)
+      if (!res.ok) {
+        logger.error('[Export] imageToDataUrl fetch failed', { status: res.status, statusText: res.statusText })
+        throw new Error(`Failed to fetch image: ${res.status}`)
+      }
       const blob = await res.blob()
+      logger.info('[Export] imageToDataUrl blob received', { type: blob.type, size: blob.size })
 
       return new Promise((resolve, reject) => {
         const reader = new FileReader()
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = () => reject(new Error('Failed to read image blob'))
+        reader.onload = () => {
+          logger.info('[Export] imageToDataUrl FileReader done', { resultLength: reader.result?.length })
+          resolve(reader.result)
+        }
+        reader.onerror = () => {
+          logger.error('[Export] imageToDataUrl FileReader error')
+          reject(new Error('Failed to read image blob'))
+        }
         reader.readAsDataURL(blob)
       })
     },

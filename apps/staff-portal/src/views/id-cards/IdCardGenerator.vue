@@ -1,5 +1,5 @@
 <template>
-  <div class="id-card-generator p-5">
+  <div class="id-card-generator p-3 p-md-5">
 
     <!-- Page header -->
     <div class="d-flex justify-content-between align-items-center mb-4">

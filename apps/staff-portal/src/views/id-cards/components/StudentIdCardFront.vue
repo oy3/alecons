@@ -173,7 +173,11 @@ export default {
           </div>
           <div class="badge-name-area">
             <span class="id-badge">STUDENT ID</span>
-            <div class="person-name">{{ cardData.formattedName }}</div>
+            <div class="person-name">
+              <span class="person-lastname">{{ cardData.lastName }}</span>
+              <br />
+              <span>{{ cardData.firstName }} {{ cardData.otherName ? cardData.otherName[0] + '.' : '' }}</span>
+            </div>
           </div>
         </div>
 

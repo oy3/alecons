@@ -36,6 +36,9 @@ export interface StudentCardData {
     userId: string;
     photoUrl: string | null;
     formattedName: string;
+    lastName: string;
+    firstName: string;
+    otherName: string;
     matricNumber: string;
     normalizedMatric: string;
     department: string;
@@ -51,6 +54,9 @@ export interface StaffCardData {
     userId: string;
     photoUrl: string | null;
     formattedName: string;
+    lastName: string;
+    firstName: string;
+    otherName: string;
     staffId: string;
     normalizedStaffId: string;
     designation: string;
@@ -284,6 +290,9 @@ export class IdCardService {
             userId: String((student as any).userId?._id ?? student.userId),
             photoUrl: student.profileImageUrl ?? null,
             formattedName: this.buildStudentDisplayName(user),
+            lastName: (user?.lastName ?? '').toUpperCase(),
+            firstName: (user?.firstName ?? '').toUpperCase(),
+            otherName: (user?.otherName ?? '').toUpperCase(),
             matricNumber: student.matriculationNumber,
             normalizedMatric: this.normalizeId(student.matriculationNumber),
             department: dept,
@@ -319,6 +328,9 @@ export class IdCardService {
             userId: String(user?._id ?? staff.userId),
             photoUrl: (user as any)?.profileImageUrl ?? null,
             formattedName: this.buildStaffDisplayName(user),
+            lastName: (user?.lastName ?? '').toUpperCase(),
+            firstName: (user?.firstName ?? '').toUpperCase(),
+            otherName: (user?.otherName ?? '').toUpperCase(),
             staffId: staff.staffId,
             normalizedStaffId: this.normalizeId(staff.staffId),
             designation: staff.position ?? 'N/A',

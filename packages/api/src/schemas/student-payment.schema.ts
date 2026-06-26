@@ -23,6 +23,9 @@ export enum PaymentChannel {
     USSD = 'ussd',
     QR = 'qr',
     MOBILE_MONEY = 'mobile_money',
+    EFT = 'eft',
+    DEDICATED_NUBAN = 'dedicated_nuban',
+    APPLE_PAY = 'apple_pay',
     MANUAL_TRANSFER = 'manual_transfer',
 }
 

@@ -730,7 +730,7 @@ export default {
       await this.convertImagesToDataUrls(node)
       return html2canvas(node, {
         allowTaint: false,
-        useCORS: false,
+        useCORS: true,
         backgroundColor: '#ffffff',
         scale: 2,
         logging: false,
@@ -781,7 +781,9 @@ export default {
 
         try {
           const dataUrl = await this.imageToDataUrl(img)
-          img.src = dataUrl
+          if (dataUrl) {
+            img.src = dataUrl
+          }
         } catch (err) {
           logger.warn('Failed to convert image to data URL', err)
         }
@@ -812,8 +814,24 @@ export default {
           const dataUrl = canvas.toDataURL('image/png')
           resolve(dataUrl)
         } catch (err) {
-          reject(err)
+          // Fallback path for images that display in DOM but taint canvas in drawImage.
+          this.fetchImageAsDataUrl(img.src)
+            .then(resolve)
+            .catch(() => reject(err))
         }
+      })
+    },
+
+    async fetchImageAsDataUrl(src) {
+      const res = await fetch(src, { credentials: 'include' })
+      if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`)
+      const blob = await res.blob()
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = () => reject(new Error('Failed to read image blob'))
+        reader.readAsDataURL(blob)
       })
     },
 

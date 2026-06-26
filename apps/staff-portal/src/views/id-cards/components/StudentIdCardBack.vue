@@ -2,7 +2,7 @@
 import QRCode from "qrcode";
 import JsBarcode from "jsbarcode";
 import footerWaveAsset from '@shared/assets/footer-wave.svg';
-import backHeaderWaveAsset from '@shared/assets/header-wave.svg';
+import backHeaderWaveAsset from '@shared/assets/back-header-wave.svg';
 
 const BASE_W = 540;
 const BASE_H = 856;
@@ -137,15 +137,16 @@ export default {
 <template>
   <div class="card-scale-wrapper" :style="wrapperStyle">
     <div class="id-card-back" :style="cardStyle">
-      <!-- ─── Content area ─── -->
-      <div class="back-content">
+    
         <!-- Logo + title -->
         <div class="back-header" :style="headerStyle">
           <img v-if="logoSrc" :src="logoSrc" class="back-logo" alt="Logo" />
           <div class="back-college">ALEBIOSU COLLEGE</div>
           <div class="back-subtitle">OF NURSING SCIENCES</div>
         </div>
-
+        
+  <!-- ─── Content area ─── -->
+      <div class="back-content">
         <!-- Divider with dot -->
         <div class="divider-dot">
           <div class="divider-line"></div>
@@ -287,21 +288,22 @@ export default {
 .back-content {
   position: relative;
   z-index: 1;
-  padding: 35px 50px 0;
+  padding: 0 50px 0;
 }
 
 .back-header {
   position: relative;
   text-align: center;
   margin-bottom: 16px;
+  padding-top: 50px;
   overflow: hidden;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
 .back-logo {
-  width: 100px;
-  height: 100px;
+  width: 90px;
+  height: 90px;
   object-fit: contain;
 }
 .back-college {
@@ -402,7 +404,7 @@ export default {
 }
 .qr-box,
 .qr-missing {
-  border: 1px solid #ddd;
+  /* border: 1px solid #ddd; */
   border-radius: 4px;
   overflow: hidden;
 }
@@ -411,7 +413,6 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 8px;
 }
 .signature-img {
   height: 48px;

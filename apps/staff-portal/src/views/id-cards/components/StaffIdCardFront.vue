@@ -134,6 +134,13 @@ export default {
               alt="Photo"
             />
             <label
+              v-if="effectivePhotoSrc"
+              class="photo-change-overlay"
+              :for="`photo-upload-${uid}`"
+            >
+              Change photo
+            </label>
+            <label
               v-else
               class="photo-placeholder"
               :for="`photo-upload-${uid}`"
@@ -144,15 +151,15 @@ export default {
                 />
               </svg>
               <span class="photo-hint">Tap to add photo</span>
-              <input
-                :id="`photo-upload-${uid}`"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                class="photo-input"
-                @change="onPhotoSelected"
-              />
             </label>
+            <input
+              :id="`photo-upload-${uid}`"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              class="photo-input"
+              @change="onPhotoSelected"
+            />
           </div>
           <div class="badge-name-area">
             <span class="id-badge">STAFF ID</span>
@@ -308,6 +315,27 @@ export default {
   justify-content: center;
   cursor: pointer;
   gap: 8px;
+}
+.photo-change-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.photo-frame:hover .photo-change-overlay {
+  opacity: 1;
 }
 .photo-hint {
   font-size: 11px;

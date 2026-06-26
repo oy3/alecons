@@ -1,110 +1,3 @@
-<template>
-  <!-- Scale wrapper: renders at card-base dimensions, scaled up for display -->
-  <div class="card-scale-wrapper" :style="wrapperStyle">
-    <div class="id-card-front student" :style="cardStyle">
-      <!-- ─── Header ─── -->
-      <div class="card-header" :style="headerStyle">
-        <img v-if="logoSrc" :src="logoSrc" class="header-logo" alt="Logo" />
-        <div class="header-text">
-          <div class="header-college">ALEBIOSU COLLEGE</div>
-          <div class="header-subtitle">OF NURSING SCIENCES</div>
-        </div>
-      </div>
-
-      <!-- ─── Watermark ─── -->
-      <div class="card-watermark">
-        <img v-if="logoSrc" :src="logoSrc" alt="" />
-      </div>
-
-      <!-- ─── Body ─── -->
-      <div class="card-body">
-        <!-- Photo + badge -->
-        <div class="photo-row d-flex align-items-center">
-          <div class="photo-frame">
-            <!-- If we have a real photo -->
-            <img
-              v-if="effectivePhotoSrc"
-              :src="effectivePhotoSrc"
-              class="photo-img"
-              alt="Photo"
-            />
-            <!-- No photo: show file picker -->
-            <label
-              v-else
-              class="photo-placeholder"
-              :for="`photo-upload-${uid}`"
-            >
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="#aaa">
-                <path
-                  d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"
-                />
-              </svg>
-              <span class="photo-hint">Tap to add photo</span>
-              <input
-                :id="`photo-upload-${uid}`"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                class="photo-input"
-                @change="onPhotoSelected"
-              />
-            </label>
-          </div>
-          <div class="badge-name-area">
-            <span class="id-badge">STUDENT ID</span>
-            <div class="person-name">{{ cardData.formattedName }}</div>
-          </div>
-        </div>
-
-        <!-- Fields -->
-        <div class="fields-list">
-          <div class="field-row">
-            <span class="field-label">MATRIC NO.:</span>
-            <span class="field-value">{{ cardData.matricNumber }}</span>
-          </div>
-          <div class="field-row">
-            <span class="field-label">DEPARTMENT:</span>
-            <span class="field-value">{{ cardData.department }}</span>
-          </div>
-          <div class="field-row">
-            <span class="field-label">PROGRAMME:</span>
-            <span class="field-value">{{ cardData.programme }}</span>
-          </div>
-          <div class="field-row">
-            <span class="field-label">ENTRY SESSION:</span>
-            <span class="field-value">{{ cardData.entrySession }}</span>
-          </div>
-          <div class="field-row">
-            <span class="field-label">DATE OF ISSUE:</span>
-            <span class="field-value">{{ formatDate(dateOfIssue) }}</span>
-          </div>
-          <div class="field-row">
-            <span class="field-label">VALID UNTIL:</span>
-            <span class="field-value">{{ formatDate(validUntil) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- ─── Footer ─── -->
-      <div class="card-footer-area">
-        <svg
-          :viewBox="`0 0 ${BASE_W} 22`"
-          preserveAspectRatio="none"
-          class="footer-wave"
-        >
-          <path
-            :d="`M0,22 L0,12 C90,0 180,-2 270,10 C360,22 450,18 ${BASE_W},6 L${BASE_W},22 Z`"
-            fill="#8B1515"
-          />
-        </svg>
-        <div class="card-footer">
-          <span class="footer-motto">COMPASSION · KNOWLEGDE · CARE</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script>
 import headerWaveAsset from '@shared/assets/header-wave.svg'
 
@@ -215,6 +108,113 @@ export default {
   },
 };
 </script>
+
+<template>
+  <!-- Scale wrapper: renders at card-base dimensions, scaled up for display -->
+  <div class="card-scale-wrapper" :style="wrapperStyle">
+    <div class="id-card-front student" :style="cardStyle">
+      <!-- ─── Header ─── -->
+      <div class="card-header" :style="headerStyle">
+        <img v-if="logoSrc" :src="logoSrc" class="header-logo" alt="Logo" />
+        <div class="header-text">
+          <div class="header-college">ALEBIOSU COLLEGE</div>
+          <div class="header-subtitle">OF NURSING SCIENCES</div>
+        </div>
+      </div>
+
+      <!-- ─── Watermark ─── -->
+      <div class="card-watermark">
+        <img v-if="logoSrc" :src="logoSrc" alt="" />
+      </div>
+
+      <!-- ─── Body ─── -->
+      <div class="card-body">
+        <!-- Photo + badge -->
+        <div class="photo-row d-flex align-items-center">
+          <div class="photo-frame">
+            <!-- If we have a real photo -->
+            <img
+              v-if="effectivePhotoSrc"
+              :src="effectivePhotoSrc"
+              class="photo-img"
+              alt="Photo"
+            />
+            <!-- No photo: show file picker -->
+            <label
+              v-else
+              class="photo-placeholder"
+              :for="`photo-upload-${uid}`"
+            >
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="#aaa">
+                <path
+                  d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"
+                />
+              </svg>
+              <span class="photo-hint">Tap to add photo</span>
+              <input
+                :id="`photo-upload-${uid}`"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                class="photo-input"
+                @change="onPhotoSelected"
+              />
+            </label>
+          </div>
+          <div class="badge-name-area">
+            <span class="id-badge">STUDENT ID</span>
+            <div class="person-name">{{ cardData.formattedName }}</div>
+          </div>
+        </div>
+
+        <!-- Fields -->
+        <div class="fields-list">
+          <div class="field-row">
+            <span class="field-label">MATRIC NO.:</span>
+            <span class="field-value">{{ cardData.matricNumber }}</span>
+          </div>
+          <div class="field-row">
+            <span class="field-label">DEPARTMENT:</span>
+            <span class="field-value">{{ cardData.department }}</span>
+          </div>
+          <div class="field-row">
+            <span class="field-label">PROGRAMME:</span>
+            <span class="field-value">{{ cardData.programme }}</span>
+          </div>
+          <div class="field-row">
+            <span class="field-label">ENTRY SESSION:</span>
+            <span class="field-value">{{ cardData.entrySession }}</span>
+          </div>
+          <div class="field-row">
+            <span class="field-label">DATE OF ISSUE:</span>
+            <span class="field-value">{{ formatDate(dateOfIssue) }}</span>
+          </div>
+          <div class="field-row">
+            <span class="field-label">VALID UNTIL:</span>
+            <span class="field-value">{{ formatDate(validUntil) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Footer ─── -->
+      <div class="card-footer-area">
+        <svg
+          :viewBox="`0 0 ${BASE_W} 22`"
+          preserveAspectRatio="none"
+          class="footer-wave"
+        >
+          <path
+            :d="`M0,22 L0,12 C90,0 180,-2 270,10 C360,22 450,18 ${BASE_W},6 L${BASE_W},22 Z`"
+            fill="#8B1515"
+          />
+        </svg>
+        <div class="card-footer">
+          <span class="footer-motto">COMPASSION · KNOWLEGDE · CARE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .card-scale-wrapper {

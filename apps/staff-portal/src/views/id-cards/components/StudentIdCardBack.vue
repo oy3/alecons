@@ -432,7 +432,7 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  background-size: 100% 100%;
+  background-size: cover;
   background-position: bottom;
   background-repeat: no-repeat;
   padding-top: 30px;

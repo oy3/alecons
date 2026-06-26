@@ -434,14 +434,17 @@ export default {
   right: 0;
   height: 150px;
   z-index: 2;
-  background-position: center bottom;
+  overflow: hidden;
+  background-position: center;
   background-repeat: no-repeat;
-  background-size: 100% 100%;
-  display: flex;
-  align-items: flex-end;
+  background-size: cover;
+  background-color: #941615;
 }
 .back-footer {
-  width: 100%;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   padding: 10px 20px 8px;
   text-align: center;
 }

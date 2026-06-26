@@ -854,7 +854,7 @@ export default {
       logger.info('[Export] imageToDataUrl fetching', { src: src.substring(0, 100) })
       // Fetch the image as blob and convert to data URL.
       // This avoids canvas taint issues with cross-origin images.
-      const res = await fetch(src, { credentials: 'include' })
+      const res = await fetch(src)
       if (!res.ok) {
         logger.error('[Export] imageToDataUrl fetch failed', { status: res.status, statusText: res.statusText })
         throw new Error(`Failed to fetch image: ${res.status}`)

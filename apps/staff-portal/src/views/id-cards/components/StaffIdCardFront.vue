@@ -134,6 +134,7 @@ export default {
               :src="effectivePhotoSrc"
               class="photo-img"
               alt="Photo"
+              crossorigin="anonymous"
             />
             <label
               v-if="effectivePhotoSrc"

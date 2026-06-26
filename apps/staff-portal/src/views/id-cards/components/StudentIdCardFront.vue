@@ -389,6 +389,8 @@ export default {
   display: block;
   width: 100%;
   height: 60px;
+  transform: scaleX(-1);
+  transform-origin: center;
 }
 .card-footer {
   background: #8b1515;

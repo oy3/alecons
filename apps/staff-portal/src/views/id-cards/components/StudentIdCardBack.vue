@@ -58,7 +58,12 @@ export default {
     },
     footerStyle() {
       if (!this.footerWaveSrc) return {};
-      return { backgroundImage: `url(${this.footerWaveSrc})` };
+      return {
+        backgroundImage: `url(${this.footerWaveSrc})`,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'center bottom',
+        backgroundSize: '100% 100%',
+      };
     },
   },
 
@@ -432,12 +437,9 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 95px;
+  height: 120px;
   z-index: 2;
   overflow: hidden;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
   background-color: #941615;
 }
 .back-footer {

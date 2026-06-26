@@ -185,11 +185,11 @@ export default {
           </div>
           <div class="field-row">
             <span class="field-label">DEPARTMENT:</span>
-            <span class="field-value">{{ cardData.department }}</span>
+            <span class="field-value text-uppercase">{{ cardData.department }}</span>
           </div>
           <div class="field-row">
             <span class="field-label">PROGRAMME:</span>
-            <span class="field-value">ND/HND {{ cardData.programme }}</span>
+            <span class="field-value text-uppercase">ND/HND {{ cardData.programme }}</span>
           </div>
           <div class="field-row">
             <span class="field-label">ENTRY SESSION:</span>
@@ -197,11 +197,11 @@ export default {
           </div>
           <div class="field-row">
             <span class="field-label">DATE OF ISSUE:</span>
-            <span class="field-value">{{ formatDate(dateOfIssue) }}</span>
+            <span class="field-value text-uppercase">{{ formatDate(dateOfIssue) }}</span>
           </div>
           <div class="field-row">
             <span class="field-label">VALID UNTIL:</span>
-            <span class="field-value">{{ formatDate(validUntil) }}</span>
+            <span class="field-value text-uppercase">{{ formatDate(validUntil) }}</span>
           </div>
         </div>
       </div>

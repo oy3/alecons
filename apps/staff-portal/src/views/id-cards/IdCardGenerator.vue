@@ -11,7 +11,7 @@
 
     <!-- ── Filters panel ── -->
     <div class="card rounded-3 shadow-sm mb-4">
-      <div class="card-body p-4">
+      <div class="card-body p-0">
         <h6 class="fw-bold mb-3">
           <i class="bi bi-funnel me-2 text-danger"></i>Select Person
         </h6>
@@ -180,7 +180,7 @@
 
       <!-- ── Export options ── -->
       <div class="card rounded-3 shadow-sm mb-4">
-        <div class="card-body p-4">
+        <div class="card-body p-0">
           <h6 class="fw-bold mb-3">
             <i class="bi bi-sliders me-2 text-danger"></i>Export Options
           </h6>

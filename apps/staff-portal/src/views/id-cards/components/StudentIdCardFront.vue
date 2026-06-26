@@ -310,6 +310,7 @@ export default {
   gap: 18px;
 }
 .photo-frame {
+  position: relative;
   width: 170px;
   height: 204px;
   border: 1px solid #8b1515;

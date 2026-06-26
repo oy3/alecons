@@ -1,5 +1,6 @@
 <script>
-import headerWaveAsset from '@shared/assets/header-wave.svg'
+import headerWaveAsset from '@shared/assets/header-wave.svg';
+import watermarkAsset from '@shared/assets/logo-black.svg';
 
 const BASE_W = 540;
 const BASE_H = 856;
@@ -26,6 +27,7 @@ export default {
       BASE_W,
       BASE_H,
       headerWaveSrc: headerWaveAsset,
+      watermarkSrc: watermarkAsset,
       localPhotoDataUrl: null,
       uid: Math.random().toString(36).slice(2, 8),
     };
@@ -121,7 +123,7 @@ export default {
       </div>
 
       <div class="card-watermark">
-        <img v-if="logoSrc" :src="logoSrc" alt="" />
+        <img v-if="watermarkSrc" :src="watermarkSrc" alt="" />
       </div>
 
       <div class="card-body">
@@ -293,6 +295,7 @@ export default {
   gap: 18px;
 }
 .photo-frame {
+  position: relative;
   width: 170px;
   height: 204px;
   border: 1px solid #8b1515;

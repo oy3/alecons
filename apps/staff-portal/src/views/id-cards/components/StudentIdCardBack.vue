@@ -429,26 +429,18 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 170px;
   z-index: 2;
-  overflow: hidden;
 }
 .footer-wave-bg {
-  position: absolute;
-  inset: 0;
+  display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: 0;
+  height: 44px;
+  object-fit: fill;
 }
 .back-footer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  background: #941615;
   padding: 10px 20px 8px;
   text-align: center;
-  z-index: 1;
 }
 .barcode-placeholder {
   background: #fff;

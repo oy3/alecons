@@ -762,13 +762,19 @@ export default {
 
       const images = Array.from(node.querySelectorAll('img'))
       await Promise.all(images.map((img) => {
-        if (img.complete) {
+        if (img.complete && img.naturalWidth > 0) {
           if (img.decode) return img.decode().catch(() => {})
           return Promise.resolve()
         }
+        // Force reload if image was not properly loaded (e.g. was in hidden container)
         return new Promise((resolve) => {
           img.onload = () => resolve()
           img.onerror = () => resolve()
+          if (img.src) {
+            const src = img.src
+            img.src = ''
+            img.src = src
+          }
         })
       }))
     },
@@ -791,38 +797,11 @@ export default {
     },
 
     async imageToDataUrl(img) {
-      return new Promise((resolve, reject) => {
-        const canvas = document.createElement('canvas')
-        canvas.width = img.naturalWidth || img.width
-        canvas.height = img.naturalHeight || img.height
-        const ctx = canvas.getContext('2d')
-        if (!ctx) {
-          reject(new Error('Canvas context unavailable'))
-          return
-        }
+      const src = img.src
+      if (!src) return null
 
-        // Preserve CSS filters (e.g. grayscale watermark) in exported images.
-        const computedFilter = window.getComputedStyle(img).filter
-        if (computedFilter && computedFilter !== 'none') {
-          ctx.filter = computedFilter
-        }
-        ctx.drawImage(img, 0, 0)
-
-        // Reset filter to avoid accidental carry-over.
-        ctx.filter = 'none'
-        try {
-          const dataUrl = canvas.toDataURL('image/png')
-          resolve(dataUrl)
-        } catch (err) {
-          // Fallback path for images that display in DOM but taint canvas in drawImage.
-          this.fetchImageAsDataUrl(img.src)
-            .then(resolve)
-            .catch(() => reject(err))
-        }
-      })
-    },
-
-    async fetchImageAsDataUrl(src) {
+      // Fetch the image as blob and convert to data URL.
+      // This avoids canvas taint issues with cross-origin images.
       const res = await fetch(src, { credentials: 'include' })
       if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`)
       const blob = await res.blob()
@@ -900,11 +879,11 @@ export default {
 .export-stage {
   position: fixed;
   top: 0;
-  left: -20000px;
-  width: 0;
-  height: 0;
-  overflow: hidden;
+  left: -9999px;
+  width: 540px;
+  height: 856px;
   pointer-events: none;
+  opacity: 0;
 }
 
 .export-card-node {

@@ -1,7 +1,7 @@
 <script>
 import QRCode from "qrcode";
 import JsBarcode from "jsbarcode";
-import footerWaveAsset from '@shared/assets/footer-wave.svg'
+import footerWaveAsset from '@shared/assets/footer-wave.svg';
 
 const BASE_W = 540;
 const BASE_H = 856;

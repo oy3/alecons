@@ -18,6 +18,7 @@ export enum PaymentMethod {
 
 export enum PaymentChannel {
     CARD = 'card',
+    BANK = 'bank',
     BANK_TRANSFER = 'bank_transfer',
     USSD = 'ussd',
     QR = 'qr',

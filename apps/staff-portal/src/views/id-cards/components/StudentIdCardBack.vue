@@ -408,7 +408,7 @@ export default {
 .signature-area {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   margin-top: 8px;
 }
 .signature-img {
@@ -429,7 +429,7 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 130px;
+  height: 170px;
   z-index: 2;
   overflow: hidden;
 }
@@ -438,7 +438,7 @@ export default {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: fill;
+  object-fit: cover;
   z-index: 0;
 }
 .back-footer {

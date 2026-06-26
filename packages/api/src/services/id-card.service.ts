@@ -273,7 +273,8 @@ export class IdCardService {
         const dept = program?.departmentId?.name ?? 'N/A';
         const progType = program?.programTypeId?.type ?? '';
         const progMode = program?.programModeId?.mode ?? '';
-        const programme = [progType, progMode, program?.name].filter(Boolean).join(' ');
+        // const programme = [progType, progMode, program?.name].filter(Boolean).join(' ');
+        const programme = program?.name ?? 'N/A';  // Only show program name, ignore type/mode for now
         const verToken = student.publicVerificationToken ?? null;
         const websiteUrl = String(process.env.WEBSITE_URL || 'https://alecons.edu.ng').replace(/\/$/, '');
 

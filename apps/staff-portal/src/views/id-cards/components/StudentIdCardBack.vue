@@ -437,10 +437,11 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 120px;
+  height: 90px;
+  background-position: center 100%;
   z-index: 2;
   overflow: hidden;
-  background-color: #941615;
+  background-color: #8b1515;
 }
 .back-footer {
   position: absolute;

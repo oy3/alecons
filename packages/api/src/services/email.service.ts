@@ -2068,4 +2068,83 @@ export class EmailService {
       throw error;
     }
   }
+
+  async sendApplicationExpiredEmail(
+    email: string,
+    firstName: string,
+    sessionYear?: string,
+  ): Promise<void> {
+    const sessionLabel = sessionYear ? ` for the ${sessionYear} Academic Session` : '';
+
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: 'Application Window Closed - ALECONS',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Application Window Closed</title>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
+                .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
+                .header { background-color: #2d7d7d; color: white; text-align: center; padding: 20px; border-radius: 10px 10px 0 0; margin: -20px -20px 20px -20px; }
+                .notice { background-color: #f8f9fa; border-left: 4px solid #6c757d; padding: 15px; margin: 20px 0; border-radius: 0 5px 5px 0; }
+                .info { background-color: #e9f7f7; border: 1px solid #b9e1e1; color: #124747; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Application Window Closed</h1>
+                    <p style="margin: 5px 0 0 0; opacity: 0.9;">Alebiosu College of Nursing Sciences</p>
+                </div>
+
+                <h2>Dear ${firstName},</h2>
+
+                <p>We are writing to let you know that the application window${sessionLabel} has now been closed.</p>
+
+                <div class="notice">
+                    <p style="margin: 0;">Your application was not completed before the window closed — specifically, the application form fee had not been paid. As a result, your application record has been marked as <strong>expired</strong>.</p>
+                </div>
+
+                <div class="info">
+                    <h4 style="margin: 0 0 10px 0;">What this means for you</h4>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        <li>Your account remains active — you do not need to create a new account.</li>
+                        <li>When a new intake opens, you may apply again using the same account.</li>
+                        <li>Watch our website or contact the Admissions Office for updates on the next intake.</li>
+                    </ul>
+                </div>
+
+                <p>We appreciate your interest in Alebiosu College of Nursing Sciences and encourage you to apply again in a future intake.</p>
+
+                <p>If you have any questions, please reach out to our Admissions Office.</p>
+
+                <div class="footer">
+                    <p><strong>Alebiosu College of Nursing Sciences</strong><br>
+                    Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria<br>
+                    Email: admissions@alecons.edu.ng<br>
+                    Phone: +234 916 000 8679</p>
+                </div>
+            </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      await this.sendEmailWithRetry(mailOptions);
+      this.logger.log(`Application expired notification sent to ${email}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send application expired notification to ${email}:`,
+        error.message,
+      );
+      throw error;
+    }
+  }
 }

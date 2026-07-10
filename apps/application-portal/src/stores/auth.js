@@ -17,6 +17,7 @@ export const useAuthStore = defineStore('auth', () => {
     const currentStage = computed(() => application.value?.currentStage || 0);
     // Note: isApplicant allows both 'applicant' and 'student' roles to access the application portal
     const isApplicant = computed(() => user.value?.role === 'applicant' || user.value?.role === 'student');
+    const isApplicationExpired = computed(() => application.value?.status === 'expired');
 
     // Actions
     async function initialize() {
@@ -97,6 +98,14 @@ export const useAuthStore = defineStore('auth', () => {
                     const errorMsg = `Access denied. This portal is for applicants and students only. Your role: ${userRole}`;
                     logger.warn('Role access denied:', { userRole, allowedRoles: ['applicant', 'student'] });
                     return { success: false, error: errorMsg };
+                }
+
+                // Block expired applications before storing any session data
+                if (loginData.application?.status === 'expired') {
+                    logger.warn('Login blocked: application is expired', {
+                        applicationNumber: loginData.application?.applicationNumber,
+                    });
+                    return { success: false, error: 'APPLICATION_EXPIRED' };
                 }
 
                 // Set token
@@ -295,6 +304,7 @@ export const useAuthStore = defineStore('auth', () => {
         isAuthenticated,
         currentStage,
         isApplicant,
+        isApplicationExpired,
 
         // Actions
         initialize,

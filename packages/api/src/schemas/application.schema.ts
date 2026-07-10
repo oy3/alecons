@@ -10,6 +10,7 @@ export enum ApplicationStatus {
     CLEARED = 'cleared',
     COMPLETED = 'completed',
     REJECTED = 'rejected',
+    EXPIRED = 'expired',
 }
 
 export enum AdmissionDecision {

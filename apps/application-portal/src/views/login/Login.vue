@@ -69,6 +69,19 @@ export default {
 
           // Navigate to dashboard
           this.$router.push('/dashboard');
+        } else if (result.error === 'APPLICATION_EXPIRED') {
+          // Application expired — show a specific, helpful message
+          logger.warn('Login blocked: application is expired');
+          await Swal.fire({
+            icon: 'info',
+            title: 'Application Expired',
+            html:
+              'The application window for your intake has closed and your application has expired.' +
+              '<br><br>' +
+              'Your account is still active. When the next intake opens, you can apply again using the same login details.',
+            confirmButtonColor: '#2d7d7d',
+            confirmButtonText: 'Okay, got it',
+          });
         } else {
           // Login failed
           logger.error('Login failed:', result.error);

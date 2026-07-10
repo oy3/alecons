@@ -104,6 +104,7 @@ router.beforeEach(async (to, from, next) => {
   const isAuthenticated = authStore.isAuthenticated;
   const isApplicant = authStore.isApplicant;
   const isLoggingOut = authStore.isLoggingOut;
+  const isApplicationExpired = authStore.isApplicationExpired;
 
   // Handle logout navigation - bypass guest-only check during logout
   if (isLoggingOut && to.meta.guestOnly) {
@@ -131,6 +132,14 @@ router.beforeEach(async (to, from, next) => {
   // Handle routes that require applicant or student role
   if (to.meta.requiresApplicant && (!isAuthenticated || !isApplicant)) {
     logger.info('Non-applicant/student user trying to access application portal route, redirecting to login');
+    return next({ name: 'Login' });
+  }
+
+  // Block expired applicants from accessing protected routes
+  // (handles the case where application was expired while user was already logged in)
+  if (to.meta.requiresAuth && isAuthenticated && isApplicationExpired) {
+    logger.warn('Expired applicant attempted to navigate to protected route, logging out');
+    await authStore.logout();
     return next({ name: 'Login' });
   }
 

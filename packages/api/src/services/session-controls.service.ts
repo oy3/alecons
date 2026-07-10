@@ -6,6 +6,11 @@ import {
     SessionControlDocument,
 } from "../schemas/session-control.schema";
 import { Payment, PaymentDocument } from "../schemas/payment.schema";
+import {
+    Application,
+    ApplicationDocument,
+    ApplicationStatus,
+} from "../schemas/application.schema";
 
 export interface AdmissionFlowConfig {
     entranceExamEnabled: boolean;
@@ -52,6 +57,8 @@ export class SessionControlsService {
         private sessionControlModel: Model<SessionControlDocument>,
         @InjectModel(Payment.name)
         private paymentModel: Model<PaymentDocument>,
+        @InjectModel(Application.name)
+        private applicationModel: Model<ApplicationDocument>,
     ) { }
 
     private getDefaultControls() {
@@ -186,7 +193,7 @@ export class SessionControlsService {
             payments?: Array<{ paymentId: string; active: boolean }>;
         },
         updatedBy: string,
-    ): Promise<SessionControl> {
+    ): Promise<{ sessionControl: SessionControl; expiredApplicants: Array<{ email: string; firstName: string }> }> {
         const sessionControl = await this.sessionControlModel.findOne({
             academicSessionId: new Types.ObjectId(academicSessionId),
         });
@@ -197,8 +204,22 @@ export class SessionControlsService {
 
         await this.ensureDefaultControls(sessionControl);
 
-        // Update controls if provided
+        // Detect if the application control is being toggled OFF
+        let shouldExpireStaleApplications = false;
         if (controlsData.controls) {
+            const previousApplicationControl = sessionControl.controls.find(
+                (c) => c.name === "application",
+            );
+            const incomingApplicationControl = controlsData.controls.find(
+                (c) => c.name === "application",
+            );
+            if (
+                previousApplicationControl?.active === true &&
+                incomingApplicationControl?.active === false
+            ) {
+                shouldExpireStaleApplications = true;
+            }
+
             sessionControl.controls = this.normalizeControls(
                 controlsData.controls,
             ).controls;
@@ -213,8 +234,60 @@ export class SessionControlsService {
         }
 
         sessionControl.updatedBy = new Types.ObjectId(updatedBy);
+        await sessionControl.save();
 
-        return sessionControl.save();
+        const expiredApplicants = shouldExpireStaleApplications
+            ? await this.expireStaleApplicationsForSession(academicSessionId, updatedBy)
+            : [];
+
+        return { sessionControl, expiredApplicants };
+    }
+
+    async expireStaleApplicationsForSession(
+        academicSessionId: string,
+        updatedBy?: string,
+    ): Promise<Array<{ email: string; firstName: string }>> {
+        // Find all pending applications that have not yet paid the form fee (stage <= 2)
+        const affected = await this.applicationModel
+            .find({
+                entryAcademicSession: new Types.ObjectId(academicSessionId),
+                status: ApplicationStatus.PENDING,
+                currentStage: { $lte: 2 },
+            })
+            .populate('userId', 'email firstName')
+            .exec();
+
+        if (affected.length === 0) {
+            return [];
+        }
+
+        const ids = affected.map((a) => (a as any)._id);
+        const auditEntry = {
+            action: 'application_expired',
+            description:
+                'Application expired automatically: the application window was closed before the form fee was paid.',
+            performedBy: updatedBy ? new Types.ObjectId(updatedBy) : undefined,
+            actorRole: 'system',
+            createdAt: new Date(),
+        };
+
+        await this.applicationModel.updateMany(
+            { _id: { $in: ids } },
+            {
+                $set: { status: ApplicationStatus.EXPIRED, isActive: false },
+                $push: { auditTrail: auditEntry } as any,
+            },
+        );
+
+        return affected
+            .map((a) => {
+                const user = (a as any).userId;
+                return {
+                    email: user?.email || '',
+                    firstName: user?.firstName || '',
+                };
+            })
+            .filter((u) => Boolean(u.email));
     }
 
     async toggleControl(

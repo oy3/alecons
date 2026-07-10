@@ -9,6 +9,7 @@ import {
     Query,
     UseGuards,
     Request,
+    Logger,
 } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { AcademicSessionsService } from "../services/academic-sessions.service";
@@ -18,13 +19,17 @@ import {
     QueryAcademicSessionsDto,
 } from "../dto/academic-session.dto";
 import { SessionControlsService } from "../services/session-controls.service";
+import { EmailService } from "../services/email.service";
 
 @Controller("academic-sessions")
 @UseGuards(JwtAuthGuard)
 export class AcademicSessionsController {
+    private readonly logger = new Logger(AcademicSessionsController.name);
+
     constructor(
         private readonly academicSessionsService: AcademicSessionsService,
-        private readonly sessionControlsService: SessionControlsService
+        private readonly sessionControlsService: SessionControlsService,
+        private readonly emailService: EmailService,
     ) { }
 
     @Get()
@@ -153,11 +158,43 @@ export class AcademicSessionsController {
         @Request() req
     ) {
         try {
-            const controls = await this.sessionControlsService.updateControls(
-                id,
-                controlsData,
-                req.user.userId
-            );
+            const { sessionControl: controls, expiredApplicants } =
+                await this.sessionControlsService.updateControls(
+                    id,
+                    controlsData,
+                    req.user.userId,
+                );
+
+            if (expiredApplicants.length > 0) {
+                this.logger.log(
+                    `Application window closed for session ${id}: expiring ${expiredApplicants.length
+                    } stale application(s) and sending notifications.`,
+                );
+
+                // Fetch session year for the notification email (best-effort)
+                let sessionYear: string | undefined;
+                try {
+                    const session = await this.academicSessionsService.findById(id);
+                    sessionYear = (session as any)?.sessionYear;
+                } catch { /* non-critical */ }
+
+                // Fire-and-forget: don't block the API response
+                Promise.all(
+                    expiredApplicants.map(({ email, firstName }) =>
+                        this.emailService.sendApplicationExpiredEmail(
+                            email,
+                            firstName,
+                            sessionYear,
+                        ),
+                    ),
+                ).catch((err) =>
+                    this.logger.error(
+                        'Failed to send application-expired notification emails:',
+                        err,
+                    ),
+                );
+            }
+
             return {
                 success: true,
                 data: { controls },

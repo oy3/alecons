@@ -274,7 +274,7 @@ export class SessionControlsService {
         await this.applicationModel.updateMany(
             { _id: { $in: ids } },
             {
-                $set: { status: ApplicationStatus.EXPIRED, isActive: false },
+                $set: { status: ApplicationStatus.EXPIRED },
                 $push: { auditTrail: auditEntry } as any,
             },
         );

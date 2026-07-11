@@ -8,6 +8,7 @@ import {
 import { Payment, PaymentDocument } from "../schemas/payment.schema";
 import {
     Application,
+    AdmissionDecision,
     ApplicationDocument,
     ApplicationStatus,
 } from "../schemas/application.schema";
@@ -247,12 +248,14 @@ export class SessionControlsService {
         academicSessionId: string,
         updatedBy?: string,
     ): Promise<Array<{ email: string; firstName: string }>> {
-        // Find all pending applications that have not yet paid the form fee (stage <= 2)
+        // Expire all pending applications where no admission decision has been made yet.
+        // This covers stages 1–5: applicants who have not been admitted (admissionDecision still AWAITING_DECISION).
+        // Stage 6 (screening) is intentionally excluded — admissionDecision is already GRANTED there.
         const affected = await this.applicationModel
             .find({
                 entryAcademicSession: new Types.ObjectId(academicSessionId),
                 status: ApplicationStatus.PENDING,
-                currentStage: { $lte: 2 },
+                admissionDecision: AdmissionDecision.AWAITING_DECISION,
             })
             .populate('userId', 'email firstName')
             .exec();
@@ -265,7 +268,8 @@ export class SessionControlsService {
         const auditEntry = {
             action: 'application_expired',
             description:
-                'Application expired automatically: the application window was closed before the form fee was paid.',
+                'Application expired automatically: the application window was closed and no admission decision had been made.',
+
             performedBy: updatedBy ? new Types.ObjectId(updatedBy) : undefined,
             actorRole: 'system',
             createdAt: new Date(),

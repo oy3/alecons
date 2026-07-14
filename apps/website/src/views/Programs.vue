@@ -46,7 +46,7 @@ export default {
               <h5 class="card-title fw-bold mb-3">Basic Nursing</h5>
               <!-- <div class="small mb-2"><i class="bi bi-clock"></i> 3 Years</div> -->
               <div class="small mb-2">
-                <i class="bi bi-people"></i> 0 Students
+                <i class="bi bi-people"></i> 63 Students
               </div>
               <div class="small">
                 <i class="bi bi-award"></i> RN Certificate

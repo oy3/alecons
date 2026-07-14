@@ -6,7 +6,7 @@ export default {
   data() {
     return {
       announcement:
-        "Batch A Admissions for the 2026/2027 session is now closed. Stay tuned — Batch B 2026/2027 Admissions opens Mid-August 2026!",
+        "Batch B Admissions for the 2026/2027 Academic Session open on July 15, 2026. Stay tuned!",
     };
   },
   components: { Marquee },

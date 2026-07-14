@@ -70,7 +70,7 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">Application Opens</h6>
               <p class="acon-text-secondary">
                 March 28, 2026 <br />
-                August 15, 2026
+                July 15, 2026
               </p>
             </div>
           </div>

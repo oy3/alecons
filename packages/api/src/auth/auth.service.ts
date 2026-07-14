@@ -5,7 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
-import { Application, ApplicationDocument } from '../schemas/application.schema';
+import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
 import { Program, ProgramDocument } from '../schemas/program.schema';
 import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
@@ -49,6 +49,8 @@ export class AuthService {
             updatedAt?: Date;
         };
 
+        const academicSession = application.entryAcademicSession as any;
+
         return {
             id: application._id,
             applicationNumber: application.applicationNumber,
@@ -78,8 +80,46 @@ export class AuthService {
             entranceExam: application.entranceExam,
             screening: application.screening,
             admissionFlow,
+            academicSession: academicSession ? {
+                id: academicSession._id,
+                sessionYear: academicSession.sessionYear,
+                title: academicSession.title,
+                status: academicSession.status,
+            } : null,
             createdAt: applicationTimestamps.createdAt,
             updatedAt: applicationTimestamps.updatedAt,
+        };
+    }
+
+    private async mapApplicationList(applications: ApplicationDocument[]) {
+        return Promise.all(applications.map((application) => this.mapApplicationResponse(application)));
+    }
+
+    private async getUserApplications(userId: string | Types.ObjectId) {
+        const normalizedUserId = typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
+
+        const applications = await this.applicationModel
+            .find({ userId: normalizedUserId })
+            .sort({ createdAt: -1 })
+            .populate({
+                path: 'programId',
+                select: 'name code programTypeId programModeId',
+                populate: [
+                    { path: 'programTypeId', select: 'type description' },
+                    { path: 'programModeId', select: 'mode description' },
+                ],
+            })
+            .populate({
+                path: 'entryAcademicSession',
+                select: 'sessionYear title status active',
+            })
+            .exec();
+
+        const mappedApplications = await this.mapApplicationList(applications as ApplicationDocument[]);
+
+        return {
+            applications: mappedApplications,
+            latestApplication: mappedApplications[0] || null,
         };
     }
 
@@ -90,6 +130,8 @@ export class AuthService {
         otherName?: string;
         lastName: string;
         phone?: string;
+        dateOfBirth?: string;
+        gender?: string;
         verificationToken: string;
         tokenExpires: Date;
     }) {
@@ -100,6 +142,8 @@ export class AuthService {
             otherName: data.otherName,
             lastName: data.lastName,
             phone: data.phone,
+            dob: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
+            gender: data.gender,
             role: UserRole.APPLICANT,
             isEmailVerified: false,
             emailVerificationToken: data.verificationToken,
@@ -230,6 +274,8 @@ export class AuthService {
                 otherName,
                 lastName,
                 phone,
+                dateOfBirth,
+                gender,
                 verificationToken,
                 tokenExpires,
             });
@@ -308,6 +354,8 @@ export class AuthService {
                         otherName,
                         lastName,
                         phone,
+                        dateOfBirth,
+                        gender,
                         verificationToken,
                         tokenExpires,
                     });
@@ -437,6 +485,7 @@ export class AuthService {
                     academicSession: eligibility.activeSession ? {
                         id: (eligibility.activeSession as any)._id,
                         sessionYear: eligibility.activeSession.sessionYear,
+                        title: eligibility.activeSession.title,
                         status: eligibility.activeSession.status
                     } : null
                 }
@@ -477,24 +526,12 @@ export class AuthService {
         const payload = { email: user.email, sub: user._id, role: user.role };
         const access_token = this.jwtService.sign(payload);
 
-        // Get application if user is an applicant or student
         let applicationData = null;
+        let applicationsData = [];
         if (user.role === UserRole.APPLICANT || user.role === UserRole.STUDENT) {
-            const application = await this.applicationModel
-                .findOne({ userId: user._id })
-                .populate({
-                    path: 'programId',
-                    select: 'name code programTypeId programModeId',
-                    populate: [
-                        { path: 'programTypeId', select: 'type description' },
-                        { path: 'programModeId', select: 'mode description' },
-                    ],
-                })
-                .exec();
-
-            if (application) {
-                applicationData = await this.mapApplicationResponse(application);
-            }
+            const { applications, latestApplication } = await this.getUserApplications(user._id);
+            applicationData = latestApplication;
+            applicationsData = applications;
         }
 
         return {
@@ -512,6 +549,8 @@ export class AuthService {
                 isActive: user.isActive,
             },
             application: applicationData,
+            applications: applicationsData,
+            currentApplicationId: applicationData?.id || null,
             // Keep backward compatibility
             applicationId: applicationData?.id,
         };
@@ -640,33 +679,32 @@ export class AuthService {
                         hasStudent: !!studentProfile.data?.student,
                         matriculationNumber: studentProfile.data?.student?.matriculationNumber
                     });
-                    return studentProfile;
+                    const { applications } = await this.getUserApplications(user._id);
+                    return {
+                        ...studentProfile,
+                        data: {
+                            ...studentProfile.data,
+                            applications,
+                        },
+                    };
                 } catch (error) {
                     this.logger.warn('StudentService failed, falling back to Application-based profile:', error.message);
                     // Fall back to application-based profile if student record doesn't exist yet
                 }
             }
 
-            // Find the user's application (for applicants or students without student records yet)
+            let applications: any[] = [];
             let application = null;
             if (user.role === UserRole.APPLICANT || user.role === UserRole.STUDENT) {
-                application = await this.applicationModel
-                    .findOne({ userId: user._id })
-                    .populate({
-                        path: 'programId',
-                        select: 'name code programTypeId programModeId',
-                        populate: [
-                            { path: 'programTypeId', select: 'type description' },
-                            { path: 'programModeId', select: 'mode description' },
-                        ],
-                    })
-                    .exec();
+                const { applications: mappedApplications, latestApplication } = await this.getUserApplications(user._id);
+                applications = mappedApplications;
+                application = latestApplication;
 
                 this.logger.log('Application data found for user profile:', {
                     userId,
                     userRole: user.role,
-                    hasApplication: !!application,
-                    applicationId: application?._id,
+                    applicationCount: applications.length,
+                    applicationId: application?.id,
                     hasDob: !!application?.dob,
                     hasGender: !!application?.gender,
                     dobValue: application?.dob,
@@ -687,9 +725,12 @@ export class AuthService {
                         role: user.role,
                         isActive: user.isActive,
                         isEmailVerified: user.isEmailVerified,
-                        fullName: user.fullName
+                        fullName: user.fullName,
+                        dob: user.dob,
+                        gender: user.gender
                     },
-                    application: application ? await this.mapApplicationResponse(application) : null
+                    application: application || null,
+                    applications: applications || []
                 }
             };
 
@@ -711,6 +752,164 @@ export class AuthService {
                 throw error;
             }
             throw new BadRequestException('Failed to fetch user profile');
+        }
+    }
+
+    async getOpenSessions() {
+        try {
+            const sessions = await this.applicationModel.db
+                .model('AcademicSession')
+                .find({ status: 'open' })
+                .sort({ createdAt: -1 })
+                .lean() as any[];
+
+            const openSessions: any[] = [];
+            for (const session of sessions) {
+                const controls = await this.applicationModel.db
+                    .model('SessionControl')
+                    .findOne({ academicSessionId: session._id })
+                    .lean() as any;
+                const hasApplicationControl = controls?.controls?.some(
+                    (c: any) => c.name === 'application' && c.active === true
+                );
+                if (hasApplicationControl) {
+                    openSessions.push({
+                        id: session._id,
+                        sessionYear: session.sessionYear,
+                        title: session.title || null,
+                        label: session.title || session.sessionYear,
+                    });
+                }
+            }
+
+            return { success: true, data: openSessions };
+        } catch (error) {
+            this.logger.error('getOpenSessions failed:', error);
+            return { success: true, data: [] };
+        }
+    }
+
+    async applyForIntake(userId: string, sessionId: string, programId: string) {
+        try {
+            const user = await this.userModel.findById(userId);
+            if (!user) throw new UnauthorizedException('User not found');
+
+            // Validate session is open with active application control
+            const session = await this.applicationModel.db
+                .model('AcademicSession')
+                .findOne({ _id: new Types.ObjectId(sessionId), status: 'open' })
+                .lean() as any;
+            if (!session) throw new BadRequestException('Selected intake is not open for applications.');
+
+            const controls = await this.applicationModel.db
+                .model('SessionControl')
+                .findOne({ academicSessionId: new Types.ObjectId(sessionId) })
+                .lean() as any;
+            const hasApplicationControl = controls?.controls?.some(
+                (c: any) => c.name === 'application' && c.active === true
+            );
+            if (!hasApplicationControl) throw new BadRequestException('Applications for this intake are currently disabled.');
+
+            // Validate program exists and is active
+            const program = await this.programModel.findOne({ _id: new Types.ObjectId(programId), active: true });
+            if (!program) throw new BadRequestException('Selected program is not available.');
+
+            // Duplicate check: no non-expired application for same user + session
+            const existing = await this.applicationModel.findOne({
+                userId: user._id,
+                entryAcademicSession: new Types.ObjectId(sessionId),
+                status: { $ne: 'expired' },
+            });
+            if (existing) throw new ConflictException('You already have an active application for this intake.');
+
+            const application = await this.buildApplicantApplicationWithNumber({
+                userId: user._id,
+                programId,
+                activeSessionId: new Types.ObjectId(sessionId),
+            });
+            await application.save();
+
+            const { applications, latestApplication } = await this.getUserApplications(user._id);
+
+            return {
+                success: true,
+                message: 'New application created successfully.',
+                data: { application: latestApplication, applications },
+            };
+        } catch (error) {
+            this.logger.error('applyForIntake failed:', error);
+            if (error instanceof ConflictException || error instanceof BadRequestException || error instanceof UnauthorizedException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to create application.');
+        }
+    }
+
+    async reapplyApplication(userId: string) {
+        try {
+            const user = await this.userModel.findById(userId);
+            if (!user) {
+                throw new UnauthorizedException('User not found');
+            }
+
+            const eligibility = await this.applicationEligibilityService.checkRegistrationEligibility();
+            if (!eligibility.eligible || !eligibility.activeSession) {
+                throw new BadRequestException(eligibility.reason || 'Applications are currently unavailable.');
+            }
+
+            const existingApplication = await this.applicationModel.findOne({
+                userId: user._id,
+                entryAcademicSession: (eligibility.activeSession as any)._id,
+                status: {
+                    $in: [
+                        ApplicationStatus.PENDING,
+                        ApplicationStatus.ADMITTED,
+                        ApplicationStatus.CLEARED,
+                        ApplicationStatus.COMPLETED,
+                        ApplicationStatus.REJECTED,
+                    ],
+                },
+            });
+
+            if (existingApplication) {
+                throw new ConflictException('You already have an application for this intake.');
+            }
+
+            const previousApplication = await this.applicationModel
+                .findOne({ userId: user._id })
+                .sort({ createdAt: -1 })
+                .exec();
+
+            if (!previousApplication?.programId) {
+                throw new BadRequestException('No prior application found to reapply from.');
+            }
+
+            const application = await this.buildApplicantApplicationWithNumber({
+                userId: user._id,
+                programId: previousApplication.programId.toString(),
+                activeSessionId: (eligibility.activeSession as any)._id,
+                dateOfBirth: previousApplication.dob ? previousApplication.dob.toISOString() : undefined,
+                gender: previousApplication.gender,
+            });
+
+            await application.save();
+
+            const { applications, latestApplication } = await this.getUserApplications(user._id);
+
+            return {
+                success: true,
+                message: 'A new application has been created successfully.',
+                data: {
+                    application: latestApplication,
+                    applications,
+                },
+            };
+        } catch (error) {
+            this.logger.error('Reapply application failed:', error);
+            if (error instanceof ConflictException || error instanceof BadRequestException || error instanceof UnauthorizedException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to create a new application.');
         }
     }
 

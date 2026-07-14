@@ -60,8 +60,8 @@ export default {
 
       <!-- Search + Right Icons -->
       <div class="d-flex align-items-center flex-grow-1 flex-md-grow-0 w-100">
-        <!-- Search -->
-        <form
+        <!-- TODO: Search -->
+        <!-- <form
           class="d-flex me-3 flex-grow-1 flex-md-grow-0 w-100 custom-search-width"
         >
           <div class="input-group">
@@ -74,11 +74,12 @@ export default {
               <i class="bi bi-search text-muted"></i>
             </span>
           </div>
-        </form>
+        </form> -->
 
         <!-- Right Icons -->
         <div class="d-flex align-items-center ms-auto">
-          <i class="bi bi-bell fs-5 me-3"></i>
+          <!-- TODO: Notification -->
+          <!-- <i class="bi bi-bell fs-5 me-3"></i> -->
 
           <!-- User Profile Dropdown -->
           <!-- <div class="dropdown">
@@ -93,7 +94,7 @@ export default {
             alt="Profile"
             class="rounded-circle me-2 border border-secondary object-fit-cover"
           />
-          <span class="fw-bold d-none d-sm-inline">{{
+          <span class="fw-bold d-none d-sm-inline text-capitalize">{{
             authStore.user?.firstName || "User"
           }}</span>
           <!-- </a>

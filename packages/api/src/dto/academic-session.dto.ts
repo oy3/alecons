@@ -2,6 +2,10 @@ import { IsString, IsDateString, IsBoolean, IsOptional, IsEnum } from 'class-val
 import { SessionStatus } from '../schemas/academic-session.schema';
 
 export class CreateAcademicSessionDto {
+    @IsOptional()
+    @IsString()
+    title?: string;
+
     @IsDateString()
     startDate: string;
 
@@ -22,6 +26,10 @@ export class CreateAcademicSessionDto {
 }
 
 export class UpdateAcademicSessionDto {
+    @IsOptional()
+    @IsString()
+    title?: string;
+
     @IsOptional()
     @IsDateString()
     startDate?: string;

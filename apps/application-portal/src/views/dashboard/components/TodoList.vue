@@ -35,7 +35,7 @@ export default {
     <h3>Your To-do</h3>
     <hr />
 
-    <div class="overflow-hidden">
+    <div class="">
       <div
         ref="todoContainer"
         class="d-flex flex-nowrap overflow-x-auto py-2 todo-container"

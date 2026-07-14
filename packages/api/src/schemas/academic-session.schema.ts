@@ -12,8 +12,11 @@ export enum SessionStatus {
 
 @Schema({ timestamps: true })
 export class AcademicSession {
-    @Prop({ required: true, unique: true })
+    @Prop({ required: true })
     sessionYear: string;
+
+    @Prop()
+    title?: string;
 
     @Prop({ required: true })
     startDate: Date;

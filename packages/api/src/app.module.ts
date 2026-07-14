@@ -22,6 +22,7 @@ import { IdCardModule } from './modules/id-card.module';
 import { CoursesModule } from './courses/courses.module';
 import { StaffApplicationsController } from './controllers/staff-applications.controller';
 import { ExamResultsController } from './controllers/exam-results.controller';
+import { MaintenanceController } from './controllers/maintenance.controller';
 import { Application, ApplicationSchema } from './schemas/application.schema';
 import { Program, ProgramSchema } from './schemas/program.schema';
 import { ProgramType, ProgramTypeSchema } from './schemas/program-type.schema';
@@ -118,7 +119,7 @@ const hasExternalApiEnvFile = Boolean(process.env.API_ENV_FILE);
         CourseRegistrationManagementModule,
         IdCardModule,
     ],
-    controllers: [AppController, StaffApplicationsController, ExamResultsController],
+    controllers: [AppController, StaffApplicationsController, ExamResultsController, MaintenanceController],
     providers: [AppService, EmailService, MatriculationService, ContentSanitizationService, AdmissionLetterPdfService],
 })
 export class AppModule { }

@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AcademicSession, AcademicSessionDocument, SessionStatus } from '../schemas/academic-session.schema';
@@ -6,6 +6,8 @@ import { CreateAcademicSessionDto, UpdateAcademicSessionDto, QueryAcademicSessio
 
 @Injectable()
 export class AcademicSessionsService {
+    private readonly logger = new Logger(AcademicSessionsService.name);
+
     constructor(
         @InjectModel(AcademicSession.name)
         private academicSessionModel: Model<AcademicSessionDocument>,
@@ -21,14 +23,24 @@ export class AcademicSessionsService {
         return `${startYear}/${endYear}`;
     }
 
+    private async ensureSessionIndexes(): Promise<void> {
+        try {
+            const indexes = await this.academicSessionModel.collection.indexes();
+            const legacyIndex = indexes.find((index) => index.key?.sessionYear === 1);
+
+            if (legacyIndex?.name) {
+                await this.academicSessionModel.collection.dropIndex(legacyIndex.name);
+                this.logger.log(`Dropped legacy academic session index: ${legacyIndex.name}`);
+            }
+        } catch (error) {
+            this.logger.warn('Could not refresh academic session indexes:', error);
+        }
+    }
+
     async create(createDto: CreateAcademicSessionDto, userId: string): Promise<AcademicSession> {
         const sessionYear = this.generateSessionYear(createDto.startDate, createDto.endDate);
 
-        // Check if session year already exists
-        const existingSession = await this.academicSessionModel.findOne({ sessionYear });
-        if (existingSession) {
-            throw new ConflictException(`Academic session for ${sessionYear} already exists`);
-        }
+        await this.ensureSessionIndexes();
 
         const academicSession = new this.academicSessionModel({
             ...createDto,
@@ -59,6 +71,7 @@ export class AcademicSessionsService {
         if (query.search) {
             filter.$or = [
                 { sessionYear: { $regex: query.search, $options: 'i' } },
+                { title: { $regex: query.search, $options: 'i' } },
                 { description: { $regex: query.search, $options: 'i' } },
             ];
         }
@@ -122,17 +135,7 @@ export class AcademicSessionsService {
 
             const newSessionYear = this.generateSessionYear(startDate, endDate);
 
-            // Check if new session year conflicts with existing sessions
             if (newSessionYear !== existingSession.sessionYear) {
-                const conflictingSession = await this.academicSessionModel.findOne({
-                    sessionYear: newSessionYear,
-                    _id: { $ne: id },
-                });
-
-                if (conflictingSession) {
-                    throw new ConflictException(`Academic session for ${newSessionYear} already exists`);
-                }
-
                 updateData.sessionYear = newSessionYear;
             }
         }
@@ -177,5 +180,63 @@ export class AcademicSessionsService {
         }
 
         return academicSession;
+    }
+
+    /**
+     * Inspect legacy index and detect duplicate sessionYear values.
+     * If `apply` is true, drop the legacy unique index when found.
+     */
+    async inspectAndRepairLegacyIndex(apply = false): Promise<{
+        legacyIndexName?: string | null;
+        duplicateCount: number;
+        duplicatesSample: Array<{ sessionYear: string; id: string }>;
+        dropped?: boolean;
+    }> {
+        try {
+            const coll = this.academicSessionModel.collection;
+
+            let legacyIndexName: string | null = null;
+            try {
+                const indexes = await coll.indexes();
+                const legacyIndex = indexes.find((index) => index.key?.sessionYear === 1 && index.unique);
+                if (legacyIndex?.name) legacyIndexName = legacyIndex.name;
+            } catch (err) {
+                this.logger.warn('Failed to list indexes on academicsessions collection:', err?.message || err);
+            }
+
+            const cursor = coll.find({}).sort({ createdAt: 1 }).batchSize(100);
+            const seen = new Map<string, string>();
+            let duplicateCount = 0;
+            const duplicatesSample: Array<{ sessionYear: string; id: string }> = [];
+
+            for await (const doc of cursor) {
+                const key = String(doc.sessionYear || '');
+                if (!seen.has(key)) {
+                    seen.set(key, String(doc._id));
+                    continue;
+                }
+
+                duplicateCount += 1;
+                if (duplicatesSample.length < 20) {
+                    duplicatesSample.push({ sessionYear: key, id: String(doc._id) });
+                }
+            }
+
+            let dropped = false;
+            if (apply && legacyIndexName) {
+                try {
+                    await coll.dropIndex(legacyIndexName);
+                    this.logger.log(`Dropped legacy academic session index: ${legacyIndexName}`);
+                    dropped = true;
+                } catch (err) {
+                    this.logger.warn('Failed to drop legacy academic session index:', err?.message || err);
+                }
+            }
+
+            return { legacyIndexName, duplicateCount, duplicatesSample, dropped };
+        } catch (error) {
+            this.logger.error('inspectAndRepairLegacyIndex failed:', error?.message || error);
+            throw error;
+        }
     }
 }

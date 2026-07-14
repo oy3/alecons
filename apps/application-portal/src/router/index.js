@@ -41,6 +41,15 @@ const router = createRouter({
       }
     },
     {
+      path: '/my-applications',
+      name: 'MyApplications',
+      component: () => import('../views/my-applications/MyApplications.vue'),
+      meta: {
+        requiresAuth: true,
+        requiresApplicant: true
+      }
+    },
+    {
       path: '/application-form',
       name: 'ApplicationForm',
       component: () => import('../views/application_form/application_form.vue'),
@@ -81,7 +90,7 @@ const router = createRouter({
       path: '/:pathMatch(.*)*',
       beforeEnter: (to, from, next) => {
         if (authManager.validateSession()) {
-          next({ name: 'Dashboard' });
+          next({ name: 'MyApplications' });
         } else {
           next({ name: 'Login' });
         }
@@ -104,7 +113,6 @@ router.beforeEach(async (to, from, next) => {
   const isAuthenticated = authStore.isAuthenticated;
   const isApplicant = authStore.isApplicant;
   const isLoggingOut = authStore.isLoggingOut;
-  const isApplicationExpired = authStore.isApplicationExpired;
 
   // Handle logout navigation - bypass guest-only check during logout
   if (isLoggingOut && to.meta.guestOnly) {
@@ -114,13 +122,13 @@ router.beforeEach(async (to, from, next) => {
 
   // Handle guest-only routes (login, register)
   if (to.meta.guestOnly && isAuthenticated) {
-    logger.info('Authenticated user trying to access guest-only route, redirecting to dashboard', {
+    logger.info('Authenticated user trying to access guest-only route, redirecting to my applications', {
       isAuthenticated,
       hasUser: !!authStore.user,
       hasToken: !!authStore.token,
       route: to.name
     });
-    return next({ name: 'Dashboard' });
+    return next({ name: 'MyApplications' });
   }
 
   // Handle routes that require authentication
@@ -132,14 +140,6 @@ router.beforeEach(async (to, from, next) => {
   // Handle routes that require applicant or student role
   if (to.meta.requiresApplicant && (!isAuthenticated || !isApplicant)) {
     logger.info('Non-applicant/student user trying to access application portal route, redirecting to login');
-    return next({ name: 'Login' });
-  }
-
-  // Block expired applicants from accessing protected routes
-  // (handles the case where application was expired while user was already logged in)
-  if (to.meta.requiresAuth && isAuthenticated && isApplicationExpired) {
-    logger.warn('Expired applicant attempted to navigate to protected route, logging out');
-    await authStore.logout();
     return next({ name: 'Login' });
   }
 

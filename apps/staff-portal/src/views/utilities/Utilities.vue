@@ -13,10 +13,20 @@ export default {
       isRepairingCounter: false,
       isRepairingProgramDrift: false,
       isBackfillingVerificationTokens: false,
+      isRepairingAcademicSessions: false,
+      isMigratingDemographics: false,
       counterStats: null,
       counterRecord: null,
       programDriftSummary: null,
       utilityCards: [
+        {
+          id: 'repair-academic-sessions',
+          title: 'Repair Academic Sessions',
+          icon: 'bi-tools',
+          variant: 'info',
+          description: 'Detect legacy unique index on academic session year and optionally drop it to allow free-text titles and multiple batches per year.',
+          actionLabel: 'Run Repair'
+        },
         {
           id: 'application-counter-repair',
           title: 'Application Counter Repair',
@@ -40,6 +50,14 @@ export default {
           variant: 'success',
           description: 'Generate missing public verification tokens for existing student and staff records so ID card QR codes can be issued without opening each profile individually.',
           actionLabel: 'Backfill Tokens'
+        },
+        {
+          id: 'migrate-user-demographics',
+          title: 'Migrate User Demographics',
+          icon: 'bi-person-lines-fill',
+          variant: 'primary',
+          description: 'Copy dob and gender from Application records into their linked User profiles where the User fields are still empty. Existing User values are never overwritten.',
+          actionLabel: 'Inspect & Migrate'
         },
         {
           id: 'future-utilities',
@@ -466,6 +484,112 @@ export default {
       } finally {
         this.isBackfillingVerificationTokens = false
       }
+    },
+
+    async runMigrateUserDemographics() {
+      const preview = await Swal.fire({
+        title: 'Inspect User Demographics Migration?',
+        html: `<div class="text-start utility-confirmation"><p class="small text-muted mb-2">This utility copies <strong>dob</strong> and <strong>gender</strong> from Application records into their linked User profiles. User fields that already have a value are never overwritten.</p><ul class="small mb-0"><li>A dry run will count how many users would be updated.</li><li>Apply will write the values to User documents.</li></ul></div>`,
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Run Dry Run First',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#0d6efd',
+        customClass: { popup: 'utility-swal-popup' }
+      })
+
+      if (!preview.isConfirmed) return
+
+      try {
+        this.isMigratingDemographics = true
+        const dryRun = await apiService.migrateUserDemographics({ apply: false })
+        if (!dryRun.success) throw new Error(dryRun.error || 'Dry run failed')
+
+        const d = dryRun.data || {}
+        const confirm = await Swal.fire({
+          title: d.migrated ? `${d.migrated} user(s) would be updated` : 'Nothing to migrate',
+          html: `<ul class="text-start mb-0 small"><li>Applications scanned: <strong>${d.scanned || 0}</strong></li><li>Would migrate: <strong>${d.migrated || 0}</strong></li><li>Already set: <strong>${d.alreadySet || 0}</strong></li><li>Skipped (no user): <strong>${d.skipped || 0}</strong></li></ul>`,
+          icon: d.migrated ? 'warning' : 'info',
+          showCancelButton: true,
+          confirmButtonText: d.migrated ? 'Apply Migration' : 'Close',
+          cancelButtonText: 'Cancel',
+          confirmButtonColor: '#0d6efd',
+          customClass: { popup: 'utility-swal-popup' }
+        })
+
+        if (!confirm.isConfirmed || !d.migrated) return
+
+        const apply = await apiService.migrateUserDemographics({ apply: true })
+        if (!apply.success) throw new Error(apply.error || 'Migration failed')
+
+        const a = apply.data || {}
+        await Swal.fire({
+          icon: 'success',
+          title: 'Migration Complete',
+          html: `<ul class="text-start mb-0 small"><li>Scanned: <strong>${a.scanned || 0}</strong></li><li>Migrated: <strong>${a.migrated || 0}</strong></li><li>Already set: <strong>${a.alreadySet || 0}</strong></li><li>Skipped: <strong>${a.skipped || 0}</strong></li></ul>`,
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('User demographics migration failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Migration Failed', text: error.message || 'Unable to complete migration.' })
+      } finally {
+        this.isMigratingDemographics = false
+      }
+    },
+
+    async runRepairAcademicSessions() {
+      const result = await Swal.fire({
+        title: 'Inspect Academic Sessions?',
+        html: `<div class="text-start utility-confirmation"><p class="small text-muted mb-2">This utility checks for a legacy unique index on the academic session year field that blocks creating sessions with the same derived year. You may inspect results first, then choose to drop the index.</p></div>`,
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Run Check',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#0d6efd',
+        customClass: { popup: 'utility-swal-popup' }
+      })
+
+      if (!result.isConfirmed) return
+
+      try {
+        this.isRepairingAcademicSessions = true
+        const resp = await apiService.repairAcademicSessions({ apply: false })
+        if (!resp.success) throw new Error(resp.error || 'Repair check failed')
+
+        const data = resp.data || {}
+        const dupCount = data.duplicateCount || 0
+        const legacy = data.legacyIndexName || 'none'
+
+        const confirmDrop = await Swal.fire({
+          title: dupCount ? `Found ${dupCount} duplicate(s)` : 'No duplicates found',
+          html: `<div class="text-start"><p class="small text-muted">Legacy index: <strong>${legacy}</strong></p><p class="small text-muted">Duplicates sample: ${data.duplicatesSample && data.duplicatesSample.length ? '<ul>' + data.duplicatesSample.map(d=>`<li>${d.sessionYear} — ${d.id}</li>`).join('') + '</ul>' : 'None'}</p></div>`,
+          icon: dupCount ? 'warning' : 'info',
+          showCancelButton: true,
+          confirmButtonText: 'Drop Legacy Index',
+          cancelButtonText: 'Keep Index',
+          confirmButtonColor: '#dc3545',
+          customClass: { popup: 'utility-swal-popup' }
+        })
+
+        if (confirmDrop.isConfirmed) {
+          const applyResp = await apiService.repairAcademicSessions({ apply: true })
+          if (!applyResp.success) throw new Error(applyResp.error || 'Failed to apply repair')
+
+          await Swal.fire({
+            icon: 'success',
+            title: 'Legacy index dropped',
+            html: `<div class="text-start small">Dropped: <strong>${applyResp.data?.dropped ? 'yes' : 'no'}</strong></div>`,
+            confirmButtonColor: '#1a5f5f'
+          })
+        }
+
+        await this.loadUtilityState()
+      } catch (error) {
+        logger.error('Academic session repair utility failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Repair Failed', text: error.message || 'Unable to complete repair.' })
+      } finally {
+        this.isRepairingAcademicSessions = false
+      }
     }
   }
 }
@@ -605,7 +729,18 @@ export default {
 
             <div class="mt-auto d-flex flex-wrap gap-2">
               <button
-                v-if="utility.id === 'application-counter-repair'"
+                v-if="utility.id === 'repair-academic-sessions'"
+                class="btn btn-info"
+                :disabled="isLoading || isRepairingAcademicSessions || isRepairingCounter || isRepairingProgramDrift || isBackfillingVerificationTokens"
+                @click="runRepairAcademicSessions"
+              >
+                <span v-if="isRepairingAcademicSessions" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-tools me-2"></i>
+                {{ isRepairingAcademicSessions ? 'Working...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'application-counter-repair'"
                 class="btn btn-primary"
                 :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift || isBackfillingVerificationTokens"
                 @click="runCounterRepair"
@@ -635,6 +770,17 @@ export default {
                 <span v-if="isBackfillingVerificationTokens" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-upc-scan me-2"></i>
                 {{ isBackfillingVerificationTokens ? 'Generating...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'migrate-user-demographics'"
+                class="btn btn-primary"
+                :disabled="isLoading || isMigratingDemographics || isRepairingCounter || isRepairingProgramDrift || isBackfillingVerificationTokens"
+                @click="runMigrateUserDemographics"
+              >
+                <span v-if="isMigratingDemographics" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-person-lines-fill me-2"></i>
+                {{ isMigratingDemographics ? 'Migrating...' : utility.actionLabel }}
               </button>
 
               <button v-else class="btn btn-outline-secondary" disabled>

@@ -34,6 +34,12 @@ export class User {
     @Prop({ trim: true })
     phone?: string;
 
+    @Prop()
+    dob?: Date;
+
+    @Prop()
+    gender?: string;
+
     @Prop({ default: true })
     isActive: boolean;
 

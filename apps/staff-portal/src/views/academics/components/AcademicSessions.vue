@@ -86,6 +86,7 @@ export default {
           this.sessions = response.data.sessions.map(session => ({
             id: session._id,
             sessionYear: session.sessionYear,
+            title: session.title || '',
             description: session.description || '',
             startDate: session.startDate,
             endDate: session.endDate,
@@ -151,6 +152,10 @@ export default {
               <input id="endDate" type="date" class="form-control" required>
             </div>
             <div class="col-12 mb-3">
+              <label class="form-label">Session Title</label>
+              <input id="title" class="form-control" placeholder="e.g. 2026/2027 Batch A">
+            </div>
+            <div class="col-12 mb-3">
               <label class="form-label">Description</label>
               <textarea id="description" class="form-control" placeholder="Session description..." rows="3"></textarea>
             </div>
@@ -194,6 +199,7 @@ export default {
         preConfirm: () => {
           const startDate = document.getElementById('startDate').value
           const endDate = document.getElementById('endDate').value
+          const title = document.getElementById('title').value
           const description = document.getElementById('description').value
           const status = document.getElementById('status').value
           const active = document.getElementById('active').checked
@@ -211,6 +217,7 @@ export default {
           return {
             startDate,
             endDate,
+            title: title || undefined,
             description: description || undefined,
             status,
             active
@@ -272,6 +279,10 @@ export default {
               <input id="endDate" type="date" class="form-control" value="${session.endDate?.split('T')[0]}" required>
             </div>
             <div class="col-12 mb-3">
+              <label class="form-label">Session Title</label>
+              <input id="title" class="form-control" value="${session.title || ''}" placeholder="e.g. 2026/2027 Batch A">
+            </div>
+            <div class="col-12 mb-3">
               <label class="form-label">Description</label>
               <textarea id="description" class="form-control" rows="3">${session.description || ''}</textarea>
             </div>
@@ -315,6 +326,7 @@ export default {
         preConfirm: () => {
           const startDate = document.getElementById('startDate').value
           const endDate = document.getElementById('endDate').value
+          const title = document.getElementById('title').value
           const description = document.getElementById('description').value
           const status = document.getElementById('status').value
           const active = document.getElementById('active').checked
@@ -332,6 +344,7 @@ export default {
           return {
             startDate,
             endDate,
+            title: title || undefined,
             description: description || undefined,
             status,
             active
@@ -764,7 +777,7 @@ export default {
                   <tr v-for="session in paginatedSessions" :key="session.id">
                     <td>
                       <div class="fw-medium">{{ session.sessionYear }}</div>
-                      <small class="text-muted">{{ session.description }}</small>
+                      <small class="text-muted">{{ session.title || session.description || 'No title provided' }}</small>
                     </td>
                     <td>{{ formatDate(session.startDate) }}</td>
                     <td>{{ formatDate(session.endDate) }}</td>

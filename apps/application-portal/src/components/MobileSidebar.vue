@@ -92,7 +92,9 @@ export default {
     <div class="offcanvas-header">
       <!-- <BrandLogo /> -->
       <!-- <div class="text-center my-4"> -->
-      <img src="@shared/assets/logo.png" alt="Logo" width="70" class="" />
+      <router-link to="/">
+        <img src="@shared/assets/logo.png" alt="Logo" width="70" class="" />
+      </router-link>
       <!-- </div> -->
       <button
         type="button"

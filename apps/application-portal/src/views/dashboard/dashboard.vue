@@ -428,6 +428,9 @@ export default {
 <template>
   <div class="container mt-3 px-3 px-md-5 py-5">
     <div class="row gy-5">
+      <router-link to="/" class="small d-flex align-items-center">
+        <i class="bi bi-arrow-left-circle fs-6 me-2"></i> Back to My Applications
+      </router-link>
       <div class="col-md-8">
         <!-- Email Verification Alert -->
         <EmailVerificationAlert
@@ -446,7 +449,7 @@ export default {
         />
 
         <!-- To-do List -->
-        <div class="">
+        <div class="overflow-x-auto">
           <TodoList :todos="todos" />
         </div>
       </div>

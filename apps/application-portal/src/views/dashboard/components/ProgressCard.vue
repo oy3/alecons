@@ -44,7 +44,7 @@ export default {
       <h5 class="card-title mb-4">Your Progress</h5>
 
       <p class="mb-4">
-        <span class="acon-text-primary fw-bold">Hi {{ userName }}</span
+        <span class="acon-text-primary fw-bold">Hi  <span class="text-capitalize">{{ userName }}</span></span
         >, You have completed {{ progressPercent.toFixed(0) }}% of your
         application process. Keep going.
       </p>

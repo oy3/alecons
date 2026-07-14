@@ -15,7 +15,8 @@
     "test": "echo \"No tests yet\"",
     "clean": "rm -rf node_modules yarn.lock package-lock.json dist* tsconfig.build.tsbuildinfo",
     "seed:staff": "ts-node -r tsconfig-paths/register src/scripts/seed-staff.ts",
-    "util:repair-program-drift": "ts-node -r tsconfig-paths/register src/scripts/repair-program-drift.ts"
+    "util:repair-program-drift": "ts-node -r tsconfig-paths/register src/scripts/repair-program-drift.ts",
+    "util:repair-academic-sessions": "ts-node -r tsconfig-paths/register src/scripts/repair-academic-sessions.ts"
   },
   "keywords": [],
   "author": "",

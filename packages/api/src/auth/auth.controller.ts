@@ -36,6 +36,31 @@ export class AuthController {
         return this.authService.login(loginDto);
     }
 
+    @Post('reapply')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Create a new application for a new intake' })
+    @ApiResponse({ status: 200, description: 'New application created' })
+    async reapply(@Request() req) {
+        return this.authService.reapplyApplication(req.user._id);
+    }
+
+    @Post('apply')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Apply for a specific intake with chosen program' })
+    @ApiResponse({ status: 200, description: 'New application created' })
+    async apply(@Request() req, @Body() body: { sessionId: string; programId: string }) {
+        return this.authService.applyForIntake(req.user._id, body.sessionId, body.programId);
+    }
+
+    @Get('open-sessions')
+    @ApiOperation({ summary: 'Get academic sessions open for new applications' })
+    @ApiResponse({ status: 200, description: 'Open sessions retrieved' })
+    async getOpenSessions() {
+        return this.authService.getOpenSessions();
+    }
+
     @Get('application/:id')
     @ApiOperation({ summary: 'Get application details' })
     @ApiResponse({ status: 200, description: 'Application details retrieved' })

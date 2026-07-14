@@ -10,7 +10,7 @@ export default {
   setup() {
     const authStore = useAuthStore();
     return {
-      authStore
+      authStore,
     };
   },
   methods: {
@@ -26,25 +26,25 @@ export default {
       });
 
       if (result.isConfirmed) {
-          logger.info("User confirmed logout");
-          await this.authStore.logout();
+        logger.info("User confirmed logout");
+        await this.authStore.logout();
 
-          this.$router.push({ name: "Login" }).then(() => {
-            // Complete the logout process after navigation
-            this.authStore.completeLogout();
-          });
+        this.$router.push({ name: "Login" }).then(() => {
+          // Complete the logout process after navigation
+          this.authStore.completeLogout();
+        });
 
-          Swal.fire({
-            toast: true,
-            position: "top-end",
-            icon: "success",
-            title: "Logged out successfully.",
-            showConfirmButton: false,
-            timer: 2000,
-          });
-        }
-    }
-  }
+        Swal.fire({
+          toast: true,
+          position: "top-end",
+          icon: "success",
+          title: "Logged out successfully.",
+          showConfirmButton: false,
+          timer: 2000,
+        });
+      }
+    },
+  },
 };
 </script>
 
@@ -54,7 +54,9 @@ export default {
   >
     <div class="text-center my-4">
       <!-- <BrandLogo /> -->
-      <img src="@shared/assets/logo.png" alt="Logo" width="70" class="" />
+      <router-link to="/">
+        <img src="@shared/assets/logo.png" alt="Logo" width="70" class="" />
+      </router-link>
     </div>
     <nav class="nav flex-column">
       <router-link

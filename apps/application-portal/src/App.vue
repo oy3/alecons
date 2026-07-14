@@ -156,7 +156,7 @@ export default {
   },
   computed: {
     showLayout() {
-      const hideLayoutRoutes = ["/", "/register"];
+      const hideLayoutRoutes = ["/", "/register", "/my-applications"];
       return !hideLayoutRoutes.includes(this.$route.path);
     }
   },

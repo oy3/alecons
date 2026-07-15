@@ -98,15 +98,16 @@ export default {
     watch(() => route.path, (newPath, oldPath) => {
       if (newPath !== oldPath && authStore.isAuthenticated) {
         // Prioritize critical pages that always need fresh data
-        const highPriorityRoutes = ['/dashboard', '/payment', '/settings'];
-        const normalPriorityRoutes = ['/application-form'];
-        
-        if (highPriorityRoutes.includes(newPath)) {
+        const isDashboard = newPath.endsWith('/dashboard');
+        const isPayment = newPath.endsWith('/payment');
+        const isSettings = newPath === '/settings';
+        const isApplicationForm = newPath.endsWith('/application-form');
+
+        if (isDashboard || isPayment || isSettings) {
           refreshUserData('route-change', 'high');
-        } else if (normalPriorityRoutes.includes(newPath)) {
+        } else if (isApplicationForm) {
           refreshUserData('route-change', 'normal');
         }
-        // For other routes, rely on existing fresh data or periodic refresh
       }
     });
 
@@ -156,7 +157,7 @@ export default {
   },
   computed: {
     showLayout() {
-      const hideLayoutRoutes = ["/", "/register"];
+      const hideLayoutRoutes = ["/", "/register", "/my-applications", "/settings"];
       return !hideLayoutRoutes.includes(this.$route.path);
     }
   },
@@ -165,15 +166,15 @@ export default {
 </script>
 
 <template>
-  <div class="d-flex vh-100">
+  <div class="app-shell d-flex min-vh-100">
     <!-- Sidebar (Desktop) -->
     <Sidebar v-if="showLayout" />
 
     <!-- Main Content -->
-    <main class="flex-grow-1 bg-white d-flex flex-column min-vh-100">
+    <main class="app-main flex-grow-1 bg-white d-flex flex-column min-vh-100">
       <!-- Navbar -->
       <Navbar v-if="showLayout" />
-      <div class="flex-grow-1 overflow-auto">
+      <div class="app-content flex-grow-1 overflow-y-auto overflow-x-hidden">
         <RouterView v-slot="{ Component }">
           <component :is="Component" />
         </RouterView>
@@ -186,4 +187,19 @@ export default {
 </template>
 
 <style>
+.app-shell {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.app-main,
+.app-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.app-main {
+  width: 0;
+}
 </style>

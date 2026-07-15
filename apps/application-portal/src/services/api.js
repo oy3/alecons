@@ -256,13 +256,18 @@ class ApiService {
         return this.makeRequest('/programs/modes');
     }
 
-    async getPrograms() {
-        return this.makeRequest('/programs');
+    async getPrograms(params = {}) {
+        const query = new URLSearchParams(params).toString();
+        return this.makeRequest(`/programs${query ? '?' + query : ''}`);
+    }
+
+    async getOpenSessions() {
+        return this.makeRequest('/auth/open-sessions');
     }
 
     // Application methods (for future use)
     async getApplication(id) {
-        return this.makeRequest(`/applications/${id}`);
+        return this.makeRequest(`/auth/application/${id}`);
     }
 
     async updateApplication(id, data) {

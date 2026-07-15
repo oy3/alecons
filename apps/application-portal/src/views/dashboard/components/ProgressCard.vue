@@ -14,6 +14,7 @@ export default {
         variant: "btn-acon-secondary",
       }),
     },
+    locked: { type: Boolean, default: false },
   },
   computed: {
     progressPercent() {
@@ -44,7 +45,7 @@ export default {
       <h5 class="card-title mb-4">Your Progress</h5>
 
       <p class="mb-4">
-        <span class="acon-text-primary fw-bold">Hi {{ userName }}</span
+        <span class="acon-text-primary fw-bold">Hi  <span class="text-capitalize">{{ userName }}</span></span
         >, You have completed {{ progressPercent.toFixed(0) }}% of your
         application process. Keep going.
       </p>
@@ -89,7 +90,7 @@ export default {
       </div>
 
       <button
-        v-if="!resumeConfig.disabled"
+        v-if="!resumeConfig.disabled && !locked"
         @click="handleResumeClick"
         :class="[
           'btn',
@@ -104,7 +105,7 @@ export default {
       </button>
 
       <button
-        v-else
+        v-else-if="!locked"
         :disabled="resumeConfig.disabled"
         :class="[
           'btn',

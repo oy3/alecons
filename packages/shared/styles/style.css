@@ -156,6 +156,10 @@ button:focus-visible {
   --bs-btn-active-color: #fff;
   --bs-btn-active-bg: #a85a45;
   --bs-btn-active-border-color: #a85a45;
+  --bs-btn-disabled-color: #fff;
+  --bs-btn-disabled-bg: var(--acon-secondary);
+  --bs-btn-disabled-border-color: var(--acon-secondary);
+  --bs-btn-disabled-opacity: 0.65;
 }
 
 .btn-outline-acon-primary {

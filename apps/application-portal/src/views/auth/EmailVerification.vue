@@ -34,6 +34,10 @@ export default {
     }
   },
   methods: {
+    goToApplication() {
+      const applicationId = this.authStore.applications[0]?.id;
+      this.$router.push(applicationId ? `/applications/${applicationId}/dashboard` : '/my-applications');
+    },
     async verifyEmail() {
       try {
         this.verifying = true;
@@ -64,7 +68,7 @@ export default {
           });
           
           // Redirect to dashboard
-          this.$router.push('/dashboard');
+          this.goToApplication();
           
         } else {
           throw new Error(response.message || 'Verification failed');
@@ -164,7 +168,7 @@ export default {
               </p>
               <button 
                 class="btn acon-btn-primary" 
-                @click="$router.push('/dashboard')"
+                @click="goToApplication"
               >
                 <i class="bi bi-arrow-right me-2"></i>Go to Dashboard
               </button>

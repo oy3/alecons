@@ -25,6 +25,7 @@ import { User, UserDocument } from '../schemas/user.schema';
 import { resolveProgramSelection } from '../utils/program-relation.util';
 
 interface UploadFileDto {
+    applicationId: string;
     fileType: 'profile_picture' | 'olevel_result' | 'reference_letter';
     sittingIndex?: number; // For O'level results
     referenceIndex?: number; // For reference letters
@@ -129,8 +130,14 @@ export class ApplicationUploadController {
                 hasBuffer: !!file.buffer
             });
 
-            // Check if user already has an application to get application number
-            let application = await this.applicationModel.findOne({ userId: new Types.ObjectId(userId) });
+            if (!Types.ObjectId.isValid(uploadData.applicationId)) {
+                throw new BadRequestException('Invalid application ID');
+            }
+
+            const application = await this.applicationModel.findOne({
+                _id: new Types.ObjectId(uploadData.applicationId),
+                userId: new Types.ObjectId(userId),
+            });
             const applicationNumber = application ? application.applicationNumber : null;
 
             if (!applicationNumber) {
@@ -200,6 +207,7 @@ export class ApplicationUploadController {
     @Post('submit-application')
     async submitApplication(
         @Body() applicationData: {
+            applicationId: string;
             // Application form data
             programId: string;
             programTypeId?: string;
@@ -290,8 +298,14 @@ export class ApplicationUploadController {
         try {
             const userId = req.user._id; // Keep as ObjectId
 
-            // Always update existing application (created during registration)
-            let application = await this.applicationModel.findOne({ userId });
+            if (!Types.ObjectId.isValid(applicationData.applicationId)) {
+                throw new BadRequestException('Invalid application ID');
+            }
+
+            const application = await this.applicationModel.findOne({
+                _id: new Types.ObjectId(applicationData.applicationId),
+                userId,
+            });
 
             if (!application) {
                 throw new HttpException(
@@ -644,7 +658,7 @@ export class ApplicationUploadController {
 
     @Post('remove-document')
     async removeDocument(
-        @Body() removeData: { applicationId?: string; documentType: string; documentUrl: string },
+        @Body() removeData: { applicationId: string; documentType: string; documentUrl: string },
         @Request() req
     ) {
         try {
@@ -657,25 +671,15 @@ export class ApplicationUploadController {
                 documentUrl: removeData.documentUrl
             });
 
-            // Get user's application - try by applicationId first, then fallback to userId
-            let application;
             const userObjectId = new Types.ObjectId(userId);
-
-            if (removeData.applicationId) {
-                this.logger.log('Searching for application by ID:', {
-                    applicationId: removeData.applicationId,
-                    userId: userId
-                });
-
-                application = await this.applicationModel.findOne({
-                    _id: removeData.applicationId,
-                    userId: userObjectId  // Convert to ObjectId for proper comparison
-                });
-            } else {
-                this.logger.log('Searching for application by userId:', { userId });
-                // Fallback to old method for backward compatibility
-                application = await this.applicationModel.findOne({ userId: userObjectId });
+            if (!Types.ObjectId.isValid(removeData.applicationId)) {
+                throw new BadRequestException('Invalid application ID');
             }
+
+            const application = await this.applicationModel.findOne({
+                _id: new Types.ObjectId(removeData.applicationId),
+                userId: userObjectId,
+            });
 
             this.logger.log('Application search result:', {
                 found: !!application,
@@ -695,11 +699,7 @@ export class ApplicationUploadController {
                 });
 
                 // Return more specific error message
-                const errorMessage = removeData.applicationId ?
-                    'Application not found or you do not have permission to modify it' :
-                    'No application found for this user. Please save your application first.';
-
-                throw new BadRequestException(errorMessage);
+                throw new BadRequestException('Application not found or you do not have permission to modify it');
             }
 
             // Extract key from URL for Spaces deletion

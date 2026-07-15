@@ -1,32 +1,45 @@
 <script>
 export default {
   name: "TodoItem",
-  props: { item: Object },
+  props: {
+    item: { type: Object, required: true },
+  },
+  computed: {
+    statusClass() {
+      if (this.item.status === "completed") {
+        return "bg-light border-success-subtle";
+      }
+      if (this.item.status === "active" && this.item.paymentStage) {
+        return "bg-warning-subtle border-warning-subtle";
+      }
+      if (this.item.status === "active") {
+        return "bg-primary-subtle border-primary-subtle";
+      }
+      return "bg-body-tertiary border-light";
+    },
+    statusIcon() {
+      if (this.item.status === "completed") return "bi-check-circle-fill text-success";
+      if (this.item.status === "active" && this.item.paymentStage) {
+        return "bi-credit-card text-warning-emphasis";
+      }
+      if (this.item.status === "active") return "bi-play-circle-fill text-primary";
+      return "bi-circle text-secondary";
+    },
+  },
 };
 </script>
 
 <template>
-  <div
-    class="card flex-shrink-0 border-0 p-0"
-    style="min-width: 220px; max-width: 220px"
-    :class="{
-      'completed-stage': item.status === 'completed',
-      'active-stage text-primary-emphasis bg-primary-subtle shadow-sm':
-        item.status === 'active',
-      'inactive-stage text-muted': item.status === 'inactive',
-      'payment-stage': item.paymentStage && item.status === 'active',
-    }"
+  <article
+    class="todo-item card p-0 border shadow-sm"
+    :class="statusClass"
+    role="listitem"
+    :aria-current="item.status === 'active' ? 'step' : undefined"
   >
-    <div class="card-body">
-      <!-- <h6 class="card-title mb-0" :class="{
-          'text-decoration-line-through text-muted':
-            item.status === 'completed',
-        }">
-          {{ item.title }}
-        </h6> -->
-      <div class="d-flex justify-content-between align-items-start mb-2">
+    <div class="card-body d-flex flex-column p-3">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
         <h6
-          class="card-title mb-0"
+          class="card-title mb-0 lh-sm"
           :class="{
             'text-decoration-line-through text-muted':
               item.status === 'completed',
@@ -34,71 +47,37 @@ export default {
         >
           {{ item.title }}
         </h6>
-
-        <div class="ms-2">
-          <i
-            v-if="item.status === 'completed'"
-            class="bi bi-check-circle-fill text-success"
-          ></i>
-          <i
-            v-else-if="item.status === 'active' && item.paymentStage"
-            class="bi bi-credit-card text-primary-emphasis"
-          ></i>
-          <i
-            v-else-if="item.status === 'active'"
-            class="bi bi-play-circle-fill text-primary"
-          ></i>
-          <i v-else class="bi bi-circle text-muted"></i>
-        </div>
+        <i :class="['bi', statusIcon, 'fs-5', 'flex-shrink-0']" aria-hidden="true"></i>
       </div>
 
       <p
-        class="card-text small mb-0"
+        class="card-text small mb-0 text-body-secondary"
         :class="{
-          'text-decoration-line-through text-muted':
-            item.status === 'completed',
+          'text-decoration-line-through': item.status === 'completed',
         }"
       >
         {{ item.description }}
       </p>
-
-      <!-- Stage indicator -->
-      <!-- <div class="mt-2">
-        <small class="badge bg-light text-dark">Stage {{ item.stage }}</small>
-      </div> -->
     </div>
-  </div>
+  </article>
 </template>
 
 <style scoped>
-/* completed */
-.completed-stage {
-  background-color: #f8f9fa;
-  /* Bootstrap light bg */
-  opacity: 0.6;
-  cursor: not-allowed;
+.todo-item {
+  flex: 0 0 13.75rem !important;
+  width: 13.75rem;
+  min-width: 13.75rem;
+  max-width: 13.75rem;
+  min-height: 9.5rem;
+  scroll-snap-align: start;
 }
 
-/* active */
-.active-stage {
-  /* border-left: 4px solid #0d6efd; */
-  background-color: rgba(13, 110, 253, 0.05);
-}
-
-/* Payment stage highlighting */
-.payment-stage {
-  /* border-left: 4px solid #ffc107; */
-  background-color: rgba(255, 193, 7, 0.1);
-}
-
-/* inactive */
-.inactive-stage {
-  background-color: #e9ecef;
-  cursor: pointer;
-  transition: background-color 0.2s ease-in-out;
-}
-
-.inactive-stage:hover {
-  background-color: #dee2e6;
+@media (max-width: 575.98px) {
+  .todo-item {
+    flex-basis: 13.75rem !important;
+    width: 13.75rem;
+    min-width: 13.75rem;
+    max-width: 13.75rem;
+  }
 }
 </style>

@@ -110,7 +110,9 @@ export class StudentService {
                         role: (student.userId as any).role,
                         isActive: (student.userId as any).isActive,
                         isEmailVerified: (student.userId as any).isEmailVerified,
-                        fullName: (student.userId as any).fullName
+                        fullName: (student.userId as any).fullName,
+                        dob: (student.userId as any).dob,
+                        gender: (student.userId as any).gender,
                     } : null,
                     application: student.applicationId ? {
                         id: (student.applicationId as any)._id,

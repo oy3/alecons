@@ -6,7 +6,7 @@ import { logger } from '@shared/utils/logger';
 export const useAuthStore = defineStore('auth', () => {
     // State
     const user = ref(null);
-    const application = ref(null);
+    const applications = ref([]);
     const token = ref(null);
     const isLoading = ref(false);
     const isInitialized = ref(false);
@@ -14,10 +14,8 @@ export const useAuthStore = defineStore('auth', () => {
 
     // Getters
     const isAuthenticated = computed(() => !!user.value && !!token.value);
-    const currentStage = computed(() => application.value?.currentStage || 0);
     // Note: isApplicant allows both 'applicant' and 'student' roles to access the application portal
     const isApplicant = computed(() => user.value?.role === 'applicant' || user.value?.role === 'student');
-    const isApplicationExpired = computed(() => application.value?.status === 'expired');
 
     // Actions
     async function initialize() {
@@ -100,14 +98,6 @@ export const useAuthStore = defineStore('auth', () => {
                     return { success: false, error: errorMsg };
                 }
 
-                // Block expired applications before storing any session data
-                if (loginData.application?.status === 'expired') {
-                    logger.warn('Login blocked: application is expired', {
-                        applicationNumber: loginData.application?.applicationNumber,
-                    });
-                    return { success: false, error: 'APPLICATION_EXPIRED' };
-                }
-
                 // Set token
                 const accessToken = loginData.access_token;
                 token.value = accessToken;
@@ -115,12 +105,12 @@ export const useAuthStore = defineStore('auth', () => {
 
                 // Set user data
                 user.value = loginData.user;
-                application.value = loginData.application || null;
+                applications.value = loginData.applications || [];
 
                 logger.info('Login successful:', {
                     userId: user.value.id,
                     email: user.value.email,
-                    applicationNumber: application.value?.applicationNumber
+                    applicationCount: applications.value.length,
                 });
 
                 return { success: true };
@@ -155,12 +145,11 @@ export const useAuthStore = defineStore('auth', () => {
 
                 // Set user data
                 user.value = response.data.user;
-                application.value = response.data.application || null;
+                applications.value = response.data.applications || (response.data.application ? [response.data.application] : []);
 
                 logger.info('Registration successful:', {
                     userId: user.value.id,
                     email: user.value.email,
-                    applicationNumber: application.value?.applicationNumber
                 });
 
                 return { success: true };
@@ -194,13 +183,12 @@ export const useAuthStore = defineStore('auth', () => {
 
             if (profileResponse.success) {
                 user.value = profileResponse.data.user;
-                application.value = profileResponse.data.application || null;
+                applications.value = profileResponse.data.applications || [];
 
                 logger.info('User data refreshed:', {
                     userId: user.value.id,
                     email: user.value.email,
-                    currentStage: application.value?.currentStage,
-                    applicationNumber: application.value?.applicationNumber
+                    applicationCount: applications.value.length,
                 });
             } else {
                 const errorMsg = profileResponse.error || 'Failed to fetch user data';
@@ -253,7 +241,7 @@ export const useAuthStore = defineStore('auth', () => {
 
             // Clear state
             user.value = null;
-            application.value = null;
+            applications.value = [];
             token.value = null;
 
             // Clear localStorage
@@ -278,11 +266,8 @@ export const useAuthStore = defineStore('auth', () => {
     function completeLogout() {
         isLoggingOut.value = false;
     }
-    async function updateApplication(applicationData) {
-        if (application.value) {
-            application.value = { ...application.value, ...applicationData };
-            logger.info('Application data updated:', applicationData);
-        }
+    function getApplicationFromList(id) {
+        return applications.value.find(a => a.id === id || a.id?.toString() === id) || null;
     }
 
     // Helper to handle authentication errors from API calls
@@ -294,7 +279,7 @@ export const useAuthStore = defineStore('auth', () => {
     return {
         // State
         user,
-        application,
+        applications,
         token,
         isLoading,
         isInitialized,
@@ -302,9 +287,7 @@ export const useAuthStore = defineStore('auth', () => {
 
         // Getters
         isAuthenticated,
-        currentStage,
         isApplicant,
-        isApplicationExpired,
 
         // Actions
         initialize,
@@ -315,7 +298,7 @@ export const useAuthStore = defineStore('auth', () => {
         fetchUserData,
         refreshUserData,
         forceRefreshUserData,
-        updateApplication,
+        getApplicationFromList,
         handleAuthError
     };
 });

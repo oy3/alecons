@@ -591,8 +591,29 @@ export class PaymentsService {
         return availability;
     }
 
-    private async resolveLinkedApplication(userId: string | Types.ObjectId) {
+    private async resolveLinkedApplication(userId: string | Types.ObjectId, applicationId?: string) {
         const userObjectId = typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
+
+        if (applicationId) {
+            if (!Types.ObjectId.isValid(applicationId)) {
+                throw new Error('Invalid application ID');
+            }
+
+            const selectedApplication = await this.applicationModel
+                .findOne({ _id: new Types.ObjectId(applicationId), userId: userObjectId })
+                .select('_id applicationNumber entryAcademicSession currentStage')
+                .lean();
+
+            if (!selectedApplication) {
+                throw new Error('Application not found or access denied');
+            }
+
+            return {
+                applicationId: selectedApplication._id as Types.ObjectId,
+                applicationNumber: selectedApplication.applicationNumber,
+                academicSessionId: selectedApplication.entryAcademicSession as Types.ObjectId,
+            };
+        }
 
         const directApplication = await this.applicationModel
             .findOne({ userId: userObjectId })
@@ -728,7 +749,7 @@ export class PaymentsService {
         return selectedYear >= entryYear;
     }
 
-    async getStudentPaymentsSummary(userId: string, context: 'application-portal' | 'student-portal' = 'application-portal'): Promise<StudentPaymentsSummary> {
+    async getStudentPaymentsSummary(userId: string, context: 'application-portal' | 'student-portal' = 'application-portal', applicationId?: string): Promise<StudentPaymentsSummary> {
         const userObjectId = new Types.ObjectId(userId);
 
         // Get user to determine their role
@@ -738,7 +759,7 @@ export class PaymentsService {
         }
 
         const userAudiences = this.getUserAudiencesForContext(user.role, context);
-        const linkedApplication = await this.resolveLinkedApplication(userId);
+        const linkedApplication = await this.resolveLinkedApplication(userId, applicationId);
         const availableMethods = await this.getPaymentMethodAvailability(
             context,
             linkedApplication.academicSessionId,
@@ -765,13 +786,32 @@ export class PaymentsService {
         );
 
         // Get student's successful payments and pending manual transfers
-        const studentPayments = await this.studentPaymentModel
-            .find({
+        const studentPaymentsQuery: any = {
                 userId: userObjectId,
                 status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING, PaymentStatus.REJECTED] }
-            })
+            };
+        if (applicationId && context === 'application-portal') {
+            studentPaymentsQuery.applicationId = linkedApplication.applicationId;
+        }
+        const studentPayments = await this.studentPaymentModel
+            .find(studentPaymentsQuery)
             .populate('paymentId')
             .lean();
+
+        if (context === 'application-portal' && applicationId) {
+            for (const studentPayment of studentPayments as any[]) {
+                if (studentPayment.status !== PaymentStatus.SUCCESSFUL) continue;
+
+                const successfulPaymentId = studentPayment.paymentId?._id || studentPayment.paymentId;
+                if (!successfulPaymentId) continue;
+
+                await this.updateApplicationStageAfterPayment(
+                    userObjectId,
+                    successfulPaymentId as Types.ObjectId,
+                    linkedApplication.applicationId,
+                );
+            }
+        }
 
         // Separate paid and unpaid fees
         const paidFees: PaymentSummary[] = [];
@@ -900,7 +940,7 @@ export class PaymentsService {
         };
     }
 
-    async initializePayment(userId: string, paymentId: string, email: string): Promise<PaystackInitializeResponse> {
+    async initializePayment(userId: string, paymentId: string, email: string, applicationId?: string): Promise<PaystackInitializeResponse> {
         try {
             this.logger.log('initializePayment called with:', { userId, paymentId, email });
 
@@ -920,9 +960,11 @@ export class PaymentsService {
             }
 
             // Check if student has already made a successful payment for this charge
+            const linkedApplication = await this.resolveLinkedApplication(userId, applicationId);
             const existingSuccessfulPayment = await this.studentPaymentModel.findOne({
                 userId: new Types.ObjectId(userId),
                 paymentId: new Types.ObjectId(paymentId),
+                applicationId: linkedApplication.applicationId,
                 status: PaymentStatus.SUCCESSFUL
             });
 
@@ -930,7 +972,6 @@ export class PaymentsService {
                 throw new Error('Payment has already been completed successfully for this charge');
             }
 
-            const linkedApplication = await this.resolveLinkedApplication(userId);
             const paystackDestinationAccount = await this.resolveDestinationForPayment(
                 payment,
                 PaymentDestinationChannelType.PAYSTACK,
@@ -945,6 +986,7 @@ export class PaymentsService {
             let existingAttempt = await this.studentPaymentModel.findOne({
                 userId: new Types.ObjectId(userId),
                 paymentId: new Types.ObjectId(paymentId),
+                applicationId: linkedApplication.applicationId,
                 status: { $in: [PaymentStatus.PENDING, PaymentStatus.FAILED] },
                 $or: [
                     { method: PaymentMethod.PAYSTACK },
@@ -1164,7 +1206,6 @@ export class PaymentsService {
     private async applyPaystackTransactionState(studentPayment: any, transaction: any): Promise<any> {
         const paystackStatus = this.getPaystackStatus(transaction);
         const now = new Date();
-        const previousStatus = studentPayment.status;
 
         studentPayment.lastVerifiedAt = now;
         studentPayment.verificationAttempts = (studentPayment.verificationAttempts || 0) + 1;
@@ -1198,11 +1239,12 @@ export class PaymentsService {
 
         await studentPayment.save();
 
-        if (
-            previousStatus !== PaymentStatus.SUCCESSFUL
-            && studentPayment.status === PaymentStatus.SUCCESSFUL
-        ) {
-            await this.updateApplicationStageAfterPayment(studentPayment.userId, studentPayment.paymentId);
+        if (studentPayment.status === PaymentStatus.SUCCESSFUL) {
+            await this.updateApplicationStageAfterPayment(
+                studentPayment.userId,
+                studentPayment.paymentId,
+                studentPayment.applicationId,
+            );
         }
 
         return {
@@ -1395,7 +1437,11 @@ export class PaymentsService {
     /**
      * Update application stage after successful payment
      */
-    private async updateApplicationStageAfterPayment(userId: Types.ObjectId, paymentId: Types.ObjectId): Promise<void> {
+    private async updateApplicationStageAfterPayment(
+        userId: Types.ObjectId,
+        paymentId: Types.ObjectId,
+        applicationId?: Types.ObjectId,
+    ): Promise<void> {
         try {
             // Get payment details to determine what stage to advance to
             const payment = await this.paymentModel.findById(paymentId);
@@ -1404,10 +1450,14 @@ export class PaymentsService {
                 return;
             }
 
-            // Get user's application
-            const application = await this.applicationModel.findOne({ userId });
+            const application = applicationId
+                ? await this.applicationModel.findOne({ _id: applicationId, userId })
+                : await this.applicationModel.findOne({ userId });
             if (!application) {
-                this.logger.log('Application not found for user:', userId);
+                this.logger.log('Application not found for payment stage progression:', {
+                    userId: userId.toString(),
+                    applicationId: applicationId?.toString(),
+                });
                 return;
             }
 
@@ -1422,16 +1472,20 @@ export class PaymentsService {
 
             const nextStage = stageProgressions[payment.paymentCode];
 
+            if (payment.paymentCode === 'schoolFee') {
+                const user = await this.userModel.findById(userId).select('role').lean();
+                if (application.currentStage < 10 || user?.role !== UserRole.STUDENT) {
+                    await this.completeApplicationProcess(userId, application);
+                }
+                return;
+            }
+
             if (nextStage && nextStage > application.currentStage) {
                 application.currentStage = nextStage;
                 await application.save();
 
-                this.logger.log(`Advanced application stage to ${nextStage} after ${payment.paymentCode} payment for user ${userId}`);
+                this.logger.log(`Advanced application ${application._id} to stage ${nextStage} after ${payment.paymentCode} payment`);
 
-                // If this is the final payment (school fee), trigger application completion
-                if (payment.paymentCode === 'schoolFee' && nextStage === 10) {
-                    await this.completeApplicationProcess(userId, application);
-                }
             } else {
                 this.logger.log(`No stage progression needed for payment ${payment.paymentCode}, current stage: ${application.currentStage}`);
             }
@@ -1525,16 +1579,10 @@ export class PaymentsService {
                 throw new Error('Academic session not found for matriculation generation');
             }
 
-            const matriculationNumber = await this.matriculationService.generateMatriculationNumber(
+            const matriculationNumber = fullApplication.matriculationNumber || await this.matriculationService.generateMatriculationNumber(
                 programId.toString(),
                 academicSessionId.toString(),
             );
-
-            // Update application with matriculation number and completion status
-            fullApplication.matriculationNumber = matriculationNumber;
-            fullApplication.status = ApplicationStatus.COMPLETED;
-            fullApplication.currentStage = 10; // Set to final stage
-            await fullApplication.save();
 
             // Extract the ObjectId from the populated entryAcademicSession
             const admissionYear = new Date().getFullYear();
@@ -1621,6 +1669,12 @@ export class PaymentsService {
                 this.logger.error('❌ Error updating user role:', userError);
                 throw userError;
             }
+
+            // Only mark the application complete after its student record and role are ready.
+            fullApplication.matriculationNumber = matriculationNumber;
+            fullApplication.status = ApplicationStatus.COMPLETED;
+            fullApplication.currentStage = 10;
+            await fullApplication.save();
 
             // Send matriculation email
             const studentPortalUrl = process.env.STUDENT_PORTAL_URL || 'http://localhost:3000/student-portal';
@@ -3106,6 +3160,7 @@ export class PaymentsService {
         options: {
             context: 'application-portal' | 'student-portal';
             academicSessionId?: string;
+            applicationId?: string;
         },
     ) {
         if (!file) {
@@ -3151,7 +3206,7 @@ export class PaymentsService {
             await this.assertAccommodationPaymentEligibility(userId, payment);
         }
 
-        const linkedApplication = await this.resolveLinkedApplication(userId);
+        const linkedApplication = await this.resolveLinkedApplication(userId, options.applicationId);
         if (!linkedApplication.applicationNumber) {
             throw new Error('Application record not found for receipt storage');
         }
@@ -3174,6 +3229,9 @@ export class PaymentsService {
             paymentId: new Types.ObjectId(paymentId),
             status: PaymentStatus.SUCCESSFUL,
         };
+        if (options.applicationId && options.context === 'application-portal') {
+            successQuery.applicationId = linkedApplication.applicationId;
+        }
 
         if (options.academicSessionId) {
             successQuery.academicSessionId = new Types.ObjectId(options.academicSessionId);
@@ -3190,6 +3248,9 @@ export class PaymentsService {
             method: PaymentMethod.MANUAL_TRANSFER,
             status: PaymentStatus.PENDING,
         };
+        if (options.applicationId && options.context === 'application-portal') {
+            pendingManualPaymentQuery.applicationId = linkedApplication.applicationId;
+        }
 
         if (options.academicSessionId) {
             pendingManualPaymentQuery.academicSessionId = new Types.ObjectId(options.academicSessionId);
@@ -3283,7 +3344,11 @@ export class PaymentsService {
         studentPayment.verifiedAt = new Date();
 
         await studentPayment.save();
-        await this.updateApplicationStageAfterPayment(studentPayment.userId, studentPayment.paymentId);
+        await this.updateApplicationStageAfterPayment(
+            studentPayment.userId,
+            studentPayment.paymentId,
+            studentPayment.applicationId,
+        );
 
         return {
             id: studentPayment._id.toString(),

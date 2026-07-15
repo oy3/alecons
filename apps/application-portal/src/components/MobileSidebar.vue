@@ -1,6 +1,7 @@
 <script>
 import BrandLogo from "./BrandLogo.vue";
 import { useAuthStore } from "../stores/auth.js";
+import { useRoute } from "vue-router";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
 
@@ -9,43 +10,36 @@ export default {
   components: { BrandLogo },
   setup() {
     const authStore = useAuthStore();
+    const route = useRoute();
     return {
       authStore,
+      route,
     };
+  },
+  computed: {
+    applicationId() {
+      return this.route.params.id;
+    },
   },
   methods: {
     navigateAndClose(routePath, event) {
-      // Prevent default anchor link behavior
-      if (event) {
-        event.preventDefault();
-      }
-
-      // Navigate to the route
-      this.$router
-        .push(routePath)
-        .then(() => {
-          // Close the offcanvas after successful navigation
-          this.closeOffcanvas();
-        })
+      if (event) event.preventDefault();
+      this.$router.push(routePath)
+        .then(() => this.closeOffcanvas())
         .catch((error) => {
-          // Handle navigation errors (e.g., if already on the same route)
           if (error.name !== "NavigationDuplicated") {
             logger.error("Navigation error:", error);
           } else {
-            // Even if we're already on the route, still close the offcanvas
             this.closeOffcanvas();
           }
         });
     },
 
     closeOffcanvas() {
-      // Use Bootstrap's data-bs-dismiss by programmatically clicking the close button
       const offcanvasElement = document.getElementById("mobileSidebar");
       if (offcanvasElement) {
         const closeButton = offcanvasElement.querySelector(".btn-close");
-        if (closeButton) {
-          closeButton.click();
-        }
+        if (closeButton) closeButton.click();
       }
     },
 
@@ -63,13 +57,10 @@ export default {
       if (result.isConfirmed) {
         logger.info("User confirmed logout");
         await this.authStore.logout();
-
         this.$router.push({ name: "Login" }).then(() => {
-          // Complete the logout process after navigation
           this.authStore.completeLogout();
           this.closeOffcanvas();
         });
-
         Swal.fire({
           toast: true,
           position: "top-end",
@@ -90,10 +81,9 @@ export default {
     id="mobileSidebar"
   >
     <div class="offcanvas-header">
-      <!-- <BrandLogo /> -->
-      <!-- <div class="text-center my-4"> -->
-      <img src="@shared/assets/logo.png" alt="Logo" width="70" class="" />
-      <!-- </div> -->
+      <router-link to="/my-applications">
+        <img src="@shared/assets/logo.png" alt="Logo" width="70" class="" />
+      </router-link>
       <button
         type="button"
         class="btn-close btn-close-white"
@@ -103,7 +93,8 @@ export default {
     <div class="offcanvas-body">
       <nav class="nav flex-column">
         <router-link
-          to="/dashboard"
+          v-if="applicationId"
+          :to="`/applications/${applicationId}/dashboard`"
           class="nav-link text-white py-4"
           active-class="active"
           @click="closeOffcanvas"
@@ -111,21 +102,22 @@ export default {
           <i class="bi bi-house h5 me-2"></i> Home
         </router-link>
         <router-link
-          to="/payment"
+          v-if="applicationId"
+          :to="`/applications/${applicationId}/payment`"
           class="nav-link text-white py-4"
           active-class="active"
           @click="closeOffcanvas"
         >
           <i class="bi bi-credit-card h5 me-2"></i> Payments
         </router-link>
-        <router-link
+        <!-- <router-link
           to="/settings"
           class="nav-link text-white py-4"
           active-class="active"
           @click="closeOffcanvas"
         >
           <i class="bi bi-gear h5 me-2"></i> Settings
-        </router-link>
+        </router-link> -->
         <li
           @click="logout"
           class="nav-link text-white mt-auto py-4"

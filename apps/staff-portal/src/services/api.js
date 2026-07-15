@@ -386,6 +386,20 @@ class StaffApiService {
         })
     }
 
+    async repairAcademicSessions({ apply = false } = {}) {
+        return this.makeRequest('/admin/maintenance/repair-academic-sessions', {
+            method: 'POST',
+            body: JSON.stringify({ apply }),
+        })
+    }
+
+    async migrateUserDemographics({ apply = false } = {}) {
+        return this.makeRequest('/admin/maintenance/migrate-user-demographics', {
+            method: 'POST',
+            body: JSON.stringify({ apply }),
+        })
+    }
+
     async backfillPublicVerificationTokens() {
         return this.makeRequest('/admin/application-numbers/public-verification/backfill', {
             method: 'POST',

@@ -537,22 +537,28 @@ export default {
 
       <div class="col-md-7 form-container text-white text-md-dark">
         <div class="scrollable-content p-2 p-md-5">
-          <div ref="topSentinel" aria-hidden="true" style="height: 1px; pointer-events: none;"></div>
+          <div
+            ref="topSentinel"
+            aria-hidden="true"
+            style="height: 1px; pointer-events: none"
+          ></div>
           <div class="content-wrapper w-100">
             <div class="mt-md-0 mt-5">
-              <h2 class="mb-4 pt-md-0 pt-5 acon-text-primary page-title">
+              <h3 class="mb-4 pt-md-0 pt-5 acon-text-primary page-title">
                 Registration
-                <span v-if="currentAcademicSession"
-                  >for {{ currentAcademicSession?.sessionYear }} Session</span
-                >
-              </h2>
+                <span v-if="currentAcademicSession">
+                  for {{ currentAcademicSession?.title }} Admission
+                </span>
+              </h3>
 
               <div class="alert alert-warning mb-4 small">
-                <i class="bi bi-exclamation-triangle me-1"></i> Only direct entry JAMB candidates and graduates
-                from <b>Community Midwifery and Nursing</b> program should select <b>Full-Time (CM&N)</b> program mode during
-                registration. All other applicants should select the
-                <b>Full-Time</b> program mode. Please ensure you select the
-                correct program mode to avoid any issues with your application.
+                <i class="bi bi-exclamation-triangle me-1"></i> Only direct
+                entry JAMB candidates and graduates from
+                <b>Community Midwifery and Nursing</b> program should select
+                <b>Full-Time (CM&N)</b> program mode during registration. All
+                other applicants should select the <b>Full-Time</b> program
+                mode. Please ensure you select the correct program mode to avoid
+                any issues with your application.
               </div>
 
               <!-- Academic Session Info -->

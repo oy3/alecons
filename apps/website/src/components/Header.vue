@@ -6,7 +6,7 @@ export default {
   data() {
     return {
       announcement:
-        "Batch B Admissions for the 2026/2027 Academic Session open on July 15, 2026. Stay tuned!",
+        "Batch B Admissions for the 2026/2027 Academic Session are now open! Apply now to secure your place at ALECONS ",
     };
   },
   components: { Marquee },

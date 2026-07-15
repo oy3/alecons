@@ -26,17 +26,17 @@ export default {
 };
 </script>
 <template>
-    <div
-      class="container-fluid acon-bg-primary-dark overflow-hidden px-0 py-2 position-relative"
-    >
-      <div class="marquee text-white">
-        <div class="marquee-track d-flex" ref="track">
-          <span class="marquee-item h5">
-            {{ announcement }} <i class="bi bi-dot"></i
-          ></span>
-        </div>
+  <div
+    class="container-fluid acon-bg-primary-dark overflow-hidden px-0 py-2 position-relative"
+  >
+    <div class="marquee text-white">
+      <div class="marquee-track d-flex" ref="track">
+        <span class="marquee-item small">
+          {{ announcement }} <i class="bi bi-stars small mx-2"></i>
+        </span>
       </div>
     </div>
+  </div>
 </template>
 <style scoped>
 .marquee {
@@ -68,4 +68,5 @@ export default {
   to {
     transform: translateX(-50%);
   }
-}</style>
+}
+</style>

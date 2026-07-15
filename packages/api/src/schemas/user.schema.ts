@@ -40,6 +40,9 @@ export class User {
     @Prop()
     gender?: string;
 
+    @Prop()
+    profileImageUrl?: string;
+
     @Prop({ default: true })
     isActive: boolean;
 

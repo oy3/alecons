@@ -113,6 +113,7 @@ export class StudentService {
                         fullName: (student.userId as any).fullName,
                         dob: (student.userId as any).dob,
                         gender: (student.userId as any).gender,
+                        profileImageUrl: (student.userId as any).profileImageUrl,
                     } : null,
                     application: student.applicationId ? {
                         id: (student.applicationId as any)._id,

@@ -35,6 +35,7 @@ export const SPACES_CONFIG = {
     },
     FILE_PATHS: {
         APPLICATIONS: 'applications',
+        STUDENTS: 'students',
         TEMP: 'temp',
         PAYMENT_RECEIPTS: 'payment-receipts',
     },

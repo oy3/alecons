@@ -570,6 +570,7 @@ export class AuthService {
                 isActive: user.isActive,
                 dob: user.dob,
                 gender: user.gender,
+                profileImageUrl: user.profileImageUrl,
             },
             application: applicationData,
             applications: applicationsData,
@@ -719,6 +720,7 @@ export class AuthService {
                                 ...studentProfile.data?.user,
                                 dob: user.dob,
                                 gender: user.gender,
+                                profileImageUrl: user.profileImageUrl,
                             },
                             applications,
                         },
@@ -763,7 +765,8 @@ export class AuthService {
                         isEmailVerified: user.isEmailVerified,
                         fullName: user.fullName,
                         dob: user.dob,
-                        gender: user.gender
+                        gender: user.gender,
+                        profileImageUrl: user.profileImageUrl,
                     },
                     application: application || null,
                     applications: applications || []

@@ -94,7 +94,9 @@ export default {
               data-bs-toggle="dropdown" aria-expanded="false"> -->
           <img
             :src="
-              application?.profileImageUrl || 'https://placehold.co/40?text=IMG'
+              authStore.user?.profileImageUrl ||
+              application?.profileImageUrl ||
+              'https://placehold.co/40?text=IMG'
             "
             width="40"
             height="40"

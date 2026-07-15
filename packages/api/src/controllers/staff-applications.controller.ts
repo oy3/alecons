@@ -953,6 +953,11 @@ export class StaffApplicationsController {
                 otherName: this.normalizeString(updateData.personalInfo?.middleName),
                 lastName: this.normalizeString(updateData.personalInfo?.lastName),
                 phone: this.normalizeString(updateData.personalInfo?.phone),
+                dob: updateData.personalInfo?.dob ? new Date(updateData.personalInfo.dob) : undefined,
+                gender: this.normalizeString(updateData.personalInfo?.gender),
+                ...(profileUpdate.profileImageUrl && {
+                    profileImageUrl: profileUpdate.profileImageUrl,
+                }),
             });
 
             application.programId = resolvedProgram.programObjectId;
@@ -2592,6 +2597,24 @@ export class StaffApplicationsController {
                 academicSessionId.toString(),
             );
 
+            let studentProfileImageUrl: string | undefined;
+            if (application.profileImageUrl) {
+                try {
+                    const copiedProfileImage = await this.uploadService.copyProfileImageToStudentFolder(
+                        application.profileImageUrl,
+                        matriculationNumber,
+                    );
+                    studentProfileImageUrl = copiedProfileImage?.url;
+                } catch (error) {
+                    this.logger.error('Student profile image migration failed; manual matriculation can be retried:', {
+                        applicationId: applicationId.toString(),
+                        userId: userId.toString(),
+                        matriculationNumber,
+                        error: error.message,
+                    });
+                }
+            }
+
             // Update application
             application.matriculationNumber = matriculationNumber;
             application.status = ApplicationStatus.COMPLETED;
@@ -2635,7 +2658,7 @@ export class StaffApplicationsController {
                     currentSemester: 1,
                     cumulativeGPA: 0.0,
                     isActive: true,
-                    profileImageUrl: application.profileImageUrl // Copy profile image from application
+                    profileImageUrl: studentProfileImageUrl,
                 });
 
                 await newStudent.save();
@@ -2648,7 +2671,9 @@ export class StaffApplicationsController {
                 existingStudent.admissionYear = admissionYear;
                 existingStudent.academicSession = studentAcademicSessionId;
                 existingStudent.entryAcademicSession = studentAcademicSessionId;
-                existingStudent.profileImageUrl = application.profileImageUrl;
+                if (studentProfileImageUrl) {
+                    existingStudent.profileImageUrl = studentProfileImageUrl;
+                }
                 existingStudent.status = existingStudent.status || 'active';
                 existingStudent.currentLevel = existingStudent.currentLevel || 1;
                 existingStudent.currentSemester = existingStudent.currentSemester || 1;
@@ -2659,10 +2684,15 @@ export class StaffApplicationsController {
 
             // Update User role from APPLICANT to STUDENT
             const userRecord = await this.userModel.findById(userId);
+            if (userRecord && studentProfileImageUrl) {
+                userRecord.profileImageUrl = studentProfileImageUrl;
+            }
             if (userRecord && userRecord.role === UserRole.APPLICANT) {
                 userRecord.role = UserRole.STUDENT;
                 await userRecord.save();
                 this.logger.log('User role updated from APPLICANT to STUDENT:', userRecord._id);
+            } else if (userRecord && studentProfileImageUrl) {
+                await userRecord.save();
             } else if (userRecord) {
                 this.logger.log('User role already set to:', userRecord.role);
             }

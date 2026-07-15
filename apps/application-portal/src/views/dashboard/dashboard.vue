@@ -448,7 +448,9 @@ export default {
       <div class="col-md-4">
         <BiodataCard
           :profileImage="
-            application?.profileImageUrl || 'https://placehold.co/100?text=IMG'
+            user?.profileImageUrl ||
+            application?.profileImageUrl ||
+            'https://placehold.co/100?text=IMG'
           "
           :name="userDisplayName || ''"
           :appNo="application?.applicationNumber || 'N/A'"

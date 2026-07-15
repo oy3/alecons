@@ -416,11 +416,6 @@ export class ApplicationUploadController {
                 // Personal information
                 application.dob = applicationData.personalInfo.dob ? new Date(applicationData.personalInfo.dob) : undefined;
                 application.gender = applicationData.personalInfo.gender;
-                if (applicationData.personalInfo.phone) {
-                    await this.userModel.findByIdAndUpdate(req.user._id, {
-                        phone: applicationData.personalInfo.phone,
-                    });
-                }
                 application.religion = applicationData.personalInfo.religion;
                 application.maritalStatus = applicationData.personalInfo.maritalStatus;
                 application.address = applicationData.personalInfo.address;
@@ -517,6 +512,25 @@ export class ApplicationUploadController {
                 application.documents = groupedDocuments;
                 if (profilePicture) {
                     application.profileImageUrl = profilePicture.url;
+                }
+
+                const userProfileUpdate: Record<string, unknown> = {};
+                if (applicationData.personalInfo.dob) {
+                    userProfileUpdate.dob = new Date(applicationData.personalInfo.dob);
+                }
+                if (applicationData.personalInfo.gender) {
+                    userProfileUpdate.gender = applicationData.personalInfo.gender;
+                }
+                if (applicationData.personalInfo.phone) {
+                    userProfileUpdate.phone = applicationData.personalInfo.phone;
+                }
+                if (profilePicture) {
+                    userProfileUpdate.profileImageUrl = profilePicture.url;
+                }
+                if (Object.keys(userProfileUpdate).length) {
+                    await this.userModel.findByIdAndUpdate(req.user._id, {
+                        $set: userProfileUpdate,
+                    });
                 }
 
                 // Application status
@@ -721,6 +735,13 @@ export class ApplicationUploadController {
                     })
                 }
             );
+
+            if (removeData.documentType === 'profile_picture') {
+                await this.userModel.updateOne(
+                    { _id: userObjectId, profileImageUrl: removeData.documentUrl },
+                    { $unset: { profileImageUrl: 1 } },
+                );
+            }
 
             // Delete from Spaces
             await this.uploadService.deleteFromSpaces(key);

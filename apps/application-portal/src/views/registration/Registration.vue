@@ -592,7 +592,7 @@ export default {
                 <div class="row g-3">
                   <div class="col-sm-4">
                     <label for="programType"
-                      >Program Type <span class="text-danger">*</span></label
+                      > Program Type <span class="text-danger">*</span></label
                     >
                     <select
                       id="programType"

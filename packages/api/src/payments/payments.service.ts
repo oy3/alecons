@@ -1584,6 +1584,24 @@ export class PaymentsService {
                 academicSessionId.toString(),
             );
 
+            let studentProfileImageUrl: string | undefined;
+            if (fullApplication.profileImageUrl) {
+                try {
+                    const copiedProfileImage = await this.uploadService.copyProfileImageToStudentFolder(
+                        fullApplication.profileImageUrl,
+                        matriculationNumber,
+                    );
+                    studentProfileImageUrl = copiedProfileImage?.url;
+                } catch (error) {
+                    this.logger.error('Student profile image migration failed; enrollment will remain retryable:', {
+                        userId: normalizedUserId.toString(),
+                        applicationId: normalizedApplicationId.toString(),
+                        matriculationNumber,
+                        error: error.message,
+                    });
+                }
+            }
+
             // Extract the ObjectId from the populated entryAcademicSession
             const admissionYear = new Date().getFullYear();
 
@@ -1626,7 +1644,7 @@ export class PaymentsService {
                         currentSemester: 1,
                         cumulativeGPA: 0.0,
                         isActive: true,
-                        profileImageUrl: fullApplication.profileImageUrl // Copy profile image from application
+                        profileImageUrl: studentProfileImageUrl,
                     });
 
                     await newStudent.save();
@@ -1639,7 +1657,9 @@ export class PaymentsService {
                     existingStudent.admissionYear = admissionYear;
                     existingStudent.academicSession = academicSessionId;
                     existingStudent.entryAcademicSession = academicSessionId;
-                    existingStudent.profileImageUrl = fullApplication.profileImageUrl;
+                    if (studentProfileImageUrl) {
+                        existingStudent.profileImageUrl = studentProfileImageUrl;
+                    }
                     existingStudent.status = existingStudent.status || 'active';
                     existingStudent.currentLevel = existingStudent.currentLevel || 1;
                     existingStudent.currentSemester = existingStudent.currentSemester || 1;
@@ -1657,11 +1677,16 @@ export class PaymentsService {
 
             // Update User role from APPLICANT to STUDENT
             try {
+                if (studentProfileImageUrl) {
+                    user.profileImageUrl = studentProfileImageUrl;
+                }
                 if (user.role === UserRole.APPLICANT) {
                     this.logger.log('Updating user role from APPLICANT to STUDENT...');
                     user.role = UserRole.STUDENT;
                     await user.save();
                     this.logger.log('✅ User role updated from APPLICANT to STUDENT:', user._id);
+                } else if (studentProfileImageUrl) {
+                    await user.save();
                 } else {
                     this.logger.log('User role already set to:', user.role);
                 }

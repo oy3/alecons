@@ -1,11 +1,22 @@
 <script setup>
-import { useRouter } from "vue-router";
+import { computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import BrandLogo from "./BrandLogo.vue";
 import { useAuthStore } from "../stores/auth.js";
 
+const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const application = computed(() =>
+  authStore.getApplicationFromList(route.params.id),
+);
+const profileImageUrl = computed(
+  () =>
+    authStore.user?.profileImageUrl ||
+    application.value?.profileImageUrl ||
+    "https://placehold.co/40?text=IMG",
+);
 
 const CONTACT_URL = import.meta.env.VITE_APP_SITE_URL
   ? `${import.meta.env.VITE_APP_SITE_URL}/contact`
@@ -23,7 +34,8 @@ async function logout() {
   });
   if (!result.isConfirmed) return;
   await authStore.logout();
-  router.push({ name: "Login" }).then(() => authStore.completeLogout());
+  await router.push({ name: "Login" });
+  authStore.completeLogout();
 }
 </script>
 
@@ -51,10 +63,7 @@ async function logout() {
           }}</span>
         </div>
         <img
-          :src="
-            authStore.user?.profileImageUrl ||
-            'https://placehold.co/40?text=IMG'
-          "
+          :src="profileImageUrl"
           width="40"
           height="40"
           alt="Profile"
@@ -67,10 +76,7 @@ async function logout() {
       >
         <li class="dropdown-item-text d-flex align-items-center gap-2">
           <img
-            :src="
-              authStore.user?.profileImageUrl ||
-              'https://placehold.co/40?text=IMG'
-            "
+            :src="profileImageUrl"
             width="40"
             height="40"
             alt="Profile"

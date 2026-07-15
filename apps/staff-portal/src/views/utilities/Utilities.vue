@@ -56,7 +56,7 @@ export default {
           title: 'Migrate User Demographics',
           icon: 'bi-person-lines-fill',
           variant: 'primary',
-          description: 'Copy dob and gender from Application records into their linked User profiles where the User fields are still empty. Existing User values are never overwritten.',
+          description: 'Copy missing dob and gender into User profiles, then migrate enrolled-student profile photos into matriculation-number student storage.',
           actionLabel: 'Inspect & Migrate'
         },
         {
@@ -489,7 +489,7 @@ export default {
     async runMigrateUserDemographics() {
       const preview = await Swal.fire({
         title: 'Inspect User Demographics Migration?',
-        html: `<div class="text-start utility-confirmation"><p class="small text-muted mb-2">This utility copies <strong>dob</strong> and <strong>gender</strong> from Application records into their linked User profiles. User fields that already have a value are never overwritten.</p><ul class="small mb-0"><li>A dry run will count how many users would be updated.</li><li>Apply will write the values to User documents.</li></ul></div>`,
+        html: `<div class="text-start utility-confirmation"><p class="small text-muted mb-2">This utility copies missing <strong>dob</strong> and <strong>gender</strong> values into User profiles, then copies enrolled-student profile photos into their matriculation-number storage folder.</p><ul class="small mb-0"><li>A dry run will count user updates and profile images to copy.</li><li>Apply updates User and Student records only after an image copy succeeds.</li></ul></div>`,
         icon: 'info',
         showCancelButton: true,
         confirmButtonText: 'Run Dry Run First',
@@ -506,18 +506,19 @@ export default {
         if (!dryRun.success) throw new Error(dryRun.error || 'Dry run failed')
 
         const d = dryRun.data || {}
+        const pendingMigrationCount = (d.migrated || 0) + (d.profileImagesEligible || 0)
         const confirm = await Swal.fire({
-          title: d.migrated ? `${d.migrated} user(s) would be updated` : 'Nothing to migrate',
-          html: `<ul class="text-start mb-0 small"><li>Applications scanned: <strong>${d.scanned || 0}</strong></li><li>Would migrate: <strong>${d.migrated || 0}</strong></li><li>Already set: <strong>${d.alreadySet || 0}</strong></li><li>Skipped (no user): <strong>${d.skipped || 0}</strong></li></ul>`,
-          icon: d.migrated ? 'warning' : 'info',
+          title: pendingMigrationCount ? `${pendingMigrationCount} migration(s) ready` : 'Nothing to migrate',
+          html: `<ul class="text-start mb-0 small"><li>Applications scanned: <strong>${d.scanned || 0}</strong></li><li>User demographics to migrate: <strong>${d.migrated || 0}</strong></li><li>Profile images to copy: <strong>${d.profileImagesEligible || 0}</strong></li><li>Profile images already migrated: <strong>${d.profileImagesAlreadySet || 0}</strong></li><li>Skipped: <strong>${(d.skipped || 0) + (d.profileImagesSkipped || 0)}</strong></li></ul>`,
+          icon: pendingMigrationCount ? 'warning' : 'info',
           showCancelButton: true,
-          confirmButtonText: d.migrated ? 'Apply Migration' : 'Close',
+          confirmButtonText: pendingMigrationCount ? 'Apply Migration' : 'Close',
           cancelButtonText: 'Cancel',
           confirmButtonColor: '#0d6efd',
           customClass: { popup: 'utility-swal-popup' }
         })
 
-        if (!confirm.isConfirmed || !d.migrated) return
+        if (!confirm.isConfirmed || (!d.migrated && !d.profileImagesEligible)) return
 
         const apply = await apiService.migrateUserDemographics({ apply: true })
         if (!apply.success) throw new Error(apply.error || 'Migration failed')
@@ -526,7 +527,7 @@ export default {
         await Swal.fire({
           icon: 'success',
           title: 'Migration Complete',
-          html: `<ul class="text-start mb-0 small"><li>Scanned: <strong>${a.scanned || 0}</strong></li><li>Migrated: <strong>${a.migrated || 0}</strong></li><li>Already set: <strong>${a.alreadySet || 0}</strong></li><li>Skipped: <strong>${a.skipped || 0}</strong></li></ul>`,
+          html: `<ul class="text-start mb-0 small"><li>Demographics migrated: <strong>${a.migrated || 0}</strong></li><li>Profile images copied: <strong>${a.profileImagesMigrated || 0}</strong></li><li>Profile images already migrated: <strong>${a.profileImagesAlreadySet || 0}</strong></li><li>Profile image failures: <strong>${a.profileImagesFailed || 0}</strong></li></ul>`,
           confirmButtonColor: '#1a5f5f'
         })
       } catch (error) {

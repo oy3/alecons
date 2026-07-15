@@ -429,6 +429,69 @@ export class UploadService {
         return `${SPACES_CONFIG.FILE_PATHS.TEMP}/temp_${applicationNumber}/`;
     }
 
+    getStudentProfileKey(matriculationNumber: string, sourceUrl: string): string | null {
+        const sourceKey = this.extractKeyFromUrl(sourceUrl);
+        const extension = sourceKey ? path.extname(sourceKey).toLowerCase() : '';
+
+        if (!extension || !SPACES_CONFIG.ALLOWED_FILE_TYPES.PROFILE_PICTURE.includes(extension)) {
+            return null;
+        }
+
+        return `${SPACES_CONFIG.FILE_PATHS.STUDENTS}/${matriculationNumber}/profile_picture${extension}`;
+    }
+
+    async copyProfileImageToStudentFolder(
+        sourceUrl: string | null | undefined,
+        matriculationNumber: string,
+    ): Promise<UploadResult | null> {
+        if (!sourceUrl || !matriculationNumber) {
+            return null;
+        }
+
+        const sourceKey = this.extractKeyFromUrl(sourceUrl);
+        const destinationKey = this.getStudentProfileKey(matriculationNumber, sourceUrl);
+        if (!sourceKey || !destinationKey) {
+            throw new BadRequestException('Profile image must be a supported Spaces-hosted JPEG file.');
+        }
+
+        if (sourceKey === destinationKey) {
+            return {
+                url: this.getFileUrl(destinationKey),
+                key: destinationKey,
+                type: 'profile_picture',
+            };
+        }
+
+        try {
+            await this.s3Client.send(new CopyObjectCommand({
+                Bucket: this.bucketName,
+                Key: destinationKey,
+                CopySource: `${this.bucketName}/${sourceKey}`,
+                ACL: 'public-read',
+            }));
+
+            this.logger.log('Copied profile image to student storage:', {
+                sourceKey,
+                destinationKey,
+                matriculationNumber,
+            });
+
+            return {
+                url: this.getFileUrl(destinationKey),
+                key: destinationKey,
+                type: 'profile_picture',
+            };
+        } catch (error) {
+            this.logger.error('Failed to copy profile image to student storage:', {
+                sourceKey,
+                destinationKey,
+                matriculationNumber,
+                error: error.message,
+            });
+            throw new BadRequestException(`Failed to migrate profile image: ${error.message}`);
+        }
+    }
+
     /**
      * Move file from temp storage to final applications folder
      * @param tempKey - Current key in temp storage

@@ -1,28 +1,29 @@
 <script lang="js">
-import { useAuthStore } from '../stores/auth.js';
-import { useRouter } from 'vue-router';
-import Swal from 'sweetalert2';
+import { useAuthStore } from "../stores/auth.js";
+import { useRoute, useRouter } from "vue-router";
+import Swal from "sweetalert2";
 
 export default {
   name: "Navbar",
   setup() {
     const authStore = useAuthStore();
+    const route = useRoute();
     const router = useRouter();
 
     const logout = async () => {
       const result = await Swal.fire({
-        title: 'Are you sure?',
-        text: 'You will be logged out of the application.',
-        icon: 'warning',
+        title: "Are you sure?",
+        text: "You will be logged out of the application.",
+        icon: "warning",
         showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Yes, logout'
+        confirmButtonColor: "#3085d6",
+        cancelButtonColor: "#d33",
+        confirmButtonText: "Yes, logout",
       });
 
       if (result.isConfirmed) {
         await authStore.logout();
-        router.push({ name: 'Login' }).then(() => {
+        router.push({ name: "Login" }).then(() => {
           // Complete the logout process after navigation
           authStore.completeLogout();
         });
@@ -40,14 +41,20 @@ export default {
 
     return {
       authStore,
-      logout
+      logout,
+      route
     };
-  }
+  },
+  computed: {
+    application() {
+        return this.authStore.getApplicationFromList(this.route.params.id);
+    }
+  },
 };
 </script>
 
 <template>
-  <nav class="navbar navbar-expand-lg navbar-light bg-white px-3">
+  <nav class="navbar navbar-expand-lg navbar-light px-3">
     <div class="w-100 p-0 d-flex align-items-center justify-content-between">
       <!-- Mobile Sidebar Toggle -->
       <button
@@ -87,7 +94,7 @@ export default {
               data-bs-toggle="dropdown" aria-expanded="false"> -->
           <img
             :src="
-              authStore.application?.profileImageUrl || 'https://placehold.co/40?text=IMG'
+              application?.profileImageUrl || 'https://placehold.co/40?text=IMG'
             "
             width="40"
             height="40"
@@ -128,6 +135,10 @@ export default {
 </template>
 
 <style scoped>
+/* nav{
+    background: #f8f9fa;
+} */
+
 /* Large screen: limit search bar width */
 @media (min-width: 992px) {
   .custom-search-width {

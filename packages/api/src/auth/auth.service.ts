@@ -11,6 +11,7 @@ import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
 import { Staff, StaffDocument } from '../schemas/staff.schema';
 import { Role, RoleDocument } from '../schemas/role.schema';
+import { Student, StudentDocument } from '../schemas/student.schema';
 import { EmailService } from '../services/email.service';
 import { ApplicationNumberService } from '../services/application-number.service';
 import { ApplicationEligibilityService } from '../services/application-eligibility.service';
@@ -34,6 +35,7 @@ export class AuthService {
         @InjectModel(ProgramMode.name) private programModeModel: Model<ProgramModeDocument>,
         @InjectModel(Staff.name) private staffModel: Model<StaffDocument>,
         @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
+        @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
         private jwtService: JwtService,
         private emailService: EmailService,
         private applicationNumberService: ApplicationNumberService,
@@ -97,6 +99,7 @@ export class AuthService {
 
     private async getUserApplications(userId: string | Types.ObjectId) {
         const normalizedUserId = typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
+        await this.syncEmailVerificationStages(normalizedUserId);
 
         const applications = await this.applicationModel
             .find({ userId: normalizedUserId })
@@ -158,6 +161,7 @@ export class AuthService {
         dateOfBirth?: string;
         gender?: string;
         applicationNumber: string;
+        isEmailVerified?: boolean;
     }) {
         const applicationData: any = {
             userId: data.userId,
@@ -165,7 +169,7 @@ export class AuthService {
             programId: new Types.ObjectId(data.programId),
             entryAcademicSession: data.activeSessionId,
             status: 'pending',
-            currentStage: 1,
+            currentStage: data.isEmailVerified ? 2 : 1,
             referees: [],
             examinations: [],
             documents: {
@@ -201,6 +205,7 @@ export class AuthService {
         activeSessionId: Types.ObjectId;
         dateOfBirth?: string;
         gender?: string;
+        isEmailVerified?: boolean;
         session?: ClientSession;
     }) {
         const applicationNumber = await this.applicationNumberService.generateApplicationNumber(
@@ -213,6 +218,22 @@ export class AuthService {
             ...data,
             applicationNumber,
         });
+    }
+
+    private async syncEmailVerificationStages(userId: Types.ObjectId) {
+        const user = await this.userModel.findById(userId).select('isEmailVerified').lean();
+        if (!user?.isEmailVerified) return;
+
+        const result = await this.applicationModel.updateMany(
+            { userId, currentStage: 1 },
+            { $set: { currentStage: 2 } },
+        );
+
+        if (result.modifiedCount > 0) {
+            this.logger.log(`Advanced ${result.modifiedCount} verified-user application(s) from stage 1 to stage 2`, {
+                userId: userId.toString(),
+            });
+        }
     }
 
     async register(registerDto: RegisterDto) {
@@ -547,6 +568,8 @@ export class AuthService {
                 fullName: user.fullName,
                 isEmailVerified: user.isEmailVerified,
                 isActive: user.isActive,
+                dob: user.dob,
+                gender: user.gender,
             },
             application: applicationData,
             applications: applicationsData,
@@ -565,8 +588,9 @@ export class AuthService {
         return null;
     }
 
-    async getApplicationById(applicationId: string) {
+    async getApplicationById(applicationId: string, requestingUserId: string) {
         try {
+            await this.syncEmailVerificationStages(new Types.ObjectId(requestingUserId));
             const application = await this.applicationModel
                 .findById(applicationId)
                 .populate({
@@ -583,11 +607,18 @@ export class AuthService {
                 throw new BadRequestException('Application not found');
             }
 
+            if (application.userId.toString() !== requestingUserId.toString()) {
+                throw new UnauthorizedException('Access denied');
+            }
+
             return {
                 success: true,
                 data: await this.mapApplicationResponse(application)
             };
         } catch (error) {
+            if (error instanceof UnauthorizedException || error instanceof BadRequestException) {
+                throw error;
+            }
             throw new BadRequestException('Failed to fetch application details');
         }
     }
@@ -684,6 +715,11 @@ export class AuthService {
                         ...studentProfile,
                         data: {
                             ...studentProfile.data,
+                            user: {
+                                ...studentProfile.data?.user,
+                                dob: user.dob,
+                                gender: user.gender,
+                            },
                             applications,
                         },
                     };
@@ -755,6 +791,18 @@ export class AuthService {
         }
     }
 
+    private async assertNoActiveStudentEnrollment(userId: Types.ObjectId) {
+        const activeEnrollment = await this.studentModel.exists({
+            userId,
+            status: 'active',
+            isActive: true,
+        });
+
+        if (activeEnrollment) {
+            throw new ConflictException('Students with an active enrollment cannot submit another admission application.');
+        }
+    }
+
     async getOpenSessions() {
         try {
             const sessions = await this.applicationModel.db
@@ -794,6 +842,8 @@ export class AuthService {
             const user = await this.userModel.findById(userId);
             if (!user) throw new UnauthorizedException('User not found');
 
+            await this.assertNoActiveStudentEnrollment(user._id);
+
             // Validate session is open with active application control
             const session = await this.applicationModel.db
                 .model('AcademicSession')
@@ -826,6 +876,7 @@ export class AuthService {
                 userId: user._id,
                 programId,
                 activeSessionId: new Types.ObjectId(sessionId),
+                isEmailVerified: user.isEmailVerified,
             });
             await application.save();
 
@@ -851,6 +902,8 @@ export class AuthService {
             if (!user) {
                 throw new UnauthorizedException('User not found');
             }
+
+            await this.assertNoActiveStudentEnrollment(user._id);
 
             const eligibility = await this.applicationEligibilityService.checkRegistrationEligibility();
             if (!eligibility.eligible || !eligibility.activeSession) {
@@ -890,6 +943,7 @@ export class AuthService {
                 activeSessionId: (eligibility.activeSession as any)._id,
                 dateOfBirth: previousApplication.dob ? previousApplication.dob.toISOString() : undefined,
                 gender: previousApplication.gender,
+                isEmailVerified: user.isEmailVerified,
             });
 
             await application.save();
@@ -932,13 +986,7 @@ export class AuthService {
             user.emailVerificationTokenExpires = undefined;
             await user.save();
 
-            // Update application stage from 1 to 2
-            const application = await this.applicationModel.findOne({ userId: user._id });
-            if (application && application.currentStage === 1) {
-                application.currentStage = 2;
-                await application.save();
-                this.logger.log(`Advanced user ${user._id} from stage 1 to stage 2 after email verification`);
-            }
+            await this.syncEmailVerificationStages(user._id);
 
             // Send welcome email
             try {

@@ -267,7 +267,7 @@ class ApiService {
 
     // Application methods (for future use)
     async getApplication(id) {
-        return this.makeRequest(`/applications/${id}`);
+        return this.makeRequest(`/auth/application/${id}`);
     }
 
     async updateApplication(id, data) {

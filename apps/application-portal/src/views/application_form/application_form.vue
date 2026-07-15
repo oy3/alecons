@@ -53,7 +53,19 @@ export default {
         "Islamic Religious Studies",
       ],
       maxSubjects: 9,
-      grades: ["A1", "A2", "A3", "B2", "B3", "C4", "C5", "C6", "D7", "E8", "F9"],
+      grades: [
+        "A1",
+        "A2",
+        "A3",
+        "B2",
+        "B3",
+        "C4",
+        "C5",
+        "C6",
+        "D7",
+        "E8",
+        "F9",
+      ],
       referenceLetters: [null, null],
       declaration: false,
 
@@ -146,6 +158,7 @@ export default {
 
       // Validation
       validationErrors: {},
+      applicationData: null,
     };
   },
   computed: {
@@ -156,7 +169,10 @@ export default {
       return this.authStore.user;
     },
     application() {
-      return this.authStore.application;
+      return this.applicationData;
+    },
+    applicationId() {
+      return this.$route.params.id;
     },
     selectedCountry() {
       return this.countries.find(
@@ -235,6 +251,9 @@ export default {
       this.lga = "";
       this.loadCitiesForState();
     },
+    async applicationId() {
+      if (await this.loadApplication()) this.prefillUserData();
+    },
   },
   created() {
     this.generateYears();
@@ -242,6 +261,26 @@ export default {
     this.prefillUserData();
   },
   async mounted() {
+    if (!(await this.loadApplication())) return;
+
+    // Block expired or rejected applications
+    if (
+      this.application &&
+      (this.application.status === "expired" ||
+        this.application.status === "rejected")
+    ) {
+      const label =
+        this.application.status === "expired" ? "Expired" : "Rejected";
+      await Swal.fire({
+        title: `Application ${label}`,
+        text: `This application is ${this.application.status} and cannot be edited.`,
+        icon: "warning",
+        confirmButtonText: "Go to Dashboard",
+      });
+      this.$router.push(`/applications/${this.applicationId}/dashboard`);
+      return;
+    }
+
     // Check if user has already completed the application form
     if (this.application && this.application.currentStage > 3) {
       logger.info(
@@ -258,11 +297,27 @@ export default {
         confirmButtonText: "Go to Dashboard",
       });
 
-      this.$router.push("/dashboard");
+      this.$router.push(`/applications/${this.applicationId}/dashboard`);
       return;
     }
   },
   methods: {
+    async loadApplication() {
+      const cached = this.authStore.getApplicationFromList(this.applicationId);
+      if (cached) this.applicationData = cached;
+
+      try {
+        const response = await apiService.getApplication(this.applicationId);
+        if (!response.success)
+          throw new Error(response.error || "Failed to load application");
+        this.applicationData = response.data;
+        return true;
+      } catch (error) {
+        logger.error("Failed to load application form:", error);
+        await this.$router.push({ name: "MyApplications" });
+        return false;
+      }
+    },
     generateYears() {
       const currentYear = new Date().getFullYear();
 
@@ -339,7 +394,9 @@ export default {
         return null;
       }
 
-      const allCountryStates = State.getStatesOfCountry(this.selectedCountry.isoCode);
+      const allCountryStates = State.getStatesOfCountry(
+        this.selectedCountry.isoCode,
+      );
       const normalizedTarget = this.normalizeStateNameForLookup(stateName);
 
       return (
@@ -418,7 +475,9 @@ export default {
 
             this.stateLoadError =
               "Could not load full Nigeria states list. Showing fallback list.";
-            this.states = State.getStatesOfCountry(this.selectedCountry.isoCode);
+            this.states = State.getStatesOfCountry(
+              this.selectedCountry.isoCode,
+            );
           } finally {
             if (requestId === this.statesLoadRequestId) {
               this.isLoadingStates = false;
@@ -448,7 +507,9 @@ export default {
           this.isLoadingLgas = true;
 
           try {
-            const stateQueryName = this.getNigeriaStateQueryName(this.selectedState);
+            const stateQueryName = this.getNigeriaStateQueryName(
+              this.selectedState,
+            );
             const nigeriaLgas = await this.fetchNigeriaLgas(stateQueryName);
 
             if (requestId !== this.lgasLoadRequestId) {
@@ -473,7 +534,9 @@ export default {
             this.lgaLoadError =
               "Could not load full LGA list. Showing fallback list.";
 
-            const fallbackState = this.getLibraryStateMatch(this.selectedState.name);
+            const fallbackState = this.getLibraryStateMatch(
+              this.selectedState.name,
+            );
             this.cities = fallbackState
               ? City.getCitiesOfState(
                   this.selectedCountry.isoCode,
@@ -903,10 +966,10 @@ export default {
         this.middleName =
           this.application.middleName || this.user?.otherName || "";
         this.phone = this.user?.phone || "";
-        this.dateOfBirth = this.application.dob
-          ? new Date(this.application.dob).toISOString().split("T")[0]
+        this.dateOfBirth = this.user?.dob
+          ? new Date(this.user?.dob).toISOString().split("T")[0]
           : "";
-        this.gender = this.application.gender || "";
+        this.gender = this.user?.gender || "";
 
         // Only prefill if current form field is empty (don't overwrite user input)
         if (!this.religion) {
@@ -1329,7 +1392,12 @@ export default {
       const file = event.target.files[0];
       if (!file) return;
 
-      await this.uploadFile(file, "reference_letter", { referenceIndex }, event);
+      await this.uploadFile(
+        file,
+        "reference_letter",
+        { referenceIndex },
+        event,
+      );
     },
 
     async uploadFile(file, fileType, options = {}, inputEvent = null) {
@@ -1394,6 +1462,7 @@ export default {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("fileType", fileType);
+        formData.append("applicationId", this.applicationId);
 
         if (options.sittingIndex !== undefined) {
           formData.append("sittingIndex", options.sittingIndex.toString());
@@ -1403,7 +1472,10 @@ export default {
         }
 
         // Upload file
-        const response = await apiService.post("/applications/upload", formData);
+        const response = await apiService.post(
+          "/applications/upload",
+          formData,
+        );
 
         if (response.success) {
           logger.info("File uploaded to temporary storage:", {
@@ -1501,25 +1573,10 @@ export default {
 
     async removeDocument(documentType, documentUrl) {
       try {
-        // Check if we have an application - if not, try to get it
-        let applicationId = this.application?.id;
-
-        if (!applicationId) {
-          // Try to refresh the auth store to get the latest application data
-          await this.authStore.refreshUserData();
-          applicationId = this.application?.id;
-        }
-
-        if (!applicationId) {
-          throw new Error(
-            "No application found. Please save your application first before removing documents.",
-          );
-        }
-
         const response = await apiService.post(
           "/applications/remove-document",
           {
-            applicationId,
+            applicationId: this.applicationId,
             documentType,
             documentUrl,
           },
@@ -1658,6 +1715,7 @@ export default {
 
         // Prepare application data
         const applicationData = {
+          applicationId: this.applicationId,
           programId: programId,
           personalInfo: {
             firstName: this.firstName,
@@ -1748,9 +1806,6 @@ export default {
         if (response.success) {
           logger.info("Application submitted successfully:", response.data);
 
-          // Update auth store with new application data
-          await this.authStore.updateApplication(response.data);
-
           // Refresh user data to get updated currentStage
           await this.authStore.refreshUserData();
 
@@ -1772,7 +1827,7 @@ export default {
           this.profileFileInfo = null;
 
           // Redirect to dashboard
-          this.$router.push("/dashboard");
+          this.$router.push(`/applications/${this.applicationId}/dashboard`);
         } else {
           throw new Error(response.error || "Application submission failed");
         }
@@ -1870,7 +1925,7 @@ export default {
               </label>
               <input
                 type="text"
-                class="form-control"
+                class="form-control text-capitalize"
                 id="firstName"
                 v-model="firstName"
                 :disabled="true"
@@ -1887,7 +1942,7 @@ export default {
               </label>
               <input
                 type="text"
-                class="form-control"
+                class="form-control text-capitalize"
                 id="middleName"
                 v-model="middleName"
                 :disabled="true"
@@ -1904,7 +1959,7 @@ export default {
               </label>
               <input
                 type="text"
-                class="form-control"
+                class="form-control text-capitalize"
                 id="lastName"
                 v-model="lastName"
                 :disabled="true"
@@ -1936,7 +1991,7 @@ export default {
               <label for="gender" class="form-label small">
                 Gender <span class="text-danger">*</span>
               </label>
-              <div class="d-flex justify-content-between">
+              <div class="d-flex justify-content-start gap-3">
                 <div class="form-check">
                   <input
                     class="form-check-input"
@@ -1965,7 +2020,7 @@ export default {
                     Female
                   </label>
                 </div>
-                <div class="form-check">
+                <!-- <div class="form-check">
                   <input
                     class="form-check-input"
                     type="radio"
@@ -1978,11 +2033,11 @@ export default {
                   <label class="form-check-label" for="genderOther">
                     Others
                   </label>
-                </div>
+                </div> -->
               </div>
-              <small class="text-muted"
-                >This field is auto-filled from your account</small
-              >
+              <small class="text-muted">
+                This field is auto-filled from your account
+              </small>
             </div>
 
             <div class="col-md-6">
@@ -2696,9 +2751,9 @@ export default {
         <div class="d-flex justify-content-between mt-5 mb-1">
           <h6 class="fw-semibold">
             O'Level Result
-            <span class="fw-light small"
-              > (5 Credits not more than two sittings) </span
-            >
+            <span class="fw-light small">
+              (5 Credits not more than two sittings)
+            </span>
           </h6>
 
           <button
@@ -2810,9 +2865,10 @@ export default {
 
         <div class="d-flex justify-content-between mt-5 mb-1">
           <h6 class="fw-semibold">
-            JAMB Details  <span class="fw-light small"
-              > (Check if JAMB details do not apply to your admission route.) </span
-            >
+            JAMB Details
+            <span class="fw-light small">
+              (Check if JAMB details do not apply to your admission route.)
+            </span>
           </h6>
         </div>
 
@@ -2826,7 +2882,8 @@ export default {
               @change="onJambExemptChange"
             />
             <label class="form-check-label small" for="isJambExempt">
-              I am not a direct JAMB applicant (for example, eligible community nursing applicants).
+              I am not a direct JAMB applicant (for example, eligible community
+              nursing applicants).
             </label>
           </div>
           <div class="row g-3 mb-3">
@@ -2841,7 +2898,9 @@ export default {
                 id="jambRegNum"
                 v-model="jambRegistrationNumber"
                 :disabled="isJambExempt"
-                :class="{ 'is-invalid': validationErrors.jambRegistrationNumber }"
+                :class="{
+                  'is-invalid': validationErrors.jambRegistrationNumber,
+                }"
               />
               <div
                 v-if="validationErrors.jambRegistrationNumber"
@@ -3228,16 +3287,28 @@ export default {
               <div class="col-md-6">
                 <p class="small text-muted mb-1">JAMB Requirement</p>
                 <p class="mb-0">
-                  {{ isJambExempt ? 'Not a direct JAMB applicant' : 'Direct JAMB applicant' }}
+                  {{
+                    isJambExempt
+                      ? "Not a direct JAMB applicant"
+                      : "Direct JAMB applicant"
+                  }}
                 </p>
               </div>
               <div class="col-md-6">
                 <p class="small text-muted mb-1">JAMB Registration Number</p>
-                <p class="mb-0">{{ isJambExempt ? 'Not applicable' : jambRegistrationNumber || 'N/A' }}</p>
+                <p class="mb-0">
+                  {{
+                    isJambExempt
+                      ? "Not applicable"
+                      : jambRegistrationNumber || "N/A"
+                  }}
+                </p>
               </div>
               <div class="col-md-6">
                 <p class="small text-muted mb-1">JAMB Score</p>
-                <p class="mb-0">{{ isJambExempt ? 'Not applicable' : jambScore || 'N/A' }}</p>
+                <p class="mb-0">
+                  {{ isJambExempt ? "Not applicable" : jambScore || "N/A" }}
+                </p>
               </div>
             </div>
           </div>

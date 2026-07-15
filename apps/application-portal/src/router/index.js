@@ -33,11 +33,22 @@ const router = createRouter({
     },
     {
       path: '/dashboard',
+      meta: { requiresAuth: true, requiresApplicant: true },
+      beforeEnter: () => {
+        const authStore = useAuthStore();
+        const latestApplication = authStore.applications[0];
+        return latestApplication
+          ? { name: 'Dashboard', params: { id: latestApplication.id } }
+          : { name: 'MyApplications' };
+      },
+    },
+    {
+      path: '/applications/:id/dashboard',
       name: 'Dashboard',
       component: () => import('../views/dashboard/dashboard.vue'),
       meta: {
         requiresAuth: true,
-        requiresApplicant: true  // Allows both applicant and student roles
+        requiresApplicant: true
       }
     },
     {
@@ -50,21 +61,21 @@ const router = createRouter({
       }
     },
     {
-      path: '/application-form',
+      path: '/applications/:id/application-form',
       name: 'ApplicationForm',
       component: () => import('../views/application_form/application_form.vue'),
       meta: {
         requiresAuth: true,
-        requiresApplicant: true  // Allows both applicant and student roles
+        requiresApplicant: true
       }
     },
     {
-      path: '/payment',
+      path: '/applications/:id/payment',
       name: 'Payment',
       component: () => import('../views/payment/payment.vue'),
       meta: {
         requiresAuth: true,
-        requiresApplicant: true  // Allows both applicant and student roles
+        requiresApplicant: true
       }
     },
     {

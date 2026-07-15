@@ -5,31 +5,13 @@ import Swal from "sweetalert2";
 import { apiService } from "../../services/api.js";
 import { useRouter } from "vue-router";
 import BrandLogo from "../../components/BrandLogo.vue";
+import AccountHeader from "../../components/AccountHeader.vue";
 
 const authStore = useAuthStore();
 const router = useRouter();
 
-const CONTACT_URL = import.meta.env.VITE_APP_SITE_URL
-  ? `${import.meta.env.VITE_APP_SITE_URL}/contact`
-  : null;
-
 const applications = computed(() => authStore.applications || []);
-const currentApplication = computed(() => authStore.application || null);
-
-async function logout() {
-  const result = await Swal.fire({
-    title: "Are you sure?",
-    text: "You will be logged out.",
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonColor: "#2d7d7d",
-    cancelButtonColor: "#6c757d",
-    confirmButtonText: "Yes, logout",
-  });
-  if (!result.isConfirmed) return;
-  await authStore.logout();
-  router.push({ name: "Login" }).then(() => authStore.completeLogout());
-}
+const isStudent = computed(() => authStore.user?.role === "student");
 
 // Modal state
 const showModal = ref(false);
@@ -69,6 +51,16 @@ watch([selectedTypeId, selectedModeId], () => {
 });
 
 async function openApplyModal() {
+  if (isStudent.value) {
+    await Swal.fire({
+      icon: "info",
+      title: "Application Unavailable",
+      text: "Students with an active enrollment cannot submit another admission application.",
+      confirmButtonColor: "#2d7d7d",
+    });
+    return;
+  }
+
   selectedSessionId.value = "";
   selectedTypeId.value = "";
   selectedModeId.value = "";
@@ -151,7 +143,6 @@ async function submitApplication() {
     if (!response.success)
       throw new Error(response.error || "Unable to create application.");
 
-    authStore.application = response.data?.application || null;
     authStore.applications = response.data?.applications || [];
     showModal.value = false;
 
@@ -164,7 +155,12 @@ async function submitApplication() {
       showConfirmButton: false,
     });
 
-    router.push("/dashboard");
+    const applicationId = response.data?.application?.id;
+    router.push(
+      applicationId
+        ? `/applications/${applicationId}/dashboard`
+        : "/my-applications",
+    );
   } catch (error) {
     await Swal.fire({
       icon: "error",
@@ -201,89 +197,7 @@ function getStatusBadgeClass(status) {
 
 <template>
   <div class="my-applications-page d-flex flex-column min-vh-100">
-    <!-- Custom Header -->
-    <header
-      class="my-apps-header px-4 py-3 d-flex align-items-center justify-content-between"
-    >
-      <!-- Left: logo + school name -->
-      <BrandLogo />
-
-      <!-- Right: help link, applicant name, logout -->
-      <div class="dropdown">
-        <a
-          href="#"
-          class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark"
-          id="userDropdown"
-          data-bs-toggle="dropdown"
-          aria-expanded="false"
-        >
-          <div class="d-flex flex-column align-items-end me-2">
-            <span
-              class="text-dark fw-bold d-none d-md-inline text-capitalize small"
-            >
-              {{ authStore.user?.firstName }} {{ authStore.user?.lastName }}
-            </span>
-            <span class="text-muted small d-none d-md-inline text-capitalize">
-              {{ authStore.user?.role }}
-            </span>
-          </div>
-          <img
-            :src="
-              authStore.application?.profileImageUrl ||
-              'https://placehold.co/40?text=IMG'
-            "
-            width="40"
-            height="40"
-            alt="Profile"
-            class="rounded-circle border border-secondary object-fit-cover"
-          />
-        </a>
-
-        <ul
-          class="dropdown-menu dropdown-menu-end"
-          aria-labelledby="userDropdown"
-        >
-          <li class="dropdown-item-text d-flex align-items-center gap-2">
-            <img
-              :src="
-                authStore.application?.profileImageUrl ||
-                'https://placehold.co/40?text=IMG'
-              "
-              width="40"
-              height="40"
-              alt="Profile"
-              class="rounded-circle border border-secondary object-fit-cover"
-            />
-            <div class="d-flex flex-column align-items-start">
-              <span class="text-dark fw-bold text-capitalize small">
-                {{ authStore.user?.firstName }} {{ authStore.user?.lastName }}
-              </span>
-              <span class="small text-muted">
-                {{ authStore.user?.email }}
-              </span>
-            </div>
-          </li>
-          <li>
-            <hr class="dropdown-divider" />
-          </li>
-          <li class="dropdown-item">
-            <a
-              :href="CONTACT_URL"
-              target="_blank"
-              rel="noopener"
-              class="text-muted text-decoration-none"
-            >
-              <i class="bi bi-question-circle me-3"></i>Need help?
-            </a>
-          </li>
-          <li class="dropdown-item">
-            <a href="#" @click.prevent="logout" class="text-danger">
-              <i class="bi bi-box-arrow-right me-3"></i>Log out
-            </a>
-          </li>
-        </ul>
-      </div>
-    </header>
+    <AccountHeader />
 
     <!-- Page Body -->
     <div class="container py-5 flex-grow-1">
@@ -346,26 +260,42 @@ function getStatusBadgeClass(status) {
                       </p>
                     </div>
                     <div class="text-lg-end">
-                      <p v-if="application.status !== 'expired'" class="mb-0">
-                        <strong>Decision:</strong>
-                        {{ application.admissionDecision || "n/a" }}
+                      <p
+                        v-if="
+                          application.status !== 'expired' &&
+                          application.status !== 'rejected'
+                        "
+                        class="mb-0"
+                      >
+                        <strong>Decision: </strong>
+                       <span class="text-capitalize">{{ application.admissionDecision || "n/a" }}</span>
                       </p>
                       <button
-                        v-if="application.status !== 'expired' && application.status !== 'completed'"
+                        v-if="
+                          application.status !== 'expired' &&
+                          application.status !== 'rejected' &&
+                          application.status !== 'completed'
+                        "
                         class="btn btn-sm btn-primary mt-2"
                         @click="
-                          authStore.application = application;
-                          router.push('/dashboard');
+                          router.push(
+                            `/applications/${application.id}/dashboard`,
+                          )
                         "
                       >
                         Continue
                       </button>
                       <button
-                        v-if="application.status === 'completed'"
-                        class="btn btn-sm btn-secondary mt-2"
+                        v-if="
+                          application.status === 'completed' ||
+                          application.status === 'expired' ||
+                          application.status === 'rejected'
+                        "
+                        class="btn btn-sm btn-outline-secondary mt-2"
                         @click="
-                          authStore.application = application;
-                          router.push('/dashboard');
+                          router.push(
+                            `/applications/${application.id}/dashboard`,
+                          )
                         "
                       >
                         <i class="bi bi-eye"></i> View

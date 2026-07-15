@@ -48,13 +48,18 @@ export class PaymentsController {
     async getStudentPaymentsSummary(
         @Request() req,
         @Query("context") context?: "application-portal" | "student-portal",
+        @Query("applicationId") applicationId?: string,
     ) {
         try {
             const userId = req.user._id.toString(); // User ID from authenticated user
             const paymentContext = context || "application-portal"; // Default to application portal
+            if (paymentContext === "application-portal" && !applicationId) {
+                throw new HttpException("Application ID is required", HttpStatus.BAD_REQUEST);
+            }
             const summary = await this.paymentsService.getStudentPaymentsSummary(
                 userId,
                 paymentContext,
+                applicationId,
             );
 
             return {
@@ -76,7 +81,7 @@ export class PaymentsController {
     @Post("initialize")
     async initializePayment(
         @Request() req,
-        @Body() body: { paymentId: string; email: string },
+        @Body() body: { paymentId: string; email: string; applicationId?: string },
     ) {
         try {
             this.logger.log("Initialize payment request:", {
@@ -86,10 +91,14 @@ export class PaymentsController {
             });
 
             const userId = req.user._id.toString();
+            if (!body.applicationId) {
+                throw new HttpException("Application ID is required", HttpStatus.BAD_REQUEST);
+            }
             const result = await this.paymentsService.initializePayment(
                 userId,
                 body.paymentId,
                 body.email,
+                body.applicationId,
             );
 
             return {
@@ -113,15 +122,18 @@ export class PaymentsController {
     async submitManualTransfer(
         @Request() req,
         @UploadedFile() file: Express.Multer.File,
-        @Body() body: { paymentId: string },
+        @Body() body: { paymentId: string; applicationId?: string },
     ) {
         try {
             const userId = req.user._id.toString();
+            if (!body.applicationId) {
+                throw new HttpException("Application ID is required", HttpStatus.BAD_REQUEST);
+            }
             const result = await this.paymentsService.submitManualTransferPayment(
                 userId,
                 body.paymentId,
                 file,
-                { context: "application-portal" },
+                { context: "application-portal", applicationId: body.applicationId },
             );
 
             return {

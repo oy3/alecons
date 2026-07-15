@@ -29,11 +29,11 @@ class PaymentService {
     /**
      * Get student payment summary (paid and unpaid fees)
      */
-    async getPaymentsSummary() {
+    async getPaymentsSummary(applicationId) {
         try {
             logger.info("Fetching payments summary for application portal");
             const response = await apiService.get(
-                "/payments/summary?context=application-portal",
+                `/payments/summary?context=application-portal&applicationId=${encodeURIComponent(applicationId)}`,
             );
 
             if (response.success) {
@@ -64,12 +64,13 @@ class PaymentService {
     /**
      * Initialize payment with Paystack
      */
-    async initializePayment(paymentId, email) {
+    async initializePayment(paymentId, email, applicationId) {
         try {
             logger.info("Initializing payment:", { paymentId, email });
             const response = await apiService.post("/payments/initialize", {
                 paymentId,
                 email,
+                applicationId,
             });
 
             if (response.success) {
@@ -91,10 +92,11 @@ class PaymentService {
         }
     }
 
-    async submitManualTransferReceipt(paymentId, file) {
+    async submitManualTransferReceipt(paymentId, file, applicationId) {
         try {
             const formData = new FormData();
             formData.append("paymentId", paymentId);
+            formData.append("applicationId", applicationId);
             formData.append("file", file);
 
             const response = await apiService.post(
@@ -136,10 +138,11 @@ class PaymentService {
                 paymentType: paymentId,
                 amount,
                 description,
+                applicationId,
             } = paymentData;
 
             // Initialize payment first
-            const initResult = await this.initializePayment(paymentId, email);
+            const initResult = await this.initializePayment(paymentId, email, applicationId);
 
             if (!initResult.success) {
                 throw new Error(initResult.message);

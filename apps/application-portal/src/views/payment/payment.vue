@@ -1,6 +1,7 @@
 <script>
 import { paymentService } from "../../services/payment.js";
 import { useAuthStore } from "../../stores/auth.js";
+import { apiService } from "../../services/api.js";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
 
@@ -18,10 +19,17 @@ export default {
       return this.authStore.user;
     },
     application() {
-      return this.authStore.application;
+      return this.loadedApplication;
+    },
+    applicationId() {
+      return this.$route.params.id;
     },
     isAuthenticated() {
       return this.authStore.isAuthenticated;
+    },
+    isApplicationLocked() {
+      const status = this.application?.status;
+      return status === 'expired' || status === 'rejected';
     },
     paymentMethods() {
       return paymentService.getAvailablePaymentMethods();
@@ -72,17 +80,11 @@ export default {
       manualTransferReceipt: null,
       manualTransferReceiptName: "",
       manualTransferSubmitting: false,
+      loadedApplication: null,
     };
   },
   async mounted() {
-    if (!this.application && this.isAuthenticated) {
-      try {
-        await this.authStore.fetchUserData();
-      } catch (error) {
-        logger.error("Failed to refresh user data:", error);
-      }
-    }
-
+    if (!(await this.loadApplication())) return;
     await this.fetchPayments();
     document.addEventListener("keydown", this.handleKeydown);
   },
@@ -90,12 +92,27 @@ export default {
     document.removeEventListener("keydown", this.handleKeydown);
   },
   methods: {
+    async loadApplication() {
+      const cached = this.authStore.getApplicationFromList(this.applicationId);
+      if (cached) this.loadedApplication = cached;
+
+      try {
+        const response = await apiService.getApplication(this.applicationId);
+        if (!response.success) throw new Error(response.error || "Failed to load application");
+        this.loadedApplication = response.data;
+        return true;
+      } catch (error) {
+        logger.error("Failed to load payment application:", error);
+        await this.$router.push({ name: "MyApplications" });
+        return false;
+      }
+    },
     async fetchPayments() {
       try {
         this.loading = true;
         this.error = null;
 
-        const result = await paymentService.getPaymentsSummary();
+        const result = await paymentService.getPaymentsSummary(this.applicationId);
 
         if (result.success) {
           this.paidFees = result.data.paidFees || [];
@@ -196,6 +213,7 @@ export default {
           firstName: this.user.firstName || "Student",
           lastName: this.user.lastName || "",
           paymentType: fee.id,
+          applicationId: this.applicationId,
           description: fee.name,
         });
 
@@ -279,6 +297,7 @@ export default {
         const result = await paymentService.submitManualTransferReceipt(
           selectedFeeId,
           this.manualTransferReceipt,
+          this.applicationId,
         );
 
         if (!result.success) {
@@ -490,6 +509,11 @@ export default {
       }
     },
   },
+  watch: {
+    async applicationId() {
+      if (await this.loadApplication()) await this.fetchPayments();
+    },
+  },
 };
 </script>
 
@@ -498,7 +522,16 @@ export default {
     <h5>Payments</h5>
     <hr />
 
-    <div v-if="loading" class="text-center py-5">
+    <div v-if="isApplicationLocked" class="alert d-flex align-items-start gap-3 mt-4" :class="application?.status === 'rejected' ? 'alert-danger' : 'alert-warning'" role="alert">
+      <i :class="['bi', application?.status === 'rejected' ? 'bi-x-circle' : 'bi-clock-history', 'fs-5 mt-1 flex-shrink-0']"></i>
+      <div>
+        <strong>{{ application?.status === 'rejected' ? 'Application Rejected' : 'Application Expired' }}</strong>
+        <p class="mb-1 mt-1">Payments are not available for this application.</p>
+        <router-link to="/" class="alert-link small">&larr; Back to My Applications</router-link>
+      </div>
+    </div>
+
+    <div v-else-if="loading" class="text-center py-5">
       <div class="spinner-border text-primary" role="status">
         <span class="visually-hidden">Loading...</span>
       </div>

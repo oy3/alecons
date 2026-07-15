@@ -14,6 +14,7 @@ export default {
         variant: "btn-acon-secondary",
       }),
     },
+    locked: { type: Boolean, default: false },
   },
   computed: {
     progressPercent() {
@@ -89,7 +90,7 @@ export default {
       </div>
 
       <button
-        v-if="!resumeConfig.disabled"
+        v-if="!resumeConfig.disabled && !locked"
         @click="handleResumeClick"
         :class="[
           'btn',
@@ -104,7 +105,7 @@ export default {
       </button>
 
       <button
-        v-else
+        v-else-if="!locked"
         :disabled="resumeConfig.disabled"
         :class="[
           'btn',

@@ -1,6 +1,7 @@
 <script lang="js">
 import BrandLogo from "./BrandLogo.vue";
 import { useAuthStore } from "../stores/auth.js";
+import { useRoute } from "vue-router";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
 
@@ -9,9 +10,16 @@ export default {
   components: { BrandLogo },
   setup() {
     const authStore = useAuthStore();
+    const route = useRoute();
     return {
       authStore,
+      route,
     };
+  },
+  computed: {
+    applicationId() {
+      return this.route.params.id;
+    },
   },
   methods: {
     async logout() {
@@ -30,7 +38,6 @@ export default {
         await this.authStore.logout();
 
         this.$router.push({ name: "Login" }).then(() => {
-          // Complete the logout process after navigation
           this.authStore.completeLogout();
         });
 
@@ -53,33 +60,34 @@ export default {
     class="sidebar d-none d-md-flex flex-column acon-bg-primary-dark rounded-start-0 nav-custom-rounded text-white p-3"
   >
     <div class="text-center my-4">
-      <!-- <BrandLogo /> -->
-      <router-link to="/">
+      <router-link to="/my-applications">
         <img src="@shared/assets/logo.png" alt="Logo" width="70" class="" />
       </router-link>
     </div>
     <nav class="nav flex-column">
       <router-link
-        to="/dashboard"
+        v-if="applicationId"
+        :to="`/applications/${applicationId}/dashboard`"
         class="nav-link text-white py-4"
         active-class="active"
       >
         <i class="bi bi-house h5 me-2"></i> Home
       </router-link>
       <router-link
-        to="/payment"
+        v-if="applicationId"
+        :to="`/applications/${applicationId}/payment`"
         class="nav-link text-white py-4"
         active-class="active"
       >
         <i class="bi bi-credit-card h5 me-2"></i> Payments
       </router-link>
-      <router-link
+      <!-- <router-link
         to="/settings"
         class="nav-link text-white py-4"
         active-class="active"
       >
         <i class="bi bi-gear h5 me-2"></i> Settings
-      </router-link>
+      </router-link> -->
       <li
         @click="logout"
         class="nav-link text-white mt-auto py-4"

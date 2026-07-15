@@ -62,11 +62,13 @@ export class AuthController {
     }
 
     @Get('application/:id')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
     @ApiOperation({ summary: 'Get application details' })
     @ApiResponse({ status: 200, description: 'Application details retrieved' })
     @ApiResponse({ status: 404, description: 'Application not found' })
-    async getApplication(@Param('id') id: string) {
-        return this.authService.getApplicationById(id);
+    async getApplication(@Param('id') id: string, @Request() req) {
+        return this.authService.getApplicationById(id, req.user._id);
     }
 
     @Get('profile')

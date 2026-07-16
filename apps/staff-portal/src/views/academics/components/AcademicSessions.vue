@@ -469,7 +469,7 @@ export default {
         this.controlsLoading = false
 
         const { value: action } = await this.$swal.fire({
-          title: `Session Controls - ${session.sessionYear}`,
+          title: `Session Controls - ${session.title}`,
           html: this.getControlsModalHTML(),
           showCloseButton: true,
           showConfirmButton: false,

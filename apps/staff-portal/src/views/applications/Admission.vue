@@ -23,6 +23,9 @@ export default {
       searchQuery: "",
       statusFilter: "pending",
       programFilter: "all",
+      academicSessionFilter: "",
+      academicSessions: [],
+      isInitializingFilters: true,
       stageNames: {
         1: "Email Verification",
         2: "Form Fee Payment",
@@ -137,6 +140,11 @@ export default {
       this.currentPage = 1;
       this.loadApplications();
     },
+    academicSessionFilter() {
+      if (this.isInitializingFilters) return;
+      this.currentPage = 1;
+      this.loadApplications();
+    },
     currentPage() {
       this.loadApplications();
     },
@@ -157,7 +165,10 @@ export default {
     this.registerModalA11yHandlers();
 
     // Load data
-    await Promise.all([this.loadPrograms(), this.loadApplications()]);
+    await Promise.all([this.loadPrograms(), this.loadAcademicSessions()]);
+    this.academicSessionFilter = this.academicSessions[0]?._id || "";
+    this.isInitializingFilters = false;
+    await this.loadApplications();
   },
   beforeUnmount() {
     this.unregisterModalA11yHandlers();
@@ -277,6 +288,22 @@ export default {
       }
     },
 
+    async loadAcademicSessions() {
+      try {
+        const response = await apiService.getAcademicSessions({
+          limit: 100,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        });
+        this.academicSessions = response.success
+          ? response.data?.sessions || []
+          : [];
+      } catch (error) {
+        logger.error("Failed to load academic sessions for filter:", error);
+        this.academicSessions = [];
+      }
+    },
+
     async loadApplications() {
       try {
         this.isLoading = true;
@@ -291,6 +318,10 @@ export default {
 
         if (this.programFilter && this.programFilter !== "all") {
           params.programId = this.programFilter;
+        }
+
+        if (this.academicSessionFilter) {
+          params.academicSessionId = this.academicSessionFilter;
         }
 
         if (this.searchQuery && this.searchQuery.trim()) {
@@ -326,7 +357,8 @@ export default {
             },
             entryAcademicSession: app.entryAcademicSession,
             profileImageUrl: app.profileImageUrl,
-            admissionLetterUrl: app.admissionLetterUrl || app.admissionLetter || "",
+            admissionLetterUrl:
+              app.admissionLetterUrl || app.admissionLetter || "",
             submittedAt: app.createdAt,
             lastUpdated: app.updatedAt,
           }));
@@ -663,7 +695,10 @@ export default {
       try {
         const venue = this.screeningForm.venue.trim();
 
-        if (!this.screeningForm.screeningDate || !this.screeningForm.screeningTime) {
+        if (
+          !this.screeningForm.screeningDate ||
+          !this.screeningForm.screeningTime
+        ) {
           this.$swal.fire({
             icon: "warning",
             title: "Missing Details",
@@ -710,7 +745,8 @@ export default {
         this.$swal.fire({
           icon: "error",
           title: "Failed",
-          text: error.message || "Failed to schedule screening. Please try again.",
+          text:
+            error.message || "Failed to schedule screening. Please try again.",
           confirmButtonColor: "#1a5f5f",
         });
       } finally {
@@ -859,13 +895,29 @@ export default {
       </div>
     </div>
 
+    <div class="col-lg-3 col-md-6 mb-3">
+      <select
+        v-model="academicSessionFilter"
+        class="form-select form-select-sm"
+      >
+        <option value="">All Academic Sessions</option>
+        <option
+          v-for="session in academicSessions"
+          :key="session._id"
+          :value="session._id"
+        >
+          {{ session.title }}
+        </option>
+      </select>
+    </div>
+
     <!-- Filters -->
     <div class="row mb-4">
       <div class="col-12">
         <div class="card p-0 border-0 shadow-sm">
           <div class="card-body">
             <div class="row g-3">
-              <div class="col-md-4">
+              <div class="col-md-3">
                 <label class="form-label">Program Filter</label>
                 <select
                   v-model="programFilter"
@@ -881,7 +933,7 @@ export default {
                   </option>
                 </select>
               </div>
-              <div class="col-md-6">
+              <div class="col-md-7">
                 <label class="form-label">Search</label>
                 <input
                   v-model="searchQuery"
@@ -958,7 +1010,7 @@ export default {
                         <img
                           :src="
                             application.profileImageUrl ||
-                            'https://placehold.co/40'
+                            'https://placehold.co/40?text=IMG'
                           "
                           class="rounded-circle me-2"
                           width="40"
@@ -966,7 +1018,7 @@ export default {
                           alt="Profile"
                         />
                         <div>
-                          <div class="fw-semibold">
+                          <div class="fw-semibold text-capitalize small">
                             {{ application.applicantName }}
                           </div>
                           <!-- <small class="text-muted">{{
@@ -1838,11 +1890,11 @@ export default {
                 </div>
                 <div class="card-body">
                   <div class="row g-3">
-                    <div class="col-12 text-center">
+                    <div class="col-md-4 text-center">
                       <img
                         :src="
                           selectedApplicationDetails.profileImageUrl ||
-                          'https://placehold.co/120x120'
+                          'https://placehold.co/120x120?text=IMG'
                         "
                         class="rounded-circle mb-3"
                         width="120"
@@ -1850,28 +1902,28 @@ export default {
                         alt="Profile Photo"
                       />
                     </div>
-                    <div class="col-12">
+                    <div class="col-md-8">
                       <label class="form-label fw-semibold">Full Name</label>
-                      <p class="form-control-plaintext">
+                      <p class="form-control-plaintext text-capitalize">
                         {{ getApplicantFullName(selectedApplicationDetails) }}
                       </p>
                     </div>
-                    <div class="col-12">
+                    <div class="col-md-6">
                       <label class="form-label fw-semibold">Email</label>
                       <p class="form-control-plaintext">
                         {{ selectedApplicationDetails.userId?.email || "N/A" }}
                       </p>
                     </div>
-                    <div class="col-12">
+                    <div class="col-md-6">
                       <label class="form-label fw-semibold">Phone Number</label>
                       <p class="form-control-plaintext">
                         {{ selectedApplicationDetails.userId?.phone || "N/A" }}
                       </p>
                     </div>
-                    <div class="col-12">
-                      <label class="form-label fw-semibold"
-                        >Date of Birth</label
-                      >
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">
+                        Date of Birth
+                      </label>
                       <p class="form-control-plaintext">
                         {{
                           selectedApplicationDetails.dob
@@ -1882,16 +1934,16 @@ export default {
                         }}
                       </p>
                     </div>
-                    <div class="col-6">
-                      <label class="form-label fw-semibold">Gender</label>
-                      <p class="form-control-plaintext">
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold"> Gender </label>
+                      <p class="form-control-plaintext text-capitalize">
                         {{ selectedApplicationDetails.gender || "N/A" }}
                       </p>
                     </div>
-                    <div class="col-6">
-                      <label class="form-label fw-semibold"
-                        >Marital Status</label
-                      >
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">
+                        Marital Status
+                      </label>
                       <p class="form-control-plaintext">
                         {{ selectedApplicationDetails.maritalStatus || "N/A" }}
                       </p>
@@ -1906,24 +1958,34 @@ export default {
               <div class="card p-0 h-100">
                 <div class="card-header">
                   <h6 class="card-title mb-0">
-                    <i class="bi bi-clipboard-data me-2"></i>Application
+                    <i class="bi bi-clipboard-data me-2"></i> Application
                     Information
                   </h6>
                 </div>
                 <div class="card-body">
                   <div class="row g-3">
-                    <div class="col-12">
-                      <label class="form-label fw-semibold"
-                        >Program Applied For</label
-                      >
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold">
+                        Program Applied For
+                      </label>
                       <p class="form-control-plaintext">
                         {{ getProgramDisplayLabel(selectedApplicationDetails) }}
                       </p>
                     </div>
-                    <div class="col-12">
-                      <label class="form-label fw-semibold"
-                        >Current Stage</label
-                      >
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold">
+                        Academic Session
+                      </label>
+                      <p class="form-control-plaintext">
+                        {{
+                          getAcademicSessionLabel(selectedApplicationDetails)
+                        }}
+                      </p>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold">
+                        Current Stage
+                      </label>
                       <p class="form-control-plaintext">
                         <span class="badge bg-info">
                           {{
@@ -1939,10 +2001,10 @@ export default {
                         </span>
                       </p>
                     </div>
-                    <div class="col-12">
-                      <label class="form-label fw-semibold"
-                        >Application Status</label
-                      >
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold">
+                        Application Status
+                      </label>
                       <p class="form-control-plaintext">
                         <span
                           :class="
@@ -1956,16 +2018,6 @@ export default {
                             "N/A"
                           }}
                         </span>
-                      </p>
-                    </div>
-                    <div class="col-12">
-                      <label class="form-label fw-semibold"
-                        >Academic Session</label
-                      >
-                      <p class="form-control-plaintext">
-                        {{
-                          getAcademicSessionLabel(selectedApplicationDetails)
-                        }}
                       </p>
                     </div>
                     <!-- <div class="col-6">
@@ -2004,9 +2056,9 @@ export default {
                       </p>
                     </div>
                     <div class="col-6">
-                      <label class="form-label fw-semibold"
-                        >Submitted Date</label
-                      >
+                      <label class="form-label fw-semibold">
+                        Submitted Date
+                      </label>
                       <p class="form-control-plaintext">
                         {{
                           selectedApplicationDetails.createdAt
@@ -2238,29 +2290,29 @@ export default {
                       </p>
                     </div>
                     <div class="col-12">
-                      <label class="form-label fw-semibold"
-                        >Emergency Contact Name</label
-                      >
+                      <label class="form-label fw-semibold">
+                        Emergency Contact Name
+                      </label>
                       <p class="form-control-plaintext">
                         {{
                           selectedApplicationDetails.nextOfKin?.name || "N/A"
                         }}
                       </p>
                     </div>
-                    <div class="col-12">
-                      <label class="form-label fw-semibold"
-                        >Emergency Contact Phone</label
-                      >
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold">
+                        Emergency Contact Phone
+                      </label>
                       <p class="form-control-plaintext">
                         {{
                           selectedApplicationDetails.nextOfKin?.phone || "N/A"
                         }}
                       </p>
                     </div>
-                    <div class="col-12">
-                      <label class="form-label fw-semibold"
-                        >Emergency Contact Relationship</label
-                      >
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold">
+                        Emergency Contact Relationship
+                      </label>
                       <p class="form-control-plaintext">
                         {{
                           selectedApplicationDetails.nextOfKin?.relationship ||
@@ -2278,7 +2330,7 @@ export default {
               <div class="card p-0 h-100">
                 <div class="card-header">
                   <h6 class="card-title mb-0">
-                    <i class="bi bi-clipboard-check me-2"></i>Exam & Screening
+                    <i class="bi bi-clipboard-check me-2"></i> Exam & Screening
                   </h6>
                 </div>
                 <div class="card-body">
@@ -2527,7 +2579,7 @@ export default {
               <div class="card p-0">
                 <div class="card-header">
                   <h6 class="card-title mb-0">
-                    <i class="bi bi-award me-2"></i>Admission Decision
+                    <i class="bi bi-award me-2"></i> Admission Decision
                   </h6>
                 </div>
                 <div class="card-body">
@@ -2536,11 +2588,15 @@ export default {
                       <label class="form-label fw-semibold">Decision</label>
                       <p class="form-control-plaintext">
                         <span
+                          class="badge"
                           :class="
                             selectedApplicationDetails.admissionDecision ===
                             'admitted'
-                              ? 'badge bg-success'
-                              : 'badge bg-danger'
+                              ? 'bg-success'
+                              : selectedApplicationDetails.admissionDecision ===
+                                  'pending'
+                                ? 'bg-warning text-dark'
+                                : 'bg-danger'
                           "
                         >
                           {{

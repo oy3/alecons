@@ -74,6 +74,7 @@ export default {
       paymentOptions: [],
       programOptions: [],
       academicSessions: [],
+      isInitializingSessionFilter: true,
       processingPaymentId: null,
       isSyncingRemittance: false,
       remittanceModalOpen: false,
@@ -96,11 +97,11 @@ export default {
       return;
     }
 
-    await Promise.all([
-      this.loadFilterOptions(),
-      this.loadPayments(),
-      this.loadPaymentStats(),
-    ]);
+    await this.loadFilterOptions();
+    this.filters.academicSessionId = this.academicSessions[0]?._id || "";
+    await this.$nextTick();
+    this.isInitializingSessionFilter = false;
+    await Promise.all([this.loadPayments(), this.loadPaymentStats()]);
   },
   computed: {
     hasActiveFilters() {
@@ -239,7 +240,7 @@ export default {
     },
 
     handleAcademicSessionFilterChange() {
-      if (this.isApplyingFilterPreset) {
+      if (this.isApplyingFilterPreset || this.isInitializingSessionFilter) {
         return;
       }
 
@@ -265,7 +266,12 @@ export default {
               sortOrder: "asc",
             }),
             apiService.getPrograms({ page: 1, limit: 500, active: true }),
-            apiService.getAcademicSessions({ page: 1, limit: 200 }),
+            apiService.getAcademicSessions({
+              page: 1,
+              limit: 200,
+              sortBy: "createdAt",
+              sortOrder: "desc",
+            }),
           ]);
 
         this.paymentOptions = paymentsResponse.success
@@ -1817,7 +1823,6 @@ export default {
     </div>
 
     <div class="col-lg-3 col-md-6 mb-3">
-      <!-- <label class="form-label">Session</label> -->
       <select
         v-model="filters.academicSessionId"
         class="form-select form-select-sm"

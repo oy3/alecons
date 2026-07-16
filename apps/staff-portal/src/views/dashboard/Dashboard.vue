@@ -135,7 +135,9 @@ export default {
         pending: "bg-warning text-dark",
         approved: "bg-success text-white",
         rejected: "bg-danger text-white",
+        completed: "bg-primary text-white",
         under_review: "bg-info text-white",
+        expired: "bg-secondary text-white",
       };
       return statusClasses[status] || "bg-secondary text-white";
     },
@@ -191,7 +193,12 @@ export default {
             <p class="text-muted mb-0">
               Here's a summary of the portal's activity
               <span v-if="currentAcademicSession">
-                for {{ currentAcademicSession.sessionYear }} session </span
+                for
+                {{
+                  currentAcademicSession.title ||
+                  currentAcademicSession.sessionYear
+                }}
+                session </span
               >.
             </p>
           </div>
@@ -242,11 +249,10 @@ export default {
           authStore.hasModuleAccess('users')
         "
       >
-      
         <!-- Pending Applications -->
         <div
           class="col-lg-3 col-md-6 mb-3"
-       v-if="authStore.hasPermission('applications', 'view')"   
+          v-if="authStore.hasPermission('applications', 'view')"
         >
           <div class="card p-0 h-100 border-0 shadow-sm">
             <div class="card-body">
@@ -366,7 +372,7 @@ export default {
             <div class="card-body p-0">
               <div class="table-responsive">
                 <table class="table table-hover mb-0">
-                  <thead class="table-light">
+                  <thead class="table-light small">
                     <tr>
                       <th>#</th>
                       <th>Applicant</th>
@@ -384,13 +390,15 @@ export default {
                     </tr>
                     <tr v-else v-for="app in recentApplications" :key="app.id">
                       <td>
-                        <code class="text-staff-primary">{{
-                          app.applicationNumber
-                        }}</code>
+                        <code class="text-staff-primary">
+                          {{ app.applicationNumber }}
+                        </code>
                       </td>
                       <td>
                         <div class="d-flex align-items-center">
-                          <span class="fw-medium">{{ app.applicantName }}</span>
+                          <span class="fw-medium text-capitalize">
+                            {{ app.applicantName }}
+                          </span>
                         </div>
                       </td>
                       <td>{{ app.program }}</td>

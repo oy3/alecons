@@ -73,6 +73,7 @@ export class StaffDashboardService {
                 ? {
                     id: currentAcademicSession._id,
                     sessionYear: currentAcademicSession.sessionYear,
+                    title: currentAcademicSession.title,
                     status: currentAcademicSession.status,
                     startDate: currentAcademicSession.startDate,
                     endDate: currentAcademicSession.endDate,

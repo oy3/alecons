@@ -1378,7 +1378,7 @@ export default {
                         <i v-else class="bi bi-person text-staff-primary"></i>
                       </div>
                       <div>
-                        <div class="fw-medium">
+                        <div class="fw-medium text-capitalize">
                           {{ user.firstName }} {{ user.otherName }}
                           {{ user.lastName }}
                         </div>

@@ -1,13 +1,16 @@
 <script lang="js">
 import BrandLogo from "../../components/BrandLogo.vue";
 import { apiService } from "../../services/api.js";
-import { authManager } from "../../services/auth.js";
+import { useAuthStore } from "../../stores/auth.js";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
 
 export default {
   name: "Registration",
   components: { BrandLogo },
+  setup() {
+    return { authStore: useAuthStore() };
+  },
   data() {
     return {
       formData: {
@@ -226,7 +229,9 @@ export default {
         if (programTypesResult.success) {
           // Handle both nested and direct data structure
           this.programTypes =
-            programTypesResult.data?.data || programTypesResult.data || [];
+            (programTypesResult.data?.data || programTypesResult.data || []).filter(
+              (programType) => programType.active !== false,
+            );
           logger.info("Program types loaded:", this.programTypes);
         } else {
           logger.error("Failed to load program types:", programTypesResult);
@@ -235,7 +240,9 @@ export default {
         if (programModesResult.success) {
           // Handle both nested and direct data structure
           this.programModes =
-            programModesResult.data?.data || programModesResult.data || [];
+            (programModesResult.data?.data || programModesResult.data || []).filter(
+              (programMode) => programMode.active !== false,
+            );
           logger.info("Program modes loaded:", this.programModes);
         } else {
           logger.error("Failed to load program modes:", programModesResult);
@@ -301,7 +308,7 @@ export default {
         });
 
         // Call backend API
-        const result = await apiService.register({
+        const result = await this.authStore.register({
           firstName: this.formData.firstName,
           otherName: this.formData.otherName,
           lastName: this.formData.lastName,
@@ -316,21 +323,6 @@ export default {
         if (result.success) {
           logger.info("Registration successful:", result.data.user);
 
-          // Create application object for consistency with login response
-          const applicationData = {
-            id: result.data.applicationId,
-            applicationNumber: result.data.applicationNumber,
-            currentStage: 1,
-            status: "pending",
-          };
-
-          // Set authentication using auth manager
-          authManager.setAuth(
-            result.data.user,
-            result.data.access_token,
-            applicationData,
-          );
-
           // Success message
           await Swal.fire({
             icon: "success",
@@ -339,8 +331,12 @@ export default {
             confirmButtonColor: "#2d7d7d",
           });
 
-          // Redirect to dashboard
-          this.$router.push({ name: "Dashboard" });
+          const applicationId = this.authStore.applications[0]?.id;
+          await this.$router.push(
+            applicationId
+              ? { name: "Dashboard", params: { id: applicationId } }
+              : { name: "MyApplications" },
+          );
         } else {
           // Handle API errors
           await Swal.fire({
@@ -551,7 +547,7 @@ export default {
                 </span>
               </h3>
 
-              <div class="alert alert-warning mb-4 small">
+              <!-- <div class="alert alert-warning mb-4 small">
                 <i class="bi bi-exclamation-triangle me-1"></i> Only direct
                 entry JAMB candidates and graduates from
                 <b>Community Midwifery and Nursing</b> program should select
@@ -559,7 +555,7 @@ export default {
                 other applicants should select the <b>Full-Time</b> program
                 mode. Please ensure you select the correct program mode to avoid
                 any issues with your application.
-              </div>
+              </div> -->
 
               <!-- Academic Session Info -->
               <!-- <div v-if="currentAcademicSession" class="alert alert-info mb-4">
@@ -591,8 +587,8 @@ export default {
               >
                 <div class="row g-3">
                   <div class="col-sm-4">
-                    <label for="programType"
-                      > Program Type <span class="text-danger">*</span></label
+                    <label for="programType">
+                      Program Type <span class="text-danger">*</span></label
                     >
                     <select
                       id="programType"
@@ -619,8 +615,8 @@ export default {
                   </div>
 
                   <div class="col-sm-4">
-                    <label for="programMode"
-                      >Program Mode<span class="text-danger">*</span></label
+                    <label for="programMode">
+                      Program Mode<span class="text-danger">*</span></label
                     >
                     <select
                       id="programMode"
@@ -647,8 +643,8 @@ export default {
                   </div>
 
                   <div class="col-sm-4">
-                    <label for="program"
-                      >Program <span class="text-danger">*</span></label
+                    <label for="program">
+                      Program <span class="text-danger">*</span></label
                     >
                     <select
                       id="program"

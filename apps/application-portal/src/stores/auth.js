@@ -139,20 +139,32 @@ export const useAuthStore = defineStore('auth', () => {
             const response = await apiService.register(userData);
 
             if (response.success) {
+                const registrationData = response.data;
+
                 // Set token
-                token.value = response.data.access_token;
-                localStorage.setItem('authToken', response.data.access_token);
+                token.value = registrationData.access_token;
+                localStorage.setItem('authToken', registrationData.access_token);
+                apiService.setToken(registrationData.access_token);
 
                 // Set user data
-                user.value = response.data.user;
-                applications.value = response.data.applications || (response.data.application ? [response.data.application] : []);
+                user.value = registrationData.user;
+                applications.value = Array.isArray(registrationData.applications) && registrationData.applications.length
+                    ? registrationData.applications
+                    : registrationData.application
+                        ? [registrationData.application]
+                        : registrationData.applicationId ? [{
+                        id: registrationData.applicationId,
+                        applicationNumber: registrationData.applicationNumber,
+                        currentStage: 1,
+                        status: 'pending',
+                    }] : [];
 
                 logger.info('Registration successful:', {
                     userId: user.value.id,
                     email: user.value.email,
                 });
 
-                return { success: true };
+                return { success: true, data: registrationData };
             } else {
                 logger.warn('Registration failed:', response.error);
                 return { success: false, error: response.error };

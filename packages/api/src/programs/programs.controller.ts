@@ -2,6 +2,9 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } fro
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Public } from '../auth/decorators/public.decorator';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
+import { UserRole } from '../schemas/user.schema';
 import { ProgramsService } from './programs.service';
 import {
     CreateProgramDto,
@@ -55,7 +58,16 @@ export class ProgramsController {
 
     @Get('types')
     @Public()  // Make this public for registration access
-    @ApiOperation({ summary: 'Get all program types' })
+    @ApiOperation({ summary: 'Get active program types for applicant selections' })
+    @ApiResponse({ status: 200, description: 'Active program types retrieved successfully' })
+    async findActiveProgramTypes() {
+        return this.programsService.findActiveProgramTypes();
+    }
+
+    @Get('types/management')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.ADMIN, UserRole.STAFF)
+    @ApiOperation({ summary: 'Get all program types for staff management' })
     @ApiResponse({ status: 200, description: 'Program types retrieved successfully' })
     async findAllProgramTypes() {
         return this.programsService.findAllProgramTypes();
@@ -96,7 +108,16 @@ export class ProgramsController {
 
     @Get('modes')
     @Public()  // Make this public for registration access
-    @ApiOperation({ summary: 'Get all program modes' })
+    @ApiOperation({ summary: 'Get active program modes for applicant selections' })
+    @ApiResponse({ status: 200, description: 'Active program modes retrieved successfully' })
+    async findActiveProgramModes() {
+        return this.programsService.findActiveProgramModes();
+    }
+
+    @Get('modes/management')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.ADMIN, UserRole.STAFF)
+    @ApiOperation({ summary: 'Get all program modes for staff management' })
     @ApiResponse({ status: 200, description: 'Program modes retrieved successfully' })
     async findAllProgramModes() {
         return this.programsService.findAllProgramModes();

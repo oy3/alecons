@@ -236,6 +236,30 @@ export class AuthService {
         }
     }
 
+    private async assertProgramAvailableForApplication(programId: string) {
+        if (!Types.ObjectId.isValid(programId)) {
+            throw new BadRequestException('Invalid program selected');
+        }
+
+        const program = await this.programModel
+            .findById(programId)
+            .select('_id active programTypeId programModeId')
+            .lean();
+
+        if (!program?.active) {
+            throw new BadRequestException('Selected program is not available.');
+        }
+
+        const [programType, programMode] = await Promise.all([
+            this.programTypeModel.findOne({ _id: program.programTypeId, active: true }).select('_id').lean(),
+            this.programModeModel.findOne({ _id: program.programModeId, active: true }).select('_id').lean(),
+        ]);
+
+        if (!programType || !programMode) {
+            throw new BadRequestException('Selected program is not currently available for applications.');
+        }
+    }
+
     async register(registerDto: RegisterDto) {
         const {
             email,
@@ -278,6 +302,7 @@ export class AuthService {
             logger: this.logger,
             logContext: { email },
         });
+        await this.assertProgramAvailableForApplication(resolvedProgram.programId);
 
         // Generate email verification token
         const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -863,9 +888,7 @@ export class AuthService {
             );
             if (!hasApplicationControl) throw new BadRequestException('Applications for this intake are currently disabled.');
 
-            // Validate program exists and is active
-            const program = await this.programModel.findOne({ _id: new Types.ObjectId(programId), active: true });
-            if (!program) throw new BadRequestException('Selected program is not available.');
+            await this.assertProgramAvailableForApplication(programId);
 
             // Duplicate check: no non-expired application for same user + session
             const existing = await this.applicationModel.findOne({
@@ -939,6 +962,8 @@ export class AuthService {
             if (!previousApplication?.programId) {
                 throw new BadRequestException('No prior application found to reapply from.');
             }
+
+            await this.assertProgramAvailableForApplication(previousApplication.programId.toString());
 
             const application = await this.buildApplicantApplicationWithNumber({
                 userId: user._id,

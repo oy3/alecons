@@ -745,7 +745,7 @@ class StaffApiService {
 
     // Program Type API methods
     async getProgramTypes() {
-        return this.makeRequest('/programs/types')
+        return this.makeRequest('/programs/types/management')
     }
 
     async createProgramType(typeData) {
@@ -776,7 +776,7 @@ class StaffApiService {
 
     // Program Mode API methods
     async getProgramModes() {
-        return this.makeRequest('/programs/modes')
+        return this.makeRequest('/programs/modes/management')
     }
 
     async createProgramMode(modeData) {

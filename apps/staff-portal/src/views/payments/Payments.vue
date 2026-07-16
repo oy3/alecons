@@ -1828,7 +1828,7 @@ export default {
           :key="session._id"
           :value="session._id"
         >
-          {{ session.sessionYear }}
+          {{ session.title }}
         </option>
       </select>
     </div>

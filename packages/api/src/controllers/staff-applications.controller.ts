@@ -562,6 +562,7 @@ export class StaffApplicationsController {
         @Query('limit') limit: number = 10,
         @Query('status') status?: string,
         @Query('programId') programId?: string,
+        @Query('academicSessionId') academicSessionId?: string,
         @Query('search') search?: string,
         @Query('sortBy') sortBy: string = 'createdAt',
         @Query('sortOrder') sortOrder: string = 'desc'
@@ -572,6 +573,7 @@ export class StaffApplicationsController {
                 limit,
                 status,
                 programId,
+                academicSessionId,
                 search,
                 sortBy,
                 sortOrder
@@ -586,6 +588,16 @@ export class StaffApplicationsController {
 
             if (programId && programId !== 'all') {
                 filter.programId = new Types.ObjectId(programId);
+            }
+
+            if (academicSessionId) {
+                if (!Types.ObjectId.isValid(academicSessionId)) {
+                    throw new HttpException(
+                        { success: false, message: 'Invalid academic session ID format' },
+                        HttpStatus.BAD_REQUEST,
+                    );
+                }
+                filter.entryAcademicSession = new Types.ObjectId(academicSessionId);
             }
 
             // Calculate pagination

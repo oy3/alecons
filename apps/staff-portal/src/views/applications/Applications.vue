@@ -109,6 +109,8 @@ export default {
       searchTimeout: null,
       statusFilter: "all",
       programFilter: "all",
+      academicSessionFilter: "",
+      isInitializingFilters: true,
       currentPage: 1,
       perPage: 10,
       totalApplications: 0,
@@ -135,9 +137,11 @@ export default {
         { value: "cleared", label: "Cleared" },
         { value: "completed", label: "Completed" },
         { value: "rejected", label: "Rejected" },
+        { value: "expired", label: "Expired" },
       ],
 
       programs: [],
+      academicSessions: [],
     };
   },
   async mounted() {
@@ -153,7 +157,10 @@ export default {
       return;
     }
 
-    await Promise.all([this.loadPrograms(), this.loadApplications()]);
+    await Promise.all([this.loadPrograms(), this.loadAcademicSessions()]);
+    this.academicSessionFilter = this.academicSessions[0]?._id || "";
+    this.isInitializingFilters = false;
+    await this.loadApplications();
   },
   computed: {
     filteredApplications() {
@@ -185,6 +192,11 @@ export default {
       this.currentPage = 1;
       this.loadApplications();
     },
+    academicSessionFilter() {
+      if (this.isInitializingFilters) return;
+      this.currentPage = 1;
+      this.loadApplications();
+    },
     searchQuery() {
       clearTimeout(this.searchTimeout);
       this.searchTimeout = setTimeout(() => {
@@ -212,6 +224,7 @@ export default {
           filters: {
             status: this.statusFilter,
             program: this.programFilter,
+            academicSessionId: this.academicSessionFilter,
             search: this.searchQuery,
             page: this.currentPage,
             limit: this.perPage,
@@ -231,6 +244,10 @@ export default {
 
         if (this.programFilter && this.programFilter !== "all") {
           params.programId = this.programFilter;
+        }
+
+        if (this.academicSessionFilter) {
+          params.academicSessionId = this.academicSessionFilter;
         }
 
         if (this.searchQuery && this.searchQuery.trim()) {
@@ -1389,6 +1406,22 @@ export default {
       }
     },
 
+    async loadAcademicSessions() {
+      try {
+        const response = await apiService.getAcademicSessions({
+          limit: 100,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        });
+        this.academicSessions = response.success
+          ? response.data?.sessions || []
+          : [];
+      } catch (error) {
+        logger.error("Failed to load academic sessions for filter:", error);
+        this.academicSessions = [];
+      }
+    },
+
     resetFilters() {
       logger.info("Resetting all filters");
 
@@ -1396,6 +1429,7 @@ export default {
       this.searchQuery = "";
       this.statusFilter = "all";
       this.programFilter = "all";
+      this.academicSessionFilter = "";
       this.currentPage = 1;
 
       // Clear any pending search timeout
@@ -1651,6 +1685,22 @@ export default {
       </div>
     </div>
 
+    <div class="col-lg-3 col-md-6 mb-3">
+      <select
+        v-model="academicSessionFilter"
+        class="form-select form-select-sm"
+      >
+        <option value="">All Academic Sessions</option>
+        <option
+          v-for="session in academicSessions"
+          :key="session._id"
+          :value="session._id"
+        >
+          {{ session.title }}
+        </option>
+      </select>
+    </div>
+
     <!-- Filters -->
     <div class="row mb-4">
       <div class="col-12">
@@ -1808,7 +1858,7 @@ export default {
                           <i class="bi bi-person text-staff-primary fs-4"></i>
                         </div>
 
-                        <span class="fw-medium">{{ app.applicantName }}</span>
+                        <span class="fw-medium text-capitalize">{{ app.applicantName }}</span>
                       </div>
                     </td>
                     <td>
@@ -1912,8 +1962,10 @@ export default {
                           </li>
                           <li
                             v-if="
-                              authStore.hasPermission('applications', 'approve') &&
-                              canSendAdmissionLetter(app)
+                              authStore.hasPermission(
+                                'applications',
+                                'approve',
+                              ) && canSendAdmissionLetter(app)
                             "
                           >
                             <a
@@ -1921,7 +1973,8 @@ export default {
                               href="#"
                               @click.prevent="sendAdmissionLetter(app)"
                             >
-                              <i class="bi bi-envelope-paper me-2"></i>Send Admission Letter
+                              <i class="bi bi-envelope-paper me-2"></i>Send
+                              Admission Letter
                             </a>
                           </li>
                           <!-- 
@@ -2056,7 +2109,7 @@ export default {
                           <i class="bi bi-person text-staff-primary fs-4"></i>
                         </div>
                         <div>
-                          <div class="fw-semibold text-staff-primary">
+                          <div class="fw-semibold text-staff-primary text-capitalize">
                             {{ app.applicantName }}
                           </div>
                           <div class="small text-muted text-break">
@@ -2188,7 +2241,7 @@ export default {
                     @click="currentPage = currentPage - 1"
                     :disabled="currentPage === 1"
                   >
-                    Previous
+                    Prev
                   </button>
                 </li>
                 <li
@@ -2768,12 +2821,12 @@ export default {
         <div class="modal-content application-details-modal">
           <div class="modal-header border-0 pb-0">
             <div>
-              <h5 class="modal-title fw-bold text-staff-primary">
+              <h6 class="modal-title fw-bold text-staff-primary">
                 Application Details
-              </h5>
+              </h6>
               <p v-if="selectedApplication" class="text-muted mb-0">
                 {{ selectedApplication.applicationNumber }} ·
-                {{ getApplicantFullName(selectedApplication) }}
+                <span class="text-capitalize">{{ getApplicantFullName(selectedApplication) }}</span>
               </p>
             </div>
             <button
@@ -2810,7 +2863,7 @@ export default {
                           <div
                             class="d-flex flex-wrap align-items-center gap-2 mb-2"
                           >
-                            <h4 class="fw-bold mb-0">
+                            <h4 class="fw-bold mb-0 text-capitalize">
                               {{ getApplicantFullName(selectedApplication) }}
                             </h4>
                             <span

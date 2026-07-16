@@ -81,11 +81,17 @@ export class ProgramsService {
             if (!programType) {
                 throw new BadRequestException('Program type not found');
             }
+            if (!programType.active) {
+                throw new BadRequestException('Inactive program types cannot be assigned to a program');
+            }
 
             // Validate program mode exists
             const programMode = await this.programModeModel.findById(createProgramDto.programModeId);
             if (!programMode) {
                 throw new BadRequestException('Program mode not found');
+            }
+            if (!programMode.active) {
+                throw new BadRequestException('Inactive program modes cannot be assigned to a program');
             }
 
             await this.validateCourseAdvisor(createProgramDto.courseAdvisorId);
@@ -150,6 +156,10 @@ export class ProgramsService {
 
             // Build filter object
             const filter: any = {};
+            const [activeProgramTypeIds, activeProgramModeIds] = await Promise.all([
+                this.programTypeModel.distinct('_id', { active: true }),
+                this.programModeModel.distinct('_id', { active: true }),
+            ]);
 
             if (search) {
                 filter.$or = [
@@ -169,12 +179,13 @@ export class ProgramsService {
                 filter.programModeId = new Types.ObjectId(programModeId);
             }
 
-            if (active !== undefined) {
-                filter.active = active;
-            } else {
-                // For public access (registration), only show active programs by default
-                filter.active = true;
-            }
+            // This endpoint is public. A program is available to applicants only when
+            // its own record, type, and mode are all active, regardless of query input.
+            filter.active = true;
+            filter.$and = [
+                { programTypeId: { $in: activeProgramTypeIds } },
+                { programModeId: { $in: activeProgramModeIds } },
+            ];
 
             // If no filters are provided (registration use case), return a lightweight public payload
             const isPublicAccess = !search && !departmentId && !programTypeId && !programModeId && active === undefined;
@@ -341,12 +352,18 @@ export class ProgramsService {
                 if (!programType) {
                     throw new BadRequestException('Program type not found');
                 }
+                if (!programType.active) {
+                    throw new BadRequestException('Inactive program types cannot be assigned to a program');
+                }
             }
 
             if (updateProgramDto.programModeId) {
                 const programMode = await this.programModeModel.findById(updateProgramDto.programModeId);
                 if (!programMode) {
                     throw new BadRequestException('Program mode not found');
+                }
+                if (!programMode.active) {
+                    throw new BadRequestException('Inactive program modes cannot be assigned to a program');
                 }
             }
 
@@ -497,6 +514,21 @@ export class ProgramsService {
         }
     }
 
+    async findActiveProgramTypes() {
+        try {
+            const programTypes = await this.programTypeModel
+                .find({ active: true })
+                .sort({ createdAt: -1 })
+                .exec();
+            return {
+                success: true,
+                data: programTypes.map(type => this.formatProgramTypeResponse(type))
+            };
+        } catch (error) {
+            throw new BadRequestException('Failed to fetch active program types: ' + error.message);
+        }
+    }
+
     async updateProgramType(id: string, updateProgramTypeDto: UpdateProgramTypeDto) {
         try {
             if (!Types.ObjectId.isValid(id)) {
@@ -644,6 +676,21 @@ export class ProgramsService {
             };
         } catch (error) {
             throw new BadRequestException('Failed to fetch program modes: ' + error.message);
+        }
+    }
+
+    async findActiveProgramModes() {
+        try {
+            const programModes = await this.programModeModel
+                .find({ active: true })
+                .sort({ createdAt: -1 })
+                .exec();
+            return {
+                success: true,
+                data: programModes.map(mode => this.formatProgramModeResponse(mode))
+            };
+        } catch (error) {
+            throw new BadRequestException('Failed to fetch active program modes: ' + error.message);
         }
     }
 

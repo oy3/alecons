@@ -88,6 +88,17 @@ class StudentPaymentService {
         }
     }
 
+    async getPaymentHistorySessions() {
+        try {
+            const response = await apiService.getPaymentHistorySessions();
+            return response.success
+                ? { success: true, data: response.data }
+                : { success: false, message: response.message || 'Failed to fetch payment history sessions' };
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to fetch payment history sessions', error };
+        }
+    }
+
     /**
      * Get available payments for a specific academic session
      */

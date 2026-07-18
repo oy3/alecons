@@ -31,6 +31,7 @@ import { User, UserSchema } from './schemas/user.schema';
 import { Student, StudentSchema } from './schemas/student.schema';
 import { Payment, PaymentSchema } from './schemas/payment.schema';
 import { StudentPayment, StudentPaymentSchema } from './schemas/student-payment.schema';
+import { StudentAcademicSession, StudentAcademicSessionSchema } from './schemas/student-academic-session.schema';
 import { ExamAttempt, ExamAttemptSchema } from './schemas/exam-attempt.schema';
 import { ExamResult, ExamResultSchema } from './schemas/exam-result.schema';
 import { ExamPassword, ExamPasswordSchema } from './schemas/exam-password.schema';
@@ -78,6 +79,7 @@ const hasExternalApiEnvFile = Boolean(process.env.API_ENV_FILE);
             { name: Student.name, schema: StudentSchema },
             { name: Payment.name, schema: PaymentSchema },
             { name: StudentPayment.name, schema: StudentPaymentSchema },
+            { name: StudentAcademicSession.name, schema: StudentAcademicSessionSchema },
             { name: ExamAttempt.name, schema: ExamAttemptSchema },
             { name: ExamResult.name, schema: ExamResultSchema },
             { name: ExamPassword.name, schema: ExamPasswordSchema },

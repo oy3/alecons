@@ -1,142 +1,142 @@
 <script>
-import { apiService } from '../../../services/api.js'
-import { logger } from '@shared/utils/logger'
+import { apiService } from "../../../services/api.js";
+import { logger } from "@shared/utils/logger";
 
 export default {
-  name: 'AcademicSessions',
+  name: "AcademicSessions",
   data() {
     return {
       sessions: [],
       isLoading: true,
-      searchQuery: '',
+      searchQuery: "",
       searchTimeout: null,
       currentPage: 1,
       perPage: 10,
       totalSessions: 0,
       apiTotalPages: 0,
-      
+
       // Status options
       statusOptions: [
-        { value: 'draft', label: 'Draft', class: 'bg-secondary' },
-        { value: 'open', label: 'Open', class: 'bg-success' },
-        { value: 'ongoing', label: 'Ongoing', class: 'bg-primary' },
-        { value: 'closed', label: 'Closed', class: 'bg-danger' }
+        { value: "draft", label: "Draft", class: "bg-secondary" },
+        { value: "open", label: "Open", class: "bg-success" },
+        { value: "ongoing", label: "Ongoing", class: "bg-primary" },
+        { value: "closed", label: "Closed", class: "bg-danger" },
       ],
 
       // Session controls data
       selectedSession: null,
       sessionControls: null,
       controlsLoading: false,
-      availablePayments: []
-    }
+      availablePayments: [],
+    };
   },
   computed: {
     filteredSessions() {
-      return this.sessions
+      return this.sessions;
     },
 
     paginatedSessions() {
-      return this.sessions
+      return this.sessions;
     },
 
     totalPages() {
-      const calculated = Math.ceil(this.totalSessions / this.perPage)
-      return this.apiTotalPages || Math.max(1, calculated)
-    }
+      const calculated = Math.ceil(this.totalSessions / this.perPage);
+      return this.apiTotalPages || Math.max(1, calculated);
+    },
   },
   watch: {
     searchQuery() {
-      this.currentPage = 1
-      this.debouncedLoadSessions()
+      this.currentPage = 1;
+      this.debouncedLoadSessions();
     },
     currentPage() {
-      this.loadSessions()
-    }
+      this.loadSessions();
+    },
   },
   async mounted() {
-    await this.loadSessions()
+    await this.loadSessions();
   },
   methods: {
     debouncedLoadSessions() {
-      clearTimeout(this.searchTimeout)
+      clearTimeout(this.searchTimeout);
       this.searchTimeout = setTimeout(() => {
-        this.loadSessions()
-      }, 500)
+        this.loadSessions();
+      }, 500);
     },
 
     async loadSessions() {
       try {
-        this.isLoading = true
-        logger.info('Loading academic sessions...')
+        this.isLoading = true;
+        logger.info("Loading academic sessions...");
 
         const params = {
           page: this.currentPage,
           limit: this.perPage,
-          sortBy: 'createdAt',
-          sortOrder: 'desc'
-        }
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        };
 
         if (this.searchQuery && this.searchQuery.trim()) {
-          params.search = this.searchQuery.trim()
+          params.search = this.searchQuery.trim();
         }
 
-        const response = await apiService.getAcademicSessions(params)
+        const response = await apiService.getAcademicSessions(params);
 
         if (response.success) {
-          this.sessions = response.data.sessions.map(session => ({
+          this.sessions = response.data.sessions.map((session) => ({
             id: session._id,
             sessionYear: session.sessionYear,
-            title: session.title || '',
-            description: session.description || '',
+            title: session.title || "",
+            description: session.description || "",
             startDate: session.startDate,
             endDate: session.endDate,
             status: session.status,
             active: session.active,
             createdAt: session.createdAt,
-            updatedAt: session.updatedAt
-          }))
+            updatedAt: session.updatedAt,
+          }));
 
-          this.totalSessions = response.data.pagination.totalItems
-          this.currentPage = response.data.pagination.currentPage
-          this.apiTotalPages = response.data.pagination.totalPages
+          this.totalSessions = response.data.pagination.totalItems;
+          this.currentPage = response.data.pagination.currentPage;
+          this.apiTotalPages = response.data.pagination.totalPages;
 
-          logger.info('Academic sessions loaded successfully', { 
+          logger.info("Academic sessions loaded successfully", {
             count: this.sessions.length,
-            total: this.totalSessions 
-          })
+            total: this.totalSessions,
+          });
         }
       } catch (error) {
-        logger.error('Failed to load academic sessions:', error)
+        logger.error("Failed to load academic sessions:", error);
         this.$swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to load academic sessions',
-          confirmButtonColor: '#1a5f5f'
-        })
+          icon: "error",
+          title: "Error",
+          text: "Failed to load academic sessions",
+          confirmButtonColor: "#1a5f5f",
+        });
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
     generateSessionYear(startDate, endDate) {
-      const start = new Date(startDate)
-      const end = new Date(endDate)
-      return `${start.getFullYear()}/${end.getFullYear()}`
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      return `${start.getFullYear()}/${end.getFullYear()}`;
     },
 
     formatDate(dateString) {
-      if (!dateString) return 'N/A'
-      return new Date(dateString).toLocaleDateString()
+      if (!dateString) return "N/A";
+      return new Date(dateString).toLocaleDateString();
     },
 
     getStatusBadgeClass(status) {
-      const statusOption = this.statusOptions.find(s => s.value === status)
-      return statusOption ? statusOption.class : 'bg-secondary'
+      const statusOption = this.statusOptions.find((s) => s.value === status);
+      return statusOption ? statusOption.class : "bg-secondary";
     },
 
     async showAddSessionModal() {
       const { value: formValues } = await this.$swal.fire({
-        title: 'Add New Academic Session',
+        title: "Add New Academic Session",
         html: `
           <div class="row text-start">
             <div class="col-12 mb-3">
@@ -178,40 +178,47 @@ export default {
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: 'Add Session',
-        confirmButtonColor: '#1a5f5f',
+        confirmButtonText: "Add Session",
+        confirmButtonColor: "#1a5f5f",
         didOpen: () => {
           // Auto-generate session year when dates change
-          const startDateInput = document.getElementById('startDate')
-          const endDateInput = document.getElementById('endDate')
-          const sessionYearInput = document.getElementById('sessionYear')
+          const startDateInput = document.getElementById("startDate");
+          const endDateInput = document.getElementById("endDate");
+          const sessionYearInput = document.getElementById("sessionYear");
 
           const updateSessionYear = () => {
             if (startDateInput.value && endDateInput.value) {
-              const sessionYear = this.generateSessionYear(startDateInput.value, endDateInput.value)
-              sessionYearInput.value = sessionYear
+              const sessionYear = this.generateSessionYear(
+                startDateInput.value,
+                endDateInput.value,
+              );
+              sessionYearInput.value = sessionYear;
             }
-          }
+          };
 
-          startDateInput.addEventListener('change', updateSessionYear)
-          endDateInput.addEventListener('change', updateSessionYear)
+          startDateInput.addEventListener("change", updateSessionYear);
+          endDateInput.addEventListener("change", updateSessionYear);
         },
         preConfirm: () => {
-          const startDate = document.getElementById('startDate').value
-          const endDate = document.getElementById('endDate').value
-          const title = document.getElementById('title').value
-          const description = document.getElementById('description').value
-          const status = document.getElementById('status').value
-          const active = document.getElementById('active').checked
+          const startDate = document.getElementById("startDate").value;
+          const endDate = document.getElementById("endDate").value;
+          const title = document.getElementById("title").value;
+          const description = document.getElementById("description").value;
+          const status = document.getElementById("status").value;
+          const active = document.getElementById("active").checked;
 
           if (!startDate || !endDate || !status) {
-            this.$swal.showValidationMessage('Please fill in all required fields')
-            return false
+            this.$swal.showValidationMessage(
+              "Please fill in all required fields",
+            );
+            return false;
           }
 
           if (new Date(endDate) <= new Date(startDate)) {
-            this.$swal.showValidationMessage('End date must be after start date')
-            return false
+            this.$swal.showValidationMessage(
+              "End date must be after start date",
+            );
+            return false;
           }
 
           return {
@@ -220,50 +227,50 @@ export default {
             title: title || undefined,
             description: description || undefined,
             status,
-            active
-          }
-        }
-      })
+            active,
+          };
+        },
+      });
 
       if (formValues) {
-        await this.addSession(formValues)
+        await this.addSession(formValues);
       }
     },
 
     async addSession(sessionData) {
       try {
-        logger.info('Adding new academic session:', sessionData)
+        logger.info("Adding new academic session:", sessionData);
 
-        const response = await apiService.createAcademicSession(sessionData)
+        const response = await apiService.createAcademicSession(sessionData);
 
         if (response.success) {
           this.$swal.fire({
-            icon: 'success',
-            title: 'Success',
-            text: 'Academic session added successfully',
+            icon: "success",
+            title: "Success",
+            text: "Academic session added successfully",
             timer: 2000,
-            showConfirmButton: false
-          })
+            showConfirmButton: false,
+          });
 
-          await this.loadSessions()
-          this.$emit('refresh')
+          await this.loadSessions();
+          this.$emit("refresh");
         } else {
-          throw new Error(response.message)
+          throw new Error(response.message);
         }
       } catch (error) {
-        logger.error('Failed to add academic session:', error)
+        logger.error("Failed to add academic session:", error);
         this.$swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: error.message || 'Failed to add academic session',
-          confirmButtonColor: '#1a5f5f'
-        })
+          icon: "error",
+          title: "Error",
+          text: error.message || "Failed to add academic session",
+          confirmButtonColor: "#1a5f5f",
+        });
       }
     },
 
     async editSession(session) {
       const { value: formValues } = await this.$swal.fire({
-        title: 'Edit Academic Session',
+        title: "Edit Academic Session",
         html: `
           <div class="row g-3 text-start">
             <div class="col-12 mb-3">
@@ -272,73 +279,80 @@ export default {
             </div>
             <div class="col-6 mb-3">
               <label class="form-label">Start Date</label>
-              <input id="startDate" type="date" class="form-control" value="${session.startDate?.split('T')[0]}" required>
+              <input id="startDate" type="date" class="form-control" value="${session.startDate?.split("T")[0]}" required>
             </div>
             <div class="col-6 mb-3">
               <label class="form-label">End Date</label>  
-              <input id="endDate" type="date" class="form-control" value="${session.endDate?.split('T')[0]}" required>
+              <input id="endDate" type="date" class="form-control" value="${session.endDate?.split("T")[0]}" required>
             </div>
             <div class="col-12 mb-3">
               <label class="form-label">Session Title</label>
-              <input id="title" class="form-control" value="${session.title || ''}" placeholder="e.g. 2026/2027 Batch A">
+              <input id="title" class="form-control" value="${session.title || ""}" placeholder="e.g. 2026/2027 Batch A">
             </div>
             <div class="col-12 mb-3">
               <label class="form-label">Description</label>
-              <textarea id="description" class="form-control" rows="3">${session.description || ''}</textarea>
+              <textarea id="description" class="form-control" rows="3">${session.description || ""}</textarea>
             </div>
             <div class="col-6 mb-3">
               <label class="form-label">Status</label>
               <select id="status" class="form-select" required>
                 <option value="">--Select status--</option>
-                <option value="draft" ${session.status === 'draft' ? 'selected' : ''}>Draft</option>
-                <option value="open" ${session.status === 'open' ? 'selected' : ''}>Open</option>
-                <option value="ongoing" ${session.status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
-                <option value="closed" ${session.status === 'closed' ? 'selected' : ''}>Closed</option>
+                <option value="draft" ${session.status === "draft" ? "selected" : ""}>Draft</option>
+                <option value="open" ${session.status === "open" ? "selected" : ""}>Open</option>
+                <option value="ongoing" ${session.status === "ongoing" ? "selected" : ""}>Ongoing</option>
+                <option value="closed" ${session.status === "closed" ? "selected" : ""}>Closed</option>
               </select>
             </div>
             <div class="col-6 mb-3">
               <div class="form-check mt-4">
-                <input class="form-check-input" type="checkbox" id="active" ${session.active ? 'checked' : ''}>
+                <input class="form-check-input" type="checkbox" id="active" ${session.active ? "checked" : ""}>
                 <label class="form-check-label" for="active">Active Session</label>
               </div>
             </div>
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: 'Update Session',
-        confirmButtonColor: '#1a5f5f',
+        confirmButtonText: "Update Session",
+        confirmButtonColor: "#1a5f5f",
         didOpen: () => {
           // Auto-generate session year when dates change
-          const startDateInput = document.getElementById('startDate')
-          const endDateInput = document.getElementById('endDate')
-          const sessionYearInput = document.getElementById('sessionYear')
+          const startDateInput = document.getElementById("startDate");
+          const endDateInput = document.getElementById("endDate");
+          const sessionYearInput = document.getElementById("sessionYear");
 
           const updateSessionYear = () => {
             if (startDateInput.value && endDateInput.value) {
-              const sessionYear = this.generateSessionYear(startDateInput.value, endDateInput.value)
-              sessionYearInput.value = sessionYear
+              const sessionYear = this.generateSessionYear(
+                startDateInput.value,
+                endDateInput.value,
+              );
+              sessionYearInput.value = sessionYear;
             }
-          }
+          };
 
-          startDateInput.addEventListener('change', updateSessionYear)
-          endDateInput.addEventListener('change', updateSessionYear)
+          startDateInput.addEventListener("change", updateSessionYear);
+          endDateInput.addEventListener("change", updateSessionYear);
         },
         preConfirm: () => {
-          const startDate = document.getElementById('startDate').value
-          const endDate = document.getElementById('endDate').value
-          const title = document.getElementById('title').value
-          const description = document.getElementById('description').value
-          const status = document.getElementById('status').value
-          const active = document.getElementById('active').checked
+          const startDate = document.getElementById("startDate").value;
+          const endDate = document.getElementById("endDate").value;
+          const title = document.getElementById("title").value;
+          const description = document.getElementById("description").value;
+          const status = document.getElementById("status").value;
+          const active = document.getElementById("active").checked;
 
           if (!startDate || !endDate || !status) {
-            this.$swal.showValidationMessage('Please fill in all required fields')
-            return false
+            this.$swal.showValidationMessage(
+              "Please fill in all required fields",
+            );
+            return false;
           }
 
           if (new Date(endDate) <= new Date(startDate)) {
-            this.$swal.showValidationMessage('End date must be after start date')
-            return false
+            this.$swal.showValidationMessage(
+              "End date must be after start date",
+            );
+            return false;
           }
 
           return {
@@ -347,149 +361,209 @@ export default {
             title: title || undefined,
             description: description || undefined,
             status,
-            active
-          }
-        }
-      })
+            active,
+          };
+        },
+      });
 
       if (formValues) {
-        await this.updateSession(session.id, formValues)
+        await this.updateSession(session.id, formValues);
       }
     },
 
     async updateSession(sessionId, sessionData) {
       try {
-        logger.info('Updating academic session:', { sessionId, sessionData })
+        logger.info("Updating academic session:", { sessionId, sessionData });
 
-        const response = await apiService.updateAcademicSession(sessionId, sessionData)
+        const response = await apiService.updateAcademicSession(
+          sessionId,
+          sessionData,
+        );
 
         if (response.success) {
           this.$swal.fire({
-            icon: 'success',
-            title: 'Success',
-            text: 'Academic session updated successfully',
+            icon: "success",
+            title: "Success",
+            text: "Academic session updated successfully",
             timer: 2000,
-            showConfirmButton: false
-          })
+            showConfirmButton: false,
+          });
 
-          await this.loadSessions()
-          this.$emit('refresh')
+          await this.loadSessions();
+          this.$emit("refresh");
         } else {
-          throw new Error(response.message)
+          throw new Error(response.message);
         }
       } catch (error) {
-        logger.error('Failed to update academic session:', error)
+        logger.error("Failed to update academic session:", error);
         this.$swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: error.message || 'Failed to update academic session',
-          confirmButtonColor: '#1a5f5f'
-        })
+          icon: "error",
+          title: "Error",
+          text: error.message || "Failed to update academic session",
+          confirmButtonColor: "#1a5f5f",
+        });
       }
     },
 
     async deleteSession(session) {
       const result = await this.$swal.fire({
-        title: 'Delete Academic Session',
+        title: "Delete Academic Session",
         text: `Are you sure you want to delete "${session.sessionYear}"? This action cannot be undone and will also delete all associated session controls.`,
-        icon: 'warning',
+        icon: "warning",
         showCancelButton: true,
-        confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Yes, delete it!'
-      })
+        confirmButtonColor: "#dc3545",
+        cancelButtonColor: "#6c757d",
+        confirmButtonText: "Yes, delete it!",
+      });
 
       if (result.isConfirmed) {
         try {
-          logger.info('Deleting academic session:', session.id)
+          logger.info("Deleting academic session:", session.id);
 
-          const response = await apiService.deleteAcademicSession(session.id)
+          const response = await apiService.deleteAcademicSession(session.id);
 
           if (response.success) {
             this.$swal.fire({
-              icon: 'success',
-              title: 'Deleted!',
-              text: 'Academic session has been deleted.',
+              icon: "success",
+              title: "Deleted!",
+              text: "Academic session has been deleted.",
               timer: 2000,
-              showConfirmButton: false
-            })
+              showConfirmButton: false,
+            });
 
-            await this.loadSessions()
-            this.$emit('refresh')
+            await this.loadSessions();
+            this.$emit("refresh");
           } else {
-            throw new Error(response.message)
+            throw new Error(response.message);
           }
         } catch (error) {
-          logger.error('Failed to delete academic session:', error)
+          logger.error("Failed to delete academic session:", error);
           this.$swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: error.message || 'Failed to delete academic session',
-            confirmButtonColor: '#1a5f5f'
-          })
+            icon: "error",
+            title: "Error",
+            text: error.message || "Failed to delete academic session",
+            confirmButtonColor: "#1a5f5f",
+          });
         }
       }
     },
 
+    async progressCohort(session) {
+      try {
+        const response = await apiService.getAcademicSessions({
+          limit: 100,
+          sortBy: 'startDate',
+          sortOrder: 'desc',
+        })
+        const targets = (response.data?.sessions || []).filter(
+          (candidate) => candidate._id !== session.id && candidate.status !== 'draft',
+        )
+        if (!targets.length) throw new Error('Create or open a destination academic session first')
+
+        const result = await this.$swal.fire({
+          title: 'Progress Cohort',
+          text: 'Move all active students currently assigned to ' + (session.title || session.sessionYear) + '.',
+          input: 'select',
+          inputOptions: Object.fromEntries(
+            targets.map((target) => [target._id, target.title || target.sessionYear]),
+          ),
+          inputPlaceholder: 'Select destination session',
+          showCancelButton: true,
+          confirmButtonText: 'Progress Students',
+          confirmButtonColor: '#198754',
+          inputValidator: (value) => !value && 'Select a destination session',
+        })
+        if (!result.isConfirmed) return
+
+        const confirmation = await this.$swal.fire({
+          title: 'Confirm Cohort Progression',
+          text: 'This changes the current billable session for every active student in this cohort.',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Confirm Progression',
+          confirmButtonColor: '#198754',
+        })
+        if (!confirmation.isConfirmed) return
+
+        const progressed = await apiService.progressAcademicSessionCohort(session.id, result.value)
+        if (!progressed.success) throw new Error(progressed.message || 'Cohort progression failed')
+        await this.$swal.fire({
+          icon: 'success',
+          title: 'Cohort Progressed',
+          text: progressed.message,
+          confirmButtonColor: '#1a5f5f',
+        })
+      } catch (error) {
+        logger.error('Failed to progress cohort:', error)
+        await this.$swal.fire({
+          icon: 'error',
+          title: 'Progression Failed',
+          text: error.message || 'Unable to progress this cohort.',
+        })
+      }
+    },
+
     async viewControls(session) {
-      await this.showControlsModal(session)
+      await this.showControlsModal(session);
     },
 
     async showControlsModal(session) {
       try {
-        this.selectedSession = session
-        this.controlsLoading = true
+        this.selectedSession = session;
+        this.controlsLoading = true;
 
-        logger.info('Loading session controls for session:', session.id)
+        logger.info("Loading session controls for session:", session.id);
 
         // Load session controls
-        const response = await apiService.getSessionControls(session.id)
-        logger.info('Session controls response:', response)
-        
+        const response = await apiService.getSessionControls(session.id);
+        logger.info("Session controls response:", response);
+
         if (response.success) {
-          this.sessionControls = response.data.controls
-          logger.info('Loaded session controls:', this.sessionControls)
+          this.sessionControls = response.data.controls;
+          logger.info("Loaded session controls:", this.sessionControls);
         } else {
-          logger.error('Failed to load session controls:', response)
-          throw new Error(response.message || 'Failed to load session controls')
+          logger.error("Failed to load session controls:", response);
+          throw new Error(
+            response.message || "Failed to load session controls",
+          );
         }
 
         // Load available payments for dropdown
-        const paymentsResponse = await apiService.getPayments({ limit: 100 })
-        logger.info('Payments response:', paymentsResponse)
-        
+        const paymentsResponse = await apiService.getPayments({ limit: 100 });
+        logger.info("Payments response:", paymentsResponse);
+
         if (paymentsResponse.success) {
-          this.availablePayments = paymentsResponse.data.payments
-          logger.info('Loaded payments:', this.availablePayments)
+          this.availablePayments = paymentsResponse.data.payments;
+          logger.info("Loaded payments:", this.availablePayments);
         } else {
-          logger.warn('Failed to load payments:', paymentsResponse)
-          this.availablePayments = []
+          logger.warn("Failed to load payments:", paymentsResponse);
+          this.availablePayments = [];
         }
 
-        this.controlsLoading = false
+        this.controlsLoading = false;
 
         const { value: action } = await this.$swal.fire({
           title: `Session Controls - ${session.title}`,
           html: this.getControlsModalHTML(),
           showCloseButton: true,
           showConfirmButton: false,
-          width: '900px',
+          width: "900px",
           customClass: {
-            htmlContainer: 'p-0'
+            htmlContainer: "p-0",
           },
           didOpen: () => {
-            this.initializeControlsModal()
-          }
-        })
+            this.initializeControlsModal();
+          },
+        });
       } catch (error) {
-        this.controlsLoading = false
-        logger.error('Failed to load session controls:', error)
+        this.controlsLoading = false;
+        logger.error("Failed to load session controls:", error);
         this.$swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: error.message || 'Failed to load session controls',
-          confirmButtonColor: '#1a5f5f'
-        })
+          icon: "error",
+          title: "Error",
+          text: error.message || "Failed to load session controls",
+          confirmButtonColor: "#1a5f5f",
+        });
       }
     },
 
@@ -502,20 +576,20 @@ export default {
             </div>
             <p class="mt-3 text-muted">Loading session controls...</p>
           </div>
-        `
+        `;
       }
 
-      const controls = this.sessionControls?.controls || []
-      const payments = this.sessionControls?.payments || []
+      const controls = this.sessionControls?.controls || [];
+      const payments = this.sessionControls?.payments || [];
 
       // Debug logging
-      logger.info('Rendering controls modal with:', {
+      logger.info("Rendering controls modal with:", {
         sessionControls: this.sessionControls,
         controls: controls,
         payments: payments,
         controlsLength: controls.length,
-        paymentsLength: payments.length
-      })
+        paymentsLength: payments.length,
+      });
 
       // If no session controls data, show message
       if (!this.sessionControls) {
@@ -526,7 +600,7 @@ export default {
               No session controls found for this academic session. Please try refreshing or contact support.
             </div>
           </div>
-        `
+        `;
       }
 
       return `
@@ -546,8 +620,13 @@ export default {
                 <i class="bi bi-toggles me-2"></i>Session Controls
               </h6>
               <div class="controls-container">
-                ${controls.length > 0 ? controls.map(control => `
-                  <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                ${
+                  controls.length > 0
+                    ? controls
+                        .map(
+                          (control) => `
+                  <div class="mb-2 p-2 border rounded">
+                    <div class="d-flex justify-content-between align-items-center">
                     <div>
                       <strong>${this.formatControlName(control.name)}</strong>
                     </div>
@@ -556,11 +635,16 @@ export default {
                         class="form-check-input control-switch" 
                         type="checkbox" 
                         data-control="${control.name}"
-                        ${control.active ? 'checked' : ''}
+                        ${control.active ? "checked" : ""}
                       >
                     </div>
                   </div>
-                `).join('') : '<p class="text-muted">No session controls available</p>'}
+                  </div>
+                `,
+                        )
+                        .join("")
+                    : '<p class="text-muted">No session controls available</p>'
+                }
               </div>
             </div>
 
@@ -570,21 +654,45 @@ export default {
                 <i class="bi bi-credit-card me-2"></i>Payment Controls
               </h6>
               <div class="payments-container">
-                ${payments.length > 0 ? payments.map(payment => `
-                  <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                ${
+                  payments.length > 0
+                    ? payments
+                        .map(
+                          (payment) => `
+                  <div class="mb-2 p-2 border rounded">
+                    <div class="d-flex justify-content-between align-items-center">
                     <div>
-                      <strong>${payment.paymentId?.name || 'Unknown Payment'}</strong>
+                      <strong>${payment.paymentId?.name || "Unknown Payment"}</strong>
                     </div>
                     <div class="form-check form-switch">
                       <input 
                         class="form-check-input payment-switch" 
                         type="checkbox" 
                         data-payment="${payment.paymentId?._id}"
-                        ${payment.active ? 'checked' : ''}
+                        ${payment.active ? "checked" : ""}
                       >
                     </div>
+                    </div>
+                    <div class="d-flex gap-3 mt-2 small">
+                      <label class="form-check mb-0">
+                        <input class="form-check-input payment-audience-switch" type="checkbox"
+                          data-payment-audience="${payment.paymentId?._id}" data-student-group="new"
+                          ${(payment.eligibleStudentGroups || ["new", "returning"]).includes("new") ? "checked" : ""}>
+                        <span class="form-check-label">New students</span>
+                      </label>
+                      <label class="form-check mb-0">
+                        <input class="form-check-input payment-audience-switch" type="checkbox"
+                          data-payment-audience="${payment.paymentId?._id}" data-student-group="returning"
+                          ${(payment.eligibleStudentGroups || ["new", "returning"]).includes("returning") ? "checked" : ""}>
+                        <span class="form-check-label">Returning students</span>
+                      </label>
+                    </div>
                   </div>
-                `).join('') : '<p class="text-muted">No payment controls available</p>'}
+                `,
+                        )
+                        .join("")
+                    : '<p class="text-muted">No payment controls available</p>'
+                }
               </div>
             </div>
           </div>
@@ -600,105 +708,145 @@ export default {
             </div>
           </div>
         </div>
-      `
+      `;
     },
 
     formatControlName(controlName) {
       const names = {
-        application: 'Application',
-        admissionProcessing: 'Admission Processing',
-        entranceExam: 'Entrance Exam',
-        screening: 'Screening & Interview',
-        courseRegistration: 'Course Registration',
-        resultUpload: 'Result Upload',
-        resultRelease: 'Result Release',
-        applicantPaystackPayments: 'Applicant Paystack Payments',
-        applicantManualTransferPayments: 'Applicant Manual Transfer Payments',
-        studentPaystackPayments: 'Student Paystack Payments',
-        studentManualTransferPayments: 'Student Manual Transfer Payments'
-      }
-      return names[controlName] || controlName
+        application: "Application",
+        admissionProcessing: "Admission Processing",
+        entranceExam: "Entrance Exam",
+        screening: "Screening & Interview",
+        courseRegistration: "Course Registration",
+        resultUpload: "Result Upload",
+        resultRelease: "Result Release",
+        applicantPaystackPayments: "Applicant Paystack Payments",
+        applicantManualTransferPayments: "Applicant Manual Transfer Payments",
+        studentPaystackPayments: "Student Paystack Payments",
+        studentManualTransferPayments: "Student Manual Transfer Payments",
+      };
+      return names[controlName] || controlName;
     },
 
     initializeControlsModal() {
       // Add event listeners for control switches
-      document.querySelectorAll('.control-switch').forEach(switchEl => {
-        switchEl.addEventListener('change', (e) => {
-          this.updateControlSwitch(e.target.dataset.control, e.target.checked)
-        })
-      })
+      document.querySelectorAll(".control-switch").forEach((switchEl) => {
+        switchEl.addEventListener("change", (e) => {
+          this.updateControlSwitch(e.target.dataset.control, e.target.checked);
+        });
+      });
 
       // Add event listeners for payment switches
-      document.querySelectorAll('.payment-switch').forEach(switchEl => {
-        switchEl.addEventListener('change', (e) => {
-          this.updatePaymentSwitch(e.target.dataset.payment, e.target.checked)
-        })
-      })
+      document.querySelectorAll(".payment-switch").forEach((switchEl) => {
+        switchEl.addEventListener("change", (e) => {
+          this.updatePaymentSwitch(e.target.dataset.payment, e.target.checked);
+        });
+      });
+
+      document
+        .querySelectorAll(".payment-audience-switch")
+        .forEach((switchEl) => {
+          switchEl.addEventListener("change", (e) => {
+            this.updatePaymentAudienceSwitch(
+              e.target.dataset.paymentAudience,
+              e.target.dataset.studentGroup,
+              e.target.checked,
+            );
+          });
+        });
 
       // Add close button listener
-      document.getElementById('closeControlsBtn')?.addEventListener('click', () => {
-        this.$swal.close()
-      })
+      document
+        .getElementById("closeControlsBtn")
+        ?.addEventListener("click", () => {
+          this.$swal.close();
+        });
 
       // Add save button listener
-      document.getElementById('saveControlsBtn')?.addEventListener('click', () => {
-        this.saveSessionControls()
-      })
+      document
+        .getElementById("saveControlsBtn")
+        ?.addEventListener("click", () => {
+          this.saveSessionControls();
+        });
     },
 
     updateControlSwitch(controlName, active) {
       if (this.sessionControls && this.sessionControls.controls) {
-        const control = this.sessionControls.controls.find(c => c.name === controlName)
+        const control = this.sessionControls.controls.find(
+          (c) => c.name === controlName,
+        );
         if (control) {
-          control.active = active
+          control.active = active;
         }
       }
     },
 
     updatePaymentSwitch(paymentId, active) {
       if (this.sessionControls && this.sessionControls.payments) {
-        const payment = this.sessionControls.payments.find(p => p.paymentId._id === paymentId)
+        const payment = this.sessionControls.payments.find(
+          (p) => p.paymentId._id === paymentId,
+        );
         if (payment) {
-          payment.active = active
+          payment.active = active;
         }
       }
+    },
+
+    updatePaymentAudienceSwitch(paymentId, studentGroup, active) {
+      const payment = this.sessionControls?.payments?.find(
+        (item) => item.paymentId._id === paymentId,
+      );
+      if (!payment) return;
+
+      const groups = new Set(
+        payment.eligibleStudentGroups || ["new", "returning"],
+      );
+      active ? groups.add(studentGroup) : groups.delete(studentGroup);
+      payment.eligibleStudentGroups = [...groups];
     },
 
     async saveSessionControls() {
       try {
         const controlsData = {
           controls: this.sessionControls.controls,
-          payments: this.sessionControls.payments.map(p => ({
+          payments: this.sessionControls.payments.map((p) => ({
             paymentId: p.paymentId._id,
-            active: p.active
-          }))
-        }
+            active: p.active,
+            eligibleStudentGroups: p.eligibleStudentGroups || [
+              "new",
+              "returning",
+            ],
+          })),
+        };
 
-        const response = await apiService.updateSessionControls(this.selectedSession.id, controlsData)
+        const response = await apiService.updateSessionControls(
+          this.selectedSession.id,
+          controlsData,
+        );
 
         if (response.success) {
           this.$swal.fire({
-            icon: 'success',
-            title: 'Success',
-            text: 'Session controls updated successfully',
+            icon: "success",
+            title: "Success",
+            text: "Session controls updated successfully",
             timer: 2000,
-            showConfirmButton: false
-          })
+            showConfirmButton: false,
+          });
         } else {
-          throw new Error(response.message)
+          throw new Error(response.message);
         }
       } catch (error) {
-        logger.error('Failed to save session controls:', error)
+        logger.error("Failed to save session controls:", error);
         this.$swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: error.message || 'Failed to save session controls',
-          confirmButtonColor: '#1a5f5f'
-        })
+          icon: "error",
+          title: "Error",
+          text: error.message || "Failed to save session controls",
+          confirmButtonColor: "#1a5f5f",
+        });
       }
-    }
-  }
-}
+    },
+  },
+};
 </script>
 
 <template>
@@ -716,7 +864,7 @@ export default {
                   type="text"
                   class="form-control"
                   placeholder="Search by session name, year, or description..."
-                >
+                />
               </div>
               <div class="col-md-4">
                 <button
@@ -777,7 +925,11 @@ export default {
                   <tr v-for="session in paginatedSessions" :key="session.id">
                     <td>
                       <div class="fw-medium">{{ session.sessionYear }}</div>
-                      <small class="text-muted">{{ session.title || session.description || 'No title provided' }}</small>
+                      <small class="text-muted">{{
+                        session.title ||
+                        session.description ||
+                        "No title provided"
+                      }}</small>
                     </td>
                     <td>{{ formatDate(session.startDate) }}</td>
                     <td>{{ formatDate(session.endDate) }}</td>
@@ -794,7 +946,7 @@ export default {
                         class="badge rounded-pill"
                         :class="session.active ? 'bg-success' : 'bg-secondary'"
                       >
-                        {{ session.active ? 'Active' : 'Inactive' }}
+                        {{ session.active ? "Active" : "Inactive" }}
                       </span>
                     </td>
                     <td class="text-center">
@@ -809,6 +961,13 @@ export default {
                     </td>
                     <td>
                       <div class="btn-group btn-group-sm">
+                        <button
+                          class="btn btn-outline-success btn-sm"
+                          @click="progressCohort(session)"
+                          title="Progress Cohort"
+                        >
+                          <i class="bi bi-arrow-right-circle"></i>
+                        </button>
                         <button
                           class="btn btn-outline-success btn-sm"
                           @click="editSession(session)"
@@ -856,12 +1015,17 @@ export default {
                 </li>
                 <li
                   class="page-item"
-                  :class="{ disabled: currentPage >= totalPages || sessions.length === 0 }"
+                  :class="{
+                    disabled:
+                      currentPage >= totalPages || sessions.length === 0,
+                  }"
                 >
                   <button
                     class="page-link"
                     @click="currentPage = currentPage + 1"
-                    :disabled="currentPage >= totalPages || sessions.length === 0"
+                    :disabled="
+                      currentPage >= totalPages || sessions.length === 0
+                    "
                   >
                     Next
                   </button>
@@ -874,7 +1038,6 @@ export default {
     </div>
   </div>
 </template>
-
 
 <style scoped>
 .table th {

@@ -12,6 +12,7 @@ export interface Control {
 export interface PaymentControl {
     paymentId: Types.ObjectId;
     active: boolean;
+    eligibleStudentGroups?: Array<'new' | 'returning'>;
 }
 
 @Schema({ timestamps: true })
@@ -43,7 +44,12 @@ export class SessionControl {
     @Prop({
         type: [{
             paymentId: { type: Types.ObjectId, ref: 'Payment', required: true },
-            active: { type: Boolean, default: false }
+            active: { type: Boolean, default: false },
+            eligibleStudentGroups: {
+                type: [String],
+                enum: ['new', 'returning'],
+                default: ['new', 'returning'],
+            },
         }]
     })
     payments: PaymentControl[];

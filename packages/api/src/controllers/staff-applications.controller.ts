@@ -30,6 +30,11 @@ import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema
 import { AcademicSession, AcademicSessionDocument } from '../schemas/academic-session.schema';
 import { Payment, PaymentDocument } from '../schemas/payment.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
+import {
+    StudentAcademicSession,
+    StudentAcademicSessionDocument,
+    StudentAcademicSessionStatus,
+} from '../schemas/student-academic-session.schema';
 import { StudentPayment, StudentPaymentDocument } from '../schemas/student-payment.schema';
 import { ExamAttempt, ExamAttemptDocument } from '../schemas/exam-attempt.schema';
 import { ExamResult, ExamResultDocument } from '../schemas/exam-result.schema';
@@ -126,6 +131,7 @@ export class StaffApplicationsController {
         @InjectModel(AcademicSession.name) private academicSessionModel: Model<AcademicSessionDocument>,
         @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
         @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
+        @InjectModel(StudentAcademicSession.name) private studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
         @InjectModel(StudentPayment.name) private studentPaymentModel: Model<StudentPaymentDocument>,
         @InjectModel(ExamAttempt.name) private examAttemptModel: Model<ExamAttemptDocument>,
         @InjectModel(ExamResult.name) private examResultModel: Model<ExamResultDocument>,
@@ -2674,6 +2680,16 @@ export class StaffApplicationsController {
                 });
 
                 await newStudent.save();
+                await this.studentAcademicSessionModel.updateOne(
+                    { studentId: newStudent._id, academicSessionId: studentAcademicSessionId },
+                    {
+                        $setOnInsert: {
+                            status: StudentAcademicSessionStatus.CURRENT,
+                            startedAt: new Date(),
+                        },
+                    },
+                    { upsert: true },
+                );
                 this.logger.log('Student record created successfully:', newStudent._id);
             } else {
                 existingStudent.userId = userId;
@@ -2681,8 +2697,13 @@ export class StaffApplicationsController {
                 existingStudent.matriculationNumber = matriculationNumber;
                 existingStudent.programId = application.programId;
                 existingStudent.admissionYear = admissionYear;
-                existingStudent.academicSession = studentAcademicSessionId;
-                existingStudent.entryAcademicSession = studentAcademicSessionId;
+                // Keep the original cohort and any staff-assigned progression session.
+                if (!existingStudent.academicSession) {
+                    existingStudent.academicSession = studentAcademicSessionId;
+                }
+                if (!existingStudent.entryAcademicSession) {
+                    existingStudent.entryAcademicSession = studentAcademicSessionId;
+                }
                 if (studentProfileImageUrl) {
                     existingStudent.profileImageUrl = studentProfileImageUrl;
                 }

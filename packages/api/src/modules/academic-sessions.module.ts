@@ -9,6 +9,8 @@ import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-sess
 import { SessionControl, SessionControlSchema } from '../schemas/session-control.schema';
 import { Payment, PaymentSchema } from '../schemas/payment.schema';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
+import { Student, StudentSchema } from '../schemas/student.schema';
+import { StudentAcademicSession, StudentAcademicSessionSchema } from '../schemas/student-academic-session.schema';
 
 @Module({
     imports: [
@@ -17,6 +19,8 @@ import { Application, ApplicationSchema } from '../schemas/application.schema';
             { name: SessionControl.name, schema: SessionControlSchema },
             { name: Payment.name, schema: PaymentSchema },
             { name: Application.name, schema: ApplicationSchema },
+            { name: Student.name, schema: StudentSchema },
+            { name: StudentAcademicSession.name, schema: StudentAcademicSessionSchema },
         ]),
     ],
     controllers: [AcademicSessionsController, StudentAcademicSessionsController],

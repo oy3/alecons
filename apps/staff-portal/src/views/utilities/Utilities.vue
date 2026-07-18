@@ -15,6 +15,7 @@ export default {
       isBackfillingVerificationTokens: false,
       isRepairingAcademicSessions: false,
       isMigratingDemographics: false,
+      isBackfillingStudentSessionHistory: false,
       counterStats: null,
       counterRecord: null,
       programDriftSummary: null,
@@ -58,6 +59,14 @@ export default {
           variant: 'primary',
           description: 'Copy missing dob and gender into User profiles, then migrate enrolled-student profile photos into matriculation-number student storage.',
           actionLabel: 'Inspect & Migrate'
+        },
+        {
+          id: 'backfill-student-session-history',
+          title: 'Backfill Student Session History',
+          icon: 'bi-clock-history',
+          variant: 'success',
+          description: 'Create session-history records from each student’s entry session, current session, and existing payment ledger.',
+          actionLabel: 'Inspect & Backfill'
         },
         {
           id: 'future-utilities',
@@ -538,6 +547,60 @@ export default {
       }
     },
 
+    async runBackfillStudentSessionHistory() {
+      const preview = await Swal.fire({
+        title: 'Inspect Student Session History Backfill?',
+        html: '<div class="text-start utility-confirmation"><p class="small mb-0">This creates missing history records from existing entry/current sessions and payment records. It never changes Student assignments or payment records.</p></div>',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Run Dry Run First',
+        confirmButtonColor: '#198754'
+      })
+      if (!preview.isConfirmed) return
+
+      try {
+        this.isBackfillingStudentSessionHistory = true
+        const dryRun = await apiService.backfillStudentSessionHistory({ apply: false })
+        if (!dryRun.success) throw new Error(dryRun.error || 'Dry run failed')
+
+        const pending = dryRun.data?.recordsNeeded || 0
+        const legacyConversions = dryRun.data?.legacyStringSessionRecords || 0
+        const pendingChanges = pending + legacyConversions
+        const confirm = await Swal.fire({
+          title: pendingChanges ? pendingChanges + ' backfill change(s) ready' : 'Nothing to backfill',
+          html: '<ul class="text-start small mb-0"><li>Students scanned: <strong>' + (dryRun.data?.scanned || 0) + '</strong></li><li>Records to create: <strong>' + pending + '</strong></li><li>Records already present: <strong>' + (dryRun.data?.recordsAlreadyPresent || 0) + '</strong></li><li>Legacy string session IDs: <strong>' + legacyConversions + '</strong></li><li>Duplicate legacy records to remove: <strong>' + (dryRun.data?.legacyDuplicateRecords || 0) + '</strong></li></ul>',
+          icon: pendingChanges ? 'warning' : 'info',
+          showCancelButton: true,
+          confirmButtonText: pendingChanges ? 'Apply Backfill' : 'Close',
+          confirmButtonColor: '#198754'
+        })
+        if (!confirm.isConfirmed) return
+        if (!pendingChanges) {
+          await Swal.fire({
+            icon: 'success',
+            title: 'Already Up to Date',
+            text: (dryRun.data?.recordsAlreadyPresent || 0) + ' student session history record(s) already exist. No changes were needed.',
+            confirmButtonColor: '#1a5f5f'
+          })
+          return
+        }
+
+        const applied = await apiService.backfillStudentSessionHistory({ apply: true })
+        if (!applied.success) throw new Error(applied.error || 'Backfill failed')
+        await Swal.fire({
+          icon: 'success',
+          title: 'Backfill Complete',
+          text: (applied.data?.recordsCreated || 0) + ' history record(s) created; ' + (applied.data?.recordsAlreadyPresent || 0) + ' already existed; ' + (applied.data?.legacySessionIdsConverted || 0) + ' IDs converted; ' + (applied.data?.legacyDuplicateRecordsRemoved || 0) + ' duplicate legacy record(s) removed.',
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Student session history backfill failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Backfill Failed', text: error.message || 'Unable to complete session history backfill.' })
+      } finally {
+        this.isBackfillingStudentSessionHistory = false
+      }
+    },
+
     async runRepairAcademicSessions() {
       const result = await Swal.fire({
         title: 'Inspect Academic Sessions?',
@@ -604,8 +667,7 @@ export default {
         <p class="text-muted mb-0">Operational tools for system checks, repair actions, and future maintenance utilities.</p>
       </div>
 
-      <div class="d-flex flex-wrap gap-2 align-items-center">
-        <label for="utilitySession" class="form-label mb-0 small text-muted">Academic Session</label>
+      <div class="d-flex flex-wrap gap-2 align-items-end">
         <select
           id="utilitySession"
           v-model="selectedAcademicSessionId"
@@ -614,7 +676,7 @@ export default {
         >
           <option value="" disabled>Select Academic Session</option>
           <option v-for="session in academicSessions" :key="session._id" :value="session._id">
-            {{ session.sessionYear }}
+            {{ session.title }}
           </option>
         </select>
         <button class="btn btn-outline-secondary" :disabled="isLoading || isRepairingCounter || isRepairingProgramDrift || isBackfillingVerificationTokens" @click="loadUtilityState">
@@ -782,6 +844,17 @@ export default {
                 <span v-if="isMigratingDemographics" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-person-lines-fill me-2"></i>
                 {{ isMigratingDemographics ? 'Migrating...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'backfill-student-session-history'"
+                class="btn btn-success"
+                :disabled="isLoading || isBackfillingStudentSessionHistory"
+                @click="runBackfillStudentSessionHistory"
+              >
+                <span v-if="isBackfillingStudentSessionHistory" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-clock-history me-2"></i>
+                {{ isBackfillingStudentSessionHistory ? 'Backfilling...' : utility.actionLabel }}
               </button>
 
               <button v-else class="btn btn-outline-secondary" disabled>

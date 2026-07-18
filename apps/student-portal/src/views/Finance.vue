@@ -15,6 +15,8 @@ export default {
       // Academic sessions
       academicSessions: [],
       selectedSessionId: "",
+      historySessions: [],
+      selectedHistorySessionId: "",
 
       // Payment data
       paymentSummary: {
@@ -113,37 +115,6 @@ export default {
   },
 
   methods: {
-    getStudentEntryYear() {
-      const authStore = useAuthStore();
-      const admissionYear = authStore.student?.admissionYear;
-
-      if (typeof admissionYear === "number" && !Number.isNaN(admissionYear)) {
-        return admissionYear;
-      }
-
-      return this.getSessionStartYear(
-        authStore.student?.academicSession?.sessionYear ||
-          authStore.application?.entryAcademicSession?.sessionYear,
-      );
-    },
-
-    getSessionStartYear(sessionLabel) {
-      const match = String(sessionLabel || "").match(/\d{4}/);
-      return match ? Number(match[0]) : null;
-    },
-
-    filterEligibleAcademicSessions(sessions) {
-      const entryYear = this.getStudentEntryYear();
-      if (!entryYear) {
-        return sessions;
-      }
-
-      return sessions.filter((session) => {
-        const sessionYear = this.getSessionStartYear(session.sessionYear);
-        return !sessionYear || sessionYear >= entryYear;
-      });
-    },
-
     async initializePage() {
       try {
         this.isLoading = true;
@@ -153,9 +124,11 @@ export default {
         this.user = authStore.user;
 
         await this.loadAcademicSessions();
+        await this.loadHistorySessions();
 
         if (this.academicSessions.length > 0) {
           this.selectedSessionId = this.academicSessions[0].id;
+          this.selectedHistorySessionId = this.selectedSessionId;
           await this.loadPaymentData();
         }
       } catch (error) {
@@ -172,12 +145,9 @@ export default {
         const response = await studentPaymentService.getAcademicSessions();
 
         if (response.success) {
-          const sessions = this.filterEligibleAcademicSessions(
-            response.data.sessions || [],
-          );
-          this.academicSessions = sessions.map((session) => ({
+          this.academicSessions = (response.data.sessions || []).map((session) => ({
             id: session._id,
-            name: session.sessionYear,
+            name: session.title || session.sessionYear,
             value: session._id,
           }));
           logger.info(
@@ -190,6 +160,19 @@ export default {
       } catch (error) {
         logger.error("Error loading academic sessions:", error);
         this.academicSessions = [];
+      }
+    },
+
+    async loadHistorySessions() {
+      const response = await studentPaymentService.getPaymentHistorySessions();
+      if (response.success) {
+        this.historySessions = (response.data.sessions || []).map((session) => ({
+          id: session.id,
+          name: session.title || session.sessionYear,
+        }));
+      } else {
+        logger.error("Error loading payment history sessions:", response.message);
+        this.historySessions = [];
       }
     },
 
@@ -221,7 +204,7 @@ export default {
         this.isHistoryLoading = true;
 
         const response = await studentPaymentService.getPaymentHistory(
-          this.selectedSessionId,
+          this.selectedHistorySessionId || null,
           this.currentPage,
           this.perPage,
         );
@@ -257,13 +240,26 @@ export default {
       }
     },
 
-    async onSessionChange() {
-      logger.info("Academic session changed to:", this.selectedSessionId);
-      await this.loadPaymentData();
+    async onHistorySessionChange() {
+      this.currentPage = 1;
+      const summarySessionId =
+        this.selectedHistorySessionId || this.selectedSessionId;
+      const summaryResponse = await studentPaymentService.getPaymentSummary(
+        summarySessionId,
+      );
+      if (summaryResponse.success) {
+        this.paymentSummary = summaryResponse.data;
+      }
+      await this.loadPaymentHistory();
     },
 
     async makePayment(paymentId, paymentCode = null) {
       try {
+        if (!this.paymentSummary?.isPayable) {
+          throw new Error(
+            "Payments can only be made for your current academic session.",
+          );
+        }
         if (!this.hasAvailablePaymentMethods) {
           throw new Error(
             "No payment methods are currently enabled for this session.",
@@ -623,6 +619,14 @@ export default {
     },
 
     async makePaymentFromModal(paymentId, paymentCode) {
+      if (!this.paymentSummary?.isPayable) {
+        await Swal.fire({
+          icon: "info",
+          title: "Historical Session",
+          text: "Payments can only be made for your current academic session.",
+        });
+        return;
+      }
       const fee =
         this.paymentSummary?.unpaidFees?.find(
           (item) => item.id === paymentId,
@@ -823,13 +827,13 @@ export default {
                 <select
                   class="form-select form-select-sm"
                   style="width: auto"
-                  v-model="selectedSessionId"
-                  @change="onSessionChange"
+                  v-model="selectedHistorySessionId"
+                  @change="onHistorySessionChange"
                   :disabled="isLoading"
                 >
                   <option value="">All Sessions</option>
                   <option
-                    v-for="session in academicSessions"
+                    v-for="session in historySessions"
                     :key="session.id"
                     :value="session.id"
                   >
@@ -972,6 +976,7 @@ export default {
                       <span class="badge bg-warning">Pending</span>
                       <div class="d-sm-none mt-2">
                         <button
+                          v-if="paymentSummary?.isPayable"
                           class="btn btn-sm btn-success d-flex align-items-center px-3 py-1"
                           @click="
                             makePaymentFromModal(
@@ -998,6 +1003,7 @@ export default {
                     </td>
                     <td class="py-3 d-none d-sm-table-cell">
                       <button
+                        v-if="paymentSummary?.isPayable"
                         class="btn btn-sm btn-success d-flex align-items-center px-3 py-1"
                         @click="
                           makePaymentFromModal(

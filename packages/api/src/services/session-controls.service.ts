@@ -111,8 +111,21 @@ export class SessionControlsService {
             sessionControl.controls || [],
         );
 
-        if (changed) {
+        const normalizedPayments = (sessionControl.payments || []).map((payment: any) => ({
+            paymentId: payment.paymentId,
+            active: payment.active,
+            // Existing controls predate audience scoping and remain available to both groups.
+            eligibleStudentGroups: payment.eligibleStudentGroups?.length
+                ? payment.eligibleStudentGroups
+                : ['new', 'returning'],
+        }));
+        const paymentsChanged = normalizedPayments.some((payment: any, index: number) =>
+            !(sessionControl.payments?.[index] as any)?.eligibleStudentGroups?.length,
+        );
+
+        if (changed || paymentsChanged) {
             sessionControl.controls = controls;
+            sessionControl.payments = normalizedPayments;
             await sessionControl.save();
         }
 
@@ -162,6 +175,7 @@ export class SessionControlsService {
         const paymentControls = payments.map((payment) => ({
             paymentId: payment._id,
             active: false,
+            eligibleStudentGroups: ['new', 'returning'],
         }));
 
         const sessionControl = new this.sessionControlModel({
@@ -191,7 +205,11 @@ export class SessionControlsService {
         academicSessionId: string,
         controlsData: {
             controls?: Array<{ name: string; active: boolean }>;
-            payments?: Array<{ paymentId: string; active: boolean }>;
+            payments?: Array<{
+                paymentId: string;
+                active: boolean;
+                eligibleStudentGroups?: Array<'new' | 'returning'>;
+            }>;
         },
         updatedBy: string,
     ): Promise<{ sessionControl: SessionControl; expiredApplicants: Array<{ email: string; firstName: string }> }> {
@@ -231,6 +249,9 @@ export class SessionControlsService {
             sessionControl.payments = controlsData.payments.map((p) => ({
                 paymentId: new Types.ObjectId(p.paymentId),
                 active: p.active,
+                eligibleStudentGroups: p.eligibleStudentGroups?.length
+                    ? p.eligibleStudentGroups
+                    : ['new', 'returning'],
             }));
         }
 

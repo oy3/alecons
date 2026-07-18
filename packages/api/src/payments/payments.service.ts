@@ -21,6 +21,11 @@ import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
 import { AcademicSession, AcademicSessionDocument } from '../schemas/academic-session.schema';
+import {
+    StudentAcademicSession,
+    StudentAcademicSessionDocument,
+    StudentAcademicSessionStatus,
+} from '../schemas/student-academic-session.schema';
 import { TenancyAgreement, TenancyAgreementDocument } from '../schemas/tenancy-agreement.schema';
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
@@ -97,6 +102,7 @@ export interface StudentPaymentsSummary {
     totalPending?: number;
     totalUnpaid: number;
     availableMethods?: PaymentMethodAvailability;
+    isPayable?: boolean;
 }
 
 export interface PaymentMethodAvailability {
@@ -176,6 +182,7 @@ export class PaymentsService {
         @InjectModel(User.name) private userModel: Model<UserDocument>,
         @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
         @InjectModel(AcademicSession.name) private academicSessionModel: Model<AcademicSessionDocument>,
+        @InjectModel(StudentAcademicSession.name) private studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
         @InjectModel(TenancyAgreement.name) private tenancyAgreementModel: Model<TenancyAgreementDocument>,
         private matriculationService: MatriculationService,
         private emailService: EmailService,
@@ -673,80 +680,66 @@ export class PaymentsService {
         this.logger.log(`Accommodation payment authorized for user ${userId} - tenancy agreement signed`);
     }
 
-    private extractSessionStartYear(session?: { sessionYear?: string; startDate?: Date | string } | null): number | null {
-        if (!session) {
-            return null;
-        }
-
-        const sessionYearMatch = session.sessionYear?.match(/\d{4}/);
-        if (sessionYearMatch) {
-            return Number(sessionYearMatch[0]);
-        }
-
-        if (session.startDate) {
-            const startDate = new Date(session.startDate);
-            if (!Number.isNaN(startDate.getTime())) {
-                return startDate.getFullYear();
-            }
-        }
-
-        return null;
-    }
-
-    private async getStudentEntryYear(userId: string): Promise<number | null> {
+    private async resolveStudentBillableSession(
+        userId: string,
+        requestedAcademicSessionId?: string,
+    ): Promise<{ academicSessionId: string; studentGroup: 'new' | 'returning' }> {
         const student = await this.studentModel
             .findOne({ userId: new Types.ObjectId(userId) })
-            .select('admissionYear academicSession')
-            .populate('academicSession', 'sessionYear startDate')
+            .select('academicSession entryAcademicSession')
             .lean();
 
-        if (typeof student?.admissionYear === 'number') {
-            return student.admissionYear;
+        if (!student?.academicSession || !student.entryAcademicSession) {
+            throw new Error('No billable academic session is assigned to this student');
         }
 
-        const studentAcademicSession = student?.academicSession && typeof student.academicSession === 'object'
-            ? student.academicSession as any
-            : null;
-
-        const studentYear = this.extractSessionStartYear(studentAcademicSession);
-        if (studentYear) {
-            return studentYear;
+        const academicSessionId = student.academicSession.toString();
+        if (
+            requestedAcademicSessionId
+            && (!Types.ObjectId.isValid(requestedAcademicSessionId)
+                || requestedAcademicSessionId !== academicSessionId)
+        ) {
+            throw new Error('Selected academic session is not available for this student');
         }
 
-        const linkedApplication = await this.resolveLinkedApplication(userId);
-        if (!linkedApplication.academicSessionId) {
-            return null;
-        }
-
-        const applicationSession = await this.academicSessionModel
-            .findById(linkedApplication.academicSessionId)
-            .select('sessionYear startDate')
-            .lean();
-
-        return this.extractSessionStartYear(applicationSession as any);
+        return {
+            academicSessionId,
+            studentGroup: student.entryAcademicSession.toString() === academicSessionId
+                ? 'new'
+                : 'returning',
+        };
     }
 
-    private async canStudentAccessAcademicSession(userId: string, academicSessionId?: string): Promise<boolean> {
-        if (!academicSessionId || !Types.ObjectId.isValid(academicSessionId)) {
-            return true;
+    private async canStudentViewPaymentHistorySession(
+        userId: string,
+        academicSessionId: string,
+    ): Promise<boolean> {
+        if (!Types.ObjectId.isValid(academicSessionId)) {
+            return false;
         }
 
-        const entryYear = await this.getStudentEntryYear(userId);
-        if (!entryYear) {
-            return true;
-        }
-
-        const selectedSession = await this.academicSessionModel
-            .findById(academicSessionId)
-            .select('sessionYear startDate')
+        const sessionId = new Types.ObjectId(academicSessionId);
+        const student = await this.studentModel
+            .findOne({ userId: new Types.ObjectId(userId) })
+            .select('_id entryAcademicSession academicSession')
             .lean();
+        if (!student) {
+            return false;
+        }
 
-        const selectedYear = this.extractSessionStartYear(selectedSession as any);
-        if (!selectedYear) {
+        if (
+            student.entryAcademicSession?.toString() === academicSessionId
+            || student.academicSession?.toString() === academicSessionId
+        ) {
             return true;
         }
 
-        return selectedYear >= entryYear;
+        const [history, payment] = await Promise.all([
+            this.studentAcademicSessionModel.exists({ studentId: student._id, academicSessionId: sessionId }),
+            this.studentPaymentModel.exists({ userId: new Types.ObjectId(userId), academicSessionId: sessionId }),
+        ]);
+
+        return Boolean(history || payment);
     }
 
     async getStudentPaymentsSummary(userId: string, context: 'application-portal' | 'student-portal' = 'application-portal', applicationId?: string): Promise<StudentPaymentsSummary> {
@@ -787,9 +780,9 @@ export class PaymentsService {
 
         // Get student's successful payments and pending manual transfers
         const studentPaymentsQuery: any = {
-                userId: userObjectId,
-                status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING, PaymentStatus.REJECTED] }
-            };
+            userId: userObjectId,
+            status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING, PaymentStatus.REJECTED] }
+        };
         if (applicationId && context === 'application-portal') {
             studentPaymentsQuery.applicationId = linkedApplication.applicationId;
         }
@@ -1648,6 +1641,16 @@ export class PaymentsService {
                     });
 
                     await newStudent.save();
+                    await this.studentAcademicSessionModel.updateOne(
+                        { studentId: newStudent._id, academicSessionId },
+                        {
+                            $setOnInsert: {
+                                status: StudentAcademicSessionStatus.CURRENT,
+                                startedAt: new Date(),
+                            },
+                        },
+                        { upsert: true },
+                    );
                     this.logger.log('✅ Student record created successfully:', newStudent._id);
                 } else {
                     existingStudent.userId = normalizedUserId;
@@ -1655,8 +1658,14 @@ export class PaymentsService {
                     existingStudent.matriculationNumber = matriculationNumber;
                     existingStudent.programId = fullApplication.programId;
                     existingStudent.admissionYear = admissionYear;
-                    existingStudent.academicSession = academicSessionId;
-                    existingStudent.entryAcademicSession = academicSessionId;
+                    // A repeat completion must not move an existing student into a
+                    // different cohort or overwrite their staff-assigned billable session.
+                    if (!existingStudent.academicSession) {
+                        existingStudent.academicSession = academicSessionId;
+                    }
+                    if (!existingStudent.entryAcademicSession) {
+                        existingStudent.entryAcademicSession = academicSessionId;
+                    }
                     if (studentProfileImageUrl) {
                         existingStudent.profileImageUrl = studentProfileImageUrl;
                     }
@@ -2710,23 +2719,26 @@ export class PaymentsService {
             throw new Error('User not found');
         }
 
-        const canAccessSelectedSession = await this.canStudentAccessAcademicSession(userId, academicSessionId);
-        if (!canAccessSelectedSession) {
-            return {
-                paidFees: [],
-                pendingFees: [],
-                unpaidFees: [],
-                totalPaid: 0,
-                totalPending: 0,
-                totalUnpaid: 0,
-                availableMethods: {
-                    paystackEnabled: false,
-                    manualTransferEnabled: false,
-                },
-            };
+        const billableSession = await this.resolveStudentBillableSession(userId);
+        const selectedSessionId = academicSessionId || billableSession.academicSessionId;
+        const isPayable = selectedSessionId === billableSession.academicSessionId;
+
+        if (!isPayable && !(await this.canStudentViewPaymentHistorySession(userId, selectedSessionId))) {
+            throw new Error('Selected academic session is not available in this payment history');
         }
 
-        const availableMethods = await this.getPaymentMethodAvailability('student-portal', academicSessionId);
+        const student = await this.studentModel
+            .findOne({ userId: userObjectId })
+            .select('entryAcademicSession')
+            .lean();
+        const studentGroup: 'new' | 'returning' =
+            student?.entryAcademicSession?.toString() === selectedSessionId
+                ? 'new'
+                : 'returning';
+
+        const availableMethods = isPayable
+            ? await this.getPaymentMethodAvailability('student-portal', selectedSessionId)
+            : { paystackEnabled: false, manualTransferEnabled: false };
 
         // Get student's successful payments for this session
         let studentPaymentQuery: any = {
@@ -2734,9 +2746,7 @@ export class PaymentsService {
             status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING, PaymentStatus.REJECTED] }
         };
 
-        if (academicSessionId) {
-            studentPaymentQuery.academicSessionId = new Types.ObjectId(academicSessionId);
-        }
+        studentPaymentQuery.academicSessionId = new Types.ObjectId(selectedSessionId);
 
         const studentPayments = await this.studentPaymentModel
             .find(studentPaymentQuery)
@@ -2749,14 +2759,11 @@ export class PaymentsService {
             targetAudience: { $in: [PaymentAudience.STUDENT] }
         };
 
-        // Filter unpaid payments by session controls if academic session is provided
-        if (academicSessionId) {
-            const sessionControls = await this.getActivePaymentsForSession(academicSessionId);
-            if (sessionControls.payments.length > 0) {
-                unpaidPaymentsQuery._id = { $in: sessionControls.payments.map(p => new Types.ObjectId(p)) };
-            } else {
-                unpaidPaymentsQuery = null; // No active payments for this session
-            }
+        const sessionControls = await this.getActivePaymentsForSession(selectedSessionId, studentGroup);
+        if (sessionControls.payments.length > 0) {
+            unpaidPaymentsQuery._id = { $in: sessionControls.payments.map(p => new Types.ObjectId(p)) };
+        } else {
+            unpaidPaymentsQuery = null;
         }
 
         const activePaymentsForUnpaid = unpaidPaymentsQuery ? await this.paymentModel.find(unpaidPaymentsQuery).lean() : [];
@@ -2929,6 +2936,7 @@ export class PaymentsService {
             totalPending,
             totalUnpaid,
             availableMethods,
+            isPayable,
         };
     }
 
@@ -2940,18 +2948,8 @@ export class PaymentsService {
         const { page = 1, limit = 10 } = options;
         const userObjectId = new Types.ObjectId(userId);
 
-        const canAccessSelectedSession = await this.canStudentAccessAcademicSession(userId, academicSessionId);
-        if (!canAccessSelectedSession) {
-            return {
-                payments: [],
-                totalPaid: 0,
-                pagination: {
-                    page,
-                    limit,
-                    totalCount: 0,
-                    totalPages: 0,
-                }
-            };
+        if (academicSessionId && !(await this.canStudentViewPaymentHistorySession(userId, academicSessionId))) {
+            throw new Error('Selected academic session is not available in this payment history');
         }
 
         // Build query
@@ -3010,6 +3008,67 @@ export class PaymentsService {
                 totalPages: Math.ceil(totalCount / limit)
             }
         };
+    }
+
+    async getStudentPaymentHistorySessions(userId: string) {
+        const student = await this.studentModel
+            .findOne({ userId: new Types.ObjectId(userId) })
+            .select('_id entryAcademicSession academicSession')
+            .lean();
+
+        if (!student) {
+            throw new Error('Student record not found');
+        }
+
+        const [history, paymentSessionIds] = await Promise.all([
+            this.studentAcademicSessionModel
+                .find({ studentId: student._id })
+                .populate('academicSessionId', 'sessionYear title startDate endDate')
+                .sort({ startedAt: -1 })
+                .lean(),
+            this.studentPaymentModel.distinct('academicSessionId', {
+                userId: new Types.ObjectId(userId),
+                academicSessionId: { $exists: true, $ne: null },
+            }),
+        ]);
+
+        const sessionIds = new Set<string>([
+            student.entryAcademicSession?.toString(),
+            student.academicSession?.toString(),
+            ...paymentSessionIds.map((id) => id.toString()),
+        ].filter(Boolean));
+
+        const knownSessionIds = new Set(
+            history.map((record: any) => record.academicSessionId?._id?.toString() || record.academicSessionId?.toString()),
+        );
+        const missingSessionIds = [...sessionIds].filter((id) => !knownSessionIds.has(id));
+        const missingSessions = missingSessionIds.length
+            ? await this.academicSessionModel
+                .find({ _id: { $in: missingSessionIds.map((id) => new Types.ObjectId(id)) } })
+                .select('sessionYear title startDate endDate')
+                .lean()
+            : [];
+
+        const sessions = [
+            ...history.map((record: any) => ({
+                id: record.academicSessionId?._id?.toString() || record.academicSessionId?.toString(),
+                sessionYear: record.academicSessionId?.sessionYear,
+                title: record.academicSessionId?.title,
+                status: record.status,
+                startedAt: record.startedAt,
+            })),
+            ...missingSessions.map((session: any) => ({
+                id: session._id.toString(),
+                sessionYear: session.sessionYear,
+                title: session.title,
+                status: session._id.toString() === student.academicSession.toString() ? 'current' : 'historical',
+                startedAt: session.startDate,
+            })),
+        ];
+
+        return sessions.sort((a, b) =>
+            new Date(b.startedAt || 0).getTime() - new Date(a.startedAt || 0).getTime(),
+        );
     }
 
     async getLinkedPaymentsForStaffReview(
@@ -3095,19 +3154,16 @@ export class PaymentsService {
         email: string,
         academicSessionId?: string
     ): Promise<PaystackInitializeResponse> {
-        if (academicSessionId) {
-            const canAccessSelectedSession = await this.canStudentAccessAcademicSession(userId, academicSessionId);
-            if (!canAccessSelectedSession) {
-                throw new Error('Selected academic session is not available for this student');
-            }
-        }
+        const { academicSessionId: billableSessionId, studentGroup } =
+            await this.resolveStudentBillableSession(userId, academicSessionId);
 
-        // Check if payment is available for the academic session
-        if (academicSessionId) {
-            const isAvailable = await this.isPaymentAvailableForSession(paymentId, academicSessionId);
-            if (!isAvailable) {
-                throw new Error('Payment is not available for the selected academic session');
-            }
+        const isAvailable = await this.isPaymentAvailableForSession(
+            paymentId,
+            billableSessionId,
+            studentGroup,
+        );
+        if (!isAvailable) {
+            throw new Error('Payment is not available for the selected academic session');
         }
 
         // Get payment details
@@ -3134,7 +3190,7 @@ export class PaymentsService {
         await this.assertPaymentMethodEnabled(
             PaymentMethod.PAYSTACK,
             'student-portal',
-            academicSessionId,
+            billableSessionId,
         );
 
         await this.assertAccommodationPaymentEligibility(userId, payment);
@@ -3149,7 +3205,7 @@ export class PaymentsService {
             userId: new Types.ObjectId(userId),
             applicationId: linkedApplication.applicationId,
             paymentId: new Types.ObjectId(paymentId),
-            academicSessionId: academicSessionId ? new Types.ObjectId(academicSessionId) : undefined,
+            academicSessionId: new Types.ObjectId(billableSessionId),
             amount: payment.amount,
             reference: reference,
             status: PaymentStatus.PENDING,
@@ -3213,17 +3269,19 @@ export class PaymentsService {
             throw new Error('Payment not available for this user');
         }
 
+        let billableSessionId: string | undefined;
         if (options.context === 'student-portal') {
-            const canAccessSelectedSession = await this.canStudentAccessAcademicSession(userId, options.academicSessionId);
-            if (!canAccessSelectedSession) {
-                throw new Error('Selected academic session is not available for this student');
-            }
+            const billableSession = await this.resolveStudentBillableSession(
+                userId,
+                options.academicSessionId,
+            );
+            billableSessionId = billableSession.academicSessionId;
 
-            if (!options.academicSessionId) {
-                throw new Error('Academic session is required for student payments');
-            }
-
-            const isAvailable = await this.isPaymentAvailableForSession(paymentId, options.academicSessionId);
+            const isAvailable = await this.isPaymentAvailableForSession(
+                paymentId,
+                billableSessionId,
+                billableSession.studentGroup,
+            );
             if (!isAvailable) {
                 throw new Error('Payment is not available for the selected academic session');
             }
@@ -3245,7 +3303,7 @@ export class PaymentsService {
             PaymentMethod.MANUAL_TRANSFER,
             options.context,
             options.context === 'student-portal'
-                ? options.academicSessionId
+                ? billableSessionId
                 : linkedApplication.academicSessionId,
         );
 
@@ -3258,8 +3316,8 @@ export class PaymentsService {
             successQuery.applicationId = linkedApplication.applicationId;
         }
 
-        if (options.academicSessionId) {
-            successQuery.academicSessionId = new Types.ObjectId(options.academicSessionId);
+        if (billableSessionId) {
+            successQuery.academicSessionId = new Types.ObjectId(billableSessionId);
         }
 
         const existingSuccessfulPayment = await this.studentPaymentModel.findOne(successQuery);
@@ -3277,8 +3335,8 @@ export class PaymentsService {
             pendingManualPaymentQuery.applicationId = linkedApplication.applicationId;
         }
 
-        if (options.academicSessionId) {
-            pendingManualPaymentQuery.academicSessionId = new Types.ObjectId(options.academicSessionId);
+        if (billableSessionId) {
+            pendingManualPaymentQuery.academicSessionId = new Types.ObjectId(billableSessionId);
         }
 
         const pendingManualPayment = await this.studentPaymentModel.findOne(pendingManualPaymentQuery);
@@ -3296,8 +3354,8 @@ export class PaymentsService {
         const studentPayment = await this.studentPaymentModel.create({
             userId: new Types.ObjectId(userId),
             applicationId: linkedApplication.applicationId,
-            academicSessionId: options.academicSessionId
-                ? new Types.ObjectId(options.academicSessionId)
+            academicSessionId: billableSessionId
+                ? new Types.ObjectId(billableSessionId)
                 : linkedApplication.academicSessionId,
             paymentId: new Types.ObjectId(paymentId),
             amount: payment.amount,
@@ -3456,10 +3514,8 @@ export class PaymentsService {
             throw new Error('User not found');
         }
 
-        const canAccessSelectedSession = await this.canStudentAccessAcademicSession(userId, academicSessionId);
-        if (!canAccessSelectedSession) {
-            return [];
-        }
+        const { academicSessionId: billableSessionId, studentGroup } =
+            await this.resolveStudentBillableSession(userId, academicSessionId);
 
         // Get all active payments for students
         let paymentQuery: any = {
@@ -3467,14 +3523,11 @@ export class PaymentsService {
             targetAudience: { $in: [PaymentAudience.STUDENT] }
         };
 
-        // If academic session is provided, filter by session controls
-        if (academicSessionId) {
-            const sessionControls = await this.getActivePaymentsForSession(academicSessionId);
-            if (sessionControls.payments.length > 0) {
-                paymentQuery._id = { $in: sessionControls.payments.map(p => new Types.ObjectId(p)) };
-            } else {
-                return []; // No payments available for this session
-            }
+        const sessionControls = await this.getActivePaymentsForSession(billableSessionId, studentGroup);
+        if (sessionControls.payments.length > 0) {
+            paymentQuery._id = { $in: sessionControls.payments.map(p => new Types.ObjectId(p)) };
+        } else {
+            return [];
         }
 
         const availablePayments = await this.paymentModel.find(paymentQuery).lean();
@@ -3485,9 +3538,7 @@ export class PaymentsService {
             status: PaymentStatus.SUCCESSFUL
         };
 
-        if (academicSessionId) {
-            paidQuery.academicSessionId = new Types.ObjectId(academicSessionId);
-        }
+        paidQuery.academicSessionId = new Types.ObjectId(billableSessionId);
 
         const paidPayments = await this.studentPaymentModel
             .find(paidQuery)
@@ -3511,7 +3562,10 @@ export class PaymentsService {
     }
 
     // Helper method to get active payments for a session
-    private async getActivePaymentsForSession(academicSessionId: string): Promise<{
+    private async getActivePaymentsForSession(
+        academicSessionId: string,
+        studentGroup?: 'new' | 'returning',
+    ): Promise<{
         controls: string[];
         payments: string[];
     }> {
@@ -3525,8 +3579,13 @@ export class PaymentsService {
                 return { controls: [], payments: [] };
             }
 
-            const activePayments = sessionControl.payments
-                .filter((p: any) => p.active)
+            const activePayments = (sessionControl.payments || [])
+                .filter((p: any) =>
+                    p.active
+                    && (!studentGroup
+                        || !p.eligibleStudentGroups?.length
+                        || p.eligibleStudentGroups.includes(studentGroup)),
+                )
                 .map((p: any) => p.paymentId.toString());
 
             return {
@@ -3540,8 +3599,12 @@ export class PaymentsService {
     }
 
     // Helper method to check if payment is available for session
-    private async isPaymentAvailableForSession(paymentId: string, academicSessionId: string): Promise<boolean> {
-        const sessionControls = await this.getActivePaymentsForSession(academicSessionId);
+    private async isPaymentAvailableForSession(
+        paymentId: string,
+        academicSessionId: string,
+        studentGroup: 'new' | 'returning',
+    ): Promise<boolean> {
+        const sessionControls = await this.getActivePaymentsForSession(academicSessionId, studentGroup);
         return sessionControls.payments.includes(paymentId);
     }
 

@@ -85,36 +85,6 @@ export default {
         ]);
     },
     methods: {
-      getStudentEntryYear() {
-        const admissionYear = this.auth.student?.admissionYear;
-
-        if (typeof admissionYear === 'number' && !Number.isNaN(admissionYear)) {
-          return admissionYear;
-        }
-
-        return this.getSessionStartYear(
-          this.auth.student?.academicSession?.sessionYear ||
-          this.auth.application?.entryAcademicSession?.sessionYear,
-        );
-      },
-
-      getSessionStartYear(sessionLabel) {
-        const match = String(sessionLabel || '').match(/\d{4}/);
-        return match ? Number(match[0]) : null;
-      },
-
-      filterEligibleAcademicSessions(sessions) {
-        const entryYear = this.getStudentEntryYear();
-        if (!entryYear) {
-          return sessions;
-        }
-
-        return sessions.filter((session) => {
-          const sessionYear = this.getSessionStartYear(session.sessionYear);
-          return !sessionYear || sessionYear >= entryYear;
-        });
-      },
-
         async loadRegistrationData() {
           try {
             this.isLoadingRegistration = true;
@@ -136,12 +106,9 @@ export default {
                 // Load academic sessions first
                 const sessionsResponse = await studentPaymentService.getAcademicSessions();
                 if (sessionsResponse.success) {
-            const sessions = this.filterEligibleAcademicSessions(
-              sessionsResponse.data.sessions || [],
-            );
-                    this.academicSessions = sessions.map(session => ({
+                    this.academicSessions = (sessionsResponse.data.sessions || []).map(session => ({
                         id: session._id,
-                        name: session.sessionYear,
+                        name: session.title || session.sessionYear,
                         value: session._id
                     }));
                     

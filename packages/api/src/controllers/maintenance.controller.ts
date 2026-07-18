@@ -1,6 +1,6 @@
 import { Controller, Post, Body, UseGuards, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
@@ -8,6 +8,12 @@ import { AcademicSessionsService } from '../services/academic-sessions.service';
 import { Application, ApplicationDocument } from '../schemas/application.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
+import { StudentPayment, StudentPaymentDocument } from '../schemas/student-payment.schema';
+import {
+    StudentAcademicSession,
+    StudentAcademicSessionDocument,
+    StudentAcademicSessionStatus,
+} from '../schemas/student-academic-session.schema';
 import { UploadService } from '../services/upload.service';
 
 @Controller('admin/maintenance')
@@ -21,6 +27,8 @@ export class MaintenanceController {
         @InjectModel(Application.name) private readonly applicationModel: Model<ApplicationDocument>,
         @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
         @InjectModel(Student.name) private readonly studentModel: Model<StudentDocument>,
+        @InjectModel(StudentPayment.name) private readonly studentPaymentModel: Model<StudentPaymentDocument>,
+        @InjectModel(StudentAcademicSession.name) private readonly studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
         private readonly uploadService: UploadService,
     ) { }
 
@@ -168,6 +176,125 @@ export class MaintenanceController {
         } catch (error) {
             this.logger.error('migrateUserDemographics failed:', error?.message || error);
             return { success: false, error: error?.message || 'Migration failed' };
+        }
+    }
+
+    @Post('backfill-student-session-history')
+    async backfillStudentSessionHistory(@Body('apply') apply?: boolean) {
+        try {
+            const students = await this.studentModel
+                .find({ entryAcademicSession: { $exists: true }, academicSession: { $exists: true } })
+                .select('_id userId entryAcademicSession academicSession createdAt')
+                .lean() as any[];
+
+            let scanned = 0;
+            let recordsNeeded = 0;
+            let recordsCreated = 0;
+            let recordsAlreadyPresent = 0;
+            const legacyStringSessionRecords = await this.studentAcademicSessionModel.collection
+                .find({ academicSessionId: { $type: 'string' } })
+                .toArray();
+            const convertibleLegacyRecords = legacyStringSessionRecords.filter((record) =>
+                Types.ObjectId.isValid(record.academicSessionId as string),
+            );
+            let legacyDuplicateRecords = 0;
+            const legacyConversionOperations: any[] = [];
+
+            for (const record of convertibleLegacyRecords) {
+                const objectId = new Types.ObjectId(record.academicSessionId as string);
+                const objectIdRecord = await this.studentAcademicSessionModel.collection.findOne({
+                    studentId: record.studentId,
+                    academicSessionId: objectId,
+                });
+
+                if (objectIdRecord) {
+                    legacyDuplicateRecords++;
+                    legacyConversionOperations.push({
+                        deleteOne: { filter: { _id: record._id } },
+                    });
+                } else {
+                    legacyConversionOperations.push({
+                        updateOne: {
+                            filter: { _id: record._id, academicSessionId: record.academicSessionId },
+                            update: { $set: { academicSessionId: objectId } },
+                        },
+                    });
+                }
+            }
+
+            if (apply && legacyConversionOperations.length) {
+                await this.studentAcademicSessionModel.collection.bulkWrite(legacyConversionOperations);
+            }
+
+            for (const student of students) {
+                scanned++;
+                const paymentSessionIds = await this.studentPaymentModel.distinct('academicSessionId', {
+                    userId: student.userId,
+                    academicSessionId: { $exists: true, $ne: null },
+                });
+                const sessionIds = new Set([
+                    student.entryAcademicSession?.toString(),
+                    student.academicSession?.toString(),
+                    ...paymentSessionIds.map((id) => id.toString()),
+                ].filter(Boolean));
+
+                const existing = await this.studentAcademicSessionModel
+                    .find({ studentId: student._id, academicSessionId: { $in: [...sessionIds] } })
+                    .select('academicSessionId')
+                    .lean() as any[];
+                const existingIds = new Set(existing.map((record) => record.academicSessionId.toString()));
+
+                const missingIds = [...sessionIds].filter((id) => !existingIds.has(id));
+                recordsNeeded += missingIds.length;
+                recordsAlreadyPresent += sessionIds.size - missingIds.length;
+
+                if (apply && missingIds.length) {
+                    const result = await this.studentAcademicSessionModel.bulkWrite(
+                        missingIds.map((academicSessionId) => ({
+                            updateOne: {
+                                filter: {
+                                    studentId: student._id,
+                                    academicSessionId: new Types.ObjectId(academicSessionId),
+                                },
+                                update: {
+                                    $setOnInsert: {
+                                        status: academicSessionId === student.academicSession.toString()
+                                            ? StudentAcademicSessionStatus.CURRENT
+                                            : StudentAcademicSessionStatus.COMPLETED,
+                                        startedAt: student.createdAt || new Date(),
+                                        endedAt: academicSessionId === student.academicSession.toString()
+                                            ? undefined
+                                            : new Date(),
+                                    },
+                                },
+                                upsert: true,
+                            },
+                        })),
+                    );
+                    recordsCreated += result.upsertedCount || 0;
+                    recordsAlreadyPresent += missingIds.length - (result.upsertedCount || 0);
+                }
+            }
+
+            return {
+                success: true,
+                data: {
+                    scanned,
+                    recordsNeeded,
+                    recordsCreated,
+                    recordsAlreadyPresent,
+                    legacyStringSessionRecords: legacyStringSessionRecords.length,
+                    legacyDuplicateRecords,
+                    legacySessionIdsConverted: apply
+                        ? convertibleLegacyRecords.length - legacyDuplicateRecords
+                        : 0,
+                    legacyDuplicateRecordsRemoved: apply ? legacyDuplicateRecords : 0,
+                    applied: Boolean(apply),
+                },
+            };
+        } catch (error) {
+            this.logger.error('backfillStudentSessionHistory failed:', error?.message || error);
+            return { success: false, error: error?.message || 'Backfill failed' };
         }
     }
 

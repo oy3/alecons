@@ -317,6 +317,10 @@ class ApiService {
         return this.makeRequest(`/student/payments/history?${params}`);
     }
 
+    async getPaymentHistorySessions() {
+        return this.makeRequest('/student/payments/history-sessions')
+    }
+
     async getAvailablePayments(academicSessionId) {
         const params = academicSessionId ? `?academicSessionId=${academicSessionId}` : '';
         return this.makeRequest(`/student/payments/available${params}`);

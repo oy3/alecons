@@ -1,8 +1,14 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { AcademicSession, AcademicSessionDocument, SessionStatus } from '../schemas/academic-session.schema';
 import { CreateAcademicSessionDto, UpdateAcademicSessionDto, QueryAcademicSessionsDto } from '../dto/academic-session.dto';
+import { Student, StudentDocument } from '../schemas/student.schema';
+import {
+    StudentAcademicSession,
+    StudentAcademicSessionDocument,
+    StudentAcademicSessionStatus,
+} from '../schemas/student-academic-session.schema';
 
 @Injectable()
 export class AcademicSessionsService {
@@ -11,6 +17,10 @@ export class AcademicSessionsService {
     constructor(
         @InjectModel(AcademicSession.name)
         private academicSessionModel: Model<AcademicSessionDocument>,
+        @InjectModel(Student.name)
+        private studentModel: Model<StudentDocument>,
+        @InjectModel(StudentAcademicSession.name)
+        private studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
     ) { }
 
     private generateSessionYear(startDate: string, endDate: string): string {
@@ -180,6 +190,67 @@ export class AcademicSessionsService {
         }
 
         return academicSession;
+    }
+
+    async progressCohort(
+        sourceAcademicSessionId: string,
+        targetAcademicSessionId: string,
+        staffUserId: string,
+    ) {
+        if (
+            !Types.ObjectId.isValid(sourceAcademicSessionId)
+            || !Types.ObjectId.isValid(targetAcademicSessionId)
+            || sourceAcademicSessionId === targetAcademicSessionId
+        ) {
+            throw new Error('Choose a different valid destination academic session');
+        }
+
+        const [sourceSession, targetSession] = await Promise.all([
+            this.findById(sourceAcademicSessionId),
+            this.findById(targetAcademicSessionId),
+        ]);
+
+        if (targetSession.status === SessionStatus.DRAFT) {
+            throw new Error('Students cannot be progressed to a draft academic session');
+        }
+
+        const sourceId = new Types.ObjectId((sourceSession as any)._id);
+        const targetId = new Types.ObjectId((targetSession as any)._id);
+        const now = new Date();
+        const students = await this.studentModel
+            .find({ academicSession: sourceId, isActive: true })
+            .select('_id')
+            .lean();
+
+        if (!students.length) {
+            return { progressed: 0, sourceSession, targetSession };
+        }
+
+        const studentIds = students.map((student) => student._id);
+        await this.studentAcademicSessionModel.updateMany(
+            { studentId: { $in: studentIds }, academicSessionId: sourceId, status: StudentAcademicSessionStatus.CURRENT },
+            { $set: { status: StudentAcademicSessionStatus.COMPLETED, endedAt: now } },
+        );
+
+        await this.studentAcademicSessionModel.bulkWrite(
+            studentIds.map((studentId) => ({
+                updateOne: {
+                    filter: { studentId, academicSessionId: targetId },
+                    update: {
+                        $set: { status: StudentAcademicSessionStatus.CURRENT, endedAt: undefined },
+                        $setOnInsert: { startedAt: now, assignedBy: new Types.ObjectId(staffUserId) },
+                    },
+                    upsert: true,
+                },
+            })),
+        );
+
+        await this.studentModel.updateMany(
+            { _id: { $in: studentIds }, academicSession: sourceId },
+            { $set: { academicSession: targetId } },
+        );
+
+        return { progressed: students.length, sourceSession, targetSession };
     }
 
     /**

@@ -11,6 +11,7 @@ import { Program, ProgramSchema } from '../schemas/program.schema';
 import { Student, StudentSchema } from '../schemas/student.schema';
 import { TenancyAgreement, TenancyAgreementSchema } from '../schemas/tenancy-agreement.schema';
 import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
+import { StudentAcademicSession, StudentAcademicSessionSchema } from '../schemas/student-academic-session.schema';
 import { PaymentDestinationAccount, PaymentDestinationAccountSchema } from '../schemas/payment-destination-account.schema';
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
@@ -30,6 +31,7 @@ import { PaymentsReconciliationScheduler } from './payments-reconciliation.sched
             { name: Student.name, schema: StudentSchema },
             { name: TenancyAgreement.name, schema: TenancyAgreementSchema },
             { name: AcademicSession.name, schema: AcademicSessionSchema },
+            { name: StudentAcademicSession.name, schema: StudentAcademicSessionSchema },
             { name: PaymentDestinationAccount.name, schema: PaymentDestinationAccountSchema },
         ]),
     ],

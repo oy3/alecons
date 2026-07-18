@@ -400,6 +400,13 @@ class StaffApiService {
         })
     }
 
+    async backfillStudentSessionHistory({ apply = false } = {}) {
+        return this.makeRequest('/admin/maintenance/backfill-student-session-history', {
+            method: 'POST',
+            body: JSON.stringify({ apply }),
+        })
+    }
+
     async backfillPublicVerificationTokens() {
         return this.makeRequest('/admin/application-numbers/public-verification/backfill', {
             method: 'POST',
@@ -613,6 +620,13 @@ class StaffApiService {
         return this.makeRequest(`/academic-sessions/${id}`, {
             method: 'PUT',
             body: JSON.stringify(sessionData),
+        })
+    }
+
+    async progressAcademicSessionCohort(sourceSessionId, targetAcademicSessionId) {
+        return this.makeRequest('/academic-sessions/' + sourceSessionId + '/progress-cohort', {
+            method: 'POST',
+            body: JSON.stringify({ targetAcademicSessionId }),
         })
     }
 

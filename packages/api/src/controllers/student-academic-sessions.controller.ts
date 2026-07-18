@@ -1,7 +1,9 @@
-import { Controller, Get, Query, UseGuards, Logger } from '@nestjs/common';
+import { Controller, Get, UseGuards, Logger, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { AcademicSessionsService } from '../services/academic-sessions.service';
+import { Student, StudentDocument } from '../schemas/student.schema';
 
 @ApiTags('Student Portal Academic Sessions')
 @Controller('student/academic-sessions')
@@ -10,33 +12,30 @@ import { AcademicSessionsService } from '../services/academic-sessions.service';
 export class StudentAcademicSessionsController {
     private readonly logger = new Logger(StudentAcademicSessionsController.name);
 
-    constructor(private readonly academicSessionsService: AcademicSessionsService) { }
+    constructor(
+        @InjectModel(Student.name)
+        private readonly studentModel: Model<StudentDocument>,
+    ) { }
 
     @Get()
     @ApiOperation({ summary: 'Get academic sessions available for students (excludes draft status)' })
     @ApiResponse({ status: 200, description: 'Academic sessions retrieved successfully' })
-    async getAcademicSessions(
-        @Query('active') active?: string,
-        @Query('page') page: number = 1,
-        @Query('limit') limit: number = 10
-    ) {
+    async getAcademicSessions(@Request() req) {
         try {
-            // Students should only see non-draft academic sessions
-            const query: any = {
-                status: { $ne: 'draft' }, // Exclude draft sessions
-                page: Number(page),
-                limit: Number(limit)
-            };
+            const student = await this.studentModel
+                .findOne({ userId: new Types.ObjectId(req.user._id) })
+                .populate('academicSession', 'sessionYear title startDate endDate status active')
+                .lean();
 
-            if (active !== undefined) {
-                query.active = active === 'true';
+            if (!student?.academicSession || typeof student.academicSession !== 'object') {
+                return { success: true, data: { sessions: [] } };
             }
-
-            const result = await this.academicSessionsService.findAll(query);
 
             return {
                 success: true,
-                data: result
+                // Staff progression assigns this session. A student never receives every
+                // open session merely because its session year looks eligible.
+                data: { sessions: [student.academicSession] }
             };
         } catch (error) {
             this.logger.error('Error getting academic sessions for student:', error);

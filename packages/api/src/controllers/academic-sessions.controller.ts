@@ -20,6 +20,9 @@ import {
 } from "../dto/academic-session.dto";
 import { SessionControlsService } from "../services/session-controls.service";
 import { EmailService } from "../services/email.service";
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
+import { UserRole } from '../schemas/user.schema';
 
 @Controller("academic-sessions")
 @UseGuards(JwtAuthGuard)
@@ -132,6 +135,30 @@ export class AcademicSessionsController {
                 success: false,
                 message: error.message,
             };
+        }
+    }
+
+    @Post(':id/progress-cohort')
+    @UseGuards(RolesGuard)
+    @Roles(UserRole.ADMIN, UserRole.STAFF)
+    async progressCohort(
+        @Param('id') sourceAcademicSessionId: string,
+        @Body('targetAcademicSessionId') targetAcademicSessionId: string,
+        @Request() req,
+    ) {
+        try {
+            const result = await this.academicSessionsService.progressCohort(
+                sourceAcademicSessionId,
+                targetAcademicSessionId,
+                req.user.userId || req.user._id,
+            );
+            return {
+                success: true,
+                data: result,
+                message: result.progressed + ' student(s) progressed successfully',
+            };
+        } catch (error) {
+            return { success: false, message: error.message };
         }
     }
 

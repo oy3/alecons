@@ -82,6 +82,22 @@ export class StudentPaymentsController {
         }
     }
 
+    @Get('history-sessions')
+    @ApiOperation({ summary: 'Get the authenticated student payment-history session filters' })
+    async getPaymentHistorySessions(@Request() req) {
+        try {
+            const sessions = await this.paymentsService.getStudentPaymentHistorySessions(
+                req.user._id.toString(),
+            );
+            return { success: true, data: { sessions } };
+        } catch (error) {
+            throw new HttpException(
+                { success: false, message: 'Failed to fetch payment history sessions', error: error.message },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
     @Post('initialize')
     @ApiOperation({ summary: 'Initialize payment for student with academic session' })
     @ApiResponse({ status: 200, description: 'Payment initialized successfully' })

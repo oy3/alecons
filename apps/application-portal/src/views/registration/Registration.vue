@@ -48,7 +48,7 @@ export default {
     maximumDateOfBirth() {
       const today = new Date();
       const minimumEligibleDate = new Date(
-        today.getFullYear() - 16,
+        today.getFullYear() - 15,
         today.getMonth(),
         today.getDate(),
       );

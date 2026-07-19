@@ -38,6 +38,18 @@ const routes = [
         meta: { requiresAuth: true, module: 'admissions' }
     },
     {
+        path: '/students',
+        name: 'Students',
+        component: () => import('../views/students/Students.vue'),
+        meta: { requiresAuth: true, module: 'students' }
+    },
+    {
+        path: '/students/:id',
+        name: 'StudentDetail',
+        component: () => import('../views/students/StudentDetail.vue'),
+        meta: { requiresAuth: true, module: 'students' }
+    },
+    {
         path: '/academics',
         name: 'Academics',
         component: () => import('../views/academics/Academics.vue'),

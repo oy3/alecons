@@ -19,6 +19,7 @@ import { UserManagementModule } from './modules/user-management.module';
 import { StudentModule } from './modules/student.module';
 import { CourseRegistrationManagementModule } from './modules/course-registration-management.module';
 import { IdCardModule } from './modules/id-card.module';
+import { StudentsManagementModule } from './modules/students-management.module';
 import { CoursesModule } from './courses/courses.module';
 import { StaffApplicationsController } from './controllers/staff-applications.controller';
 import { ExamResultsController } from './controllers/exam-results.controller';
@@ -120,6 +121,7 @@ const hasExternalApiEnvFile = Boolean(process.env.API_ENV_FILE);
         StudentModule,
         CourseRegistrationManagementModule,
         IdCardModule,
+        StudentsManagementModule,
     ],
     controllers: [AppController, StaffApplicationsController, ExamResultsController, MaintenanceController],
     providers: [AppService, EmailService, MatriculationService, ContentSanitizationService, AdmissionLetterPdfService],

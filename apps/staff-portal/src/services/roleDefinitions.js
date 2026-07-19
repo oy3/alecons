@@ -79,6 +79,14 @@ export const MODULE_DEFINITIONS = {
             { value: 'manage', label: 'Manage All' },
         ],
     },
+    students: {
+        label: 'Students',
+        permissions: [
+            { value: 'view', label: 'View' },
+            { value: 'edit', label: 'Edit Status' },
+            { value: 'manage', label: 'Manage All' },
+        ],
+    },
     utilities: {
         label: 'Utilities',
         permissions: [

@@ -1297,6 +1297,54 @@ class StaffApiService {
     }
 
     // -------------------------------------------------------------------------
+    // Student Registry
+    // -------------------------------------------------------------------------
+
+    async getStaffStudents(filters = {}) {
+        const params = new URLSearchParams()
+        Object.entries(filters).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && String(value).trim() !== '') {
+                params.append(key, String(value))
+            }
+        })
+        const qs = params.toString()
+        return this.makeRequest(`/staff/students${qs ? `?${qs}` : ''}`)
+    }
+
+    async getStaffStudentStats(filters = {}) {
+        const params = new URLSearchParams()
+        Object.entries(filters).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && String(value).trim() !== '') {
+                params.append(key, String(value))
+            }
+        })
+        const qs = params.toString()
+        return this.makeRequest(`/staff/students/stats${qs ? `?${qs}` : ''}`)
+    }
+
+    async getStaffStudentFilterOptions() {
+        return this.makeRequest('/staff/students/filter-options')
+    }
+
+    async getStaffStudent(id) {
+        return this.makeRequest(`/staff/students/${id}`)
+    }
+
+    async updateStaffStudentStatus(id, status) {
+        return this.makeRequest(`/staff/students/${id}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status }),
+        })
+    }
+
+    async updateStaffStudentPortalAccess(id, isActive) {
+        return this.makeRequest(`/staff/students/${id}/portal-access`, {
+            method: 'PATCH',
+            body: JSON.stringify({ isActive }),
+        })
+    }
+
+    // -------------------------------------------------------------------------
     // ID Card Generation
     // -------------------------------------------------------------------------
 

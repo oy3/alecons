@@ -18,6 +18,12 @@ export const staffNavigationItems = [
     module: "admissions",
   },
   {
+    title: "Students",
+    icon: "bi-mortarboard-fill",
+    route: "/students",
+    module: "students",
+  },
+  {
     title: "Academics",
     icon: "bi-mortarboard",
     route: "/academics",

@@ -34,7 +34,7 @@ export default {
       currentPage: 1,
       totalPages: 1,
       totalItems: 0,
-      perPage: 20,
+      perPage: 10,
       searchTimeout: null,
       isInitializing: true,
     };
@@ -200,7 +200,7 @@ export default {
       class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4"
     >
       <div>
-        <h1 class="h3 mb-1">Students Management</h1>
+        <h2 class="fw-bold text-staff-primary mb-1">Students Management</h2>
         <p class="text-muted mb-0">
           Manage enrolled student records, programme placement, and portal
           access.
@@ -338,23 +338,21 @@ export default {
             </select>
           </div>
           <div class="col-lg-2">
-            <label class="form-label small">Level</label
+            <label class="form-label small">Year</label
             ><select
               v-model="filters.level"
               class="form-select"
               :disabled="!filters.programId"
             >
               <option value="">
-                {{
-                  filters.programId ? "All levels" : "Select a program first"
-                }}
+                {{ filters.programId ? "All year" : "Select a program first" }}
               </option>
               <option
                 v-for="level in availableLevels"
                 :key="level"
                 :value="level"
               >
-                Level {{ level }}
+                Year {{ level }}
               </option>
             </select>
           </div>
@@ -389,7 +387,7 @@ export default {
               <th>Student</th>
               <th>Matriculation No.</th>
               <th>Program</th>
-              <th>Academic Standing</th>
+              <th>Level</th>
               <th>Current Session</th>
               <th>Status</th>
               <th class="text-end">Actions</th>
@@ -435,17 +433,17 @@ export default {
                 <code>{{ student.matriculationNumber }}</code>
               </td>
               <td>
-                <div>{{ student.programId?.name || "Not assigned" }}</div>
                 <div class="small text-muted">
                   {{ student.programId?.programTypeId?.type }}
                   {{ student.programId?.programModeId?.mode }}
                 </div>
+                <div>{{ student.programId?.name || "Not assigned" }}</div>
               </td>
-              <td>
-                Level {{ student.currentLevel }} · Semester
+              <td class="small">
+                Year {{ student.currentLevel }} · Semester
                 {{ student.currentSemester }}
               </td>
-              <td>
+              <td class="small">
                 <div>{{ sessionLabel(student.academicSession) }}</div>
                 <div class="small text-muted">
                   Entry: {{ sessionLabel(student.entryAcademicSession) }}

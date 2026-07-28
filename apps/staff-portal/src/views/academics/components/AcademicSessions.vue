@@ -14,6 +14,7 @@ export default {
       perPage: 10,
       totalSessions: 0,
       apiTotalPages: 0,
+      provostCandidates: [],
 
       // Status options
       statusOptions: [
@@ -54,7 +55,7 @@ export default {
     },
   },
   async mounted() {
-    await this.loadSessions();
+    await Promise.all([this.loadSessions(), this.loadProvostCandidates()]);
   },
   methods: {
     debouncedLoadSessions() {
@@ -92,6 +93,8 @@ export default {
             endDate: session.endDate,
             status: session.status,
             active: session.active,
+            provostUserId: session.provostUserId?._id || session.provostUserId || "",
+            provostName: this.formatStaffName(session.provostUserId),
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,
           }));
@@ -134,7 +137,45 @@ export default {
       return statusOption ? statusOption.class : "bg-secondary";
     },
 
+    async loadProvostCandidates() {
+      try {
+        const response = await apiService.getUsers({ page: 1, limit: 200, role: "staff", status: "active" });
+        this.provostCandidates = response.success
+          ? (response.data?.users || []).filter((user) => user.isActive !== false)
+          : [];
+      } catch (error) {
+        logger.error("Failed to load Provost candidates:", error);
+        this.provostCandidates = [];
+      }
+    },
+
+    formatStaffName(user) {
+      if (!user || typeof user === "string") return "";
+      return [user.firstName, user.otherName, user.lastName].filter(Boolean).join(" ");
+    },
+
+    escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    },
+
+    getProvostOptions(selectedId = "") {
+      return [
+        '<option value="">No Provost assigned</option>',
+        ...this.provostCandidates.map((user) => {
+          const name = this.escapeHtml(this.formatStaffName(user));
+          const email = this.escapeHtml(user.email);
+          return `<option value="${user._id}" ${user._id === selectedId ? "selected" : ""}>${name} (${email})</option>`;
+        }),
+      ].join("");
+    },
+
     async showAddSessionModal() {
+      if (!this.provostCandidates.length) await this.loadProvostCandidates();
       const { value: formValues } = await this.$swal.fire({
         title: "Add New Academic Session",
         html: `
@@ -158,6 +199,11 @@ export default {
             <div class="col-12 mb-3">
               <label class="form-label">Description</label>
               <textarea id="description" class="form-control" placeholder="Session description..." rows="3"></textarea>
+            </div>
+            <div class="col-12 mb-3">
+              <label class="form-label">Provost</label>
+              <select id="provostUserId" class="form-select">${this.getProvostOptions()}</select>
+              <small class="text-muted">This staff member will review results for this academic session.</small>
             </div>
             <div class="col-6 mb-3">
               <label class="form-label">Status</label>
@@ -206,6 +252,7 @@ export default {
           const description = document.getElementById("description").value;
           const status = document.getElementById("status").value;
           const active = document.getElementById("active").checked;
+          const provostUserId = document.getElementById("provostUserId").value;
 
           if (!startDate || !endDate || !status) {
             this.$swal.showValidationMessage(
@@ -228,6 +275,7 @@ export default {
             description: description || undefined,
             status,
             active,
+            provostUserId: provostUserId || null,
           };
         },
       });
@@ -269,6 +317,7 @@ export default {
     },
 
     async editSession(session) {
+      if (!this.provostCandidates.length) await this.loadProvostCandidates();
       const { value: formValues } = await this.$swal.fire({
         title: "Edit Academic Session",
         html: `
@@ -292,6 +341,11 @@ export default {
             <div class="col-12 mb-3">
               <label class="form-label">Description</label>
               <textarea id="description" class="form-control" rows="3">${session.description || ""}</textarea>
+            </div>
+            <div class="col-12 mb-3">
+              <label class="form-label">Provost</label>
+              <select id="provostUserId" class="form-select">${this.getProvostOptions(session.provostUserId)}</select>
+              <small class="text-muted">Changing this assignment changes who can review this session's results.</small>
             </div>
             <div class="col-6 mb-3">
               <label class="form-label">Status</label>
@@ -340,6 +394,7 @@ export default {
           const description = document.getElementById("description").value;
           const status = document.getElementById("status").value;
           const active = document.getElementById("active").checked;
+          const provostUserId = document.getElementById("provostUserId").value;
 
           if (!startDate || !endDate || !status) {
             this.$swal.showValidationMessage(
@@ -362,6 +417,7 @@ export default {
             description: description || undefined,
             status,
             active,
+            provostUserId: provostUserId || null,
           };
         },
       });
@@ -900,6 +956,7 @@ export default {
                     <th>Session Year</th>
                     <th>Start Date</th>
                     <th>End Date</th>
+                    <th>Provost</th>
                     <th class="text-center">Status</th>
                     <th class="text-center">Active</th>
                     <th class="text-center">Controls</th>
@@ -908,7 +965,7 @@ export default {
                 </thead>
                 <tbody>
                   <tr v-if="paginatedSessions.length === 0">
-                    <td colspan="7" class="text-center py-5">
+                    <td colspan="8" class="text-center py-5">
                       <div class="text-muted">
                         <i class="bi bi-calendar-x fs-1 mb-3 d-block"></i>
                         <h5 class="mb-2">No Academic Sessions Found</h5>
@@ -933,6 +990,7 @@ export default {
                     </td>
                     <td>{{ formatDate(session.startDate) }}</td>
                     <td>{{ formatDate(session.endDate) }}</td>
+                    <td>{{ session.provostName || "Not assigned" }}</td>
                     <td class="text-center">
                       <span
                         class="badge rounded-pill"

@@ -407,6 +407,20 @@ class StaffApiService {
         })
     }
 
+    async migrateAcademicResultModel({ apply = false } = {}) {
+        return this.makeRequest('/admin/maintenance/migrate-academic-result-model', {
+            method: 'POST',
+            body: JSON.stringify({ apply }),
+        })
+    }
+
+    async rebuildAcademicResultSummaries({ apply = false } = {}) {
+        return this.makeRequest('/admin/maintenance/rebuild-academic-result-summaries', {
+            method: 'POST',
+            body: JSON.stringify({ apply }),
+        })
+    }
+
     async backfillPublicVerificationTokens() {
         return this.makeRequest('/admin/application-numbers/public-verification/backfill', {
             method: 'POST',
@@ -1242,8 +1256,16 @@ class StaffApiService {
         return this.post('/staff/roles', roleData)
     }
 
+    async getManagedRoles() {
+        return this.makeRequest('/staff/roles/management')
+    }
+
     async updateRole(id, roleData) {
         return this.put(`/staff/roles/${id}`, roleData)
+    }
+
+    async updateRoleStatus(id, active) {
+        return this.patch(`/staff/roles/${id}/status`, { active })
     }
 
     async deleteRole(id) {
@@ -1325,6 +1347,32 @@ class StaffApiService {
     async getStaffStudentFilterOptions() {
         return this.makeRequest('/staff/students/filter-options')
     }
+
+    // Academic Results
+    async getAcademicResultGradeScales() { return this.makeRequest('/staff/academic-results/grade-scales') }
+    async createAcademicResultGradeScale(payload) { return this.post('/staff/academic-results/grade-scales', payload) }
+    async updateAcademicResultGradeScaleStatus(id, status) { return this.patch(`/staff/academic-results/grade-scales/${id}/status`, { status }) }
+    async getAcademicResultLecturerCourses(filters = {}) { const params = new URLSearchParams(filters); return this.makeRequest(`/staff/academic-results/lecturer-courses${params.toString() ? `?${params}` : ''}`) }
+    async getAcademicResultsQueue(queue) { return this.makeRequest(`/staff/academic-results/queues/${queue}`) }
+    academicResultContext(context) {
+        return {
+            programCourseId: context.programCourseId,
+            academicSessionId: context.academicSessionId,
+            attemptType: context.attemptType,
+            ...(context.departmentId ? { departmentId: context.departmentId?._id || context.departmentId } : {}),
+        }
+    }
+    async getAcademicResultContextReport(context) { return this.post('/staff/academic-results/context/report', this.academicResultContext(context)) }
+    async getAcademicResultsReadiness() { return this.makeRequest('/staff/academic-results/readiness') }
+    async getAcademicResultScoreSheet(programCourseId, attemptType = 'initial') { return this.makeRequest(`/staff/academic-results/program-courses/${programCourseId}/score-sheet?attemptType=${encodeURIComponent(attemptType)}`) }
+    async saveAcademicResultScores(programCourseId, payload) { return this.post(`/staff/academic-results/program-courses/${programCourseId}/scores`, payload) }
+    async submitAcademicResultsToHod(programCourseId, attemptType = 'initial') { return this.post(`/staff/academic-results/program-courses/${programCourseId}/submit-hod?attemptType=${encodeURIComponent(attemptType)}`) }
+    async reviewAcademicResultsAsHod(context, payload) { return this.post('/staff/academic-results/context/hod-review', { context: this.academicResultContext(context), ...payload }) }
+    async submitAcademicResultsToProvost(context) { return this.post('/staff/academic-results/context/submit-provost', this.academicResultContext(context)) }
+    async reviewAcademicResultsAsProvost(context, payload) { return this.post('/staff/academic-results/context/provost-review', { context: this.academicResultContext(context), ...payload }) }
+    async publishAcademicResults(context) { return this.post('/staff/academic-results/context/publish', this.academicResultContext(context)) }
+    async createAcademicResultAttempt(payload) { return this.post('/staff/academic-results/attempts', payload) }
+    async amendPublishedAcademicResult(resultId, payload) { return this.post(`/staff/academic-results/results/${resultId}/amend`, payload) }
 
     async getStaffStudent(id) {
         return this.makeRequest(`/staff/students/${id}`)

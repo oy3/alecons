@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
     ArrayUnique,
     IsArray,
@@ -10,10 +10,57 @@ import {
     IsNumber,
     IsOptional,
     IsString,
+    MaxLength,
+    ValidateNested,
     Max,
     Min,
 } from 'class-validator';
 import { ProgramCourseCategory } from '../schemas/program-course.schema';
+
+export class ProgramCourseAssessmentComponentDto {
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(100)
+    title: string;
+
+    @IsNumber()
+    @Min(0.0001)
+    maximumMark: number;
+
+    @IsNumber()
+    @Min(0.0001)
+    @Max(100)
+    weightPercent: number;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(50)
+    componentType?: string;
+
+    @IsInt()
+    @Min(1)
+    displayOrder: number;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(1000)
+    description?: string;
+
+    @IsOptional()
+    assessmentDate?: Date;
+
+    @IsOptional()
+    @IsBoolean()
+    active?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    mandatory?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    absenceAllowed?: boolean;
+}
 
 export class CreateCourseDto {
     @IsString()
@@ -31,6 +78,7 @@ export class CreateCourseDto {
     @IsOptional()
     @IsBoolean()
     active?: boolean;
+
 }
 
 export class UpdateCourseDto {
@@ -49,6 +97,7 @@ export class UpdateCourseDto {
     @IsOptional()
     @IsBoolean()
     active?: boolean;
+
 }
 
 export class QueryCoursesDto {
@@ -118,6 +167,11 @@ export class CreateProgramCourseDto {
     @IsOptional()
     @IsBoolean()
     active?: boolean;
+
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => ProgramCourseAssessmentComponentDto)
+    assessmentComponents: ProgramCourseAssessmentComponentDto[];
 }
 
 export class UpdateProgramCourseDto {
@@ -165,6 +219,12 @@ export class UpdateProgramCourseDto {
     @IsOptional()
     @IsBoolean()
     active?: boolean;
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => ProgramCourseAssessmentComponentDto)
+    assessmentComponents?: ProgramCourseAssessmentComponentDto[];
 }
 
 export class QueryProgramCoursesDto {

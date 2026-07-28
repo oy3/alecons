@@ -17,6 +17,7 @@ export default {
     return {
       users: [],
       roles: [],
+      managedRoles: [],
       isLoading: true,
       isSavingUser: false, // Loading state for user creation/update
       searchQuery: "",
@@ -167,6 +168,11 @@ export default {
       } catch (error) {
         logger.error("Failed to load roles:", error);
       }
+    },
+
+    async loadManagedRoles() {
+      const response = await apiService.getManagedRoles();
+      this.managedRoles = response.data || [];
     },
 
     async onSearch() {
@@ -790,9 +796,9 @@ export default {
     async showRolesManagement() {
       try {
         // Refresh roles data
-        await this.loadRoles();
+        await Promise.all([this.loadRoles(), this.loadManagedRoles()]);
 
-        const rolesTableRows = this.roles
+        const rolesTableRows = this.managedRoles
           .map((role) => {
             // Convert module permissions back to frontend format for display
             const moduleNames = role.modules?.map((m) => m.module) || [];
@@ -803,13 +809,14 @@ export default {
               <td class="text-start">${role.name}</td>
               <td class="text-start">${role.description || "No description"}</td>
               <td class="text-start">${totalModules} modules</td>
+              <td><span class="badge ${role.active ? "text-bg-success" : "text-bg-secondary"}">${role.active ? "Active" : "Inactive"}</span></td>
               <td class="text-center">
                 <button class="btn btn-sm btn-outline-primary me-2" onclick="window.editRole('${role._id}')">
                   <i class="bi bi-pencil"></i> Edit
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="window.deleteRole('${role._id}')">
-                  <i class="bi bi-trash"></i> Delete
-                </button>
+                <div class="form-check form-switch d-inline-flex align-items-center ms-1 mb-0">
+                  <input class="form-check-input" type="checkbox" role="switch" title="Toggle role status" ${role.active ? "checked" : ""} onchange="window.toggleRoleStatus('${role._id}', this.checked)">
+                </div>
               </td>
             </tr>
           `;
@@ -818,7 +825,7 @@ export default {
 
         // Store reference to this component for global access
         window.editRole = (roleId) => this.editRole(roleId);
-        window.deleteRole = (roleId) => this.deleteRole(roleId);
+        window.toggleRoleStatus = (roleId, active) => this.toggleRoleStatus(roleId, active);
         window.addNewRole = () => this.showRoleModal();
 
         const result = await Swal.fire({
@@ -839,17 +846,18 @@ export default {
                       <th class="text-start">Role Name</th>
                       <th class="text-start">Description</th>
                       <th class="text-start">Modules</th>
+                      <th>Status</th>
                       <th class="text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${rolesTableRows || '<tr><td colspan="4" class="text-center text-muted">No roles found</td></tr>'}
+                    ${rolesTableRows || '<tr><td colspan="5" class="text-center text-muted">No roles found</td></tr>'}
                   </tbody>
                 </table>
               </div>
             </div>
           `,
-          width: "800px",
+          width: "900px",
           showConfirmButton: false,
           showCloseButton: true,
           customClass: {
@@ -859,7 +867,7 @@ export default {
 
         // Clean up global references
         delete window.editRole;
-        delete window.deleteRole;
+        delete window.toggleRoleStatus;
         delete window.addNewRole;
       } catch (error) {
         logger.error("Error showing roles management:", error);
@@ -955,7 +963,18 @@ export default {
           this.setupRoleModalInteractions(selectedModules, rolePermissions);
         },
         preConfirm: () => {
-          return this.validateAndGetRoleData();
+          const roleData = this.validateAndGetRoleData();
+          if (!roleData) return false;
+          const duplicate = this.managedRoles.find(
+            (role) =>
+              role._id !== existingRole?._id &&
+              role.name?.trim().toLowerCase() === roleData.name.toLowerCase(),
+          );
+          if (duplicate) {
+            Swal.showValidationMessage(`A role named "${duplicate.name}" already exists. Edit that role or choose another name.`);
+            return false;
+          }
+          return roleData;
         },
       });
 
@@ -1127,7 +1146,7 @@ export default {
         // Show error modal and wait for user acknowledgment
         await Swal.fire({
           title: "Error!",
-          text: error.response?.data?.message || "Failed to create role",
+          text: error.message || "Failed to create role",
           icon: "error",
           confirmButtonText: "OK",
           confirmButtonColor: "#dc3545",
@@ -1139,7 +1158,7 @@ export default {
 
     async editRole(roleId) {
       try {
-        const role = this.roles.find((r) => r._id === roleId);
+        const role = this.managedRoles.find((r) => r._id === roleId);
         if (!role) {
           throw new Error("Role not found");
         }
@@ -1186,13 +1205,47 @@ export default {
         // Show error modal and wait for user acknowledgment
         await Swal.fire({
           title: "Error!",
-          text: error.response?.data?.message || "Failed to update role",
+          text: error.message || "Failed to update role",
           icon: "error",
           confirmButtonText: "OK",
           confirmButtonColor: "#dc3545",
         });
 
         return false; // Operation failed
+      }
+    },
+
+    async toggleRoleStatus(roleId, active) {
+      const role = this.managedRoles.find((item) => item._id === roleId);
+      if (!role) return;
+      const decision = await Swal.fire({
+        title: `${active ? "Activate" : "Deactivate"} ${role.name}?`,
+        text: active
+          ? "The role will become available for staff assignment."
+          : "The role will no longer be available for new staff assignments.",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: active ? "Activate" : "Deactivate",
+        confirmButtonColor: active ? "#198754" : "#b7791f",
+      });
+      if (!decision.isConfirmed) {
+        setTimeout(() => this.showRolesManagement(), 150);
+        return;
+      }
+      try {
+        await apiService.updateRoleStatus(roleId, active);
+        await Promise.all([this.loadRoles(), this.loadManagedRoles()]);
+        await Swal.fire({
+          icon: "success",
+          title: active ? "Role activated" : "Role deactivated",
+          text: `${role.name} is now ${active ? "available" : "inactive"}.`,
+          timer: 1800,
+          showConfirmButton: false,
+        });
+        setTimeout(() => this.showRolesManagement(), 200);
+      } catch (error) {
+        await Swal.fire("Could not update role", error.message || "Please try again.", "error");
+        setTimeout(() => this.showRolesManagement(), 200);
       }
     },
 

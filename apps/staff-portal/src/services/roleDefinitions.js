@@ -49,6 +49,21 @@ export const MODULE_DEFINITIONS = {
             { value: 'manage', label: 'Manage All' },
         ],
     },
+    academicResults: {
+        label: 'Result Grading',
+        permissions: [
+            { value: 'view', label: 'View' },
+            { value: 'configure', label: 'Configure Grade Scales' },
+            { value: 'enter_scores', label: 'Enter Scores' },
+            { value: 'submit', label: 'Submit for Review' },
+            { value: 'review_hod', label: 'HOD Review' },
+            { value: 'review_provost', label: 'Provost Review' },
+            { value: 'publish', label: 'Publish Results' },
+            { value: 'amend', label: 'Amend Published Results' },
+            { value: 'export', label: 'Export' },
+            { value: 'manage', label: 'Manage All' },
+        ],
+    },
     exams: {
         label: 'Exams',
         permissions: [

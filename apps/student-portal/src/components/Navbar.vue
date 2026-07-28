@@ -117,7 +117,7 @@ export default {
               class="rounded-circle me-2 border border-2 border-primary"
             />
             <div class="d-none d-lg-block">
-              <div class="fw-bold text-dark small">{{ auth.userName }}</div>
+              <div class="fw-bold text-dark small text-capitalize">{{ auth.userName }}</div>
               <div class="text-muted small">Student</div>
             </div>
           </div>

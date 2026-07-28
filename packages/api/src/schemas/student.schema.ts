@@ -38,8 +38,8 @@ export class Student {
     @Prop()
     graduationDate?: Date;
 
-    @Prop({ default: 0.0 })
-    cumulativeGPA: number;
+    @Prop({ type: Number, default: null })
+    cumulativeGPA: number | null;
 
     @Prop({ default: true })
     isActive: boolean;

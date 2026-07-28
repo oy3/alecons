@@ -30,7 +30,13 @@ export const useAuthStore = defineStore("auth", () => {
     const currentLevel = computed(() => student.value?.currentLevel || 0);
     const currentSemester = computed(() => student.value?.currentSemester || 0);
     const studentStatus = computed(() => student.value?.status || "n/a");
-    const cumulativeGPA = computed(() => student.value?.cumulativeGPA || 0.0);
+    const cumulativeGPA = computed(() => {
+        const value = student.value?.cumulativeGPA;
+        return value === null || value === undefined ? null : Number(value);
+    });
+    const hasCumulativeGPA = computed(() =>
+        Number.isFinite(cumulativeGPA.value)
+    );
     const profileImageUrl = computed(
         () =>
             student.value?.profileImageUrl ||
@@ -317,6 +323,7 @@ export const useAuthStore = defineStore("auth", () => {
         currentSemester,
         studentStatus,
         cumulativeGPA,
+        hasCumulativeGPA,
         profileImageUrl,
         // Program information
         programType,

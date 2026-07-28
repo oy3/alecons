@@ -252,6 +252,13 @@ class ApiService {
         return this.makeRequest(`/student/course-registration${params}`);
     }
 
+    async getAcademicResults(filters = {}) {
+        const params = new URLSearchParams()
+        if (filters.academicSessionId) params.append('academicSessionId', filters.academicSessionId)
+        if (filters.semester) params.append('semester', String(filters.semester))
+        return this.makeRequest(`/student/academic-results${params.toString() ? `?${params}` : ''}`)
+    }
+
     async saveCourseRegistrationDraft(payload) {
         return this.makeRequest('/student/course-registration/draft', {
             method: 'PUT',

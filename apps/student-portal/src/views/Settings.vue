@@ -290,7 +290,7 @@ export default {
                       <label class="form-label fw-bold">First Name</label>
                       <input
                         type="text"
-                        class="form-control"
+                        class="form-control text-capitalize"
                         :value="auth.user?.firstName || ''"
                         readonly
                       />
@@ -302,7 +302,7 @@ export default {
                       <label class="form-label fw-bold">Last Name</label>
                       <input
                         type="text"
-                        class="form-control"
+                        class="form-control text-capitalize"
                         :value="auth.user?.lastName || ''"
                         readonly
                       />
@@ -325,7 +325,7 @@ export default {
                       <input
                         type="tel"
                         class="form-control"
-                        :value="auth.application?.phone || ''"
+                        :value="auth.user?.phone || ''"
                         readonly
                       />
                       <small class="text-muted">Phone cannot be changed</small>
@@ -414,12 +414,14 @@ export default {
                 />
               </div> -->
               <div class="col-md-6 mb-3">
-                <label class="form-label fw-bold">Current GPA</label>
+                <label class="form-label fw-bold">Cumulative GPA</label>
                 <input
                   type="text"
                   class="form-control"
                   :value="
-                    auth.cumulativeGPA ? auth.cumulativeGPA.toFixed(2) : '0.00'
+                    auth.hasCumulativeGPA
+                      ? auth.cumulativeGPA.toFixed(2)
+                      : 'Not yet calculated'
                   "
                   readonly
                 />

@@ -16,6 +16,9 @@ export default {
       isRepairingAcademicSessions: false,
       isMigratingDemographics: false,
       isBackfillingStudentSessionHistory: false,
+      isCheckingAcademicResultsReadiness: false,
+      isMigratingAcademicResults: false,
+      isRebuildingAcademicSummaries: false,
       counterStats: null,
       counterRecord: null,
       programDriftSummary: null,
@@ -67,6 +70,30 @@ export default {
           variant: 'success',
           description: 'Create session-history records from each student’s entry session, current session, and existing payment ledger.',
           actionLabel: 'Inspect & Backfill'
+        },
+        {
+          id: 'academic-results-readiness',
+          title: 'Academic Results Readiness',
+          icon: 'bi-clipboard2-check',
+          variant: 'primary',
+          description: 'Check that departments have HODs and that active program courses have assessment components and an applicable grade scale before score entry begins.',
+          actionLabel: 'Run Readiness Check'
+        },
+        {
+          id: 'migrate-academic-results',
+          title: 'Migrate Academic Result Model',
+          icon: 'bi-arrow-repeat',
+          variant: 'warning',
+          description: 'Backfill result context and Program Course assessment components created by the retired course-offering workflow, then remove obsolete result indexes.',
+          actionLabel: 'Inspect & Migrate'
+        },
+        {
+          id: 'rebuild-academic-summaries',
+          title: 'Rebuild Academic Result Summaries',
+          icon: 'bi-calculator',
+          variant: 'success',
+          description: 'Recalculate official semester GPA and CGPA from complete approved registrations, set unavailable CGPAs to null, and repair stale student values.',
+          actionLabel: 'Inspect & Rebuild'
         },
         {
           id: 'future-utilities',
@@ -183,6 +210,18 @@ export default {
         logger.error('Failed to load academic sessions for utilities:', error)
         throw error
       }
+    },
+    async checkAcademicResultsReadiness() {
+      this.isCheckingAcademicResultsReadiness = true
+      try {
+        const response = await apiService.getAcademicResultsReadiness()
+        if (!response.success) throw new Error(response.error || 'Could not check academic result readiness')
+        const data = response.data
+        await Swal.fire({ icon: data.ready ? 'success' : 'warning', title: data.ready ? 'Result cycle ready' : 'Result cycle needs setup', html: `<div class="text-start"><p>Configured program courses: <strong>${data.configuredProgramCourses}</strong></p><p>Active grade scales: <strong>${data.activeGradeScales}</strong></p><p>Departments without HOD: <strong>${data.departmentsWithoutHod}</strong></p><p>Active sessions without Provost: <strong>${data.activeSessionsWithoutProvost}</strong></p></div>` })
+      } catch (error) {
+        logger.error('Academic results readiness check failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Readiness Check Failed', text: error.message || 'Unable to check academic results readiness.' })
+      } finally { this.isCheckingAcademicResultsReadiness = false }
     },
     async loadUtilityState() {
       try {
@@ -601,6 +640,90 @@ export default {
       }
     },
 
+    async runMigrateAcademicResults() {
+      const preview = await Swal.fire({
+        title: 'Inspect Academic Result Migration?',
+        html: '<div class="text-start utility-confirmation"><p class="small mb-0">The dry run checks records and indexes left by the retired Course Offering and Assessment Scheme design. Existing scores and audit history are preserved.</p></div>',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Run Dry Run First',
+        confirmButtonColor: '#ffc107'
+      })
+      if (!preview.isConfirmed) return
+
+      try {
+        this.isMigratingAcademicResults = true
+        const dryRun = await apiService.migrateAcademicResultModel({ apply: false })
+        if (!dryRun.success) throw new Error(dryRun.error || 'Dry run failed')
+        const data = dryRun.data || {}
+        const pending = (data.resultsReady || 0) + (data.programCoursesReady || 0) + (data.legacyIndexes || 0) + (data.legacyGradeScaleIndexes || 0) + (data.extraActiveGradeScales || 0)
+        const confirm = await Swal.fire({
+          title: pending ? `${pending} migration change(s) ready` : 'Academic results are up to date',
+          html: `<ul class="text-start small mb-0"><li>Legacy results found: <strong>${data.legacyResults || 0}</strong></li><li>Results ready to backfill: <strong>${data.resultsReady || 0}</strong></li><li>Unresolved results: <strong>${data.unresolvedResults || 0}</strong></li><li>Program Course schemes ready: <strong>${data.programCoursesReady || 0}</strong></li><li>Extra active grade scales: <strong>${data.extraActiveGradeScales || 0}</strong></li><li>Obsolete indexes: <strong>${(data.legacyIndexes || 0) + (data.legacyGradeScaleIndexes || 0)}</strong></li></ul>`,
+          icon: data.unresolvedResults ? 'warning' : 'info',
+          showCancelButton: true,
+          confirmButtonText: pending ? 'Apply Migration' : 'Close',
+          confirmButtonColor: '#b7791f'
+        })
+        if (!confirm.isConfirmed || !pending) return
+
+        const applied = await apiService.migrateAcademicResultModel({ apply: true })
+        if (!applied.success) throw new Error(applied.error || 'Migration failed')
+        await Swal.fire({
+          icon: applied.data?.unresolvedResults ? 'warning' : 'success',
+          title: applied.data?.unresolvedResults ? 'Migration Completed With Warnings' : 'Migration Complete',
+          html: `<ul class="text-start small mb-0"><li>Results migrated: <strong>${applied.data?.resultsMigrated || 0}</strong></li><li>Program Courses migrated: <strong>${applied.data?.programCoursesMigrated || 0}</strong></li><li>Grade scales retired: <strong>${applied.data?.gradeScalesRetired || 0}</strong></li><li>Indexes removed: <strong>${applied.data?.indexesRemoved || 0}</strong></li><li>Unresolved results: <strong>${applied.data?.unresolvedResults || 0}</strong></li></ul>`,
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Academic result model migration failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Migration Failed', text: error.message || 'Unable to migrate academic results.' })
+      } finally {
+        this.isMigratingAcademicResults = false
+      }
+    },
+
+    async runRebuildAcademicSummaries() {
+      const preview = await Swal.fire({
+        title: 'Inspect Academic Summary Rebuild?',
+        text: 'The dry run identifies official CGPAs, unavailable values, and stale student records. Applying will rebuild complete result periods and store null until a CGPA can be calculated.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Run Dry Run First',
+        confirmButtonColor: '#198754'
+      })
+      if (!preview.isConfirmed) return
+
+      try {
+        this.isRebuildingAcademicSummaries = true
+        const dryRun = await apiService.rebuildAcademicResultSummaries({ apply: false })
+        if (!dryRun.success) throw new Error(dryRun.error || 'Dry run failed')
+        const data = dryRun.data || {}
+        const confirm = await Swal.fire({
+          title: `${data.studentsEligible || 0} student record(s) ready`,
+          html: `<ul class="text-start small mb-0"><li>Student records inspected: <strong>${data.studentsEligible || 0}</strong></li><li>Official CGPAs available: <strong>${data.studentsWithOfficialCumulativeGPA || 0}</strong></li><li>CGPAs not yet available: <strong>${data.studentsWithoutOfficialCumulativeGPA || 0}</strong></li><li>Student CGPA values to repair: <strong>${data.studentCgpaValuesToChange || 0}</strong></li><li>Existing summary records: <strong>${data.existingSummaries || 0}</strong></li></ul>`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: data.studentsEligible ? 'Apply Rebuild' : 'Close',
+          confirmButtonColor: '#198754'
+        })
+        if (!confirm.isConfirmed || !data.studentsEligible) return
+        const applied = await apiService.rebuildAcademicResultSummaries({ apply: true })
+        if (!applied.success) throw new Error(applied.error || 'Rebuild failed')
+        await Swal.fire({
+          icon: 'success',
+          title: 'Academic Summaries Rebuilt',
+          html: `<ul class="text-start small mb-0"><li>Student records rebuilt: <strong>${applied.data?.studentsRebuilt || 0}</strong></li><li>Official CGPAs available: <strong>${applied.data?.studentsWithOfficialCumulativeGPA || 0}</strong></li><li>CGPAs set to not yet available: <strong>${applied.data?.studentsWithoutOfficialCumulativeGPA || 0}</strong></li></ul>`,
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Academic summary rebuild failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Rebuild Failed', text: error.message || 'Unable to rebuild academic summaries.' })
+      } finally {
+        this.isRebuildingAcademicSummaries = false
+      }
+    },
+
     async runRepairAcademicSessions() {
       const result = await Swal.fire({
         title: 'Inspect Academic Sessions?',
@@ -855,6 +978,39 @@ export default {
                 <span v-if="isBackfillingStudentSessionHistory" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-clock-history me-2"></i>
                 {{ isBackfillingStudentSessionHistory ? 'Backfilling...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'academic-results-readiness'"
+                class="btn btn-primary"
+                :disabled="isLoading || isCheckingAcademicResultsReadiness"
+                @click="checkAcademicResultsReadiness"
+              >
+                <span v-if="isCheckingAcademicResultsReadiness" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-clipboard2-check me-2"></i>
+                {{ isCheckingAcademicResultsReadiness ? 'Checking...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'migrate-academic-results'"
+                class="btn btn-warning"
+                :disabled="isLoading || isMigratingAcademicResults"
+                @click="runMigrateAcademicResults"
+              >
+                <span v-if="isMigratingAcademicResults" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-arrow-repeat me-2"></i>
+                {{ isMigratingAcademicResults ? 'Migrating...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'rebuild-academic-summaries'"
+                class="btn btn-success"
+                :disabled="isLoading || isRebuildingAcademicSummaries"
+                @click="runRebuildAcademicSummaries"
+              >
+                <span v-if="isRebuildingAcademicSummaries" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-calculator me-2"></i>
+                {{ isRebuildingAcademicSummaries ? 'Rebuilding...' : utility.actionLabel }}
               </button>
 
               <button v-else class="btn btn-outline-secondary" disabled>

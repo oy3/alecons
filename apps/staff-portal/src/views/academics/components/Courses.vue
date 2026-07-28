@@ -2,6 +2,19 @@
 import { apiService } from '../../../services/api.js'
 import { logger } from '@shared/utils/logger'
 
+const createDefaultAssessmentComponents = () => Array.from({ length: 4 }, (_, index) => ({
+  title: `Assessment ${index + 1}`,
+  maximumMark: null,
+  weightPercent: null,
+  componentType: 'assessment',
+  displayOrder: index + 1,
+  description: '',
+  assessmentDate: null,
+  active: true,
+  mandatory: true,
+  absenceAllowed: false,
+}))
+
 const createEmptyProgramCourseForm = () => ({
   id: null,
   courseId: '',
@@ -12,7 +25,8 @@ const createEmptyProgramCourseForm = () => ({
   level: null,
   semester: null,
   category: 'compulsory',
-  active: true
+  active: true,
+  assessmentComponents: createDefaultAssessmentComponents(),
 })
 
 const createEmptyCourseForm = () => ({
@@ -92,6 +106,18 @@ export default {
     },
     hasSelectedProgramVariant() {
       return Boolean(this.programCourseForm.programId)
+    },
+    assessmentWeightTotal() {
+      return this.programCourseForm.assessmentComponents
+        .filter((component) => component.active !== false)
+        .reduce((total, component) => total + Number(component.weightPercent || 0), 0)
+    },
+    assessmentWeightRemaining() {
+      return Number((100 - this.assessmentWeightTotal).toFixed(4))
+    },
+    hasValidAssessmentComponents() {
+      const active = this.programCourseForm.assessmentComponents.filter((component) => component.active !== false)
+      return active.length > 0 && this.assessmentWeightRemaining === 0 && active.every((component, index) => component.title?.trim() && Number(component.maximumMark) > 0 && Number(component.weightPercent) > 0 && component.displayOrder === index + 1)
     }
   },
   watch: {
@@ -338,6 +364,7 @@ export default {
           semester: programCourse.semester,
           category: programCourse.category,
           active: programCourse.active,
+          assessmentComponents: (programCourse.assessmentComponents?.length ? programCourse.assessmentComponents : createDefaultAssessmentComponents()).map((component) => ({ ...component })),
         }
         : createEmptyProgramCourseForm()
       this.showProgramCourseModal = true
@@ -356,6 +383,7 @@ export default {
         semester: programCourse.semester,
         category: programCourse.category,
         active: programCourse.active,
+        assessmentComponents: (programCourse.assessmentComponents?.length ? programCourse.assessmentComponents : createDefaultAssessmentComponents()).map((component) => ({ ...component })),
       }
       this.showProgramCourseModal = true
     },
@@ -364,6 +392,25 @@ export default {
       this.showProgramCourseModal = false
       this.selectedProgramCourse = null
       this.programCourseForm = createEmptyProgramCourseForm()
+    },
+
+    addAssessmentComponent() {
+      if (this.assessmentWeightRemaining <= 0) return
+      const order = this.programCourseForm.assessmentComponents.length + 1
+      this.programCourseForm.assessmentComponents.push({ title: `Assessment ${order}`, maximumMark: null, weightPercent: null, componentType: 'assessment', displayOrder: order, description: '', assessmentDate: null, active: true, mandatory: true, absenceAllowed: false })
+    },
+
+    removeAssessmentComponent(index) {
+      this.programCourseForm.assessmentComponents.splice(index, 1)
+      this.programCourseForm.assessmentComponents.forEach((component, componentIndex) => { component.displayOrder = componentIndex + 1 })
+    },
+
+    moveAssessmentComponent(index, direction) {
+      const target = index + direction
+      if (target < 0 || target >= this.programCourseForm.assessmentComponents.length) return
+      const component = this.programCourseForm.assessmentComponents.splice(index, 1)[0]
+      this.programCourseForm.assessmentComponents.splice(target, 0, component)
+      this.programCourseForm.assessmentComponents.forEach((item, itemIndex) => { item.displayOrder = itemIndex + 1 })
     },
 
     async saveProgramCourse() {
@@ -378,6 +425,10 @@ export default {
 
         if (this.programCourseForm.semester === null || this.programCourseForm.semester === undefined) {
           throw new Error('Please select a semester.')
+        }
+
+        if (!this.hasValidAssessmentComponents) {
+          throw new Error('Assessment components must have titles, positive maximum marks, and active weights totalling exactly 100%.')
         }
 
         this.isSavingProgramCourse = true
@@ -739,7 +790,7 @@ export default {
     </div>
 
     <div class="modal fade" :class="{ show: showProgramCourseModal }" :style="{ display: showProgramCourseModal ? 'block' : 'none' }" tabindex="-1">
-      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content border-0 course-modal">
           <div class="modal-header border-0 pb-0">
             <div>
@@ -816,11 +867,18 @@ export default {
                 </select>
                 <small class="text-muted">Hold Command to select multiple lecturers.</small>
               </div>
+              <div class="col-12">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                  <div><label class="form-label mb-0">Assessment Components</label><div class="small text-muted">These columns will be used for score entry. Active weights must total exactly 100%.</div></div>
+                  <div class="d-flex align-items-center gap-2"><span class="badge" :class="hasValidAssessmentComponents ? 'text-bg-success' : 'text-bg-warning'">{{ assessmentWeightTotal.toFixed(2) }}% total · {{ assessmentWeightRemaining.toFixed(2) }}% remaining</span><button class="btn btn-sm btn-outline-primary" :disabled="assessmentWeightRemaining <= 0" @click="addAssessmentComponent"><i class="bi bi-plus-lg me-1"></i>Add component</button></div>
+                </div>
+                <div class="table-responsive border rounded"><table class="table table-sm align-middle mb-0"><thead class="table-light"><tr><th>Order</th><th>Title</th><th>Type</th><th>Maximum Mark</th><th>Weight %</th><th>Mandatory</th><th>Absence</th><th></th></tr></thead><tbody><tr v-for="(component, index) in programCourseForm.assessmentComponents" :key="component.displayOrder"><td>{{ component.displayOrder }}</td><td><input v-model.trim="component.title" class="form-control form-control-sm" :placeholder="`Assessment ${index + 1}`"></td><td><select v-model="component.componentType" class="form-select form-select-sm"><option value="assessment">Assessment</option><option value="quiz">Quiz</option><option value="assignment">Assignment</option><option value="practical">Practical</option><option value="test">Test</option><option value="attendance">Attendance</option><option value="project">Project</option><option value="examination">Examination</option></select></td><td><input v-model.number="component.maximumMark" class="form-control form-control-sm" type="number" min="0.01" step="0.01"></td><td><input v-model.number="component.weightPercent" class="form-control form-control-sm" type="number" min="0.01" max="100" step="0.01"></td><td class="text-center"><input v-model="component.mandatory" class="form-check-input" type="checkbox"></td><td class="text-center"><input v-model="component.absenceAllowed" class="form-check-input" type="checkbox"></td><td class="text-nowrap"><button class="btn btn-sm btn-outline-secondary me-1" :disabled="index === 0" title="Move up" @click="moveAssessmentComponent(index, -1)"><i class="bi bi-arrow-up"></i></button><button class="btn btn-sm btn-outline-secondary me-1" :disabled="index === programCourseForm.assessmentComponents.length - 1" title="Move down" @click="moveAssessmentComponent(index, 1)"><i class="bi bi-arrow-down"></i></button><button class="btn btn-sm btn-outline-danger" title="Remove" @click="removeAssessmentComponent(index)"><i class="bi bi-trash"></i></button></td></tr></tbody></table></div>
+              </div>
             </div>
           </div>
           <div class="modal-footer border-0 pt-0">
             <button type="button" class="btn btn-outline-secondary" @click="closeProgramCourseModal">Cancel</button>
-            <button type="button" class="btn btn-staff-primary" @click="saveProgramCourse" :disabled="isSavingProgramCourse">
+            <button type="button" class="btn btn-staff-primary" @click="saveProgramCourse" :disabled="isSavingProgramCourse || !hasValidAssessmentComponents">
               <span v-if="isSavingProgramCourse" class="spinner-border spinner-border-sm me-2"></span>
               {{ isSavingProgramCourse ? 'Saving...' : (selectedProgramCourse ? 'Update Mapping' : 'Assign Course') }}
             </button>

@@ -36,6 +36,12 @@ export const staffNavigationItems = [
     module: "courseRegistrations",
   },
   {
+    title: "Result Grading",
+    icon: "bi-clipboard-data",
+    route: "/result-grading",
+    module: "academicResults",
+  },
+  {
     title: "Exams",
     icon: "bi-file-text",
     route: "/exams",

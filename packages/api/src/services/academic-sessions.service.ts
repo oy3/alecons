@@ -9,6 +9,8 @@ import {
     StudentAcademicSessionDocument,
     StudentAcademicSessionStatus,
 } from '../schemas/student-academic-session.schema';
+import { User, UserDocument } from '../schemas/user.schema';
+import { Staff, StaffDocument } from '../schemas/staff.schema';
 
 @Injectable()
 export class AcademicSessionsService {
@@ -21,6 +23,10 @@ export class AcademicSessionsService {
         private studentModel: Model<StudentDocument>,
         @InjectModel(StudentAcademicSession.name)
         private studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
+        @InjectModel(User.name)
+        private userModel: Model<UserDocument>,
+        @InjectModel(Staff.name)
+        private staffModel: Model<StaffDocument>,
     ) { }
 
     private generateSessionYear(startDate: string, endDate: string): string {
@@ -49,6 +55,7 @@ export class AcademicSessionsService {
 
     async create(createDto: CreateAcademicSessionDto, userId: string): Promise<AcademicSession> {
         const sessionYear = this.generateSessionYear(createDto.startDate, createDto.endDate);
+        const provostUserId = await this.resolveProvostUserId(createDto.provostUserId);
 
         await this.ensureSessionIndexes();
 
@@ -57,6 +64,11 @@ export class AcademicSessionsService {
             sessionYear,
             status: createDto.status || SessionStatus.OPEN,
             active: createDto.active !== undefined ? createDto.active : true,
+            provostUserId,
+            provostAssignedAt: provostUserId ? new Date() : undefined,
+            provostAssignedBy: provostUserId && Types.ObjectId.isValid(userId)
+                ? new Types.ObjectId(userId)
+                : undefined,
         });
 
         return academicSession.save();
@@ -104,6 +116,7 @@ export class AcademicSessionsService {
         const [sessions, totalItems] = await Promise.all([
             this.academicSessionModel
                 .find(filter)
+                .populate('provostUserId', 'firstName otherName lastName email')
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
@@ -123,7 +136,9 @@ export class AcademicSessionsService {
     }
 
     async findById(id: string): Promise<AcademicSession> {
-        const academicSession = await this.academicSessionModel.findById(id);
+        const academicSession = await this.academicSessionModel
+            .findById(id)
+            .populate('provostUserId', 'firstName otherName lastName email');
         if (!academicSession) {
             throw new NotFoundException('Academic session not found');
         }
@@ -136,6 +151,15 @@ export class AcademicSessionsService {
         userId: string,
     ): Promise<AcademicSession> {
         const updateData: any = { ...updateDto };
+
+        if (updateDto.provostUserId !== undefined) {
+            const provostUserId = await this.resolveProvostUserId(updateDto.provostUserId);
+            updateData.provostUserId = provostUserId || null;
+            updateData.provostAssignedAt = provostUserId ? new Date() : null;
+            updateData.provostAssignedBy = provostUserId && Types.ObjectId.isValid(userId)
+                ? new Types.ObjectId(userId)
+                : null;
+        }
 
         // Regenerate session year if dates are updated
         if (updateDto.startDate || updateDto.endDate) {
@@ -161,6 +185,23 @@ export class AcademicSessionsService {
         }
 
         return academicSession;
+    }
+
+    private async resolveProvostUserId(provostUserId?: string | null): Promise<Types.ObjectId | undefined> {
+        if (!provostUserId) return undefined;
+        if (!Types.ObjectId.isValid(provostUserId)) {
+            throw new NotFoundException('Selected Provost is invalid');
+        }
+
+        const userId = new Types.ObjectId(provostUserId);
+        const [user, staff] = await Promise.all([
+            this.userModel.findOne({ _id: userId, isActive: true }).select('_id').lean(),
+            this.staffModel.findOne({ userId, isActive: true }).select('_id').lean(),
+        ]);
+        if (!user || !staff) {
+            throw new NotFoundException('Selected Provost must be an active staff member');
+        }
+        return userId;
     }
 
     async delete(id: string): Promise<void> {

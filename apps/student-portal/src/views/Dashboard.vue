@@ -80,6 +80,7 @@ export default {
     },
     async mounted() {
         await Promise.all([
+          this.auth.loadStudentData(),
           this.loadFinanceData(),
           this.loadRegistrationData(),
         ]);
@@ -210,9 +211,14 @@ export default {
                 </div>
               </div>
               <div class="flex-grow-1 ms-3">
-                <h6 class="fw-bold text-dark mb-1">GPA</h6>
-                <h4 class="fw-bold text-muted mb-0">-</h4>
-                <small class="text-muted">Not available</small>
+                <h6 class="fw-bold text-dark mb-1">CGPA</h6>
+                <h4
+                  class="fw-bold mb-0"
+                  :class="auth.hasCumulativeGPA ? 'text-success' : 'text-muted'"
+                >
+                  {{ auth.hasCumulativeGPA ? auth.cumulativeGPA.toFixed(2) : 'N/A' }}
+                </h4>
+                <small class="text-muted"></small>
               </div>
             </div>
           </div>

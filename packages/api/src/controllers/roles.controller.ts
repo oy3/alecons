@@ -3,6 +3,7 @@ import {
     Get,
     Post,
     Put,
+    Patch,
     Delete,
     Body,
     Param,
@@ -16,7 +17,7 @@ import { RolesGuard } from "../guards/roles.guard";
 import { Roles } from "../decorators/roles.decorator";
 import { UserRole } from "../schemas/user.schema";
 import { RolesService } from "../services/roles.service";
-import { CreateRoleDto, UpdateRoleDto } from "../dto/role.dto";
+import { CreateRoleDto, UpdateRoleDto, UpdateRoleStatusDto } from "../dto/role.dto";
 
 @Controller("staff/roles")
 @UseGuards(AuthGuard("jwt"), RolesGuard)
@@ -41,6 +42,15 @@ export class RolesController {
                 HttpStatus.INTERNAL_SERVER_ERROR
             );
         }
+    }
+
+    @Get("management")
+    @Roles(UserRole.ADMIN)
+    async getManagedRoles() {
+        return {
+            success: true,
+            data: await this.rolesService.getAllRoles(true),
+        };
     }
 
     @Get(":id")
@@ -127,6 +137,17 @@ export class RolesController {
                 HttpStatus.INTERNAL_SERVER_ERROR
             );
         }
+    }
+
+    @Patch(":id/status")
+    @Roles(UserRole.ADMIN)
+    async updateRoleStatus(@Param("id") id: string, @Body() payload: UpdateRoleStatusDto) {
+        const role = await this.rolesService.updateRoleStatus(id, payload.active);
+        return {
+            success: true,
+            message: `Role ${payload.active ? "activated" : "deactivated"} successfully`,
+            data: role,
+        };
     }
 
     @Delete(":id")

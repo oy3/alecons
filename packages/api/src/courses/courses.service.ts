@@ -7,6 +7,11 @@ import { Program, ProgramDocument } from '../schemas/program.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Staff, StaffDocument } from '../schemas/staff.schema';
 import {
+    AcademicResult,
+    AcademicResultDocument,
+    AcademicResultWorkflowStatus,
+} from '../schemas/academic-result.schema';
+import {
     CreateCourseDto,
     CreateProgramCourseDto,
     QueryCoursesDto,
@@ -23,6 +28,7 @@ export class CoursesService {
         @InjectModel(Program.name) private programModel: Model<ProgramDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
         @InjectModel(Staff.name) private staffModel: Model<StaffDocument>,
+        @InjectModel(AcademicResult.name) private academicResultModel: Model<AcademicResultDocument>,
     ) { }
 
     async createCourse(createCourseDto: CreateCourseDto) {
@@ -250,6 +256,24 @@ export class CoursesService {
             throw new NotFoundException('Program course not found');
         }
 
+        if (
+            updateProgramCourseDto.assessmentComponents &&
+            JSON.stringify(existingProgramCourse.assessmentComponents || []) !==
+                JSON.stringify(updateProgramCourseDto.assessmentComponents)
+        ) {
+            const openResultExists = await this.academicResultModel.exists({
+                programCourseId: existingProgramCourse._id,
+                workflowStatus: {
+                    $nin: [AcademicResultWorkflowStatus.PUBLISHED, AcademicResultWorkflowStatus.ARCHIVED],
+                },
+            });
+            if (openResultExists) {
+                throw new BadRequestException(
+                    'Assessment components cannot be changed while this course has draft or pending results',
+                );
+            }
+        }
+
         await this.validateProgramCourseReferences(updateProgramCourseDto, id);
 
         const updateData: any = { ...updateProgramCourseDto };
@@ -286,6 +310,15 @@ export class CoursesService {
 
     async deleteProgramCourse(id: string) {
         this.ensureValidObjectId(id, 'Invalid program course ID');
+
+        const resultExists = await this.academicResultModel.exists({
+            programCourseId: new Types.ObjectId(id),
+        });
+        if (resultExists) {
+            throw new BadRequestException(
+                'Cannot delete this program course because academic results reference it. Deactivate it instead.',
+            );
+        }
 
         const programCourse = await this.programCourseModel.findByIdAndDelete(id).exec();
         if (!programCourse) {
@@ -340,6 +373,28 @@ export class CoursesService {
 
         if (input.category && !Object.values(ProgramCourseCategory).includes(input.category as ProgramCourseCategory)) {
             throw new BadRequestException('Invalid program course category');
+        }
+
+        if (input.assessmentComponents) {
+            const activeComponents = input.assessmentComponents.filter((component) => component.active !== false);
+            if (!activeComponents.length) {
+                throw new BadRequestException('Add at least one active assessment component');
+            }
+            const orders = new Set<number>();
+            let scaledWeight = 0;
+            for (const component of activeComponents) {
+                if (!component.title?.trim() || Number(component.maximumMark) <= 0 || Number(component.weightPercent) <= 0) {
+                    throw new BadRequestException('Assessment components require a title, positive maximum mark, and positive weight');
+                }
+                if (orders.has(Number(component.displayOrder))) {
+                    throw new BadRequestException('Assessment component display order must be unique');
+                }
+                orders.add(Number(component.displayOrder));
+                scaledWeight += Math.round(Number(component.weightPercent) * 10000);
+            }
+            if (scaledWeight !== 100 * 10000) {
+                throw new BadRequestException('Active assessment component weights must total exactly 100%');
+            }
         }
 
         const uniqueFilter: any = {
@@ -442,6 +497,18 @@ export class CoursesService {
             semester: programCourse.semester,
             category: programCourse.category,
             active: programCourse.active,
+            assessmentComponents: (programCourse.assessmentComponents || []).map((component: any) => ({
+                title: component.title,
+                maximumMark: component.maximumMark,
+                weightPercent: component.weightPercent,
+                componentType: component.componentType || 'assessment',
+                displayOrder: component.displayOrder,
+                description: component.description || '',
+                assessmentDate: component.assessmentDate || null,
+                active: component.active !== false,
+                mandatory: component.mandatory !== false,
+                absenceAllowed: component.absenceAllowed === true,
+            })),
             lecturers: Array.isArray(programCourse.lecturerIds)
                 ? programCourse.lecturerIds.map((lecturer: any) => ({
                     id: lecturer._id?.toString?.() || lecturer.toString?.() || null,

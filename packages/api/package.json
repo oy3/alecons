@@ -13,7 +13,7 @@
     "start:dev:verbose": "rm -f tsconfig.build.tsbuildinfo && NODE_ENV=development nest start --watch",
     "start:debug": "rm -f tsconfig.build.tsbuildinfo && NODE_ENV=development nest start --debug --watch",
     "start:prod": "node dist/main",
-    "test": "echo \"No tests yet\"",
+    "test": "node --test -r ts-node/register test/academic-result-calculator.spec.ts",
     "clean": "rm -rf node_modules yarn.lock package-lock.json dist* tsconfig.build.tsbuildinfo",
     "seed:staff": "ts-node -r tsconfig-paths/register src/scripts/seed-staff.ts",
     "util:repair-program-drift": "ts-node -r tsconfig-paths/register src/scripts/repair-program-drift.ts",

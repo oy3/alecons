@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type AcademicSessionDocument = AcademicSession & Document;
 
@@ -32,6 +32,15 @@ export class AcademicSession {
 
     @Prop({ default: false })
     active: boolean;
+
+    @Prop({ type: Types.ObjectId, ref: 'User' })
+    provostUserId?: Types.ObjectId;
+
+    @Prop()
+    provostAssignedAt?: Date;
+
+    @Prop({ type: Types.ObjectId, ref: 'User' })
+    provostAssignedBy?: Types.ObjectId;
 }
 
 export const AcademicSessionSchema = SchemaFactory.createForClass(AcademicSession);

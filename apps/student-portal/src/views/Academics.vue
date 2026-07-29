@@ -38,6 +38,21 @@ export default {
     currentRegistration() {
       return this.registrationContext?.registration || null;
     },
+    academicProgression() {
+      return this.registrationContext?.academicProgression || null;
+    },
+    selectedSemesterProgression() {
+      return (this.academicProgression?.semesterProgressions || []).find(
+        (item) => Number(item.semester) === Number(this.selectedSemester || 1),
+      ) || null;
+    },
+    resitCourseIds() {
+      return new Set(
+        (this.selectedSemesterProgression?.resitProgramCourseIds || []).map((id) =>
+          String(id?._id || id),
+        ),
+      );
+    },
     savedRegistrationCourses() {
       return (this.currentRegistration?.items || [])
         .map((item) => item.programCourse)
@@ -162,11 +177,8 @@ export default {
     filteredDisplayedCourses() {
       const query = this.courseSearchQuery.trim().toLowerCase();
 
-      if (!query) {
-        return this.displayedCourses;
-      }
-
-      return this.displayedCourses.filter((course) => {
+      const matches = this.displayedCourses.filter((course) => {
+        if (!query) return true;
         const lecturerNames = (course.lecturers || [])
           .map((lecturer) =>
             [lecturer.firstName, lecturer.otherName, lecturer.lastName]
@@ -190,6 +202,7 @@ export default {
 
         return haystack.includes(query);
       });
+      return matches.sort((left, right) => Number(this.isResitCourse(right)) - Number(this.isResitCourse(left)));
     },
     totalFilteredCourses() {
       return this.filteredDisplayedCourses.length;
@@ -336,6 +349,9 @@ export default {
     this.disposeReviewPopover();
   },
   methods: {
+    isResitCourse(course) {
+      return this.resitCourseIds.has(String(course.id || course._id || ''));
+    },
     async loadRegistrationContext() {
       try {
         this.isLoading = true;
@@ -742,6 +758,23 @@ export default {
     </div>
 
     <template v-else>
+      <div v-if="academicProgression?.isRepeatYear" class="alert alert-warning d-flex gap-3 align-items-start mb-4">
+        <i class="bi bi-arrow-repeat fs-5"></i>
+        <div>
+          <div class="fw-semibold">Repeat Year</div>
+          <div class="small">You are repeating this level and must complete the full approved course load. Resits are not available during a repeat year.</div>
+        </div>
+      </div>
+      <div
+        v-else-if="['repeat_year_required', 'academic_review'].includes(academicProgression?.annualOutcome)"
+        class="alert alert-danger d-flex gap-3 align-items-start mb-4"
+      >
+        <i class="bi bi-exclamation-triangle fs-5"></i>
+        <div>
+          <div class="fw-semibold">{{ academicProgression.annualOutcome === 'academic_review' ? 'Academic Review Required' : 'Repeat Year Required' }}</div>
+          <div class="small">Your completed semester results require formal progression review before the next academic session.</div>
+        </div>
+      </div>
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white border-0 py-3">
           <div
@@ -885,12 +918,14 @@ export default {
                         <span
                           class="badge rounded-pill"
                           :class="
-                            isCompulsory(course)
+                            isResitCourse(course)
+                              ? 'bg-warning-subtle text-warning-emphasis'
+                              : isCompulsory(course)
                               ? 'bg-danger-subtle text-danger'
                               : 'bg-secondary-subtle text-secondary'
                           "
                         >
-                          {{ isCompulsory(course) ? "Compulsory" : "Elective" }}
+                          {{ isResitCourse(course) ? "Resit Required" : isCompulsory(course) ? "Compulsory" : "Elective" }}
                         </span>
                       </td>
                       <!-- <td class="py-3 d-none d-sm-table-cell">

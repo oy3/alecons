@@ -421,6 +421,13 @@ class StaffApiService {
         })
     }
 
+    async migrateAcademicProgression({ apply = false } = {}) {
+        return this.makeRequest('/admin/maintenance/migrate-academic-progression', {
+            method: 'POST',
+            body: JSON.stringify({ apply }),
+        })
+    }
+
     async backfillPublicVerificationTokens() {
         return this.makeRequest('/admin/application-numbers/public-verification/backfill', {
             method: 'POST',
@@ -637,10 +644,10 @@ class StaffApiService {
         })
     }
 
-    async progressAcademicSessionCohort(sourceSessionId, targetAcademicSessionId) {
+    async progressAcademicSessionCohort(sourceSessionId, targetAcademicSessionId, apply = false) {
         return this.makeRequest('/academic-sessions/' + sourceSessionId + '/progress-cohort', {
             method: 'POST',
-            body: JSON.stringify({ targetAcademicSessionId }),
+            body: JSON.stringify({ targetAcademicSessionId, apply }),
         })
     }
 

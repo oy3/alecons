@@ -55,6 +55,9 @@ export class CourseRegistrationHistorySnapshot {
 
     @Prop({ type: [CourseRegistrationHistorySnapshotItemSchema], default: [] })
     items: CourseRegistrationHistorySnapshotItem[];
+
+    @Prop({ min: 1 })
+    resitLimitSnapshot?: number;
 }
 
 export const CourseRegistrationHistorySnapshotSchema = SchemaFactory.createForClass(CourseRegistrationHistorySnapshot);
@@ -113,6 +116,9 @@ export class CourseRegistration {
 
     @Prop({ required: true, default: 0 })
     totalUnits: number;
+
+    @Prop({ min: 1 })
+    resitLimitSnapshot?: number;
 
     @Prop({ required: true, default: 0 })
     submissionVersion: number;

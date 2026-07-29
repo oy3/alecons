@@ -19,6 +19,7 @@ export default {
       isCheckingAcademicResultsReadiness: false,
       isMigratingAcademicResults: false,
       isRebuildingAcademicSummaries: false,
+      isMigratingAcademicProgression: false,
       counterStats: null,
       counterRecord: null,
       programDriftSummary: null,
@@ -85,6 +86,14 @@ export default {
           icon: 'bi-arrow-repeat',
           variant: 'warning',
           description: 'Backfill result context and Program Course assessment components created by the retired course-offering workflow, then remove obsolete result indexes.',
+          actionLabel: 'Inspect & Migrate'
+        },
+        {
+          id: 'migrate-academic-progression',
+          title: 'Migrate Academic Progression Policy',
+          icon: 'bi-signpost-split',
+          variant: 'info',
+          description: 'Snapshot each program resit limit on approved registrations and prepare student session records for semester resits and whole-year repeats.',
           actionLabel: 'Inspect & Migrate'
         },
         {
@@ -217,7 +226,7 @@ export default {
         const response = await apiService.getAcademicResultsReadiness()
         if (!response.success) throw new Error(response.error || 'Could not check academic result readiness')
         const data = response.data
-        await Swal.fire({ icon: data.ready ? 'success' : 'warning', title: data.ready ? 'Result cycle ready' : 'Result cycle needs setup', html: `<div class="text-start"><p>Configured program courses: <strong>${data.configuredProgramCourses}</strong></p><p>Active grade scales: <strong>${data.activeGradeScales}</strong></p><p>Departments without HOD: <strong>${data.departmentsWithoutHod}</strong></p><p>Active sessions without Provost: <strong>${data.activeSessionsWithoutProvost}</strong></p></div>` })
+        await Swal.fire({ icon: data.ready ? 'success' : 'warning', title: data.ready ? 'Result cycle ready' : 'Result cycle needs setup', html: `<div class="text-start"><p>Configured program courses: <strong>${data.configuredProgramCourses}</strong></p><p>Active grade scales: <strong>${data.activeGradeScales}</strong></p><p>Programs without Maximum Resit Courses: <strong>${data.programsWithoutResitLimit || 0}</strong></p><p>Departments without HOD: <strong>${data.departmentsWithoutHod}</strong></p><p>Active sessions without Provost: <strong>${data.activeSessionsWithoutProvost}</strong></p></div>` })
       } catch (error) {
         logger.error('Academic results readiness check failed:', error)
         await Swal.fire({ icon: 'error', title: 'Readiness Check Failed', text: error.message || 'Unable to check academic results readiness.' })
@@ -724,6 +733,40 @@ export default {
       }
     },
 
+    async runMigrateAcademicProgression() {
+      try {
+        this.isMigratingAcademicProgression = true
+        const dryRun = await apiService.migrateAcademicProgression({ apply: false })
+        if (!dryRun.success) throw new Error(dryRun.error || 'Dry run failed')
+        const data = dryRun.data || {}
+        const missingPrograms = data.programsMissingPolicy?.length || 0
+        const unresolved = data.unresolvedEnrollmentIds?.length || 0
+        const ready = (data.registrationSnapshotsReady || 0) + (data.enrollmentRecordsReady || 0)
+        const confirmation = await Swal.fire({
+          title: missingPrograms || unresolved ? 'Policy Setup Needs Attention' : `${ready} migration change(s) ready`,
+          html: `<ul class="text-start small mb-0"><li>Programs missing Maximum Resit Courses: <strong>${missingPrograms}</strong></li><li>Approved registration snapshots ready: <strong>${data.registrationSnapshotsReady || 0}</strong></li><li>Student session records ready: <strong>${data.enrollmentRecordsReady || 0}</strong></li><li>Ambiguous session records: <strong>${unresolved}</strong></li></ul>${missingPrograms ? '<p class="text-start small text-danger mt-3 mb-0">Configure Maximum Resit Courses on every program, then run this utility again.</p>' : ''}`,
+          icon: missingPrograms || unresolved ? 'warning' : 'info',
+          showCancelButton: true,
+          confirmButtonText: ready ? 'Apply Safe Changes' : 'Close',
+          confirmButtonColor: '#0dcaf0'
+        })
+        if (!confirmation.isConfirmed || !ready) return
+        const applied = await apiService.migrateAcademicProgression({ apply: true })
+        if (!applied.success) throw new Error(applied.error || 'Migration failed')
+        await Swal.fire({
+          icon: applied.data?.programsMissingPolicy?.length || applied.data?.unresolvedEnrollmentIds?.length ? 'warning' : 'success',
+          title: 'Progression Migration Complete',
+          text: `${applied.data?.registrationSnapshotsReady || 0} registration snapshot(s), ${applied.data?.enrollmentRecordsReady || 0} session record(s), and ${applied.data?.progressionRebuild?.studentsRebuilt || 0} current progression record(s) updated.`,
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Academic progression migration failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Migration Failed', text: error.message || 'Unable to migrate academic progression policy.' })
+      } finally {
+        this.isMigratingAcademicProgression = false
+      }
+    },
+
     async runRepairAcademicSessions() {
       const result = await Swal.fire({
         title: 'Inspect Academic Sessions?',
@@ -1000,6 +1043,17 @@ export default {
                 <span v-if="isMigratingAcademicResults" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-arrow-repeat me-2"></i>
                 {{ isMigratingAcademicResults ? 'Migrating...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'migrate-academic-progression'"
+                class="btn btn-info"
+                :disabled="isLoading || isMigratingAcademicProgression"
+                @click="runMigrateAcademicProgression"
+              >
+                <span v-if="isMigratingAcademicProgression" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-signpost-split me-2"></i>
+                {{ isMigratingAcademicProgression ? 'Migrating...' : utility.actionLabel }}
               </button>
 
               <button

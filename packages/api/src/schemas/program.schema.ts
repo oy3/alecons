@@ -23,6 +23,9 @@ export class Program {
     @Prop({ min: 1 })
     maxUnits?: number;
 
+    @Prop({ min: 1 })
+    maxResitCourses?: number;
+
     @Prop({ type: Types.ObjectId, ref: 'User' })
     courseAdvisorId?: Types.ObjectId;
 

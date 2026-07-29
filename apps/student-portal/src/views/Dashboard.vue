@@ -58,7 +58,12 @@ export default {
         },
 
         registeredCoursesPreview() {
+          const semester = Number(this.registrationContext?.student?.selectedSemester || this.registrationContext?.student?.currentSemester || 1);
+          const progression = (this.registrationContext?.academicProgression?.semesterProgressions || [])
+            .find((item) => Number(item.semester) === semester);
+          const resitIds = new Set((progression?.resitProgramCourseIds || []).map((id) => String(id?._id || id)));
           return this.approvedRegisteredCourses
+            .sort((left, right) => Number(resitIds.has(String(right.id))) - Number(resitIds.has(String(left.id))))
             .slice(0, 3);
         },
 

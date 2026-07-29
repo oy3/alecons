@@ -13,9 +13,11 @@ import { Student, StudentSchema } from '../schemas/student.schema';
 import { StudentAcademicSession, StudentAcademicSessionSchema } from '../schemas/student-academic-session.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Staff, StaffSchema } from '../schemas/staff.schema';
+import { AcademicResultsModule } from './academic-results.module';
 
 @Module({
     imports: [
+        AcademicResultsModule,
         MongooseModule.forFeature([
             { name: AcademicSession.name, schema: AcademicSessionSchema },
             { name: SessionControl.name, schema: SessionControlSchema },

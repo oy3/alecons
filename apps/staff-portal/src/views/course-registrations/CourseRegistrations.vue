@@ -848,6 +848,9 @@ export default {
                       <div class="value">
                         {{ selectedRegistrationDetails.totalUnits }}
                       </div>
+                      <div v-if="selectedRegistrationDetails.resitLimitSnapshot" class="text-muted small mt-1">
+                        Semester resit limit: {{ selectedRegistrationDetails.resitLimitSnapshot }} courses
+                      </div>
                     </div>
                   </div>
                   <div class="col-12 col-lg-3">
@@ -1000,6 +1003,9 @@ export default {
                       <div class="text-muted small mb-2">
                         {{ entry.snapshot?.courseCount || 0 }} courses ·
                         {{ entry.snapshot?.totalUnits || 0 }} units
+                        <span v-if="entry.snapshot?.resitLimitSnapshot">
+                          · resit limit {{ entry.snapshot.resitLimitSnapshot }}
+                        </span>
                       </div>
 
                       <div

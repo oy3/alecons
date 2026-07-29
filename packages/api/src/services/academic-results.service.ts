@@ -8,20 +8,27 @@ import { CourseRegistration, CourseRegistrationDocument, CourseRegistrationStatu
 import { Department, DepartmentDocument } from '../schemas/department.schema';
 import { GradeScaleStatus, GradeScaleVersion, GradeScaleVersionDocument } from '../schemas/grade-scale-version.schema';
 import { ProgramCourse, ProgramCourseDocument } from '../schemas/program-course.schema';
+import { Program, ProgramDocument } from '../schemas/program.schema';
 import { Role, RoleDocument } from '../schemas/role.schema';
 import { Staff, StaffDocument } from '../schemas/staff.schema';
 import { StudentAcademicSummary, StudentAcademicSummaryDocument } from '../schemas/student-academic-summary.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
+import { StudentAcademicSession, StudentAcademicSessionDocument } from '../schemas/student-academic-session.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import {
   calculateAcademicResult,
+  assertSupportedAcademicResultStatus,
   assertAcademicWorkflowTransition,
   buildAcademicProgress,
   nextAcademicAttemptType,
   roundAcademicValue,
+  validateAcademicResultSubmission,
   validateAssessmentComponents,
   validateGradeBands,
 } from './academic-result-calculator';
+import { hasAcademicResultPermission, isAssignedAcademicOwner } from './academic-result-access';
+import { filterStudentsWithCurrentCourseRegistration } from './academic-result-roster';
+import { StudentProgressionService } from './student-progression.service';
 
 type WorkflowQueue = 'lecturer' | 'hod' | 'hod-ready' | 'provost' | 'publish' | 'published';
 
@@ -31,6 +38,7 @@ export class AcademicResultsService {
     @InjectConnection() private readonly connection: Connection,
     @InjectModel(GradeScaleVersion.name) private readonly gradeScaleModel: Model<GradeScaleVersionDocument>,
     @InjectModel(ProgramCourse.name) private readonly programCourseModel: Model<ProgramCourseDocument>,
+    @InjectModel(Program.name) private readonly programModel: Model<ProgramDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(Staff.name) private readonly staffModel: Model<StaffDocument>,
     @InjectModel(Role.name) private readonly roleModel: Model<RoleDocument>,
@@ -41,6 +49,8 @@ export class AcademicResultsService {
     @InjectModel(CourseRegistration.name) private readonly registrationModel: Model<CourseRegistrationDocument>,
     @InjectModel(Student.name) private readonly studentModel: Model<StudentDocument>,
     @InjectModel(Department.name) private readonly departmentModel: Model<DepartmentDocument>,
+    @InjectModel(StudentAcademicSession.name) private readonly studentSessionModel: Model<StudentAcademicSessionDocument>,
+    private readonly progressionService: StudentProgressionService,
   ) {}
 
   async listGradeScales(userId: string) {
@@ -113,29 +123,35 @@ export class AcademicResultsService {
     await this.assertProgramCourseLecturer(userId, programCourse);
     this.validateComponents(programCourse.assessmentComponents || []);
     const program: any = programCourse.programId;
-    const students = await this.studentModel.find({ programId: program._id, currentLevel: programCourse.level, isActive: true, status: 'active' })
+    const registrations = await this.registrationModel.find({
+      programId: program._id,
+      status: CourseRegistrationStatus.APPROVED,
+      'items.programCourseId': programCourse._id,
+    }).sort({ createdAt: -1 }).lean();
+    const registeredStudentIds = [...new Set(registrations.map((registration: any) => String(registration.studentId)))];
+    const students = await this.studentModel.find({
+      _id: { $in: registeredStudentIds.map((studentId) => this.objectId(studentId, 'student')) },
+      programId: program._id,
+      isActive: true,
+      status: 'active',
+    })
       .populate('userId', 'firstName otherName lastName email')
       .populate('academicSession', 'title sessionYear')
       .sort({ matriculationNumber: 1 })
       .lean();
-    const studentIds = students.map((student: any) => student._id);
-    const registrations = await this.registrationModel.find({
-      studentId: { $in: studentIds },
-      programId: program._id,
-      level: programCourse.level,
-      semester: programCourse.semester,
-      status: CourseRegistrationStatus.APPROVED,
-      'items.programCourseId': programCourse._id,
-    }).lean();
-    const registrationByStudent = new Map(registrations.map((registration: any) => [String(registration.studentId), registration]));
-    const eligibleStudents = students.filter((student: any) => {
-      const registration: any = registrationByStudent.get(String(student._id));
-      return registration && String(registration.academicSessionId) === String(student.academicSession?._id || student.academicSession);
-    });
+    const eligibleStudents = filterStudentsWithCurrentCourseRegistration(students, registrations);
     if (!Object.values(AcademicResultAttemptType).includes(attemptType)) {
       throw new BadRequestException('Invalid result attempt type');
     }
     const results = await this.resultModel.find({ studentId: { $in: eligibleStudents.map((student: any) => student._id) }, programCourseId: programCourse._id }).sort({ attemptNumber: -1, createdAt: -1 }).lean();
+    const enrollments = await this.studentSessionModel.find({
+      studentId: { $in: eligibleStudents.map((student: any) => student._id) },
+      academicSessionId: { $in: eligibleStudents.map((student: any) => student.academicSession?._id || student.academicSession) },
+    }).lean();
+    const enrollmentByContext = new Map(enrollments.map((enrollment: any) => [
+      `${enrollment.studentId}:${enrollment.academicSessionId}`,
+      enrollment,
+    ]));
     const returnedAudits = results.length
       ? await this.auditModel.find({
           academicResultId: { $in: results.map((result) => result._id) },
@@ -165,7 +181,20 @@ export class AcademicResultsService {
         ? { ...storedResult, reviewFeedback: feedbackByResult.get(String(storedResult._id)) || null }
         : null;
       const latestPublished = latestPublishedByStudent.get(String(student._id)) || null;
-      const nextAttemptType = nextAcademicAttemptType(latestPublished);
+      const enrollment: any = enrollmentByContext.get(`${student._id}:${sessionId}`) || null;
+      const semesterProgression = enrollment?.semesterProgressions?.find(
+        (item: any) => Number(item.semester) === Number(programCourse.semester),
+      );
+      const isAuthorizedResit = semesterProgression?.resitProgramCourseIds?.some(
+        (id: any) => String(id) === String(programCourse._id),
+      );
+      const isAuthorizedRepeat = Boolean(enrollment?.isRepeatYear)
+        && Number(enrollment.level) === Number(programCourse.level);
+      const nextAttemptType = isAuthorizedRepeat
+        ? AcademicResultAttemptType.REPEAT
+        : isAuthorizedResit
+          ? AcademicResultAttemptType.RESIT
+          : nextAcademicAttemptType(latestPublished);
       return {
         studentId: student._id,
         academicSessionId: sessionId,
@@ -176,8 +205,11 @@ export class AcademicResultsService {
         latestPublishedAttempt: latestPublished,
         nextAttemptType,
         canCreateAttempt: !result && nextAttemptType === attemptType,
+        isRepeatYear: Boolean(enrollment?.isRepeatYear),
       };
-    }).filter((student) => attemptType === AcademicResultAttemptType.INITIAL || student.result || student.canCreateAttempt);
+    }).filter((student) => attemptType === AcademicResultAttemptType.INITIAL
+      ? (Boolean(student.result) || !student.latestPublishedAttempt) && !student.isRepeatYear
+      : Boolean(student.result) || student.canCreateAttempt);
     return {
       programCourse,
       attemptType,
@@ -239,7 +271,7 @@ export class AcademicResultsService {
     const results = await this.resultModel.find({ programCourseId: programCourse._id, attemptType, workflowStatus: { $in: [AcademicResultWorkflowStatus.DRAFT, AcademicResultWorkflowStatus.RETURNED_BY_HOD, AcademicResultWorkflowStatus.RETURNED_BY_PROVOST] } });
     if (!results.length) throw new BadRequestException('There are no editable results to submit');
     const grouped = this.groupResultsByContext(results);
-    for (const group of grouped.values()) await this.requireCompleteResultSet(programCourse, group);
+    for (const group of grouped.values()) await this.requireCompleteResultSet(programCourse, group, attemptType);
     await this.transitionResults(results, userId, AcademicResultWorkflowStatus.SUBMITTED_TO_HOD, 'submitted_to_hod');
     return { submitted: results.length, cohorts: grouped.size };
   }
@@ -334,6 +366,7 @@ export class AcademicResultsService {
     const query = this.contextQuery(context, AcademicResultWorkflowStatus.PROVOST_APPROVED);
     const results = await this.resultModel.find(query);
     if (!results.length) throw new BadRequestException('No Provost-approved result group is ready to publish');
+    results.forEach((result) => assertSupportedAcademicResultStatus(result.specialStatus));
     const now = new Date();
     await this.withTransaction(async (session) => {
       for (const result of results) {
@@ -350,6 +383,15 @@ export class AcademicResultsService {
       }
       for (const studentId of new Set(results.map((result) => String(result.studentId)))) {
         await this.rebuildStudentSummaries(new Types.ObjectId(studentId), session);
+        const studentResult = results.find((result) => String(result.studentId) === studentId);
+        if (studentResult) {
+          await this.progressionService.recalculate(
+            new Types.ObjectId(studentId),
+            studentResult.academicSessionId,
+            this.objectId(userId, 'user'),
+            session,
+          );
+        }
       }
     });
     return { published: results.length, publishedAt: now };
@@ -380,11 +422,27 @@ export class AcademicResultsService {
     const academicSessionId = student.academicSession;
     const registration = await this.registrationModel.exists({ studentId, academicSessionId, status: CourseRegistrationStatus.APPROVED, 'items.programCourseId': programCourse._id });
     if (!registration) throw new BadRequestException('The student needs an approved current registration for this course');
+    const enrollment: any = await this.progressionService.getCurrentEnrollment(studentId, academicSessionId);
+    if (!enrollment) throw new BadRequestException('The student academic-session enrollment is missing');
     const prior = await this.resultModel.find({ studentId, programCourseId: programCourse._id, workflowStatus: AcademicResultWorkflowStatus.PUBLISHED }).sort({ attemptNumber: -1 });
     const latest = prior[0];
-    if (!latest || latest.isPass) throw new BadRequestException('A new attempt requires a previously published failed result');
-    const expected = latest.attemptType === AcademicResultAttemptType.INITIAL ? AcademicResultAttemptType.RESIT : latest.attemptType === AcademicResultAttemptType.RESIT ? AcademicResultAttemptType.REPEAT : null;
-    if (payload.attemptType !== expected) throw new BadRequestException('Attempt sequence must be initial, then resit, then repeat');
+    if (!latest) throw new BadRequestException('A new attempt requires a previously published result');
+    if (payload.attemptType === AcademicResultAttemptType.RESIT) {
+      const semesterProgression: any = enrollment.semesterProgressions?.find(
+        (item: any) => Number(item.semester) === Number(programCourse.semester),
+      );
+      const authorized = semesterProgression?.resitProgramCourseIds?.some(
+        (id: any) => String(id) === String(programCourse._id),
+      );
+      if (!authorized || latest.attemptType !== AcademicResultAttemptType.INITIAL || latest.isPass) {
+        throw new BadRequestException('This course is not authorized for a semester resit');
+      }
+    }
+    if (payload.attemptType === AcademicResultAttemptType.REPEAT) {
+      if (!enrollment.isRepeatYear || Number(enrollment.level) !== Number(programCourse.level)) {
+        throw new BadRequestException('Repeat attempts require an authorized repeat-year enrollment at this level');
+      }
+    }
     const gradeScale = await this.getActiveGradeScale();
     const program: any = programCourse.programId;
     const course: any = programCourse.courseId;
@@ -408,6 +466,7 @@ export class AcademicResultsService {
     if (Number((result as any).__v || 0) !== Number(payload.version)) {
       throw new ConflictException('This result changed after it was opened. Refresh the report before amending it');
     }
+    assertSupportedAcademicResultStatus(payload.specialStatus || AcademicResultSpecialStatus.NORMAL);
     const gradeScale = await this.gradeScaleModel.findById(result.gradeScaleVersionId).lean();
     if (!gradeScale) throw new BadRequestException('The historical grade scale for this result no longer exists');
     const components = this.componentsFromSnapshot(result.componentScores || []);
@@ -444,19 +503,26 @@ export class AcademicResultsService {
         session,
       );
       await this.rebuildStudentSummaries(result.studentId, session);
+      await this.progressionService.recalculate(
+        result.studentId,
+        result.academicSessionId,
+        actor,
+        session,
+      );
     });
     return result;
   }
 
   async getReadiness(userId: string) {
     await this.assertPermission(userId, 'view');
-    const [configuredCourses, activeScales, departmentsWithoutHod, activeSessionsWithoutProvost] = await Promise.all([
+    const [configuredCourses, activeScales, departmentsWithoutHod, activeSessionsWithoutProvost, programsWithoutResitLimit] = await Promise.all([
       this.programCourseModel.countDocuments({ active: true, 'assessmentComponents.0': { $exists: true } }),
       this.gradeScaleModel.countDocuments({ status: GradeScaleStatus.ACTIVE }),
       this.departmentModel.countDocuments({ active: true, $or: [{ hodUserId: { $exists: false } }, { hodUserId: null }] }),
       this.academicSessionModel.countDocuments({ active: true, $or: [{ provostUserId: { $exists: false } }, { provostUserId: null }] }),
+      this.programModel.countDocuments({ active: true, $or: [{ maxResitCourses: { $exists: false } }, { maxResitCourses: null }] }),
     ]);
-    return { configuredProgramCourses: configuredCourses, activeGradeScales: activeScales, departmentsWithoutHod, activeSessionsWithoutProvost, ready: configuredCourses > 0 && activeScales > 0 && departmentsWithoutHod === 0 && activeSessionsWithoutProvost === 0 };
+    return { configuredProgramCourses: configuredCourses, activeGradeScales: activeScales, departmentsWithoutHod, activeSessionsWithoutProvost, programsWithoutResitLimit, ready: configuredCourses > 0 && activeScales > 0 && departmentsWithoutHod === 0 && activeSessionsWithoutProvost === 0 && programsWithoutResitLimit === 0 };
   }
 
   async rebuildAllAcademicSummaries(apply = false) {
@@ -531,13 +597,60 @@ export class AcademicResultsService {
     return calculateAcademicResult(components, submittedScores, bands, requestedStatus, allowIncomplete);
   }
 
-  private async requireCompleteResultSet(programCourse: ProgramCourseDocument, results: AcademicResultDocument[]) {
+  private async requireCompleteResultSet(programCourse: ProgramCourseDocument, results: AcademicResultDocument[], attemptType: AcademicResultAttemptType) {
     const sessionId = results[0].academicSessionId;
-    const studentIds = await this.studentModel.find({ programId: (programCourse.programId as any)._id || programCourse.programId, currentLevel: programCourse.level, academicSession: sessionId, isActive: true, status: 'active' }).distinct('_id');
-    const registrations = await this.registrationModel.countDocuments({ studentId: { $in: studentIds }, academicSessionId: sessionId, status: CourseRegistrationStatus.APPROVED, 'items.programCourseId': programCourse._id });
-    if (results.length !== registrations) throw new BadRequestException('Enter a result for every student with an approved current course registration before submitting');
-    if (results.some((result) => result.specialStatus === AcademicResultSpecialStatus.NORMAL && result.finalScore === undefined)) throw new BadRequestException('Complete all mandatory assessment marks before submitting');
-    if (results.some((result) => [AcademicResultSpecialStatus.INCOMPLETE, AcademicResultSpecialStatus.DEFERRED].includes(result.specialStatus))) throw new BadRequestException('Incomplete or deferred results cannot be submitted for approval');
+    const activeStudentIds = await this.studentModel.find({
+      programId: (programCourse.programId as any)._id || programCourse.programId,
+      academicSession: sessionId,
+      isActive: true,
+      status: 'active',
+    }).distinct('_id');
+    const registeredStudentIds = await this.registrationModel.distinct('studentId', {
+      studentId: { $in: activeStudentIds },
+      academicSessionId: sessionId,
+      status: CourseRegistrationStatus.APPROVED,
+      'items.programCourseId': programCourse._id,
+    });
+    let expectedStudentIds: string[] = [];
+    if (attemptType === AcademicResultAttemptType.INITIAL) {
+      const repeatEnrollmentStudentIds = await this.studentSessionModel.distinct('studentId', {
+        studentId: { $in: registeredStudentIds },
+        academicSessionId: sessionId,
+        isRepeatYear: true,
+      });
+      const repeatStudents = new Set(repeatEnrollmentStudentIds.map(String));
+      const previouslyAttemptedStudentIds = await this.resultModel.distinct('studentId', {
+        studentId: { $in: registeredStudentIds },
+        programCourseId: programCourse._id,
+        workflowStatus: AcademicResultWorkflowStatus.PUBLISHED,
+      });
+      const previouslyAttempted = new Set(previouslyAttemptedStudentIds.map(String));
+      expectedStudentIds = registeredStudentIds.map(String).filter(
+        (studentId) => !previouslyAttempted.has(studentId) && !repeatStudents.has(studentId),
+      );
+    } else if (attemptType === AcademicResultAttemptType.RESIT) {
+      const enrollments: any[] = await this.studentSessionModel.find({
+        studentId: { $in: registeredStudentIds },
+        academicSessionId: sessionId,
+        'semesterProgressions.semester': Number(programCourse.semester),
+        'semesterProgressions.resitProgramCourseIds': programCourse._id,
+      }).select('studentId').lean();
+      expectedStudentIds = enrollments.map((enrollment) => String(enrollment.studentId));
+    } else if (attemptType === AcademicResultAttemptType.REPEAT) {
+      const repeatStudentIds = await this.studentSessionModel.distinct('studentId', {
+        studentId: { $in: registeredStudentIds },
+        academicSessionId: sessionId,
+        level: Number(programCourse.level),
+        isRepeatYear: true,
+      });
+      expectedStudentIds = repeatStudentIds.map(String);
+    }
+    validateAcademicResultSubmission(
+      attemptType,
+      results,
+      expectedStudentIds,
+      registeredStudentIds.map(String),
+    );
   }
 
   private groupResultsByContext(results: AcademicResultDocument[]) {
@@ -582,14 +695,14 @@ export class AcademicResultsService {
     if (await this.isAdmin(userId)) return;
     if (!departmentId) throw new BadRequestException('Result context is missing its department');
     const department = await this.departmentModel.findById(departmentId).select('hodUserId').lean();
-    if (!department?.hodUserId || String(department.hodUserId) !== userId) throw new ForbiddenException('Only the assigned Head of Department can review this result group');
+    if (!department?.hodUserId || !isAssignedAcademicOwner(userId, [department.hodUserId])) throw new ForbiddenException('Only the assigned Head of Department can review this result group');
   }
 
   private async assertProvostForContext(userId: string, academicSessionId?: Types.ObjectId) {
     if (await this.isAdmin(userId)) return;
     if (!academicSessionId) throw new BadRequestException('Result context is missing its academic session');
     const academicSession = await this.academicSessionModel.findById(academicSessionId).select('provostUserId').lean();
-    if (!academicSession?.provostUserId || String(academicSession.provostUserId) !== userId) {
+    if (!academicSession?.provostUserId || !isAssignedAcademicOwner(userId, [academicSession.provostUserId])) {
       throw new ForbiddenException('Only the Provost assigned to this academic session can review this result group');
     }
   }
@@ -597,17 +710,17 @@ export class AcademicResultsService {
   private async assertContextReadAccess(userId: string, programCourseId: Types.ObjectId, academicSessionId: Types.ObjectId, departmentId?: Types.ObjectId) {
     if (await this.isAdmin(userId)) return;
     const department = departmentId ? await this.departmentModel.findById(departmentId).select('hodUserId').lean() : null;
-    if (department?.hodUserId && String(department.hodUserId) === userId) {
+    if (department?.hodUserId && isAssignedAcademicOwner(userId, [department.hodUserId])) {
       await this.assertAnyPermission(userId, ['review_hod', 'view', 'export', 'amend']);
       return;
     }
     const academicSession = await this.academicSessionModel.findById(academicSessionId).select('provostUserId').lean();
-    if (academicSession?.provostUserId && String(academicSession.provostUserId) === userId) {
+    if (academicSession?.provostUserId && isAssignedAcademicOwner(userId, [academicSession.provostUserId])) {
       await this.assertAnyPermission(userId, ['review_provost', 'view', 'export', 'amend']);
       return;
     }
     const programCourse = await this.programCourseModel.findById(programCourseId).select('lecturerIds').lean();
-    if (programCourse?.lecturerIds?.some((id: any) => String(id) === userId)) {
+    if (isAssignedAcademicOwner(userId, programCourse?.lecturerIds || [])) {
       await this.assertAnyPermission(userId, ['enter_scores', 'view', 'export', 'amend']);
       return;
     }
@@ -684,8 +797,29 @@ export class AcademicResultsService {
   private round4(value: number) { return roundAcademicValue(value); }
   private objectId(value: string, label: string) { if (!Types.ObjectId.isValid(value)) throw new BadRequestException(`Invalid ${label}`); return new Types.ObjectId(value); }
   private async isAdmin(userId: string) { return (await this.userModel.findById(this.objectId(userId, 'user')).select('role').lean())?.role === UserRole.ADMIN; }
-  private async hasAcademicResultPermission(userId: string, permission: string) { if (await this.isAdmin(userId)) return true; const staff = await this.staffModel.findOne({ userId: this.objectId(userId, 'user'), isActive: true }).lean(); const role = staff ? await this.roleModel.findById(staff.roleId).lean() : null; const module = role?.modules?.find((item: any) => item.module === 'academicResults'); return Boolean(module?.permissions?.includes(permission) || module?.permissions?.includes('manage')); }
-  private async assertPermission(userId: string, permission: string) { if (await this.isAdmin(userId)) return; const staff = await this.staffModel.findOne({ userId: this.objectId(userId, 'user'), isActive: true }).lean(); const role = staff ? await this.roleModel.findById(staff.roleId).lean() : null; const module = role?.modules?.find((item: any) => item.module === 'academicResults'); if (!module?.permissions?.includes(permission) && !module?.permissions?.includes('manage')) throw new ForbiddenException('You do not have the required academic results permission'); }
-  private async assertAnyPermission(userId: string, permissions: string[]) { if (await this.isAdmin(userId)) return; const staff = await this.staffModel.findOne({ userId: this.objectId(userId, 'user'), isActive: true }).lean(); const role = staff ? await this.roleModel.findById(staff.roleId).lean() : null; const module = role?.modules?.find((item: any) => item.module === 'academicResults'); if (!module?.permissions?.includes('manage') && !permissions.some((permission) => module?.permissions?.includes(permission))) throw new ForbiddenException('You do not have the required academic results permission'); }
-  private async assertProgramCourseLecturer(userId: string, programCourse: any) { if (await this.isAdmin(userId)) return; if (!programCourse.lecturerIds?.some((id: any) => String(id?._id || id) === userId)) throw new ForbiddenException('Only an assigned lecturer can enter scores for this course'); }
+  private async hasAcademicResultPermission(userId: string, permission: string) {
+    if (await this.isAdmin(userId)) return true;
+    const staff = await this.staffModel.findOne({ userId: this.objectId(userId, 'user'), isActive: true }).lean();
+    const role = staff ? await this.roleModel.findById(staff.roleId).lean() : null;
+    return hasAcademicResultPermission(role, permission);
+  }
+  private async assertPermission(userId: string, permission: string) {
+    if (!(await this.hasAcademicResultPermission(userId, permission))) {
+      throw new ForbiddenException('You do not have the required academic results permission');
+    }
+  }
+  private async assertAnyPermission(userId: string, permissions: string[]) {
+    if (await this.isAdmin(userId)) return;
+    const staff = await this.staffModel.findOne({ userId: this.objectId(userId, 'user'), isActive: true }).lean();
+    const role = staff ? await this.roleModel.findById(staff.roleId).lean() : null;
+    if (!permissions.some((permission) => hasAcademicResultPermission(role, permission))) {
+      throw new ForbiddenException('You do not have the required academic results permission');
+    }
+  }
+  private async assertProgramCourseLecturer(userId: string, programCourse: any) {
+    if (await this.isAdmin(userId)) return;
+    if (!isAssignedAcademicOwner(userId, programCourse.lecturerIds || [])) {
+      throw new ForbiddenException('Only an assigned lecturer can enter scores for this course');
+    }
+  }
 }

@@ -531,9 +531,20 @@ export default {
         })
         if (!result.isConfirmed) return
 
+        const previewResponse = await apiService.progressAcademicSessionCohort(session.id, result.value, false)
+        if (!previewResponse.success) throw new Error(previewResponse.message || 'Could not preview cohort progression')
+        const preview = previewResponse.data || {}
         const confirmation = await this.$swal.fire({
           title: 'Confirm Cohort Progression',
-          text: 'This changes the current billable session for every active student in this cohort.',
+          html: `
+            <div class="text-start small">
+              <p class="mb-2">This will update only students with a completed annual decision.</p>
+              <div><strong>${preview.promoted || 0}</strong> progressing to the next level</div>
+              <div><strong>${preview.repeating || 0}</strong> repeating the current level</div>
+              <div><strong>${preview.graduationReview || 0}</strong> awaiting graduation review</div>
+              <div><strong>${preview.academicReview || 0}</strong> requiring academic review</div>
+              <div><strong>${preview.blocked || 0}</strong> blocked by incomplete results</div>
+            </div>`,
           icon: 'warning',
           showCancelButton: true,
           confirmButtonText: 'Confirm Progression',
@@ -541,12 +552,12 @@ export default {
         })
         if (!confirmation.isConfirmed) return
 
-        const progressed = await apiService.progressAcademicSessionCohort(session.id, result.value)
+        const progressed = await apiService.progressAcademicSessionCohort(session.id, result.value, true)
         if (!progressed.success) throw new Error(progressed.message || 'Cohort progression failed')
         await this.$swal.fire({
           icon: 'success',
           title: 'Cohort Progressed',
-          text: progressed.message,
+          html: `<strong>${progressed.data?.progressed || 0}</strong> student(s) moved.<br><small>${progressed.data?.graduationReview || 0} graduation review, ${progressed.data?.academicReview || 0} academic review, ${progressed.data?.blocked || 0} incomplete.</small>`,
           confirmButtonColor: '#1a5f5f',
         })
       } catch (error) {

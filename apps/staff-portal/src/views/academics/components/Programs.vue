@@ -37,6 +37,7 @@ export default {
             description: program.description,
             minUnits: program.minUnits,
             maxUnits: program.maxUnits,
+            maxResitCourses: program.maxResitCourses,
             courseAdvisorId: program.courseAdvisorId,
             courseAdvisor: program.courseAdvisor,
             department: program.department,
@@ -55,6 +56,7 @@ export default {
           durationYears: program.durationYears,
           minUnits: program.minUnits,
           maxUnits: program.maxUnits,
+          maxResitCourses: program.maxResitCourses,
           courseAdvisorId: program.courseAdvisorId,
           courseAdvisor: program.courseAdvisor,
           active: program.active
@@ -297,7 +299,12 @@ export default {
               <label class="form-label">Max Units</label>
               <input id="maxUnits" type="number" class="form-control" min="1" placeholder="e.g. 30" required>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-3">
+              <label class="form-label">Max Resit Courses</label>
+              <input id="maxResitCourses" type="number" class="form-control" min="1" placeholder="e.g. 4" required>
+              <div class="form-text">Per semester</div>
+            </div>
+            <div class="col-md-3">
               <label class="form-label">Course Advisor</label>
               <select id="courseAdvisorId" class="form-select">
                 <option value="">Select Course Advisor</option>
@@ -416,9 +423,10 @@ export default {
           const description = document.getElementById("description").value;
           const minUnits = parseInt(document.getElementById("minUnits").value, 10);
           const maxUnits = parseInt(document.getElementById("maxUnits").value, 10);
+          const maxResitCourses = parseInt(document.getElementById("maxResitCourses").value, 10);
           const courseAdvisorId = document.getElementById("courseAdvisorId").value;
 
-          if (!department || !programName || !minUnits || !maxUnits) {
+          if (!department || !programName || !minUnits || !maxUnits || !maxResitCourses) {
             this.$swal.showValidationMessage("Please fill in all required fields");
             return false;
           }
@@ -462,6 +470,7 @@ export default {
             description,
             minUnits,
             maxUnits,
+            maxResitCourses,
             courseAdvisorId: courseAdvisorId || null,
             variants
           };
@@ -487,6 +496,7 @@ export default {
             description: programData.description,
             minUnits: programData.minUnits,
             maxUnits: programData.maxUnits,
+            maxResitCourses: programData.maxResitCourses,
             courseAdvisorId: programData.courseAdvisorId,
             programTypeId: variant.programTypeId,
             programModeId: variant.programModeId,
@@ -631,7 +641,12 @@ export default {
               <label class="form-label">Max Units</label>
               <input id="maxUnits" type="number" class="form-control" min="1" value="${programGroup.maxUnits || ''}" required>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-3">
+              <label class="form-label">Max Resit Courses</label>
+              <input id="maxResitCourses" type="number" class="form-control" min="1" value="${programGroup.maxResitCourses || ''}" required>
+              <div class="form-text">Per semester</div>
+            </div>
+            <div class="col-md-3">
               <label class="form-label">Course Advisor</label>
               <select id="courseAdvisorId" class="form-select">
                 <option value="">Select Course Advisor</option>
@@ -653,13 +668,17 @@ export default {
                   const actualTypeId = extractId(variant.programTypeId);
                   const actualModeId = extractId(variant.programModeId);
                   
-                  const typeOptionsForVariant = this.programTypes.filter(type => type.active).map(type => 
-                    `<option value="${type.id}" ${type.id === actualTypeId ? 'selected' : ''}>${type.type}</option>`
-                  ).join('');
+                  const typeOptionsForVariant = this.programTypes
+                    .filter(type => type.active || type.id === actualTypeId)
+                    .map(type =>
+                      `<option value="${type.id}" ${type.id === actualTypeId ? 'selected' : ''}>${type.type}${type.active ? '' : ' (Inactive)'}</option>`
+                    ).join('');
                   
-                  const modeOptionsForVariant = this.programModes.filter(mode => mode.active).map(mode => 
-                    `<option value="${mode.id}" ${mode.id === actualModeId ? 'selected' : ''}>${mode.mode}</option>`
-                  ).join('');
+                  const modeOptionsForVariant = this.programModes
+                    .filter(mode => mode.active || mode.id === actualModeId)
+                    .map(mode =>
+                      `<option value="${mode.id}" ${mode.id === actualModeId ? 'selected' : ''}>${mode.mode}${mode.active ? '' : ' (Inactive)'}</option>`
+                    ).join('');
                   
                   return `
                   <div class="variant-row row g-2 mb-2" data-index="${index}" data-variant-id="${variant.id}">
@@ -766,9 +785,10 @@ export default {
           const description = document.getElementById("description").value;
           const minUnits = parseInt(document.getElementById("minUnits").value, 10);
           const maxUnits = parseInt(document.getElementById("maxUnits").value, 10);
+          const maxResitCourses = parseInt(document.getElementById("maxResitCourses").value, 10);
           const courseAdvisorId = document.getElementById("courseAdvisorId").value;
 
-          if (!department || !programName || !minUnits || !maxUnits) {
+          if (!department || !programName || !minUnits || !maxUnits || !maxResitCourses) {
             this.$swal.showValidationMessage("Please fill in all required fields");
             return false;
           }
@@ -814,6 +834,7 @@ export default {
             description,
             minUnits,
             maxUnits,
+            maxResitCourses,
             courseAdvisorId: courseAdvisorId || null,
             variants,
             originalGroup: programGroup
@@ -850,6 +871,7 @@ export default {
               description: programData.description,
               minUnits: programData.minUnits,
               maxUnits: programData.maxUnits,
+              maxResitCourses: programData.maxResitCourses,
               courseAdvisorId: programData.courseAdvisorId,
               programTypeId: variant.programTypeId,
               programModeId: variant.programModeId,
@@ -868,6 +890,7 @@ export default {
               description: programData.description,
               minUnits: programData.minUnits,
               maxUnits: programData.maxUnits,
+              maxResitCourses: programData.maxResitCourses,
               courseAdvisorId: programData.courseAdvisorId,
               programTypeId: variant.programTypeId,
               programModeId: variant.programModeId,

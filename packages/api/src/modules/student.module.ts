@@ -15,6 +15,7 @@ import { CourseRegistration, CourseRegistrationSchema } from '../schemas/course-
 import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
 import { SessionControl, SessionControlSchema } from '../schemas/session-control.schema';
 import { TenancyAgreement, TenancyAgreementSchema } from '../schemas/tenancy-agreement.schema';
+import { StudentAcademicSession, StudentAcademicSessionSchema } from '../schemas/student-academic-session.schema';
 
 @Module({
     imports: [
@@ -28,6 +29,7 @@ import { TenancyAgreement, TenancyAgreementSchema } from '../schemas/tenancy-agr
             { name: AcademicSession.name, schema: AcademicSessionSchema },
             { name: SessionControl.name, schema: SessionControlSchema },
             { name: TenancyAgreement.name, schema: TenancyAgreementSchema },
+            { name: StudentAcademicSession.name, schema: StudentAcademicSessionSchema },
         ])
     ],
     controllers: [StudentController, StudentCourseRegistrationController],

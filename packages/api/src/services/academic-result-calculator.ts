@@ -28,6 +28,43 @@ export function assertAcademicWorkflowTransition(previous: AcademicResultWorkflo
     }
 }
 
+export function validateAcademicResultSubmission(
+    attemptType: AcademicResultAttemptType,
+    results: any[],
+    expectedStudentIds: string[] = [],
+    registeredStudentIds?: string[],
+): void {
+    if (!results.length) throw new BadRequestException('There are no results to submit');
+
+    const actual = new Set(results.map((result) => String(result.studentId?._id || result.studentId)));
+    const registered = new Set((registeredStudentIds || []).map(String));
+    if (registeredStudentIds && [...actual].some((studentId) => !registered.has(studentId))) {
+        throw new BadRequestException('Every submitted result requires an active approved registration for this course and session');
+    }
+
+    if (expectedStudentIds.length || attemptType === AcademicResultAttemptType.INITIAL) {
+        const expected = new Set(expectedStudentIds.map(String));
+        if (expected.size !== actual.size || [...expected].some((studentId) => !actual.has(studentId))) {
+            throw new BadRequestException(
+                `Enter a result for every eligible ${attemptType} student with an approved current course registration before submitting`,
+            );
+        }
+    }
+
+    results.forEach((result) => assertSupportedAcademicResultStatus(result.specialStatus));
+    if (results.some((result) => result.finalScore === undefined || result.gradePoint === undefined)) {
+        throw new BadRequestException('Complete all mandatory assessment marks before submitting');
+    }
+}
+
+export function assertSupportedAcademicResultStatus(status?: AcademicResultSpecialStatus): void {
+    if ((status || AcademicResultSpecialStatus.NORMAL) !== AcademicResultSpecialStatus.NORMAL) {
+        throw new BadRequestException(
+            'Whole-result special statuses cannot enter the approval workflow until their institutional policy is configured. Use component-level absence where permitted',
+        );
+    }
+}
+
 export function validateGradeBands(bands: any[], gpaScale: number): void {
     if (!Array.isArray(bands) || !bands.length) {
         throw new BadRequestException('Add at least one grade band');
@@ -222,10 +259,12 @@ export function buildAcademicProgress(registrations: any[], publishedResults: an
         const rightDate = new Date(right.academicSessionId?.startDate || right.createdAt || 0).getTime();
         return leftDate - rightDate || Number(left.semester) - Number(right.semester);
     });
-    const latestByCourse = new Map<string, any>();
+    const latestByCourseAndSession = new Map<string, any>();
     for (const result of publishedResults) {
         const courseId = documentId(result.programCourseId);
-        const current = latestByCourse.get(courseId);
+        const sessionId = documentId(result.academicSessionId);
+        const key = `${courseId}:${sessionId || '*'}`;
+        const current = latestByCourseAndSession.get(key);
         if (
             !current ||
             Number(result.attemptNumber || 0) > Number(current.attemptNumber || 0) ||
@@ -235,26 +274,23 @@ export function buildAcademicProgress(registrations: any[], publishedResults: an
                     new Date(current.publishedAt || current.createdAt || 0).getTime()
             )
         ) {
-            latestByCourse.set(courseId, result);
+            latestByCourseAndSession.set(key, result);
         }
     }
 
-    const ownedCourses = new Set<string>();
     const periods: any[] = [];
     for (const registration of orderedRegistrations) {
+        const sessionId = documentId(registration.academicSessionId);
         const expectedCourseIds = [...new Set<string>(
             (registration.items || [])
                 .map((item: any) => documentId(item.programCourseId))
                 .filter(Boolean),
-        )].filter((courseId) => {
-            if (ownedCourses.has(courseId)) return false;
-            ownedCourses.add(courseId);
-            return true;
-        });
+        )];
         if (!expectedCourseIds.length) continue;
 
         const latestResults = expectedCourseIds
-            .map((courseId) => latestByCourse.get(courseId))
+            .map((courseId) => latestByCourseAndSession.get(`${courseId}:${sessionId}`)
+                || latestByCourseAndSession.get(`${courseId}:*`))
             .filter(Boolean);
         const resolvedResults = latestResults.filter((result) =>
             [
@@ -286,11 +322,11 @@ export function buildAcademicProgress(registrations: any[], publishedResults: an
             cumulativeGPA: null,
             cumulativeApplicableUnits: null,
             cumulativeQualityPoints: null,
+            resolvedResults,
         });
     }
 
-    let cumulativeUnits = 0;
-    let cumulativeQualityPoints = 0;
+    const cumulativeResultsByCourse = new Map<string, any>();
     let officialChainComplete = true;
     let completedPeriods = 0;
     for (const period of periods) {
@@ -299,20 +335,21 @@ export function buildAcademicProgress(registrations: any[], publishedResults: an
             continue;
         }
         completedPeriods++;
-        cumulativeUnits += Number(period.applicableUnits || 0);
-        cumulativeQualityPoints += Number(period.qualityPoints || 0);
-        period.cumulativeApplicableUnits = cumulativeUnits;
-        period.cumulativeQualityPoints = roundAcademicValue(cumulativeQualityPoints);
-        period.cumulativeGPA = cumulativeUnits
-            ? roundAcademicValue(cumulativeQualityPoints / cumulativeUnits)
-            : 0;
+        for (const result of period.resolvedResults) {
+            cumulativeResultsByCourse.set(documentId(result.programCourseId), result);
+        }
+        const cumulative = calculateGpa([...cumulativeResultsByCourse.values()]);
+        period.cumulativeApplicableUnits = cumulative.applicableUnits;
+        period.cumulativeQualityPoints = cumulative.qualityPoints;
+        period.cumulativeGPA = cumulative.gpa;
     }
+
+    for (const period of periods) delete period.resolvedResults;
+    const latestCompletedPeriod = [...periods].reverse().find((period) => period.cumulativeGPA !== null);
 
     return {
         periods,
         completedPeriods,
-        officialCumulativeGPA: completedPeriods
-            ? roundAcademicValue(cumulativeQualityPoints / cumulativeUnits)
-            : null,
+        officialCumulativeGPA: completedPeriods ? latestCompletedPeriod?.cumulativeGPA ?? null : null,
     };
 }

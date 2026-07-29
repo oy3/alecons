@@ -14,10 +14,12 @@ import { Student, StudentSchema } from '../schemas/student.schema';
 import { Staff, StaffSchema } from '../schemas/staff.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Role, RoleSchema } from '../schemas/role.schema';
+import { StudentAcademicSession, StudentAcademicSessionSchema } from '../schemas/student-academic-session.schema';
 import { StudentAcademicResultsController } from '../controllers/student-academic-results.controller';
 import { StudentAcademicResultsService } from '../services/student-academic-results.service';
 import { AcademicResultsService } from '../services/academic-results.service';
 import { AcademicResultsController } from '../controllers/academic-results.controller';
+import { StudentProgressionService } from '../services/student-progression.service';
 
 @Module({
     imports: [
@@ -36,10 +38,11 @@ import { AcademicResultsController } from '../controllers/academic-results.contr
             { name: Staff.name, schema: StaffSchema },
             { name: User.name, schema: UserSchema },
             { name: Role.name, schema: RoleSchema },
+            { name: StudentAcademicSession.name, schema: StudentAcademicSessionSchema },
         ]),
     ],
     controllers: [StudentAcademicResultsController, AcademicResultsController],
-    providers: [StudentAcademicResultsService, AcademicResultsService],
-    exports: [StudentAcademicResultsService, AcademicResultsService],
+    providers: [StudentAcademicResultsService, AcademicResultsService, StudentProgressionService],
+    exports: [StudentAcademicResultsService, AcademicResultsService, StudentProgressionService],
 })
 export class AcademicResultsModule {}

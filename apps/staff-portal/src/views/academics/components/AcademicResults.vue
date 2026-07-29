@@ -605,21 +605,17 @@ export default {
                 >
               </td>
               <td>
-                <select
-                  v-if="student.result"
-                  v-model="student.result.specialStatus"
-                  class="form-select form-select-sm"
-                  :disabled="!isEditableResult(student)"
-                  @change="markDirty"
-                >
-                  <option value="normal">Normal</option>
-                  <option value="absent">Absent</option>
-                  <option value="incomplete">Incomplete</option>
-                  <option value="withheld">Withheld</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="malpractice">Malpractice</option>
-                  <option value="deferred">Deferred</option>
-                </select>
+                <template v-if="student.result">
+                  <select
+                    v-model="student.result.specialStatus"
+                    class="form-select form-select-sm"
+                    :disabled="!isEditableResult(student)"
+                    @change="markDirty"
+                  >
+                    <option value="normal">Normal</option>
+                  </select>
+                  <small v-if="student.result.specialStatus !== 'normal'" class="d-block text-warning mt-1">Reset to Normal before submission</small>
+                </template>
                 <span v-else class="badge text-bg-light border">Attempt not created</span>
               </td>
               <td class="fw-semibold">

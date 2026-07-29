@@ -16,6 +16,7 @@ import {
 } from '../schemas/student-academic-session.schema';
 import { UploadService } from '../services/upload.service';
 import { AcademicResultsService } from '../services/academic-results.service';
+import { StudentProgressionService } from '../services/student-progression.service';
 
 @Controller('admin/maintenance')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,6 +27,7 @@ export class MaintenanceController {
     constructor(
         @InjectConnection() private readonly connection: Connection,
         private readonly academicResultsService: AcademicResultsService,
+        private readonly studentProgressionService: StudentProgressionService,
         private readonly academicSessionsService: AcademicSessionsService,
         @InjectModel(Application.name) private readonly applicationModel: Model<ApplicationDocument>,
         @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
@@ -34,6 +36,19 @@ export class MaintenanceController {
         @InjectModel(StudentAcademicSession.name) private readonly studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
         private readonly uploadService: UploadService,
     ) { }
+
+    @Post('migrate-academic-progression')
+    async migrateAcademicProgression(@Body('apply') apply?: boolean) {
+        try {
+            return {
+                success: true,
+                data: await this.studentProgressionService.migratePolicyFoundation(Boolean(apply)),
+            };
+        } catch (error) {
+            this.logger.error('migrateAcademicProgression failed:', error?.message || error);
+            return { success: false, error: error?.message || 'Academic progression migration failed' };
+        }
+    }
 
     @Post('rebuild-academic-result-summaries')
     async rebuildAcademicResultSummaries(@Body('apply') apply?: boolean) {

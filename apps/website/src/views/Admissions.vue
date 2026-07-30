@@ -259,7 +259,7 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  May & October
+                  May & September
                 </span>
               </div>
 
@@ -304,7 +304,7 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  May & October
+                  May & September
                 </span>
               </div>
 
@@ -348,7 +348,7 @@ export default {
                 <span
                   class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
                 >
-                  May & November
+                  May & September
                 </span>
               </div>
 

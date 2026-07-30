@@ -137,7 +137,7 @@ export default {
             <div class="card-body">
               <i class="bi bi-calendar-event h4 acon-text-primary"></i>
               <h6 class="acon-text-primary fw-bold mt-2">
-                Online Course Registration Begins
+                Course Registration Begins
               </h6>
               <p class="acon-text-secondary">
                 May 18, 2026 <br />

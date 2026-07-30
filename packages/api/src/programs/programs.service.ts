@@ -67,6 +67,13 @@ export class ProgramsService {
         }
     }
 
+    private validateResitLimit(maxResitCourses?: number) {
+        if (maxResitCourses === undefined) return;
+        if (!Number.isInteger(maxResitCourses) || maxResitCourses < 1) {
+            throw new BadRequestException('Maximum resit courses must be a positive whole number');
+        }
+    }
+
     // Program CRUD Operations
     async createProgram(createProgramDto: CreateProgramDto) {
         try {
@@ -96,6 +103,7 @@ export class ProgramsService {
 
             await this.validateCourseAdvisor(createProgramDto.courseAdvisorId);
             this.validateUnitRange(createProgramDto.minUnits, createProgramDto.maxUnits);
+            this.validateResitLimit(createProgramDto.maxResitCourses);
 
             // Use atomic operation to generate code to avoid race conditions
             let savedProgram;
@@ -206,6 +214,7 @@ export class ProgramsService {
                         description: program.description,
                         minUnits: program.minUnits,
                         maxUnits: program.maxUnits,
+                        maxResitCourses: program.maxResitCourses,
                         courseAdvisorId: this.extractReferenceId(program.courseAdvisorId),
                         departmentId: program.departmentId.toString(),
                         programTypeId: program.programTypeId.toString(),
@@ -372,6 +381,7 @@ export class ProgramsService {
             }
 
             this.validateUnitRange(updateProgramDto.minUnits, updateProgramDto.maxUnits);
+            this.validateResitLimit(updateProgramDto.maxResitCourses);
 
             const updateData: any = { ...updateProgramDto };
 
@@ -828,6 +838,7 @@ export class ProgramsService {
             description: program.description,
             minUnits: program.minUnits,
             maxUnits: program.maxUnits,
+            maxResitCourses: program.maxResitCourses,
             courseAdvisorId: this.extractReferenceId(program.courseAdvisorId),
             courseAdvisor: program.courseAdvisorId ? {
                 id: this.extractReferenceId(program.courseAdvisorId),

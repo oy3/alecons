@@ -3,6 +3,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Department, DepartmentDocument } from '../schemas/department.schema';
 import { Program, ProgramDocument } from '../schemas/program.schema';
+import { User, UserDocument } from '../schemas/user.schema';
+import { Staff, StaffDocument } from '../schemas/staff.schema';
 import { CreateDepartmentDto, UpdateDepartmentDto, QueryDepartmentsDto } from '../dto/department.dto';
 
 @Injectable()
@@ -12,9 +14,13 @@ export class DepartmentsService {
         private departmentModel: Model<DepartmentDocument>,
         @InjectModel(Program.name)
         private programModel: Model<ProgramDocument>,
+        @InjectModel(User.name)
+        private userModel: Model<UserDocument>,
+        @InjectModel(Staff.name)
+        private staffModel: Model<StaffDocument>,
     ) { }
 
-    async create(createDepartmentDto: CreateDepartmentDto): Promise<Department> {
+    async create(createDepartmentDto: CreateDepartmentDto, assignedBy?: string): Promise<Department> {
         // Check if department with same code already exists
         const existingDepartment = await this.departmentModel.findOne({
             code: createDepartmentDto.code.toUpperCase(),
@@ -24,8 +30,14 @@ export class DepartmentsService {
             throw new ConflictException(`Department with code ${createDepartmentDto.code} already exists`);
         }
 
+        const hodUserId = await this.resolveHodUserId(createDepartmentDto.hodUserId);
         const department = new this.departmentModel({
             ...createDepartmentDto,
+            hodUserId,
+            hodAssignedAt: hodUserId ? new Date() : undefined,
+            hodAssignedBy: hodUserId && assignedBy && Types.ObjectId.isValid(assignedBy)
+                ? new Types.ObjectId(assignedBy)
+                : undefined,
             code: createDepartmentDto.code.toUpperCase(),
             active: createDepartmentDto.active !== undefined ? createDepartmentDto.active : true,
         });
@@ -74,6 +86,7 @@ export class DepartmentsService {
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
+                .populate('hodUserId', 'firstName otherName lastName email')
                 .lean()
                 .exec(),
             this.departmentModel.countDocuments(filter),
@@ -126,7 +139,7 @@ export class DepartmentsService {
     }
 
     async findById(id: string): Promise<Department> {
-        const department = await this.departmentModel.findById(id).exec();
+        const department = await this.departmentModel.findById(id).populate('hodUserId', 'firstName otherName lastName email').exec();
 
         if (!department) {
             throw new NotFoundException('Department not found');
@@ -135,7 +148,7 @@ export class DepartmentsService {
         return department;
     }
 
-    async update(id: string, updateDepartmentDto: UpdateDepartmentDto): Promise<DepartmentDocument> {
+    async update(id: string, updateDepartmentDto: UpdateDepartmentDto, assignedBy?: string): Promise<DepartmentDocument> {
         const department = await this.departmentModel.findById(id).exec();
 
         if (!department) {
@@ -156,7 +169,19 @@ export class DepartmentsService {
             updateDepartmentDto.code = updateDepartmentDto.code.toUpperCase();
         }
 
-        Object.assign(department, updateDepartmentDto);
+        if (updateDepartmentDto.hodUserId !== undefined) {
+            const hodUserId = await this.resolveHodUserId(updateDepartmentDto.hodUserId);
+            department.hodUserId = hodUserId;
+            department.hodAssignedAt = hodUserId ? new Date() : undefined;
+            department.hodAssignedBy = hodUserId && assignedBy && Types.ObjectId.isValid(assignedBy)
+                ? new Types.ObjectId(assignedBy)
+                : undefined;
+        }
+
+        Object.assign(department, {
+            ...updateDepartmentDto,
+            hodUserId: department.hodUserId,
+        });
         return department.save();
     }
 
@@ -173,7 +198,12 @@ export class DepartmentsService {
     }
 
     async findAllActive(): Promise<Array<Department & { programsCount: number }>> {
-        const departments = await this.departmentModel.find({ active: true }).sort({ name: 1 }).lean().exec();
+        const departments = await this.departmentModel
+            .find({ active: true })
+            .populate('hodUserId', 'firstName otherName lastName email')
+            .sort({ name: 1 })
+            .lean()
+            .exec();
         const departmentIds = departments.map((department) => department._id);
 
         const programCounts = departmentIds.length > 0
@@ -221,5 +251,24 @@ export class DepartmentsService {
 
         department.active = !department.active;
         return department.save();
+    }
+
+    private async resolveHodUserId(hodUserId?: string): Promise<Types.ObjectId | undefined> {
+        if (!hodUserId) return undefined;
+        if (!Types.ObjectId.isValid(hodUserId)) {
+            throw new NotFoundException('Selected HOD is invalid');
+        }
+
+        const userId = new Types.ObjectId(hodUserId);
+        const [user, staff] = await Promise.all([
+            this.userModel.findOne({ _id: userId, isActive: true }).select('_id role').lean(),
+            this.staffModel.findOne({ userId, isActive: true }).select('_id').lean(),
+        ]);
+
+        if (!user || !staff) {
+            throw new NotFoundException('Selected HOD must be an active staff member');
+        }
+
+        return userId;
     }
 }

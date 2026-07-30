@@ -17,6 +17,7 @@ import {
 } from '../schemas/program-course.schema';
 import { SessionControl, SessionControlDocument } from '../schemas/session-control.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
+import { StudentAcademicSession, StudentAcademicSessionDocument } from '../schemas/student-academic-session.schema';
 
 interface RegistrationEligibilityResult {
     eligible: boolean;
@@ -33,6 +34,7 @@ export class CourseRegistrationService {
         @InjectModel(CourseRegistration.name) private courseRegistrationModel: Model<CourseRegistrationDocument>,
         @InjectModel(AcademicSession.name) private academicSessionModel: Model<AcademicSessionDocument>,
         @InjectModel(SessionControl.name) private sessionControlModel: Model<SessionControlDocument>,
+        @InjectModel(StudentAcademicSession.name) private studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
     ) { }
 
     async getRegistrationContext(userId: string, level?: number, semester?: number) {
@@ -59,6 +61,10 @@ export class CourseRegistrationService {
             existingRegistration?._id?.toString() || null,
         );
         const currentSemesterUnits = existingRegistration?.totalUnits || 0;
+        const academicProgression = await this.studentAcademicSessionModel.findOne({
+            studentId: context.student._id,
+            academicSessionId: context.student.academicSession,
+        }).select('level yearAttemptNumber isRepeatYear semesterProgressions annualOutcome').lean();
 
         return {
             success: true,
@@ -84,6 +90,7 @@ export class CourseRegistrationService {
                 program: this.formatProgram(context.student.programId),
                 availableCourses: availableCourses.map((programCourse) => this.formatAvailableProgramCourse(programCourse)),
                 registration: existingRegistration ? this.formatRegistration(existingRegistration) : null,
+                academicProgression,
                 sessionTotals: {
                     ...sessionTotals,
                     currentSemesterUnits,
@@ -501,7 +508,7 @@ export class CourseRegistrationService {
             .findOne({ userId: new Types.ObjectId(userId), isActive: true })
             .populate({
                 path: 'programId',
-                select: 'name code durationYears minUnits maxUnits courseAdvisorId programTypeId programModeId',
+                select: 'name code durationYears minUnits maxUnits maxResitCourses courseAdvisorId programTypeId programModeId',
                 populate: [
                     { path: 'programTypeId', select: 'type description' },
                     { path: 'programModeId', select: 'mode description' },
@@ -600,6 +607,14 @@ export class CourseRegistrationService {
         }
 
         const submissionVersion = Math.max(registration.submissionVersion || 1, 1);
+
+        if (status === CourseRegistrationStatus.APPROVED) {
+            const maxResitCourses = Number((registration.programId as any)?.maxResitCourses);
+            if (!Number.isInteger(maxResitCourses) || maxResitCourses < 1) {
+                throw new BadRequestException('Configure Maximum Resit Courses for this program before approving registrations.');
+            }
+            registration.resitLimitSnapshot = maxResitCourses;
+        }
 
         registration.workflowHistory = Array.isArray(registration.workflowHistory)
             ? registration.workflowHistory
@@ -784,6 +799,7 @@ export class CourseRegistrationService {
             description: program?.description,
             minUnits: program?.minUnits,
             maxUnits: program?.maxUnits,
+            maxResitCourses: program?.maxResitCourses,
             durationYears: program?.durationYears,
             courseAdvisorId: this.extractId(program?.courseAdvisorId),
             department: program?.departmentId ? {
@@ -825,6 +841,7 @@ export class CourseRegistrationService {
             level,
             semester,
             totalUnits: registration?.totalUnits || 0,
+            resitLimitSnapshot: registration?.resitLimitSnapshot || null,
             courseCount: Array.isArray(registration?.items) ? registration.items.length : 0,
             submittedAt: registration?.submittedAt || null,
             reviewedAt: registration?.reviewedAt || null,
@@ -861,6 +878,7 @@ export class CourseRegistrationService {
             level: registration?.level,
             semester: registration?.semester,
             totalUnits: registration?.totalUnits || 0,
+            resitLimitSnapshot: registration?.resitLimitSnapshot || null,
             submissionVersion: registration?.submissionVersion || 0,
             submittedAt: registration?.submittedAt || null,
             reviewedAt: registration?.reviewedAt || null,
@@ -1058,6 +1076,7 @@ export class CourseRegistrationService {
             code: program.code,
             minUnits: program.minUnits,
             maxUnits: program.maxUnits,
+            maxResitCourses: program.maxResitCourses,
             durationYears: program.durationYears,
             programType: program.programTypeId?.type || null,
             programMode: program.programModeId?.mode || null,
@@ -1120,6 +1139,7 @@ export class CourseRegistrationService {
             level: registration.level,
             semester: registration.semester,
             totalUnits: registration.totalUnits,
+            resitLimitSnapshot: registration.resitLimitSnapshot,
             submissionVersion: registration.submissionVersion || 0,
             status: registration.status,
             submittedAt: registration.submittedAt,
@@ -1152,6 +1172,7 @@ export class CourseRegistrationService {
         snapshot: {
             totalUnits: number;
             courseCount: number;
+            resitLimitSnapshot?: number;
             items: Array<{
                 programCourseId: Types.ObjectId | string;
                 courseCode?: string | null;
@@ -1172,6 +1193,7 @@ export class CourseRegistrationService {
             snapshot: {
                 totalUnits: payload.snapshot.totalUnits,
                 courseCount: payload.snapshot.courseCount,
+                resitLimitSnapshot: payload.snapshot.resitLimitSnapshot,
                 items: payload.snapshot.items.map((item) => ({
                     programCourseId: new Types.ObjectId(String(item.programCourseId)),
                     courseCode: item.courseCode || undefined,
@@ -1188,6 +1210,7 @@ export class CourseRegistrationService {
         return {
             totalUnits,
             courseCount: Array.isArray(programCourses) ? programCourses.length : 0,
+            resitLimitSnapshot: undefined,
             items: Array.isArray(programCourses)
                 ? programCourses.map((programCourse: any) => ({
                     programCourseId: programCourse._id,
@@ -1206,6 +1229,7 @@ export class CourseRegistrationService {
         return {
             totalUnits: registration?.totalUnits || 0,
             courseCount: items.length,
+            resitLimitSnapshot: registration?.resitLimitSnapshot,
             items: items
                 .map((item: any) => item?.programCourseId)
                 .filter(Boolean)
@@ -1249,6 +1273,7 @@ export class CourseRegistrationService {
                 snapshot: {
                     totalUnits: entry?.snapshot?.totalUnits || 0,
                     courseCount: entry?.snapshot?.courseCount || 0,
+                    resitLimitSnapshot: entry?.snapshot?.resitLimitSnapshot || null,
                     items: Array.isArray(entry?.snapshot?.items)
                         ? entry.snapshot.items.map((item: any) => ({
                             programCourseId: this.extractId(item?.programCourseId),

@@ -14,7 +14,8 @@ export default {
       currentPage: 1,
       perPage: 10,
       totalDepartments: 0,
-      apiTotalPages: 0
+      apiTotalPages: 0,
+      hodCandidates: []
     }
   },
   computed: {
@@ -41,7 +42,7 @@ export default {
     }
   },
   async mounted() {
-    await this.loadDepartments()
+    await Promise.all([this.loadDepartments(), this.loadHodCandidates()])
   },
   methods: {
     debouncedLoadDepartments() {
@@ -78,7 +79,9 @@ export default {
             isActive: dept.active,
             programsCount: dept.programsCount || 0,
             createdAt: dept.createdAt,
-            updatedAt: dept.updatedAt
+            updatedAt: dept.updatedAt,
+            hodUserId: dept.hodUserId?._id || dept.hodUserId || '',
+            hodName: this.formatHodName(dept.hodUserId)
           }))
 
           this.totalDepartments = response.data.pagination.totalItems
@@ -105,7 +108,25 @@ export default {
       }
     },
 
+    async loadHodCandidates() {
+      const response = await apiService.getUsers({ page: 1, limit: 200, role: 'staff', status: 'active' })
+      this.hodCandidates = response.success ? (response.data?.users || []).filter((user) => user.isActive !== false) : []
+    },
+
+    formatHodName(user) {
+      if (!user || typeof user === 'string') return ''
+      return [user.firstName, user.otherName, user.lastName].filter(Boolean).join(' ')
+    },
+
+    getHodOptions(selectedId = '') {
+      return ['<option value="">No HOD assigned</option>', ...this.hodCandidates.map((user) => {
+        const name = this.formatHodName(user).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+        return `<option value="${user._id}" ${user._id === selectedId ? 'selected' : ''}>${name} (${user.email})</option>`
+      })].join('')
+    },
+
     async showAddDepartmentModal() {
+      if (!this.hodCandidates.length) await this.loadHodCandidates()
       const { value: formValues } = await this.$swal.fire({
         title: 'Add New Department',
         html: `
@@ -124,6 +145,10 @@ export default {
               <textarea id="description" class="form-control" placeholder="Department description..." rows="3"></textarea>
             </div>
             <div class="col-12">
+              <label class="form-label">Head of Department</label>
+              <select id="hodUserId" class="form-select">${this.getHodOptions()}</select>
+            </div>
+            <div class="col-12">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="isActive" checked>
                 <label class="form-check-label" for="isActive">Active Department</label>
@@ -139,6 +164,7 @@ export default {
           const departmentName = document.getElementById('departmentName').value.trim()
           const description = document.getElementById('description').value.trim()
           const isActive = document.getElementById('isActive').checked
+          const hodUserId = document.getElementById('hodUserId').value
 
           if (!departmentCode || !departmentName) {
             this.$swal.showValidationMessage('Please fill in all required fields')
@@ -160,6 +186,7 @@ export default {
             code: departmentCode.toUpperCase(),
             name: departmentName,
             description: description || undefined,
+            hodUserId: hodUserId || undefined,
             active: isActive
           }
         }
@@ -202,6 +229,7 @@ export default {
     },
 
     async editDepartment(department) {
+      if (!this.hodCandidates.length) await this.loadHodCandidates()
       const { value: formValues } = await this.$swal.fire({
         title: 'Edit Department',
         html: `
@@ -220,6 +248,10 @@ export default {
               <textarea id="description" class="form-control" rows="3">${department.description || ''}</textarea>
             </div>
             <div class="col-12">
+              <label class="form-label">Head of Department</label>
+              <select id="hodUserId" class="form-select">${this.getHodOptions(department.hodUserId)}</select>
+            </div>
+            <div class="col-12">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="isActive" ${department.isActive ? 'checked' : ''}>
                 <label class="form-check-label" for="isActive">Active Department</label>
@@ -235,6 +267,7 @@ export default {
           const departmentName = document.getElementById('departmentName').value.trim()
           const description = document.getElementById('description').value.trim()
           const isActive = document.getElementById('isActive').checked
+          const hodUserId = document.getElementById('hodUserId').value
 
           if (!departmentCode || !departmentName) {
             this.$swal.showValidationMessage('Please fill in all required fields')
@@ -256,6 +289,7 @@ export default {
             code: departmentCode.toUpperCase(),
             name: departmentName,
             description: description || undefined,
+            hodUserId: hodUserId || undefined,
             active: isActive
           }
         }
@@ -404,6 +438,7 @@ export default {
                     <th>Code</th>
                     <th>Name</th>
                     <th>Description</th>
+                    <th>Head of Department</th>
                     <th class="text-center">Programs</th>
                     <th class="text-center">Status</th>
                     <th>Actions</th>
@@ -411,7 +446,7 @@ export default {
                 </thead>
                 <tbody>
                   <tr v-if="paginatedDepartments.length === 0">
-                    <td colspan="6" class="text-center py-5">
+                    <td colspan="7" class="text-center py-5">
                       <div class="text-muted">
                         <i class="bi bi-building-x fs-1 mb-3 d-block"></i>
                         <h5 class="mb-2">No Departments Found</h5>
@@ -435,6 +470,7 @@ export default {
                     <td>
                       <span class="text-muted">{{ department.description || 'No description' }}</span>
                     </td>
+                    <td><span class="text-muted">{{ department.hodName || 'Not assigned' }}</span></td>
                     <td class="text-center">
                       <span class="badge bg-info rounded-pill">
                         {{ department.programsCount || 0 }}

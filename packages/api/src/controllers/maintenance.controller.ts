@@ -1,6 +1,6 @@
 import { Controller, Post, Body, UseGuards, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
@@ -15,6 +15,8 @@ import {
     StudentAcademicSessionStatus,
 } from '../schemas/student-academic-session.schema';
 import { UploadService } from '../services/upload.service';
+import { AcademicResultsService } from '../services/academic-results.service';
+import { StudentProgressionService } from '../services/student-progression.service';
 
 @Controller('admin/maintenance')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -23,6 +25,9 @@ export class MaintenanceController {
     private readonly logger = new Logger(MaintenanceController.name);
 
     constructor(
+        @InjectConnection() private readonly connection: Connection,
+        private readonly academicResultsService: AcademicResultsService,
+        private readonly studentProgressionService: StudentProgressionService,
         private readonly academicSessionsService: AcademicSessionsService,
         @InjectModel(Application.name) private readonly applicationModel: Model<ApplicationDocument>,
         @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
@@ -31,6 +36,270 @@ export class MaintenanceController {
         @InjectModel(StudentAcademicSession.name) private readonly studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
         private readonly uploadService: UploadService,
     ) { }
+
+    @Post('migrate-academic-progression')
+    async migrateAcademicProgression(@Body('apply') apply?: boolean) {
+        try {
+            return {
+                success: true,
+                data: await this.studentProgressionService.migratePolicyFoundation(Boolean(apply)),
+            };
+        } catch (error) {
+            this.logger.error('migrateAcademicProgression failed:', error?.message || error);
+            return { success: false, error: error?.message || 'Academic progression migration failed' };
+        }
+    }
+
+    @Post('rebuild-academic-result-summaries')
+    async rebuildAcademicResultSummaries(@Body('apply') apply?: boolean) {
+        try {
+            return {
+                success: true,
+                data: await this.academicResultsService.rebuildAllAcademicSummaries(Boolean(apply)),
+            };
+        } catch (error) {
+            this.logger.error('rebuildAcademicResultSummaries failed:', error?.message || error);
+            return { success: false, error: error?.message || 'Academic summary rebuild failed' };
+        }
+    }
+
+    @Post('migrate-academic-result-model')
+    async migrateAcademicResultModel(@Body('apply') apply?: boolean) {
+        try {
+            const resultsCollection = this.connection.collection('academicresults');
+            const offeringsCollection = this.connection.collection('courseofferings');
+            const schemesCollection = this.connection.collection('assessmentschemes');
+            const programCoursesCollection = this.connection.collection('programcourses');
+            const programsCollection = this.connection.collection('programs');
+            const coursesCollection = this.connection.collection('courses');
+            const gradeScalesCollection = this.connection.collection('gradescaleversions');
+
+            const legacyResults = await resultsCollection.find({
+                $or: [
+                    { courseOfferingId: { $exists: true } },
+                    { assessmentSchemeId: { $exists: true } },
+                    { programCourseId: { $exists: false } },
+                    { programId: { $exists: false } },
+                    { departmentId: { $exists: false } },
+                    { level: { $exists: false } },
+                    { semester: { $exists: false } },
+                ],
+            }).toArray();
+
+            const resultOperations: any[] = [];
+            const programCourseUpdates = new Map<string, { _id: Types.ObjectId; components: any[] }>();
+            let unresolvedResults = 0;
+
+            for (const result of legacyResults) {
+                const offeringId = this.toObjectId(result.courseOfferingId);
+                const offering = offeringId
+                    ? await offeringsCollection.findOne({ _id: offeringId })
+                    : null;
+                const programCourseId = this.toObjectId(result.programCourseId || offering?.programCourseId);
+                const programCourse = programCourseId
+                    ? await programCoursesCollection.findOne({ _id: programCourseId })
+                    : null;
+                const programId = this.toObjectId(result.programId || offering?.programId || programCourse?.programId);
+                const program = programId ? await programsCollection.findOne({ _id: programId }) : null;
+                const courseId = this.toObjectId(offering?.courseId || programCourse?.courseId);
+                const course = courseId ? await coursesCollection.findOne({ _id: courseId }) : null;
+                const academicSessionId = this.toObjectId(result.academicSessionId || offering?.academicSessionId);
+                const departmentId = this.toObjectId(result.departmentId || offering?.departmentId || program?.departmentId);
+                const gradeScaleVersionId = this.toObjectId(result.gradeScaleVersionId || offering?.gradeScaleVersionId);
+                const level = result.level || offering?.level || programCourse?.level;
+                const semester = result.semester || offering?.semester || programCourse?.semester;
+                const unitsSnapshot = result.unitsSnapshot || offering?.unitsSnapshot || programCourse?.units;
+                const courseCodeSnapshot = result.courseCodeSnapshot || offering?.courseCodeSnapshot || course?.code;
+                const courseTitleSnapshot = result.courseTitleSnapshot || offering?.courseTitleSnapshot || course?.title;
+
+                if (
+                    !programCourseId || !programId || !academicSessionId || !departmentId ||
+                    !gradeScaleVersionId || !programCourse || !level || !semester || !unitsSnapshot ||
+                    !courseCodeSnapshot || !courseTitleSnapshot
+                ) {
+                    unresolvedResults++;
+                    continue;
+                }
+
+                resultOperations.push({
+                    updateOne: {
+                        filter: { _id: result._id },
+                        update: {
+                            $set: {
+                                programCourseId,
+                                programId,
+                                academicSessionId,
+                                departmentId,
+                                gradeScaleVersionId,
+                                level,
+                                semester,
+                                unitsSnapshot,
+                                courseCodeSnapshot,
+                                courseTitleSnapshot,
+                            },
+                            $unset: { courseOfferingId: '', assessmentSchemeId: '' },
+                        },
+                    },
+                });
+
+                if (!(programCourse.assessmentComponents || []).length && !programCourseUpdates.has(programCourseId.toString())) {
+                    const relatedOffering = offering || await offeringsCollection.findOne(
+                        { programCourseId },
+                        { sort: { createdAt: -1 } },
+                    );
+                    if (relatedOffering) {
+                        const scheme = await schemesCollection.findOne(
+                            { courseOfferingId: relatedOffering._id, 'components.0': { $exists: true } },
+                            { sort: { version: -1, createdAt: -1 } },
+                        );
+                        if (scheme?.components?.length) {
+                            programCourseUpdates.set(programCourseId.toString(), {
+                                _id: programCourseId,
+                                components: scheme.components.map((component: any) => ({
+                                    title: component.title,
+                                    maximumMark: component.maximumMark,
+                                    weightPercent: component.weightPercent,
+                                    componentType: component.componentType,
+                                    displayOrder: component.displayOrder,
+                                    description: component.description,
+                                    assessmentDate: component.assessmentDate,
+                                    active: component.active !== false,
+                                    mandatory: component.mandatory !== false,
+                                    absenceAllowed: Boolean(component.absenceAllowed),
+                                })),
+                            });
+                        }
+                    }
+                }
+            }
+
+            const unconfiguredProgramCourses = await programCoursesCollection.find({
+                $or: [
+                    { assessmentComponents: { $exists: false } },
+                    { assessmentComponents: { $size: 0 } },
+                ],
+            }).toArray();
+            for (const programCourse of unconfiguredProgramCourses) {
+                const key = programCourse._id.toString();
+                if (programCourseUpdates.has(key)) continue;
+                const offering = await offeringsCollection.findOne(
+                    { programCourseId: programCourse._id },
+                    { sort: { createdAt: -1 } },
+                );
+                if (!offering) continue;
+                const scheme = await schemesCollection.findOne(
+                    { courseOfferingId: offering._id, 'components.0': { $exists: true } },
+                    { sort: { version: -1, createdAt: -1 } },
+                );
+                if (!scheme?.components?.length) continue;
+                programCourseUpdates.set(key, {
+                    _id: programCourse._id,
+                    components: scheme.components.map((component: any) => ({
+                        title: component.title,
+                        maximumMark: component.maximumMark,
+                        weightPercent: component.weightPercent,
+                        componentType: component.componentType,
+                        displayOrder: component.displayOrder,
+                        description: component.description,
+                        assessmentDate: component.assessmentDate,
+                        active: component.active !== false,
+                        mandatory: component.mandatory !== false,
+                        absenceAllowed: Boolean(component.absenceAllowed),
+                    })),
+                });
+            }
+
+            let indexes: any[] = [];
+            try {
+                indexes = await resultsCollection.indexes();
+            } catch (error: any) {
+                if (error?.codeName !== 'NamespaceNotFound') throw error;
+            }
+            const legacyIndexes = indexes.filter((index) =>
+                Object.keys(index.key || {}).some((key) => ['courseOfferingId', 'assessmentSchemeId'].includes(key)),
+            );
+            const activeGradeScales = await gradeScalesCollection
+                .find({ status: 'active' })
+                .sort({ version: -1, createdAt: -1 })
+                .toArray();
+            let gradeScaleIndexes: any[] = [];
+            try {
+                gradeScaleIndexes = await gradeScalesCollection.indexes();
+            } catch (error: any) {
+                if (error?.codeName !== 'NamespaceNotFound') throw error;
+            }
+            const legacyGradeScaleIndexes = gradeScaleIndexes.filter((index) =>
+                Object.keys(index.key || {}).includes('effectiveAcademicSessionId'),
+            );
+
+            let resultsMigrated = 0;
+            let programCoursesMigrated = 0;
+            let indexesRemoved = 0;
+            let gradeScalesRetired = 0;
+            if (apply) {
+                if (resultOperations.length) {
+                    const result = await resultsCollection.bulkWrite(resultOperations, { ordered: false });
+                    resultsMigrated = result.modifiedCount;
+                }
+                if (programCourseUpdates.size) {
+                    const result = await programCoursesCollection.bulkWrite(
+                        [...programCourseUpdates.values()].map((item) => ({
+                            updateOne: {
+                                filter: { _id: item._id, 'assessmentComponents.0': { $exists: false } },
+                                update: { $set: { assessmentComponents: item.components } },
+                            },
+                        })),
+                        { ordered: false },
+                    );
+                    programCoursesMigrated = result.modifiedCount;
+                }
+                for (const index of legacyIndexes) {
+                    await resultsCollection.dropIndex(index.name);
+                    indexesRemoved++;
+                }
+                if (activeGradeScales.length > 1) {
+                    const result = await gradeScalesCollection.updateMany(
+                        { _id: { $in: activeGradeScales.slice(1).map((scale) => scale._id) } },
+                        { $set: { status: 'retired', updatedAt: new Date() } },
+                    );
+                    gradeScalesRetired = result.modifiedCount;
+                }
+                for (const index of legacyGradeScaleIndexes) {
+                    await gradeScalesCollection.dropIndex(index.name);
+                    indexesRemoved++;
+                }
+                await gradeScalesCollection.createIndex(
+                    { status: 1 },
+                    {
+                        unique: true,
+                        partialFilterExpression: { status: 'active' },
+                        name: 'one_active_grade_scale',
+                    },
+                );
+            }
+
+            return {
+                success: true,
+                data: {
+                    legacyResults: legacyResults.length,
+                    resultsReady: resultOperations.length,
+                    resultsMigrated,
+                    unresolvedResults,
+                    programCoursesReady: programCourseUpdates.size,
+                    programCoursesMigrated,
+                    legacyIndexes: legacyIndexes.length,
+                    legacyGradeScaleIndexes: legacyGradeScaleIndexes.length,
+                    indexesRemoved,
+                    extraActiveGradeScales: Math.max(0, activeGradeScales.length - 1),
+                    gradeScalesRetired,
+                    applied: Boolean(apply),
+                },
+            };
+        } catch (error) {
+            this.logger.error('migrateAcademicResultModel failed:', error?.message || error);
+            return { success: false, error: error?.message || 'Academic result migration failed' };
+        }
+    }
 
     /**
      * Migrate applicant demographics and enrolled-student profile images into User profiles.
@@ -317,5 +586,13 @@ export class MaintenanceController {
                 error: error?.message || 'Repair failed',
             };
         }
+    }
+
+    private toObjectId(value: unknown): Types.ObjectId | null {
+        if (value instanceof Types.ObjectId) return value;
+        const normalized = value?.toString?.();
+        return normalized && Types.ObjectId.isValid(normalized)
+            ? new Types.ObjectId(normalized)
+            : null;
     }
 }

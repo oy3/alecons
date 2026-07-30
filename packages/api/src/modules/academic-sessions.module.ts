@@ -11,9 +11,13 @@ import { Payment, PaymentSchema } from '../schemas/payment.schema';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { Student, StudentSchema } from '../schemas/student.schema';
 import { StudentAcademicSession, StudentAcademicSessionSchema } from '../schemas/student-academic-session.schema';
+import { User, UserSchema } from '../schemas/user.schema';
+import { Staff, StaffSchema } from '../schemas/staff.schema';
+import { AcademicResultsModule } from './academic-results.module';
 
 @Module({
     imports: [
+        AcademicResultsModule,
         MongooseModule.forFeature([
             { name: AcademicSession.name, schema: AcademicSessionSchema },
             { name: SessionControl.name, schema: SessionControlSchema },
@@ -21,6 +25,8 @@ import { StudentAcademicSession, StudentAcademicSessionSchema } from '../schemas
             { name: Application.name, schema: ApplicationSchema },
             { name: Student.name, schema: StudentSchema },
             { name: StudentAcademicSession.name, schema: StudentAcademicSessionSchema },
+            { name: User.name, schema: UserSchema },
+            { name: Staff.name, schema: StaffSchema },
         ]),
     ],
     controllers: [AcademicSessionsController, StudentAcademicSessionsController],

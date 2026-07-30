@@ -1,4 +1,4 @@
-import { IsString, IsBoolean, IsOptional, MaxLength, MinLength } from 'class-validator';
+import { IsString, IsBoolean, IsOptional, IsMongoId, MaxLength, MinLength } from 'class-validator';
 
 export class CreateDepartmentDto {
     @IsString()
@@ -17,6 +17,10 @@ export class CreateDepartmentDto {
     @IsOptional()
     @IsBoolean()
     active?: boolean;
+
+    @IsOptional()
+    @IsMongoId()
+    hodUserId?: string;
 }
 
 export class UpdateDepartmentDto {
@@ -38,6 +42,10 @@ export class UpdateDepartmentDto {
     @IsOptional()
     @IsBoolean()
     active?: boolean;
+
+    @IsOptional()
+    @IsMongoId()
+    hodUserId?: string;
 }
 
 export class QueryDepartmentsDto {

@@ -177,6 +177,7 @@ export default {
         <Courses @refresh="refreshCurrentTab" />
       </div>
 
+
       <!-- Payments Tab -->
       <div
         v-show="activeTab === 'payments'"

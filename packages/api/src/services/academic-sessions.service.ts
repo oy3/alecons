@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
 import { AcademicSession, AcademicSessionDocument, SessionStatus } from '../schemas/academic-session.schema';
 import { CreateAcademicSessionDto, UpdateAcademicSessionDto, QueryAcademicSessionsDto } from '../dto/academic-session.dto';
 import { Student, StudentDocument } from '../schemas/student.schema';
@@ -8,19 +8,29 @@ import {
     StudentAcademicSession,
     StudentAcademicSessionDocument,
     StudentAcademicSessionStatus,
+    StudentAnnualOutcome,
 } from '../schemas/student-academic-session.schema';
+import { User, UserDocument } from '../schemas/user.schema';
+import { Staff, StaffDocument } from '../schemas/staff.schema';
+import { StudentProgressionService } from './student-progression.service';
 
 @Injectable()
 export class AcademicSessionsService {
     private readonly logger = new Logger(AcademicSessionsService.name);
 
     constructor(
+        @InjectConnection() private readonly connection: Connection,
         @InjectModel(AcademicSession.name)
         private academicSessionModel: Model<AcademicSessionDocument>,
         @InjectModel(Student.name)
         private studentModel: Model<StudentDocument>,
         @InjectModel(StudentAcademicSession.name)
         private studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
+        @InjectModel(User.name)
+        private userModel: Model<UserDocument>,
+        @InjectModel(Staff.name)
+        private staffModel: Model<StaffDocument>,
+        private readonly progressionService: StudentProgressionService,
     ) { }
 
     private generateSessionYear(startDate: string, endDate: string): string {
@@ -49,6 +59,7 @@ export class AcademicSessionsService {
 
     async create(createDto: CreateAcademicSessionDto, userId: string): Promise<AcademicSession> {
         const sessionYear = this.generateSessionYear(createDto.startDate, createDto.endDate);
+        const provostUserId = await this.resolveProvostUserId(createDto.provostUserId);
 
         await this.ensureSessionIndexes();
 
@@ -57,6 +68,11 @@ export class AcademicSessionsService {
             sessionYear,
             status: createDto.status || SessionStatus.OPEN,
             active: createDto.active !== undefined ? createDto.active : true,
+            provostUserId,
+            provostAssignedAt: provostUserId ? new Date() : undefined,
+            provostAssignedBy: provostUserId && Types.ObjectId.isValid(userId)
+                ? new Types.ObjectId(userId)
+                : undefined,
         });
 
         return academicSession.save();
@@ -104,6 +120,7 @@ export class AcademicSessionsService {
         const [sessions, totalItems] = await Promise.all([
             this.academicSessionModel
                 .find(filter)
+                .populate('provostUserId', 'firstName otherName lastName email')
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
@@ -123,7 +140,9 @@ export class AcademicSessionsService {
     }
 
     async findById(id: string): Promise<AcademicSession> {
-        const academicSession = await this.academicSessionModel.findById(id);
+        const academicSession = await this.academicSessionModel
+            .findById(id)
+            .populate('provostUserId', 'firstName otherName lastName email');
         if (!academicSession) {
             throw new NotFoundException('Academic session not found');
         }
@@ -136,6 +155,15 @@ export class AcademicSessionsService {
         userId: string,
     ): Promise<AcademicSession> {
         const updateData: any = { ...updateDto };
+
+        if (updateDto.provostUserId !== undefined) {
+            const provostUserId = await this.resolveProvostUserId(updateDto.provostUserId);
+            updateData.provostUserId = provostUserId || null;
+            updateData.provostAssignedAt = provostUserId ? new Date() : null;
+            updateData.provostAssignedBy = provostUserId && Types.ObjectId.isValid(userId)
+                ? new Types.ObjectId(userId)
+                : null;
+        }
 
         // Regenerate session year if dates are updated
         if (updateDto.startDate || updateDto.endDate) {
@@ -161,6 +189,23 @@ export class AcademicSessionsService {
         }
 
         return academicSession;
+    }
+
+    private async resolveProvostUserId(provostUserId?: string | null): Promise<Types.ObjectId | undefined> {
+        if (!provostUserId) return undefined;
+        if (!Types.ObjectId.isValid(provostUserId)) {
+            throw new NotFoundException('Selected Provost is invalid');
+        }
+
+        const userId = new Types.ObjectId(provostUserId);
+        const [user, staff] = await Promise.all([
+            this.userModel.findOne({ _id: userId, isActive: true }).select('_id').lean(),
+            this.staffModel.findOne({ userId, isActive: true }).select('_id').lean(),
+        ]);
+        if (!user || !staff) {
+            throw new NotFoundException('Selected Provost must be an active staff member');
+        }
+        return userId;
     }
 
     async delete(id: string): Promise<void> {
@@ -196,6 +241,7 @@ export class AcademicSessionsService {
         sourceAcademicSessionId: string,
         targetAcademicSessionId: string,
         staffUserId: string,
+        apply = false,
     ) {
         if (
             !Types.ObjectId.isValid(sourceAcademicSessionId)
@@ -219,38 +265,98 @@ export class AcademicSessionsService {
         const now = new Date();
         const students = await this.studentModel
             .find({ academicSession: sourceId, isActive: true })
-            .select('_id')
-            .lean();
+            .populate('programId', 'durationYears')
+            .select('_id programId currentLevel currentSemester')
+            .lean() as any[];
 
         if (!students.length) {
-            return { progressed: 0, sourceSession, targetSession };
+            return {
+                applied: Boolean(apply),
+                eligible: 0,
+                progressed: 0,
+                promoted: 0,
+                repeating: 0,
+                graduationReview: 0,
+                academicReview: 0,
+                blocked: 0,
+                sourceSession,
+                targetSession,
+            };
         }
 
-        const studentIds = students.map((student) => student._id);
-        await this.studentAcademicSessionModel.updateMany(
-            { studentId: { $in: studentIds }, academicSessionId: sourceId, status: StudentAcademicSessionStatus.CURRENT },
-            { $set: { status: StudentAcademicSessionStatus.COMPLETED, endedAt: now } },
-        );
+        const actor = new Types.ObjectId(staffUserId);
+        const decisions: Array<{ student: any; enrollment: any; nextLevel: number; repeat: boolean }> = [];
+        const summary = { promoted: 0, repeating: 0, graduationReview: 0, academicReview: 0, blocked: 0 };
+        for (const student of students) {
+            const enrollment: any = await this.progressionService.recalculate(
+                student._id,
+                sourceId,
+                actor,
+                undefined,
+                apply,
+            );
+            if (enrollment.annualOutcome === StudentAnnualOutcome.ELIGIBLE_FOR_PROGRESSION) {
+                decisions.push({ student, enrollment, nextLevel: Number(enrollment.level) + 1, repeat: false });
+                summary.promoted++;
+            } else if (enrollment.annualOutcome === StudentAnnualOutcome.REPEAT_YEAR_REQUIRED) {
+                decisions.push({ student, enrollment, nextLevel: Number(enrollment.level), repeat: true });
+                summary.repeating++;
+            } else if (enrollment.annualOutcome === StudentAnnualOutcome.GRADUATION_REVIEW) {
+                summary.graduationReview++;
+            } else if (enrollment.annualOutcome === StudentAnnualOutcome.ACADEMIC_REVIEW) {
+                summary.academicReview++;
+            } else {
+                summary.blocked++;
+            }
+        }
 
-        await this.studentAcademicSessionModel.bulkWrite(
-            studentIds.map((studentId) => ({
-                updateOne: {
-                    filter: { studentId, academicSessionId: targetId },
-                    update: {
-                        $set: { status: StudentAcademicSessionStatus.CURRENT, endedAt: undefined },
-                        $setOnInsert: { startedAt: now, assignedBy: new Types.ObjectId(staffUserId) },
-                    },
-                    upsert: true,
-                },
-            })),
-        );
+        if (apply && decisions.length) {
+            const dbSession = await this.connection.startSession();
+            try {
+                await dbSession.withTransaction(async () => {
+                for (const decision of decisions) {
+                    await this.studentAcademicSessionModel.updateOne(
+                        { _id: decision.enrollment._id, status: StudentAcademicSessionStatus.CURRENT },
+                        { $set: { status: StudentAcademicSessionStatus.COMPLETED, endedAt: now } },
+                        { session: dbSession },
+                    );
+                    await this.studentAcademicSessionModel.updateOne(
+                        { studentId: decision.student._id, academicSessionId: targetId },
+                        {
+                            $set: {
+                                status: StudentAcademicSessionStatus.CURRENT,
+                                level: decision.nextLevel,
+                                yearAttemptNumber: decision.repeat ? Number(decision.enrollment.yearAttemptNumber || 1) + 1 : 1,
+                                isRepeatYear: decision.repeat,
+                                annualOutcome: decision.repeat ? StudentAnnualOutcome.REPEATING_YEAR : StudentAnnualOutcome.IN_PROGRESS,
+                                sourceAcademicSessionId: sourceId,
+                                semesterProgressions: [],
+                                endedAt: undefined,
+                            },
+                            $setOnInsert: { startedAt: now, assignedBy: actor },
+                        },
+                        { upsert: true, session: dbSession },
+                    );
+                    await this.studentModel.updateOne(
+                        { _id: decision.student._id, academicSession: sourceId },
+                        { $set: { academicSession: targetId, currentLevel: decision.nextLevel, currentSemester: 1 } },
+                        { session: dbSession },
+                    );
+                }
+                });
+            } finally {
+                await dbSession.endSession();
+            }
+        }
 
-        await this.studentModel.updateMany(
-            { _id: { $in: studentIds }, academicSession: sourceId },
-            { $set: { academicSession: targetId } },
-        );
-
-        return { progressed: students.length, sourceSession, targetSession };
+        return {
+            applied: Boolean(apply),
+            eligible: decisions.length,
+            progressed: apply ? decisions.length : 0,
+            ...summary,
+            sourceSession,
+            targetSession,
+        };
     }
 
     /**

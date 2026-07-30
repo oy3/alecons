@@ -1,4 +1,4 @@
-import { IsString, IsDateString, IsBoolean, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsDateString, IsBoolean, IsOptional, IsEnum, IsMongoId } from 'class-validator';
 import { SessionStatus } from '../schemas/academic-session.schema';
 
 export class CreateAcademicSessionDto {
@@ -23,6 +23,10 @@ export class CreateAcademicSessionDto {
     @IsOptional()
     @IsBoolean()
     active?: boolean;
+
+    @IsOptional()
+    @IsMongoId()
+    provostUserId?: string | null;
 }
 
 export class UpdateAcademicSessionDto {
@@ -49,6 +53,10 @@ export class UpdateAcademicSessionDto {
     @IsOptional()
     @IsBoolean()
     active?: boolean;
+
+    @IsOptional()
+    @IsMongoId()
+    provostUserId?: string | null;
 }
 
 export class QueryAcademicSessionsDto {

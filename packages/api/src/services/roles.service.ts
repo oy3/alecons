@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Role, RoleDocument } from '../schemas/role.schema';
@@ -14,12 +14,33 @@ export class RolesService {
         @InjectModel(Staff.name) private staffModel: Model<StaffDocument>
     ) { }
 
-    async getAllRoles(): Promise<Role[]> {
+    async getAllRoles(includeInactive = false): Promise<Role[]> {
         return this.roleModel
-            .find({ active: true })
+            .find(includeInactive ? {} : { active: true })
             .select('name description modules active createdAt')
-            .sort({ createdAt: -1 })
+            .sort({ active: -1, name: 1 })
             .lean();
+    }
+
+    async updateRoleStatus(id: string, active: boolean): Promise<Role> {
+        if (!Types.ObjectId.isValid(id)) throw new BadRequestException('Invalid role ID');
+        const role = await this.roleModel.findById(id);
+        if (!role) throw new NotFoundException('Role not found');
+        if (role.active === active) return role.toObject();
+
+        if (!active) {
+            const staffCount = await this.staffModel.countDocuments({ roleId: role._id, isActive: true });
+            if (staffCount > 0) {
+                throw new ConflictException(
+                    `Cannot deactivate ${role.name}. ${staffCount} active staff member(s) are assigned to this role. Reassign them first.`,
+                );
+            }
+        }
+
+        role.active = active;
+        await role.save();
+        this.logger.log(`Role ${active ? 'activated' : 'deactivated'}: ${role.name} (${role._id})`);
+        return role.toObject();
     }
 
     async getRoleById(id: string): Promise<Role> {
@@ -41,14 +62,15 @@ export class RolesService {
 
     async createRole(createRoleDto: CreateRoleDto): Promise<Role> {
         try {
-            // Check if role name already exists
+            const normalizedName = this.normalizeRoleName(createRoleDto.name);
             const existingRole = await this.roleModel.findOne({
-                name: createRoleDto.name,
-                active: true
-            });
+                name: this.exactNameMatch(normalizedName),
+            }).select('_id name active').lean();
 
             if (existingRole) {
-                throw new BadRequestException('Role name already exists');
+                throw new ConflictException(
+                    `A role named "${existingRole.name}" already exists${existingRole.active ? '' : ' but is inactive'}. Choose another name or update the existing role.`,
+                );
             }
 
             // Convert frontend format to schema format
@@ -58,7 +80,7 @@ export class RolesService {
             }));
 
             const role = new this.roleModel({
-                name: createRoleDto.name,
+                name: normalizedName,
                 description: createRoleDto.description,
                 modules: modulePermissions,
                 active: createRoleDto.active !== false,
@@ -70,6 +92,9 @@ export class RolesService {
             return role.toObject();
         } catch (error) {
             this.logger.error('Error creating role:', error);
+            if (error?.code === 11000) {
+                throw new ConflictException('A role with this name already exists. Choose another name or update the existing role.');
+            }
             throw error;
         }
     }
@@ -85,21 +110,25 @@ export class RolesService {
                 throw new NotFoundException('Role not found');
             }
 
-            // Check for duplicate name if name is being updated
-            if (updateRoleDto.name && updateRoleDto.name !== role.name) {
+            const normalizedName = updateRoleDto.name === undefined
+                ? undefined
+                : this.normalizeRoleName(updateRoleDto.name);
+
+            if (normalizedName) {
                 const existingRole = await this.roleModel.findOne({
-                    name: updateRoleDto.name,
-                    active: true,
-                    _id: { $ne: id }
-                });
+                    name: this.exactNameMatch(normalizedName),
+                    _id: { $ne: role._id },
+                }).select('_id name active').lean();
 
                 if (existingRole) {
-                    throw new BadRequestException('Role name already exists');
+                    throw new ConflictException(
+                        `A role named "${existingRole.name}" already exists${existingRole.active ? '' : ' but is inactive'}. Choose another name or update the existing role.`,
+                    );
                 }
             }
 
             // Update basic fields
-            if (updateRoleDto.name) role.name = updateRoleDto.name;
+            if (normalizedName) role.name = normalizedName;
             if (updateRoleDto.description !== undefined) role.description = updateRoleDto.description;
             if (updateRoleDto.active !== undefined) role.active = updateRoleDto.active;
 
@@ -118,6 +147,9 @@ export class RolesService {
             return role.toObject();
         } catch (error) {
             this.logger.error('Error updating role:', error);
+            if (error?.code === 11000) {
+                throw new ConflictException('A role with this name already exists. Choose another name or update the existing role.');
+            }
             throw error;
         }
     }
@@ -187,5 +219,16 @@ export class RolesService {
         // Check if role has the specific permission for the module
         return modulePermission.permissions.includes(permission) ||
             modulePermission.permissions.includes('manage');
+    }
+
+    private normalizeRoleName(name: string): string {
+        const normalized = String(name || '').trim().replace(/\s+/g, ' ');
+        if (!normalized) throw new BadRequestException('Role name is required');
+        return normalized;
+    }
+
+    private exactNameMatch(name: string): RegExp {
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`^${escaped}$`, 'i');
     }
 }

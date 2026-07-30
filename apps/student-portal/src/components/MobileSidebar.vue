@@ -1,4 +1,3 @@
-x
 <script lang="js">
 import BrandLogo from "./BrandLogo.vue";
 import { useAuthStore } from "../stores/auth.js";
@@ -129,7 +128,7 @@ export default {
         >
           <img
             :src="
-              auth.profileImageUrl  ||
+              auth.profileImageUrl ||
               'https://ui-avatars.com/api/?name=' +
                 encodeURIComponent(auth.userName) +
                 '&background=2d7d7d&color=fff'
@@ -140,7 +139,7 @@ export default {
             class="rounded-circle me-3"
           />
           <div>
-            <div class="fw-bold">{{ auth.userName }}</div>
+            <div class="fw-bold text-capitalize">{{ auth.userName }}</div>
             <div class="text-light small">Student</div>
             <div class="text-info small">{{ auth.userEmail }}</div>
           </div>

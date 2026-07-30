@@ -28,6 +28,11 @@ export class CreateProgramDto {
     @Min(1)
     maxUnits: number;
 
+    @ApiProperty({ description: 'Maximum failed courses eligible for resit in one semester', minimum: 1 })
+    @IsNumber()
+    @Min(1)
+    maxResitCourses: number;
+
     @ApiPropertyOptional({ description: 'Course advisor user ID' })
     @IsMongoId()
     @IsOptional()
@@ -81,6 +86,12 @@ export class UpdateProgramDto {
     @Min(1)
     @IsOptional()
     maxUnits?: number;
+
+    @ApiPropertyOptional({ description: 'Maximum failed courses eligible for resit in one semester', minimum: 1 })
+    @IsNumber()
+    @Min(1)
+    @IsOptional()
+    maxResitCourses?: number;
 
     @ApiPropertyOptional({ description: 'Course advisor user ID' })
     @IsMongoId()

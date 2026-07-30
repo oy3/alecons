@@ -9,6 +9,7 @@ import {
     Query,
     UseGuards,
     Patch,
+    Request,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DepartmentsService } from '../services/departments.service';
@@ -68,9 +69,9 @@ export class DepartmentsController {
     }
 
     @Post()
-    async createDepartment(@Body() createDepartmentDto: CreateDepartmentDto) {
+    async createDepartment(@Body() createDepartmentDto: CreateDepartmentDto, @Request() req: any) {
         try {
-            const department = await this.departmentsService.create(createDepartmentDto);
+            const department = await this.departmentsService.create(createDepartmentDto, this.getCurrentUserId(req));
             return {
                 success: true,
                 data: { department },
@@ -88,9 +89,10 @@ export class DepartmentsController {
     async updateDepartment(
         @Param('id') id: string,
         @Body() updateDepartmentDto: UpdateDepartmentDto,
+        @Request() req: any,
     ) {
         try {
-            const department = await this.departmentsService.update(id, updateDepartmentDto);
+            const department = await this.departmentsService.update(id, updateDepartmentDto, this.getCurrentUserId(req));
             return {
                 success: true,
                 data: { department },
@@ -135,5 +137,9 @@ export class DepartmentsController {
                 message: error.message,
             };
         }
+    }
+
+    private getCurrentUserId(req: any) {
+        return req?.user?._id?.toString?.() || req?.user?.id?.toString?.() || req?.user?.sub?.toString?.();
     }
 }

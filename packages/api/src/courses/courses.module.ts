@@ -7,6 +7,7 @@ import { ProgramCourse, ProgramCourseSchema } from '../schemas/program-course.sc
 import { Program, ProgramSchema } from '../schemas/program.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Staff, StaffSchema } from '../schemas/staff.schema';
+import { AcademicResult, AcademicResultSchema } from '../schemas/academic-result.schema';
 
 @Module({
     imports: [
@@ -16,6 +17,7 @@ import { Staff, StaffSchema } from '../schemas/staff.schema';
             { name: Program.name, schema: ProgramSchema },
             { name: User.name, schema: UserSchema },
             { name: Staff.name, schema: StaffSchema },
+            { name: AcademicResult.name, schema: AcademicResultSchema },
         ]),
     ],
     controllers: [CoursesController],

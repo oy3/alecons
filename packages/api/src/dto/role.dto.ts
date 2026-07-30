@@ -40,3 +40,8 @@ export class UpdateRoleDto {
     @IsBoolean()
     active?: boolean;
 }
+
+export class UpdateRoleStatusDto {
+    @IsBoolean()
+    active: boolean;
+}

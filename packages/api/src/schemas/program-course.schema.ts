@@ -8,6 +8,41 @@ export enum ProgramCourseCategory {
     ELECTIVE = 'elective',
 }
 
+@Schema({ _id: false })
+export class ProgramCourseAssessmentComponent {
+    @Prop({ required: true, trim: true, maxlength: 100 })
+    title: string;
+
+    @Prop({ required: true, min: 0.0001 })
+    maximumMark: number;
+
+    @Prop({ required: true, min: 0.0001, max: 100 })
+    weightPercent: number;
+
+    @Prop({ trim: true, maxlength: 50 })
+    componentType?: string;
+
+    @Prop({ required: true, min: 1 })
+    displayOrder: number;
+
+    @Prop({ maxlength: 1000 })
+    description?: string;
+
+    @Prop()
+    assessmentDate?: Date;
+
+    @Prop({ default: true })
+    active: boolean;
+
+    @Prop({ default: true })
+    mandatory: boolean;
+
+    @Prop({ default: false })
+    absenceAllowed: boolean;
+}
+
+export const ProgramCourseAssessmentComponentSchema = SchemaFactory.createForClass(ProgramCourseAssessmentComponent);
+
 @Schema({ timestamps: true })
 export class ProgramCourse {
     @Prop({ type: Types.ObjectId, ref: 'Course', required: true })
@@ -36,6 +71,9 @@ export class ProgramCourse {
 
     @Prop({ default: true })
     active: boolean;
+
+    @Prop({ type: [ProgramCourseAssessmentComponentSchema], default: [] })
+    assessmentComponents: ProgramCourseAssessmentComponent[];
 }
 
 export const ProgramCourseSchema = SchemaFactory.createForClass(ProgramCourse);

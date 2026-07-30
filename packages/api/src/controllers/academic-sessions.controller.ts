@@ -144,6 +144,7 @@ export class AcademicSessionsController {
     async progressCohort(
         @Param('id') sourceAcademicSessionId: string,
         @Body('targetAcademicSessionId') targetAcademicSessionId: string,
+        @Body('apply') apply: boolean,
         @Request() req,
     ) {
         try {
@@ -151,11 +152,14 @@ export class AcademicSessionsController {
                 sourceAcademicSessionId,
                 targetAcademicSessionId,
                 req.user.userId || req.user._id,
+                Boolean(apply),
             );
             return {
                 success: true,
                 data: result,
-                message: result.progressed + ' student(s) progressed successfully',
+                message: result.applied
+                    ? result.progressed + ' student(s) progressed successfully'
+                    : result.eligible + ' student(s) are eligible for progression',
             };
         } catch (error) {
             return { success: false, message: error.message };

@@ -19,6 +19,12 @@ export default {
       courseSearchQuery: "",
       feedback: null,
       reviewReasonPopover: null,
+      academicResults: [],
+      academicSummary: null,
+      isLoadingResults: false,
+      showResultsModal: false,
+      resultSessionFilter: '',
+      resultSemesterFilter: '',
     };
   },
   setup() {
@@ -31,6 +37,21 @@ export default {
     },
     currentRegistration() {
       return this.registrationContext?.registration || null;
+    },
+    academicProgression() {
+      return this.registrationContext?.academicProgression || null;
+    },
+    selectedSemesterProgression() {
+      return (this.academicProgression?.semesterProgressions || []).find(
+        (item) => Number(item.semester) === Number(this.selectedSemester || 1),
+      ) || null;
+    },
+    resitCourseIds() {
+      return new Set(
+        (this.selectedSemesterProgression?.resitProgramCourseIds || []).map((id) =>
+          String(id?._id || id),
+        ),
+      );
     },
     savedRegistrationCourses() {
       return (this.currentRegistration?.items || [])
@@ -65,6 +86,53 @@ export default {
         }
       );
     },
+    gradePreview() {
+      const currentSession = String(this.registrationContext?.student?.academicSessionId || '');
+      return this.academicResults.filter((result) => String(result.academicSessionId?._id || result.academicSessionId) === currentSession && (!this.selectedSemester || Number(result.semester) === Number(this.selectedSemester))).slice(0, 6);
+    },
+    resultSessions() {
+      const seen = new Map();
+      this.academicResults.forEach((result) => {
+        const session = result.academicSessionId;
+        const id = String(session?._id || session || '');
+        if (id) seen.set(id, session?.title || session?.sessionYear || id);
+      });
+      return [...seen].map(([id, title]) => ({ id, title }));
+    },
+    filteredFullResults() {
+      return this.academicResults.filter((result) => (!this.resultSessionFilter || String(result.academicSessionId?._id || result.academicSessionId) === this.resultSessionFilter) && (!this.resultSemesterFilter || Number(result.semester) === Number(this.resultSemesterFilter)));
+    },
+    gradePeriodSummary() {
+      const periods = this.academicSummary?.periods || [];
+      const sessionId = String(this.registrationContext?.student?.academicSessionId || '');
+      const semester = Number(this.selectedSemester || this.registrationContext?.student?.selectedSemester || 1);
+      return periods.find((period) => period.academicSessionId === sessionId && Number(period.semester) === semester) || {
+        isComplete: false,
+        expectedCourses: 0,
+        publishedCourses: 0,
+      };
+    },
+    modalPeriodSummary() {
+      const periods = this.academicSummary?.periods || [];
+      const selected = periods.filter((period) =>
+        (!this.resultSessionFilter || period.academicSessionId === this.resultSessionFilter) &&
+        (!this.resultSemesterFilter || Number(period.semester) === Number(this.resultSemesterFilter)),
+      );
+      if (!this.resultSessionFilter && !this.resultSemesterFilter) return this.academicSummary;
+      if (selected.length === 1) return selected[0];
+      if (!selected.length) return null;
+      const isComplete = selected.every((period) => period.isComplete);
+      const applicableUnits = isComplete ? selected.reduce((sum, period) => sum + Number(period.applicableUnits || 0), 0) : null;
+      const qualityPoints = isComplete ? selected.reduce((sum, period) => sum + Number(period.qualityPoints || 0), 0) : null;
+      return {
+        isComplete,
+        expectedCourses: selected.reduce((sum, period) => sum + period.expectedCourses, 0),
+        publishedCourses: selected.reduce((sum, period) => sum + period.publishedCourses, 0),
+        qualityPoints,
+        semesterGPA: applicableUnits ? qualityPoints / applicableUnits : null,
+      };
+    },
+    modalGpaLabel() { return this.resultSemesterFilter ? 'Semester GPA' : 'Selected GPA' },
     sessionTotals() {
       return (
         this.registrationContext?.sessionTotals || {
@@ -109,11 +177,8 @@ export default {
     filteredDisplayedCourses() {
       const query = this.courseSearchQuery.trim().toLowerCase();
 
-      if (!query) {
-        return this.displayedCourses;
-      }
-
-      return this.displayedCourses.filter((course) => {
+      const matches = this.displayedCourses.filter((course) => {
+        if (!query) return true;
         const lecturerNames = (course.lecturers || [])
           .map((lecturer) =>
             [lecturer.firstName, lecturer.otherName, lecturer.lastName]
@@ -137,6 +202,7 @@ export default {
 
         return haystack.includes(query);
       });
+      return matches.sort((left, right) => Number(this.isResitCourse(right)) - Number(this.isResitCourse(left)));
     },
     totalFilteredCourses() {
       return this.filteredDisplayedCourses.length;
@@ -283,6 +349,9 @@ export default {
     this.disposeReviewPopover();
   },
   methods: {
+    isResitCourse(course) {
+      return this.resitCourseIds.has(String(course.id || course._id || ''));
+    },
     async loadRegistrationContext() {
       try {
         this.isLoading = true;
@@ -307,6 +376,7 @@ export default {
         this.selectedSemester =
           response.data.student?.selectedSemester || this.selectedSemester || 1;
         this.initializeSelections();
+        await this.loadAcademicResults();
         this.$nextTick(() => {
           this.initializeReviewPopover();
         });
@@ -322,6 +392,30 @@ export default {
       } finally {
         this.isLoading = false;
       }
+    },
+    async loadAcademicResults() {
+      try {
+        this.isLoadingResults = true;
+        const [response] = await Promise.all([
+          apiService.getAcademicResults(),
+          this.auth.loadStudentData(),
+        ]);
+        if (!response.success) throw new Error(response.error || 'Failed to load published results');
+        this.academicResults = response.data?.results || [];
+        this.academicSummary = response.data?.summary || null;
+      } catch (error) {
+        logger.error('Academics: failed to load published results', error);
+        this.academicResults = [];
+        this.academicSummary = null;
+      } finally {
+        this.isLoadingResults = false;
+      }
+    },
+    formatGpa(value) {
+      return Number(value || 0).toFixed(2);
+    },
+    gradeBadgeClass(result) {
+      return result.isPass ? 'bg-success' : 'bg-danger';
     },
     disposeReviewPopover() {
       if (this.reviewReasonPopover) {
@@ -583,7 +677,8 @@ export default {
               <i class="bi bi-mortarboard text-white fs-3"></i>
             </div>
             <h4 class="fw-bold text-muted">
-              {{ auth.cumulativeGPA ? auth.cumulativeGPA.toFixed(2) : "-" }}
+              <template v-if="auth.hasCumulativeGPA">{{ formatGpa(auth.cumulativeGPA) }}</template>
+              <span v-else class="fs-6">N/A</span>
             </h4>
             <p class="text-muted mb-0">Cumulative GPA</p>
           </div>
@@ -663,6 +758,23 @@ export default {
     </div>
 
     <template v-else>
+      <div v-if="academicProgression?.isRepeatYear" class="alert alert-warning d-flex gap-3 align-items-start mb-4">
+        <i class="bi bi-arrow-repeat fs-5"></i>
+        <div>
+          <div class="fw-semibold">Repeat Year</div>
+          <div class="small">You are repeating this level and must complete the full approved course load. Resits are not available during a repeat year.</div>
+        </div>
+      </div>
+      <div
+        v-else-if="['repeat_year_required', 'academic_review'].includes(academicProgression?.annualOutcome)"
+        class="alert alert-danger d-flex gap-3 align-items-start mb-4"
+      >
+        <i class="bi bi-exclamation-triangle fs-5"></i>
+        <div>
+          <div class="fw-semibold">{{ academicProgression.annualOutcome === 'academic_review' ? 'Academic Review Required' : 'Repeat Year Required' }}</div>
+          <div class="small">Your completed semester results require formal progression review before the next academic session.</div>
+        </div>
+      </div>
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white border-0 py-3">
           <div
@@ -806,12 +918,14 @@ export default {
                         <span
                           class="badge rounded-pill"
                           :class="
-                            isCompulsory(course)
+                            isResitCourse(course)
+                              ? 'bg-warning-subtle text-warning-emphasis'
+                              : isCompulsory(course)
                               ? 'bg-danger-subtle text-danger'
                               : 'bg-secondary-subtle text-secondary'
                           "
                         >
-                          {{ isCompulsory(course) ? "Compulsory" : "Elective" }}
+                          {{ isResitCourse(course) ? "Resit Required" : isCompulsory(course) ? "Compulsory" : "Elective" }}
                         </span>
                       </td>
                       <!-- <td class="py-3 d-none d-sm-table-cell">
@@ -943,20 +1057,21 @@ export default {
               <h5 class="fw-bold mb-0">Grade Summary</h5>
             </div>
             <div class="card-body">
-              <!-- TODO: Replace with actual grade data when grading system is implemented -->
-              <!--
-              <div class="grade-item d-flex justify-content-between align-items-center py-2 border-bottom">
+              <div v-if="isLoadingResults" class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading grades...</div>
+              <div v-else-if="gradePreview.length" class="grade-summary-list overflow-auto">
+              <div v-for="result in gradePreview" :key="result._id" class="grade-item d-flex justify-content-between align-items-center py-2 border-bottom gap-3">
                 <div>
-                  <div class="fw-bold">Course Name</div>
-                  <small class="text-muted">Course Code</small>
+                  <div class="fw-bold">{{ result.courseTitleSnapshot }}</div>
+                  <small class="text-muted">{{ result.courseCodeSnapshot }}<span v-if="result.attemptType !== 'initial'"> · {{ result.attemptType }}</span></small>
                 </div>
                 <div class="text-end">
-                  <div class="badge bg-success fs-6">Grade</div>
-                  <div class="small text-muted">GPA Points</div>
+                  <div class="badge fs-6" :class="gradeBadgeClass(result)">{{ result.gradeLetter }}</div>
+                  <div class="small text-muted">{{ formatGpa(result.gradePoint) }} points</div>
                 </div>
               </div>
-              -->
-              <div class="text-center py-4">
+              </div>
+
+              <div v-else class="text-center py-4">
                 <i
                   class="bi bi-graph-up text-muted mb-3"
                   style="font-size: 3rem"
@@ -968,21 +1083,26 @@ export default {
               </div>
 
               <div class="mt-4 p-3 bg-light rounded">
+                <div v-if="gradePeriodSummary && !gradePeriodSummary.isComplete" class="text-center mb-2">
+                  <span class="badge bg-warning-subtle text-warning-emphasis">{{ gradePeriodSummary.expectedCourses ? `Results pending · ${gradePeriodSummary.publishedCourses || 0}/${gradePeriodSummary.expectedCourses} published` : 'Awaiting approved course registration' }}</span>
+                </div>
                 <div class="row text-center">
                   <div class="col-6">
-                    <div class="fw-bold text-muted fs-4">-</div>
-                    <div class="small text-muted">Current GPA</div>
+                    <div v-if="gradePeriodSummary?.isComplete" class="fw-bold text-muted fs-4">{{ formatGpa(gradePeriodSummary.semesterGPA) }}</div>
+                    <div v-else class="placeholder-glow summary-placeholder" aria-label="Semester GPA pending"><span class="placeholder col-5"></span></div>
+                    <div class="small text-muted">Semester GPA</div>
                   </div>
                   <div class="col-6">
-                    <div class="fw-bold text-muted fs-4">-</div>
+                    <div v-if="gradePeriodSummary?.isComplete" class="fw-bold text-muted fs-4">{{ gradePeriodSummary.earnedUnits }}</div>
+                    <div v-else class="placeholder-glow summary-placeholder" aria-label="Credits earned pending"><span class="placeholder col-5"></span></div>
                     <div class="small text-muted">Credits Earned</div>
                   </div>
                 </div>
               </div>
 
               <div class="text-center mt-3">
-                <button class="btn btn-outline-secondary btn-sm" disabled>
-                  View Full Transcript
+                <button class="btn btn-outline-secondary btn-sm" :disabled="!academicResults.length" @click="showResultsModal = true">
+                  View Full Results
                 </button>
               </div>
             </div>
@@ -991,6 +1111,13 @@ export default {
       </div>
     </template>
   </div>
+  <div v-if="showResultsModal" class="modal d-block" tabindex="-1" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+      <div class="modal-header"><div><h5 class="modal-title">Published Results</h5><small v-if="modalPeriodSummary?.isComplete" class="text-muted">{{ modalGpaLabel }} {{ formatGpa(modalPeriodSummary.semesterGPA) }} · Quality Points {{ formatGpa(modalPeriodSummary.qualityPoints) }}<template v-if="auth.hasCumulativeGPA"> · Official CGPA {{ formatGpa(auth.cumulativeGPA) }}</template></small><small v-else class="text-warning-emphasis">Results pending · {{ modalPeriodSummary?.publishedCourses || 0 }}/{{ modalPeriodSummary?.expectedCourses || 0 }} published</small></div><button type="button" class="btn-close" aria-label="Close" @click="showResultsModal = false"></button></div>
+      <div class="modal-body"><div class="row g-2 mb-3"><div class="col-sm-7"><select v-model="resultSessionFilter" class="form-select form-select-sm"><option value="">All academic sessions</option><option v-for="session in resultSessions" :key="session.id" :value="session.id">{{ session.title }}</option></select></div><div class="col-sm-5"><select v-model="resultSemesterFilter" class="form-select form-select-sm"><option value="">Both semesters</option><option value="1">First semester</option><option value="2">Second semester</option></select></div></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Course</th><th>Attempt</th><th>Units</th><th>Score</th><th>Grade</th><th>Grade Point</th><th>Quality Points</th></tr></thead><tbody><tr v-for="result in filteredFullResults" :key="result._id"><td><div class="fw-semibold">{{ result.courseTitleSnapshot }}</div><small class="text-muted">{{ result.courseCodeSnapshot }} · {{ result.academicSessionId?.title || result.academicSessionId?.sessionYear }} · Semester {{ result.semester || '-' }}</small></td><td class="text-capitalize">{{ result.attemptType }}</td><td>{{ result.unitsSnapshot }}</td><td>{{ result.finalScore == null ? '-' : Number(result.finalScore).toFixed(2) }}</td><td><span class="badge" :class="gradeBadgeClass(result)">{{ result.gradeLetter || result.specialStatus }}</span></td><td>{{ result.gradePoint == null ? '-' : formatGpa(result.gradePoint) }}</td><td>{{ result.qualityPoints == null ? '-' : formatGpa(result.qualityPoints) }}</td></tr><tr v-if="!filteredFullResults.length"><td colspan="7" class="text-center text-muted py-4">No published results match these filters.</td></tr></tbody></table></div></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" @click="showResultsModal = false">Close</button></div>
+    </div></div>
+  </div><div v-if="showResultsModal" class="modal-backdrop show"></div>
 </template>
 
 <style scoped>
@@ -1047,5 +1174,12 @@ export default {
 
 .grade-item:last-child {
   border-bottom: none !important;
+}
+.grade-summary-list { max-height: 15.5rem; }
+.summary-placeholder {
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

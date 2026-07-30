@@ -2674,7 +2674,7 @@ export class StaffApplicationsController {
                     status: 'active',
                     currentLevel: 1,
                     currentSemester: 1,
-                    cumulativeGPA: 0.0,
+                    cumulativeGPA: null,
                     isActive: true,
                     profileImageUrl: studentProfileImageUrl,
                 });

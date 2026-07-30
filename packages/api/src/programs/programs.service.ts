@@ -348,6 +348,14 @@ export class ProgramsService {
                 throw new BadRequestException('Invalid program ID');
             }
 
+            const existingProgram = await this.programModel
+                .findById(id)
+                .select('programTypeId programModeId')
+                .lean();
+            if (!existingProgram) {
+                throw new NotFoundException('Program not found');
+            }
+
             // Validate references if they are being updated
             if (updateProgramDto.departmentId) {
                 const department = await this.departmentModel.findById(updateProgramDto.departmentId);
@@ -361,7 +369,8 @@ export class ProgramsService {
                 if (!programType) {
                     throw new BadRequestException('Program type not found');
                 }
-                if (!programType.active) {
+                const keepsExistingType = String(existingProgram.programTypeId) === String(updateProgramDto.programTypeId);
+                if (!programType.active && !keepsExistingType) {
                     throw new BadRequestException('Inactive program types cannot be assigned to a program');
                 }
             }
@@ -371,7 +380,8 @@ export class ProgramsService {
                 if (!programMode) {
                     throw new BadRequestException('Program mode not found');
                 }
-                if (!programMode.active) {
+                const keepsExistingMode = String(existingProgram.programModeId) === String(updateProgramDto.programModeId);
+                if (!programMode.active && !keepsExistingMode) {
                     throw new BadRequestException('Inactive program modes cannot be assigned to a program');
                 }
             }

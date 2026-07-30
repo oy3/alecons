@@ -85,7 +85,7 @@ export default {
               </h6>
               <p class="acon-text-secondary">
                 April 30, 2026 <br />
-                September 30, 2026
+                September 15, 2026
               </p>
             </div>
           </div>
@@ -100,7 +100,7 @@ export default {
               </h6>
               <p class="acon-text-secondary">
                 May 6, 2026 <br />
-                October 6, 2026
+                September 15, 2026
               </p>
             </div>
           </div>
@@ -113,7 +113,7 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">Screening Period</h6>
               <p class="acon-text-secondary">
                 May 11-13, 2026 <br />
-                October 12-15, 2026
+                September 15-20, 2026
               </p>
             </div>
           </div>
@@ -126,7 +126,7 @@ export default {
               <h6 class="acon-text-primary fw-bold mt-2">Admission Results</h6>
               <p class="acon-text-secondary">
                 May 15, 2026 <br />
-                October 15, 2026
+                September 18, 2026
               </p>
             </div>
           </div>
@@ -141,7 +141,7 @@ export default {
               </h6>
               <p class="acon-text-secondary">
                 May 18, 2026 <br />
-                October 20, 2026
+                October 19, 2026
               </p>
             </div>
           </div>

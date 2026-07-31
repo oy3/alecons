@@ -104,18 +104,19 @@ export default {
           description: 'Recalculate official semester GPA and CGPA from complete approved registrations, set unavailable CGPAs to null, and repair stale student values.',
           actionLabel: 'Inspect & Rebuild'
         },
-        {
-          id: 'future-utilities',
-          title: 'More Utilities Coming',
-          icon: 'bi-stars',
-          variant: 'secondary',
-          description: 'This module is reserved for future admin utilities such as data integrity checks, one-off repair tools, and operational maintenance actions.',
-          actionLabel: 'Coming Soon',
-          disabled: true
-        }
+
       ]
     }
   },
+        //   {
+        //   id: 'future-utilities',
+        //   title: 'More Utilities Coming',
+        //   icon: 'bi-stars',
+        //   variant: 'secondary',
+        //   description: 'This module is reserved for future admin utilities such as data integrity checks, one-off repair tools, and operational maintenance actions.',
+        //   actionLabel: 'Coming Soon',
+        //   disabled: true
+        // }
   async mounted() {
     await this.loadAcademicSessions()
     await this.loadUtilityState()

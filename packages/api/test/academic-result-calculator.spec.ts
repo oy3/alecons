@@ -16,6 +16,8 @@ import { hasAcademicResultPermission, isAssignedAcademicOwner } from '../src/ser
 import { filterStudentsWithCurrentCourseRegistration } from '../src/services/academic-result-roster';
 import { calculateAnnualProgression, calculateSemesterProgression } from '../src/services/academic-progression-calculator';
 import { StudentAnnualOutcome, StudentSemesterOutcome } from '../src/schemas/student-academic-session.schema';
+import { resolveCourseRegistrationAccess } from '../src/services/course-registration-access';
+import { UserRole } from '../src/schemas/user.schema';
 
 const bands = [
     { letter: 'F', minScore: 0, maxScore: 29, gradePoint: 0, isPass: false },
@@ -32,6 +34,22 @@ const components = [
     { title: 'Practical', maximumMark: 50, weightPercent: 25, displayOrder: 3, mandatory: true },
     { title: 'Examination', maximumMark: 100, weightPercent: 50, displayOrder: 4, mandatory: true },
 ];
+
+test('scopes course registration access by admin, manage, and advisor permissions', () => {
+    assert.equal(resolveCourseRegistrationAccess(UserRole.ADMIN, null, 'view').scope, 'institution');
+    assert.equal(resolveCourseRegistrationAccess(UserRole.STAFF, {
+        roleName: 'Registrar',
+        permissions: ['manage'],
+    }, 'approve').scope, 'institution');
+    assert.equal(resolveCourseRegistrationAccess(UserRole.STAFF, {
+        roleName: 'Course Advisor',
+        permissions: ['view', 'approve'],
+    }, 'view').scope, 'advisor');
+    assert.throws(() => resolveCourseRegistrationAccess(UserRole.STAFF, {
+        roleName: 'Viewer',
+        permissions: ['view'],
+    }, 'reject'));
+});
 
 test('validates the configured ALECONS grade bands', () => {
     assert.doesNotThrow(() => validateGradeBands(bands, 4));

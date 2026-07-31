@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { UpsertCourseRegistrationDraftDto, SubmitCourseRegistrationDto } from '../dto/course-registration.dto';
@@ -18,6 +18,13 @@ import {
 import { SessionControl, SessionControlDocument } from '../schemas/session-control.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
 import { StudentAcademicSession, StudentAcademicSessionDocument } from '../schemas/student-academic-session.schema';
+import { User, UserDocument } from '../schemas/user.schema';
+import { RolesService } from './roles.service';
+import {
+    CourseRegistrationPermission,
+    resolveCourseRegistrationAccess,
+    StaffCourseRegistrationAccess,
+} from './course-registration-access';
 
 interface RegistrationEligibilityResult {
     eligible: boolean;
@@ -35,6 +42,8 @@ export class CourseRegistrationService {
         @InjectModel(AcademicSession.name) private academicSessionModel: Model<AcademicSessionDocument>,
         @InjectModel(SessionControl.name) private sessionControlModel: Model<SessionControlDocument>,
         @InjectModel(StudentAcademicSession.name) private studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
+        @InjectModel(User.name) private userModel: Model<UserDocument>,
+        private readonly rolesService: RolesService,
     ) { }
 
     async getRegistrationContext(userId: string, level?: number, semester?: number) {
@@ -307,8 +316,8 @@ export class CourseRegistrationService {
 
     async getAdvisorPrograms(userId: string) {
         this.ensureValidObjectId(userId, 'Invalid user ID');
-
-        const programs = await this.getOwnedPrograms(userId);
+        const access = await this.resolveStaffCourseRegistrationAccess(userId, 'view');
+        const programs = await this.getAccessiblePrograms(userId, access);
 
         return {
             success: true,
@@ -329,9 +338,9 @@ export class CourseRegistrationService {
         } = {},
     ) {
         this.ensureValidObjectId(userId, 'Invalid user ID');
-
-        const ownedPrograms = await this.getOwnedPrograms(userId);
-        if (!ownedPrograms.length) {
+        const access = await this.resolveStaffCourseRegistrationAccess(userId, 'view');
+        const accessiblePrograms = await this.getAccessiblePrograms(userId, access);
+        if (!accessiblePrograms.length) {
             return {
                 success: true,
                 data: {
@@ -349,7 +358,7 @@ export class CourseRegistrationService {
             };
         }
 
-        const selectedProgram = this.resolveAdvisorProgram(ownedPrograms, filters.programId);
+        const selectedProgram = this.resolveAdvisorProgram(accessiblePrograms, filters.programId);
         const normalizedLevel = filters.level ? Number(filters.level) : undefined;
         const normalizedSemester = filters.semester ? Number(filters.semester) : undefined;
 
@@ -424,7 +433,7 @@ export class CourseRegistrationService {
         return {
             success: true,
             data: {
-                programs: ownedPrograms.map((program) => this.formatAdvisorProgram(program)),
+                programs: accessiblePrograms.map((program) => this.formatAdvisorProgram(program)),
                 program: this.formatAdvisorProgram(selectedProgram),
                 stats,
                 registrations: pagedRows,
@@ -442,6 +451,7 @@ export class CourseRegistrationService {
         this.ensureValidObjectId(userId, 'Invalid user ID');
         this.ensureValidObjectId(registrationId, 'Invalid registration ID');
 
+        const access = await this.resolveStaffCourseRegistrationAccess(userId, 'view');
         const registration = await this.courseRegistrationModel
             .findById(registrationId)
             .populate({
@@ -481,7 +491,7 @@ export class CourseRegistrationService {
             throw new NotFoundException('Course registration not found');
         }
 
-        this.assertAdvisorOwnership(userId, registration.programId as any);
+        this.assertProgramAccess(userId, registration.programId as any, access);
 
         return {
             success: true,
@@ -491,12 +501,12 @@ export class CourseRegistrationService {
         };
     }
 
-    async approveAdvisorCourseRegistration(userId: string, registrationId: string, reviewComment?: string, actorRole?: string) {
-        return this.reviewAdvisorCourseRegistration(userId, registrationId, CourseRegistrationStatus.APPROVED, reviewComment, actorRole);
+    async approveAdvisorCourseRegistration(userId: string, registrationId: string, reviewComment?: string) {
+        return this.reviewAdvisorCourseRegistration(userId, registrationId, CourseRegistrationStatus.APPROVED, reviewComment);
     }
 
-    async rejectAdvisorCourseRegistration(userId: string, registrationId: string, reviewComment?: string, actorRole?: string) {
-        return this.reviewAdvisorCourseRegistration(userId, registrationId, CourseRegistrationStatus.REJECTED, reviewComment, actorRole);
+    async rejectAdvisorCourseRegistration(userId: string, registrationId: string, reviewComment?: string) {
+        return this.reviewAdvisorCourseRegistration(userId, registrationId, CourseRegistrationStatus.REJECTED, reviewComment);
     }
 
     private async getStudentContext(userId: string, level?: number, semester?: number) {
@@ -559,8 +569,9 @@ export class CourseRegistrationService {
         registrationId: string,
         status: CourseRegistrationStatus.APPROVED | CourseRegistrationStatus.REJECTED,
         reviewComment?: string,
-        actorRole?: string,
     ) {
+        const requiredPermission = status === CourseRegistrationStatus.APPROVED ? 'approve' : 'reject';
+        const access = await this.resolveStaffCourseRegistrationAccess(userId, requiredPermission);
         const registration = await this.courseRegistrationModel
             .findById(registrationId)
             .populate({
@@ -600,7 +611,7 @@ export class CourseRegistrationService {
             throw new NotFoundException('Course registration not found');
         }
 
-        this.assertAdvisorOwnership(userId, registration.programId as any);
+        this.assertProgramAccess(userId, registration.programId as any, access);
 
         if (registration.status !== CourseRegistrationStatus.SUBMITTED) {
             throw new BadRequestException('Only submitted registrations can be reviewed.');
@@ -626,7 +637,7 @@ export class CourseRegistrationService {
             fromStatus: CourseRegistrationStatus.SUBMITTED,
             toStatus: status,
             performedBy: userId,
-            actorRole: actorRole || 'staff',
+            actorRole: access.actorRole,
             comment: reviewComment?.trim() || null,
             submissionVersion,
             snapshot: this.buildHistorySnapshotFromRegistration(registration),
@@ -670,6 +681,18 @@ export class CourseRegistrationService {
             .exec();
     }
 
+    private async getAccessiblePrograms(userId: string, access: StaffCourseRegistrationAccess) {
+        if (access.scope === 'advisor') return this.getOwnedPrograms(userId);
+
+        return this.programModel
+            .find({})
+            .populate('programTypeId', 'type description')
+            .populate('programModeId', 'mode description')
+            .populate('departmentId', 'name')
+            .sort({ name: 1 })
+            .exec();
+    }
+
     private resolveAdvisorProgram(programs: any[], programId?: string) {
         if (!programId) {
             return programs[0];
@@ -684,12 +707,28 @@ export class CourseRegistrationService {
         return selectedProgram;
     }
 
-    private assertAdvisorOwnership(userId: string, program: any) {
+    private assertProgramAccess(
+        userId: string,
+        program: any,
+        access: StaffCourseRegistrationAccess,
+    ) {
+        if (access.scope === 'institution') return;
         const courseAdvisorId = this.extractId(program?.courseAdvisorId);
 
         if (!courseAdvisorId || courseAdvisorId !== userId) {
             throw new NotFoundException('Course registration not found');
         }
+    }
+
+    private async resolveStaffCourseRegistrationAccess(
+        userId: string,
+        requiredPermission: CourseRegistrationPermission,
+    ): Promise<StaffCourseRegistrationAccess> {
+        const user = await this.userModel.findById(userId).select('role').lean();
+        if (!user) throw new ForbiddenException('Course registration access is not available');
+
+        const moduleAccess = await this.rolesService.getUserModuleAccess(userId, 'courseRegistrations');
+        return resolveCourseRegistrationAccess(user.role, moduleAccess, requiredPermission);
     }
 
     private ensureValidObjectId(value: string, message: string) {

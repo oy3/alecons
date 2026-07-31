@@ -221,6 +221,35 @@ export class RolesService {
             modulePermission.permissions.includes('manage');
     }
 
+    async getUserModuleAccess(userId: string, module: string): Promise<{
+        roleId: string;
+        roleName: string;
+        permissions: string[];
+    } | null> {
+        if (!Types.ObjectId.isValid(userId)) return null;
+
+        const staff = await this.staffModel
+            .findOne({ userId: new Types.ObjectId(userId), isActive: true })
+            .select('roleId')
+            .lean();
+        if (!staff?.roleId) return null;
+
+        const role = await this.roleModel
+            .findOne({ _id: staff.roleId, active: true })
+            .select('name modules')
+            .lean();
+        if (!role) return null;
+
+        const moduleAccess = role.modules.find((entry) => entry.module === module);
+        if (!moduleAccess) return null;
+
+        return {
+            roleId: String(role._id),
+            roleName: role.name,
+            permissions: [...(moduleAccess.permissions || [])],
+        };
+    }
+
     private normalizeRoleName(name: string): string {
         const normalized = String(name || '').trim().replace(/\s+/g, ' ');
         if (!normalized) throw new BadRequestException('Role name is required');

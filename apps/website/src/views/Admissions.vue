@@ -181,7 +181,7 @@ export default {
         Follow these four simple steps to secure your place at ALECONS.
       </p>
 
-      <div
+      <!-- <div
         class="bg-warning p-2 text-dark bg-opacity-25 mb-5 text-start border-start border-4 border-warning"
       >
         <b>NOTE:</b> Only Direct entry JAMB candidates and graduates from
@@ -190,7 +190,7 @@ export default {
         applicants should select the <b>Full-Time</b> program mode. Please
         ensure you select the correct program mode to avoid any issues with your
         application.
-      </div>
+      </div> -->
 
       <div class="row gy-4">
         <!-- Step 1 -->

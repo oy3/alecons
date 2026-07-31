@@ -16,9 +16,11 @@ import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-sess
 import { SessionControl, SessionControlSchema } from '../schemas/session-control.schema';
 import { TenancyAgreement, TenancyAgreementSchema } from '../schemas/tenancy-agreement.schema';
 import { StudentAcademicSession, StudentAcademicSessionSchema } from '../schemas/student-academic-session.schema';
+import { UserManagementModule } from './user-management.module';
 
 @Module({
     imports: [
+        UserManagementModule,
         MongooseModule.forFeature([
             { name: Student.name, schema: StudentSchema },
             { name: User.name, schema: UserSchema },

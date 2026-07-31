@@ -103,7 +103,25 @@ export default {
       );
     },
     canReviewSelectedRegistration() {
-      return this.selectedRegistrationDetails?.state === "submitted";
+      return this.canApproveSelectedRegistration || this.canRejectSelectedRegistration;
+    },
+    canApproveSelectedRegistration() {
+      return (
+        this.selectedRegistrationDetails?.state === "submitted" &&
+        this.authStore.hasPermission("courseRegistrations", "approve")
+      );
+    },
+    canRejectSelectedRegistration() {
+      return (
+        this.selectedRegistrationDetails?.state === "submitted" &&
+        this.authStore.hasPermission("courseRegistrations", "reject")
+      );
+    },
+    hasInstitutionWideAccess() {
+      return (
+        this.authStore.isAdmin ||
+        this.authStore.hasPermission("courseRegistrations", "manage")
+      );
     },
     selectedRegistrationBadgeClass() {
       const state = this.selectedRegistrationDetails?.state || "not_registered";
@@ -559,7 +577,9 @@ export default {
             </select>
           </div>
           <div class="col-12 col-lg-4 text-lg-end">
-            <div class="small text-muted mb-1">Advisor-owned programs only</div>
+            <div class="small text-muted mb-1">
+              {{ hasInstitutionWideAccess ? "Institution-wide access" : "Advisor-owned programs only" }}
+            </div>
             <div class="fw-semibold">{{ selectedProgramLabel }}</div>
           </div>
         </div>
@@ -1067,7 +1087,7 @@ export default {
             <div class="d-flex gap-2 justify-content-between w-100">
               <!-- <button class="btn btn-outline-secondary" @click="closeRegistrationModal">Close</button> -->
               <button
-                v-if="canReviewSelectedRegistration"
+                v-if="canRejectSelectedRegistration"
                 class="btn btn-danger"
                 :disabled="isSavingDecision"
                 @click="confirmDecision('reject')"
@@ -1079,7 +1099,7 @@ export default {
                 Reject
               </button>
               <button
-                v-if="canReviewSelectedRegistration"
+                v-if="canApproveSelectedRegistration"
                 class="btn btn-success"
                 :disabled="isSavingDecision"
                 @click="confirmDecision('approve')"

@@ -16,7 +16,7 @@ export class StaffCourseRegistrationsController {
 
     @Get('programs')
     @Roles(UserRole.ADMIN, UserRole.STAFF)
-    @ApiOperation({ summary: 'Get advisor-owned programs for course registration management' })
+    @ApiOperation({ summary: 'Get programs accessible for course registration management' })
     @ApiResponse({ status: 200, description: 'Advisor programs retrieved successfully' })
     async getAdvisorPrograms(@Request() req: any) {
         return this.courseRegistrationService.getAdvisorPrograms(this.getCurrentUserId(req));
@@ -24,7 +24,7 @@ export class StaffCourseRegistrationsController {
 
     @Get()
     @Roles(UserRole.ADMIN, UserRole.STAFF)
-    @ApiOperation({ summary: 'Get advisor course registrations with stats and filters' })
+    @ApiOperation({ summary: 'Get accessible course registrations with stats and filters' })
     @ApiResponse({ status: 200, description: 'Course registrations retrieved successfully' })
     async getAdvisorRegistrations(
         @Request() req: any,
@@ -68,7 +68,6 @@ export class StaffCourseRegistrationsController {
             this.getCurrentUserId(req),
             id,
             payload?.reviewComment,
-            req?.user?.role,
         );
     }
 
@@ -85,7 +84,6 @@ export class StaffCourseRegistrationsController {
             this.getCurrentUserId(req),
             id,
             payload?.reviewComment,
-            req?.user?.role,
         );
     }
 

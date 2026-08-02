@@ -75,14 +75,14 @@ export default {
       ],
       facultyMembers: [
         {
-          name: "Mrs. Yewande Akute",
+          name: "Dr. Yewande Akute",
           role: "Provost",
           qualifications: "",
           department: "Administration",
           specialization: "Nursing Leadership & Mgt.",
           experience: "20+ years",
           experienceYears: 20,
-          bio: "Mrs. Akute provides strategic leadership for the college and supports a strong academic culture grounded in student development and institutional growth.",
+          bio: "Dr. Akute provides strategic leadership for the college and supports a strong academic culture grounded in student development and institutional growth.",
           email: "provost@alecons.edu.ng",
           phone: "+234 916 000 8679",
           image: new URL("../assets/img/yewande-akute.svg", import.meta.url)

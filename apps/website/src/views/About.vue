@@ -295,11 +295,11 @@ export default {
               src="../assets/img/yewande-akute.svg"
               class="card-img-top rounded-circle object-fit-cover mx-auto d-block"
               style="width: 200px; height: 200px"
-              alt="Mrs. Yewande Akute"
+              alt="Dr. Yewande Akute"
             />
             <div class="card-body">
               <h5 class="card-title acon-text-primary fw-bold">
-                Mrs. Yewande Akute
+                Dr. Yewande Akute
               </h5>
               <h6 class="acon-text-secondary">Provost</h6>
               <!-- TODO: Update credentials for Provost when we have them -->

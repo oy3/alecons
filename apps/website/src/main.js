@@ -1,14 +1,18 @@
 import { createApp } from "vue";
-import { createMetaManager } from "vue-meta";
-import "./style.css";
-import '@shared/styles/style.css'
+import "@fontsource/inter-tight/latin-400.css";
+import "@fontsource/inter-tight/latin-500.css";
+import "@fontsource/inter-tight/latin-600.css";
+import "@fontsource/inter-tight/latin-700.css";
+import "@fontsource/newsreader/latin-400.css";
+import "@fontsource/newsreader/latin-500.css";
+import "@fontsource/newsreader/latin-600.css";
 import "bootstrap/dist/css/bootstrap.min.css";
-import "bootstrap";
 import "bootstrap-icons/font/bootstrap-icons.css";
+import "./style.css";
+import "bootstrap";
 import router from "./router";
 import App from "./App.vue";
 
 createApp(App)
   .use(router)
-  .use(createMetaManager())
   .mount("#app");

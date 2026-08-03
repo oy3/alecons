@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node ./scripts/generate-sitemap.mjs",
-    "preview": "vite preview",
+    "build": "vite build && vite build --ssr src/entry-server.js --outDir dist-server && node ./scripts/prerender.mjs && node ./scripts/generate-sitemap.mjs && node ./scripts/validate-seo.mjs",
+    "preview": "node ./scripts/preview-production.mjs",
+    "verify:deployment": "node ./scripts/verify-deployment.mjs",
     "clean": "rm -rf node_modules yarn.lock package-lock.json dist*",
     "lint": "eslint .",
     "test": "vitest run",
@@ -15,6 +16,7 @@
   "dependencies": {
     "@fontsource/inter-tight": "^5.3.0",
     "@fontsource/newsreader": "^5.3.0",
+    "@vue/server-renderer": "^3.5.17",
     "bootstrap": "^5.3.2",
     "bootstrap-icons": "^1.11.1",
     "vue": "^3.5.17",

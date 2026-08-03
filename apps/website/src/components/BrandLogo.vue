@@ -1,5 +1,5 @@
 <script setup>
-import logo from "../assets/img/logo-256.png";
+import logo from "../assets/img/logo-110.webp";
 
 defineProps({ compact: Boolean, inverse: Boolean });
 </script>

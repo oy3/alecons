@@ -98,7 +98,12 @@ onBeforeUnmount(() => {
   >
     <div class="site-container announcement__inner">
       <span><i class="bi bi-circle-fill" aria-hidden="true"></i>{{ announcement.text }}</span>
-      <a :href="announcement.href" target="_blank" rel="noopener noreferrer">{{ announcement.linkLabel }}
+      <a
+        :href="announcement.href"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-umami-event="apply-click"
+        >{{ announcement.linkLabel }}
         <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
       <button
         type="button"
@@ -137,6 +142,7 @@ onBeforeUnmount(() => {
                 :href="portal.href"
                 target="_blank"
                 rel="noopener noreferrer"
+                data-umami-event="portal-click"
               >
                 {{ portal.label }}
                 <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
@@ -150,6 +156,7 @@ onBeforeUnmount(() => {
             class="button btn-sm button--primary nav-apply py-0"
             target="_blank"
             rel="noopener noreferrer"
+            data-umami-event="apply-click"
           >
             Apply Now
           </a>
@@ -158,6 +165,7 @@ onBeforeUnmount(() => {
             class="button btn-sm button--whatsapp nav-whatsapp"
             target="_blank"
             rel="noopener noreferrer"
+            data-umami-event="whatsapp-click"
           >
             <i class="bi bi-whatsapp" aria-hidden="true"></i>
             Chat on WhatsApp
@@ -209,6 +217,7 @@ onBeforeUnmount(() => {
             :href="portal.href"
             target="_blank"
             rel="noopener noreferrer"
+            data-umami-event="portal-click"
             >{{ portal.label
             }}<i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
         </nav>
@@ -217,6 +226,7 @@ onBeforeUnmount(() => {
           class="button button--primary mobile-drawer__apply"
           target="_blank"
           rel="noopener noreferrer"
+          data-umami-event="apply-click"
         >
           Apply Now
         </a>
@@ -225,6 +235,7 @@ onBeforeUnmount(() => {
           class="button button--whatsapp mobile-drawer__whatsapp"
           target="_blank"
           rel="noopener noreferrer"
+          data-umami-event="whatsapp-click"
         >
           <i class="bi bi-whatsapp" aria-hidden="true"></i>
           Chat on WhatsApp

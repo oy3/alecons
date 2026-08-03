@@ -23,6 +23,7 @@ import rootLabLogo from "../assets/img/rootlab.svg";
             target="_blank"
             rel="noopener noreferrer"
             :aria-label="social.label"
+            :data-umami-event="social.label === 'WhatsApp' ? 'whatsapp-click' : 'social-click'"
             ><i :class="`bi ${social.icon}`" aria-hidden="true"></i></a>
         </div>
       </div>
@@ -48,6 +49,7 @@ import rootLabLogo from "../assets/img/rootlab.svg";
           :href="portal.href"
           target="_blank"
           rel="noopener noreferrer"
+          data-umami-event="portal-click"
           >{{ portal.label }}</a>
       </nav>
       <div class="site-footer__contact">

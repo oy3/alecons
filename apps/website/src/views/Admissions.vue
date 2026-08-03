@@ -5,6 +5,7 @@ import FaqAccordion from "../components/FaqAccordion.vue";
 import RevealOnScroll from "../components/RevealOnScroll.vue";
 import { applyUrl } from "../data/site";
 import {
+  admissionsConfig,
   admissionDates,
   admissionSteps,
   faqs,
@@ -16,7 +17,7 @@ import {
   <PageHero
     eyebrow="Admissions"
     title="Apply to ALECONS"
-    description="Applications for the 2026/2027 academic session are submitted and tracked through the ALECONS Applicant Portal."
+    :description="`Applications for the ${admissionsConfig.academicSession} academic session are submitted and tracked through the ALECONS Applicant Portal.`"
     :breadcrumbs="[{ label: 'Admissions' }]"
   >
     <a
@@ -24,8 +25,8 @@ import {
       class="button button--primary mt-3"
       target="_blank"
       rel="noopener noreferrer"
-      >Start your application</a
-    >
+      data-umami-event="apply-click"
+      >Start your application</a>
   </PageHero>
   <section class="section">
     <div class="site-container requirements-grid">
@@ -66,14 +67,16 @@ import {
                 </li>
               </ul>
             </article>
-          </li></RevealOnScroll
-        >
+          </li></RevealOnScroll>
       </ol>
     </div>
   </section>
   <section class="section">
     <div class="site-container">
-      <SectionHeading eyebrow="Key dates" title="2026/2027 session calendar" />
+      <SectionHeading
+        eyebrow="Key dates"
+        :title="`${admissionsConfig.academicSession} session calendar`"
+      />
       <div class="dates-grid">
         <article v-for="date in admissionDates" :key="date.label">
           <h3>{{ date.label }}</h3>
@@ -113,10 +116,8 @@ import {
             <span>18 months</span>
           </header>
           <p>Programme charges have not yet been published.</p>
-          <RouterLink to="/contact" class="text-link"
-            >Contact Admissions
-            <i class="bi bi-arrow-right" aria-hidden="true"></i
-          ></RouterLink>
+          <RouterLink to="/contact" class="text-link">Contact Admissions
+            <i class="bi bi-arrow-right" aria-hidden="true"></i></RouterLink>
         </article>
       </div>
     </div>
@@ -144,10 +145,8 @@ import {
           class="button button--primary"
           target="_blank"
           rel="noopener noreferrer"
-          >Start application</a
-        ><RouterLink to="/contact" class="button button--outline-light"
-          >Contact Admissions</RouterLink
-        >
+          data-umami-event="apply-click"
+          >Start application</a><RouterLink to="/contact" class="button button--outline-light">Contact Admissions</RouterLink>
       </div>
     </div>
   </section>

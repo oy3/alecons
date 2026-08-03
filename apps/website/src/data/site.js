@@ -1,3 +1,5 @@
+import { admissionsConfig } from "./admissions";
+
 export const site = {
   name: "Alebiosu College of Nursing Sciences",
   shortName: "ALECONS",
@@ -50,7 +52,7 @@ export const navigation = [
 
 export const announcement = {
   active: true,
-  text: "Batch B admissions for the 2026/2027 academic session are now open.",
+  text: `${admissionsConfig.activeBatch} admissions for the ${admissionsConfig.academicSession} academic session are now open.`,
   linkLabel: "Apply now",
   href: applyUrl,
 };

@@ -1,3 +1,8 @@
+export const admissionsConfig = {
+  academicSession: "2026/2027",
+  activeBatch: "Batch B",
+};
+
 export const requirements = [
   "West African Senior School Certificate Examination (WASSCE) with a minimum of five credits, including English, Mathematics, Biology, Chemistry and Physics",
   "Minimum age of 17 years at the time of admission",

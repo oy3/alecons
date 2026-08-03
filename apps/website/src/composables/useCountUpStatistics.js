@@ -3,7 +3,8 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 export function useCountUpStatistics(statistics, options = {}) {
   const { duration = 1400, threshold = 0.3 } = options;
   const target = ref(null);
-  const displayedValues = ref(statistics.map(() => 0));
+  // Keep real values in prerendered HTML; animation begins only after hydration.
+  const displayedValues = ref(statistics.map((stat) => stat.value));
   let observer;
   let animationFrame;
 

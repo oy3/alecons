@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { applyRouteMeta } from "../src/utils/head";
+import {
+  applyRouteMeta,
+  buildStructuredData,
+  renderRouteHead,
+} from "../src/utils/head";
 
 describe("route metadata", () => {
   afterEach(() => {
@@ -13,11 +17,28 @@ describe("route metadata", () => {
     expect(document.head.querySelector('meta[name="description"]')?.content).toBe("About the college");
     expect(document.head.querySelector('link[rel="canonical"]')?.href).toContain("/about");
     expect(document.head.querySelector("#alecons-structured-data")?.textContent).toContain("CollegeOrUniversity");
+    expect(document.head.querySelector('meta[property="og:site_name"]')?.content).toContain("Alebiosu College");
   });
 
   it("marks non-public routes as noindex", () => {
     applyRouteMeta({ path: "/missing", meta: { noindex: true } });
 
-    expect(document.head.querySelector('meta[name="robots"]')?.content).toBe("noindex, follow");
+    expect(document.head.querySelector('meta[name="robots"]')?.content).toBe("noindex, nofollow, noarchive");
+    expect(document.head.querySelector('link[rel="canonical"]')).toBeNull();
+  });
+
+  it("creates page-specific structured data and prerender head markup", () => {
+    const route = {
+      name: "About",
+      path: "/about",
+      params: {},
+      meta: { title: "About ALECONS", description: "About the college" },
+    };
+    const structuredData = buildStructuredData(route);
+    const head = renderRouteHead(route);
+
+    expect(structuredData["@graph"].some((item) => item["@type"] === "AboutPage")).toBe(true);
+    expect(structuredData["@graph"].some((item) => item["@type"] === "BreadcrumbList")).toBe(true);
+    expect(head).toContain('<link rel="canonical" href="https://alecons.edu.ng/about">');
   });
 });

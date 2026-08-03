@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, ref } from "vue";
 import { submitContactEnquiry } from "../services/contactService";
+import { trackEvent } from "../services/analytics";
 
 const form = reactive({ firstName: "", lastName: "", email: "", phone: "", subject: "Admissions enquiry", message: "", website: "" });
 const submitting = ref(false);
@@ -24,6 +25,7 @@ const submit = async () => {
   submitting.value = true;
   try {
     await submitContactEnquiry({ ...form, source: "public-website", submittedAt: new Date().toISOString() });
+    trackEvent("contact-submit");
     status.value = { type: "success", message: "Your enquiry has been sent. Our team will respond as soon as possible." };
     Object.assign(form, { firstName: "", lastName: "", email: "", phone: "", subject: "Admissions enquiry", message: "", website: "" });
   } catch (error) {

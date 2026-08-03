@@ -19,12 +19,10 @@ import heroImage from "../../assets/img/campus/main-gate.jpg";
           class="button button--primary"
           target="_blank"
           rel="noopener noreferrer"
+          data-umami-event="apply-click"
           >Apply for Admission
-          <i class="bi bi-arrow-right" aria-hidden="true"></i
-        ></a>
-        <RouterLink to="/programs" class="button button--outline-light"
-          >Explore Programmes</RouterLink
-        >
+          <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+        <RouterLink to="/programs" class="button button--outline-light">Explore Programmes</RouterLink>
       </div>
       <p class="home-hero__trust">
         <i class="bi bi-check-circle" aria-hidden="true"></i> Accredited by the

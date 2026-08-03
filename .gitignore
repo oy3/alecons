@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# OS-specific junk
+.DS_Store
+
+# env
+.env*
+.env.*
+packages/api/.env*

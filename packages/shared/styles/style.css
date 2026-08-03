@@ -1,0 +1,276 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: white;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  min-width: 100%;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+
+button:hover {
+  border-color: #646cff;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+.card {
+  padding: 2em;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+
+  a:hover {
+    color: #747bff;
+  }
+
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+/* Custom CSS - Consolidated from all apps */
+
+:root {
+  --acon-primary: #C62828;
+  --acon-primary-dark: #8B2C2C;
+  --acon-secondary: #e07a5f;
+  --acon-accent: #28C6C6;
+  --acon-dark: #264653;
+  --acon-light: #EDF2F4;
+}
+
+.acon-text-primary {
+  color: var(--acon-primary) !important;
+}
+
+.acon-text-dark {
+  color: var(--acon-dark) !important;
+}
+
+.acon-text-secondary {
+  color: var(--acon-secondary) !important;
+}
+
+.acon-text-accent {
+  color: var(--acon-accent) !important;
+}
+
+.acon-bg-primary {
+  background-color: var(--acon-primary) !important;
+  color: #fff !important;
+}
+
+.acon-bg-light {
+  background-color: var(--acon-light) !important;
+}
+
+.acon-bg-secondary {
+  background-color: var(--acon-secondary) !important;
+  color: #fff !important;
+}
+
+.acon-bg-primary-dark {
+  background-color: var(--acon-primary-dark) !important;
+  color: #fff !important;
+}
+
+.acon-bg-dark {
+  background-color: var(--acon-dark) !important;
+  color: #fff !important;
+}
+
+.acon-bg-accent {
+  background-color: var(--acon-accent) !important;
+  color: #fff !important;
+}
+
+.btn-acon-primary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: var(--acon-primary) !important;
+  --bs-btn-border-color: var(--acon-primary) !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #a81e1e;
+  --bs-btn-hover-border-color: #a81e1e !important;
+  --bs-btn-focus-shadow-rgb: 198, 40, 40;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #7c1a1a;
+  --bs-btn-active-border-color: #7c1a1a;
+}
+
+.btn-acon-secondary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: var(--acon-secondary) !important;
+  --bs-btn-border-color: var(--acon-secondary) !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #c56a53;
+  --bs-btn-hover-border-color: #c56a53 !important;
+  --bs-btn-focus-shadow-rgb: 224, 122, 95;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #a85a45;
+  --bs-btn-active-border-color: #a85a45;
+  --bs-btn-disabled-color: #fff;
+  --bs-btn-disabled-bg: var(--acon-secondary);
+  --bs-btn-disabled-border-color: var(--acon-secondary);
+  --bs-btn-disabled-opacity: 0.65;
+}
+
+.btn-outline-acon-primary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: var(--acon-primary) !important;
+  --bs-btn-border-color: var(--acon-primary) !important;
+  --bs-btn-hover-color: #fff !important;
+  --bs-btn-hover-bg: var(--acon-primary);
+  --bs-btn-hover-border-color: var(--acon-primary) !important;
+  --bs-btn-focus-shadow-rgb: 198, 40, 40;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #7c1a1a;
+  --bs-btn-active-border-color: #7c1a1a;
+}
+
+.btn-outline-acon-secondary {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: var(--acon-secondary) !important;
+  --bs-btn-border-color: var(--acon-secondary) !important;
+  --bs-btn-hover-color: #fff !important;
+  --bs-btn-hover-bg: var(--acon-secondary);
+  --bs-btn-hover-border-color: var(--acon-secondary) !important;
+  --bs-btn-focus-shadow-rgb: 224, 122, 95;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #a85a45;
+  --bs-btn-active-border-color: #a85a45;
+}
+
+.btn-acon-dark {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: var(--acon-dark) !important;
+  --bs-btn-border-color: var(--acon-dark) !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #1e3a47;
+  --bs-btn-hover-border-color: #1e3a47 !important;
+  --bs-btn-focus-shadow-rgb: 45, 125, 125;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #1e5555;
+  --bs-btn-active-border-color: #1e5555;
+}
+
+.btn-acon-accent {
+  --bs-btn-font-weight: 400;
+  --bs-btn-color: #fff !important;
+  --bs-btn-bg: var(--acon-accent) !important;
+  --bs-btn-border-color: var(--acon-accent) !important;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #209e9e;
+  --bs-btn-hover-border-color: #209e9e !important;
+  --bs-btn-focus-shadow-rgb: 40, 198, 198;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #167c7c;
+  --bs-btn-active-border-color: #167c7c;
+}
+
+.acon-btn-primary:focus,
+.acon-btn-primary:active {
+  box-shadow: 0 0 0 0.2rem rgb(198, 40, 40, 0.5) !important;
+  outline: none;
+}
+
+.acon-btn-secondary:focus,
+.acon-btn-secondary:active {
+  box-shadow: 0 0 0 0.2rem rgb(224, 122, 95, 0.5);
+  outline: none;
+}
+
+.acon-btn-outline-primary:focus,
+.acon-btn-outline-primary:active {
+  box-shadow: 0 0 0 0.2rem rgb(198, 40, 40, 0.5);
+  outline: none;
+}
+
+.acon-btn-outline-secondary:focus,
+.acon-btn-outline-secondary:active {
+  box-shadow: 0 0 0 0.2rem rgb(224, 122, 95, 0.5);
+  outline: none;
+}
+
+.acon-border-primary {
+  border-color: var(--acon-primary) !important;
+}
+
+.acon-border-secondary {
+  border-color: var(--acon-secondary) !important;
+}
+
+/* Focused input style */
+.form-control:focus {
+  border-color: var(--acon-primary) !important;
+  box-shadow: 0 0 0 0.2rem rgba(198, 40, 40, 0.25) !important;
+  outline: none !important;
+}
+
+.acon-link {
+  text-decoration: none !important;
+}
+
+.acon-link:hover {
+  color: var(--acon-secondary) !important;
+}
+
+.acon-bullet li::marker {
+  color: var(--acon-secondary) !important;
+}
+
+.acon-secondary-link {
+  text-decoration: none !important;
+}
+
+.acon-primary-link:hover {
+  color: var(--acon-primary) !important;
+}

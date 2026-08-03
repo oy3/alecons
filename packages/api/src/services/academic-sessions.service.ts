@@ -1,0 +1,419 @@
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
+import { AcademicSession, AcademicSessionDocument, SessionStatus } from '../schemas/academic-session.schema';
+import { CreateAcademicSessionDto, UpdateAcademicSessionDto, QueryAcademicSessionsDto } from '../dto/academic-session.dto';
+import { Student, StudentDocument } from '../schemas/student.schema';
+import {
+    StudentAcademicSession,
+    StudentAcademicSessionDocument,
+    StudentAcademicSessionStatus,
+    StudentAnnualOutcome,
+} from '../schemas/student-academic-session.schema';
+import { User, UserDocument } from '../schemas/user.schema';
+import { Staff, StaffDocument } from '../schemas/staff.schema';
+import { StudentProgressionService } from './student-progression.service';
+
+@Injectable()
+export class AcademicSessionsService {
+    private readonly logger = new Logger(AcademicSessionsService.name);
+
+    constructor(
+        @InjectConnection() private readonly connection: Connection,
+        @InjectModel(AcademicSession.name)
+        private academicSessionModel: Model<AcademicSessionDocument>,
+        @InjectModel(Student.name)
+        private studentModel: Model<StudentDocument>,
+        @InjectModel(StudentAcademicSession.name)
+        private studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
+        @InjectModel(User.name)
+        private userModel: Model<UserDocument>,
+        @InjectModel(Staff.name)
+        private staffModel: Model<StaffDocument>,
+        private readonly progressionService: StudentProgressionService,
+    ) { }
+
+    private generateSessionYear(startDate: string, endDate: string): string {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        const startYear = start.getFullYear();
+        const endYear = end.getFullYear();
+
+        return `${startYear}/${endYear}`;
+    }
+
+    private async ensureSessionIndexes(): Promise<void> {
+        try {
+            const indexes = await this.academicSessionModel.collection.indexes();
+            const legacyIndex = indexes.find((index) => index.key?.sessionYear === 1);
+
+            if (legacyIndex?.name) {
+                await this.academicSessionModel.collection.dropIndex(legacyIndex.name);
+                this.logger.log(`Dropped legacy academic session index: ${legacyIndex.name}`);
+            }
+        } catch (error) {
+            this.logger.warn('Could not refresh academic session indexes:', error);
+        }
+    }
+
+    async create(createDto: CreateAcademicSessionDto, userId: string): Promise<AcademicSession> {
+        const sessionYear = this.generateSessionYear(createDto.startDate, createDto.endDate);
+        const provostUserId = await this.resolveProvostUserId(createDto.provostUserId);
+
+        await this.ensureSessionIndexes();
+
+        const academicSession = new this.academicSessionModel({
+            ...createDto,
+            sessionYear,
+            status: createDto.status || SessionStatus.OPEN,
+            active: createDto.active !== undefined ? createDto.active : true,
+            provostUserId,
+            provostAssignedAt: provostUserId ? new Date() : undefined,
+            provostAssignedBy: provostUserId && Types.ObjectId.isValid(userId)
+                ? new Types.ObjectId(userId)
+                : undefined,
+        });
+
+        return academicSession.save();
+    }
+
+    async findAll(query: QueryAcademicSessionsDto): Promise<{
+        sessions: AcademicSession[];
+        pagination: {
+            currentPage: number;
+            totalPages: number;
+            totalItems: number;
+            itemsPerPage: number;
+        };
+    }> {
+        const page = parseInt(query.page) || 1;
+        const limit = parseInt(query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // Build filter object
+        const filter: any = {};
+
+        if (query.search) {
+            filter.$or = [
+                { sessionYear: { $regex: query.search, $options: 'i' } },
+                { title: { $regex: query.search, $options: 'i' } },
+                { description: { $regex: query.search, $options: 'i' } },
+            ];
+        }
+
+        if (query.status) {
+            filter.status = query.status;
+        }
+
+        if (query.active !== undefined) {
+            filter.active = typeof query.active === 'string' ? query.active === 'true' : query.active;
+        }
+
+        // Build sort object
+        const sort: any = {};
+        const sortBy = query.sortBy || 'createdAt';
+        const sortOrder = query.sortOrder === 'asc' ? 1 : -1;
+        sort[sortBy] = sortOrder;
+
+        // Execute queries
+        const [sessions, totalItems] = await Promise.all([
+            this.academicSessionModel
+                .find(filter)
+                .populate('provostUserId', 'firstName otherName lastName email')
+                .sort(sort)
+                .skip(skip)
+                .limit(limit)
+                .exec(),
+            this.academicSessionModel.countDocuments(filter),
+        ]);
+
+        return {
+            sessions,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalItems / limit),
+                totalItems,
+                itemsPerPage: limit,
+            },
+        };
+    }
+
+    async findById(id: string): Promise<AcademicSession> {
+        const academicSession = await this.academicSessionModel
+            .findById(id)
+            .populate('provostUserId', 'firstName otherName lastName email');
+        if (!academicSession) {
+            throw new NotFoundException('Academic session not found');
+        }
+        return academicSession;
+    }
+
+    async update(
+        id: string,
+        updateDto: UpdateAcademicSessionDto,
+        userId: string,
+    ): Promise<AcademicSession> {
+        const updateData: any = { ...updateDto };
+
+        if (updateDto.provostUserId !== undefined) {
+            const provostUserId = await this.resolveProvostUserId(updateDto.provostUserId);
+            updateData.provostUserId = provostUserId || null;
+            updateData.provostAssignedAt = provostUserId ? new Date() : null;
+            updateData.provostAssignedBy = provostUserId && Types.ObjectId.isValid(userId)
+                ? new Types.ObjectId(userId)
+                : null;
+        }
+
+        // Regenerate session year if dates are updated
+        if (updateDto.startDate || updateDto.endDate) {
+            const existingSession = await this.findById(id);
+            const startDate = updateDto.startDate || existingSession.startDate.toISOString();
+            const endDate = updateDto.endDate || existingSession.endDate.toISOString();
+
+            const newSessionYear = this.generateSessionYear(startDate, endDate);
+
+            if (newSessionYear !== existingSession.sessionYear) {
+                updateData.sessionYear = newSessionYear;
+            }
+        }
+
+        const academicSession = await this.academicSessionModel.findByIdAndUpdate(
+            id,
+            updateData,
+            { new: true },
+        );
+
+        if (!academicSession) {
+            throw new NotFoundException('Academic session not found');
+        }
+
+        return academicSession;
+    }
+
+    private async resolveProvostUserId(provostUserId?: string | null): Promise<Types.ObjectId | undefined> {
+        if (!provostUserId) return undefined;
+        if (!Types.ObjectId.isValid(provostUserId)) {
+            throw new NotFoundException('Selected Provost is invalid');
+        }
+
+        const userId = new Types.ObjectId(provostUserId);
+        const [user, staff] = await Promise.all([
+            this.userModel.findOne({ _id: userId, isActive: true }).select('_id').lean(),
+            this.staffModel.findOne({ userId, isActive: true }).select('_id').lean(),
+        ]);
+        if (!user || !staff) {
+            throw new NotFoundException('Selected Provost must be an active staff member');
+        }
+        return userId;
+    }
+
+    async delete(id: string): Promise<void> {
+        const result = await this.academicSessionModel.findByIdAndDelete(id);
+        if (!result) {
+            throw new NotFoundException('Academic session not found');
+        }
+    }
+
+    async findActiveSession(): Promise<AcademicSession | null> {
+        return this.academicSessionModel.findOne({ active: true });
+    }
+
+    async setActiveSession(id: string): Promise<AcademicSession> {
+        // First deactivate all sessions
+        await this.academicSessionModel.updateMany({}, { active: false });
+
+        // Then activate the specified session
+        const academicSession = await this.academicSessionModel.findByIdAndUpdate(
+            id,
+            { active: true },
+            { new: true },
+        );
+
+        if (!academicSession) {
+            throw new NotFoundException('Academic session not found');
+        }
+
+        return academicSession;
+    }
+
+    async progressCohort(
+        sourceAcademicSessionId: string,
+        targetAcademicSessionId: string,
+        staffUserId: string,
+        apply = false,
+    ) {
+        if (
+            !Types.ObjectId.isValid(sourceAcademicSessionId)
+            || !Types.ObjectId.isValid(targetAcademicSessionId)
+            || sourceAcademicSessionId === targetAcademicSessionId
+        ) {
+            throw new Error('Choose a different valid destination academic session');
+        }
+
+        const [sourceSession, targetSession] = await Promise.all([
+            this.findById(sourceAcademicSessionId),
+            this.findById(targetAcademicSessionId),
+        ]);
+
+        if (targetSession.status === SessionStatus.DRAFT) {
+            throw new Error('Students cannot be progressed to a draft academic session');
+        }
+
+        const sourceId = new Types.ObjectId((sourceSession as any)._id);
+        const targetId = new Types.ObjectId((targetSession as any)._id);
+        const now = new Date();
+        const students = await this.studentModel
+            .find({ academicSession: sourceId, isActive: true })
+            .populate('programId', 'durationYears')
+            .select('_id programId currentLevel currentSemester')
+            .lean() as any[];
+
+        if (!students.length) {
+            return {
+                applied: Boolean(apply),
+                eligible: 0,
+                progressed: 0,
+                promoted: 0,
+                repeating: 0,
+                graduationReview: 0,
+                academicReview: 0,
+                blocked: 0,
+                sourceSession,
+                targetSession,
+            };
+        }
+
+        const actor = new Types.ObjectId(staffUserId);
+        const decisions: Array<{ student: any; enrollment: any; nextLevel: number; repeat: boolean }> = [];
+        const summary = { promoted: 0, repeating: 0, graduationReview: 0, academicReview: 0, blocked: 0 };
+        for (const student of students) {
+            const enrollment: any = await this.progressionService.recalculate(
+                student._id,
+                sourceId,
+                actor,
+                undefined,
+                apply,
+            );
+            if (enrollment.annualOutcome === StudentAnnualOutcome.ELIGIBLE_FOR_PROGRESSION) {
+                decisions.push({ student, enrollment, nextLevel: Number(enrollment.level) + 1, repeat: false });
+                summary.promoted++;
+            } else if (enrollment.annualOutcome === StudentAnnualOutcome.REPEAT_YEAR_REQUIRED) {
+                decisions.push({ student, enrollment, nextLevel: Number(enrollment.level), repeat: true });
+                summary.repeating++;
+            } else if (enrollment.annualOutcome === StudentAnnualOutcome.GRADUATION_REVIEW) {
+                summary.graduationReview++;
+            } else if (enrollment.annualOutcome === StudentAnnualOutcome.ACADEMIC_REVIEW) {
+                summary.academicReview++;
+            } else {
+                summary.blocked++;
+            }
+        }
+
+        if (apply && decisions.length) {
+            const dbSession = await this.connection.startSession();
+            try {
+                await dbSession.withTransaction(async () => {
+                for (const decision of decisions) {
+                    await this.studentAcademicSessionModel.updateOne(
+                        { _id: decision.enrollment._id, status: StudentAcademicSessionStatus.CURRENT },
+                        { $set: { status: StudentAcademicSessionStatus.COMPLETED, endedAt: now } },
+                        { session: dbSession },
+                    );
+                    await this.studentAcademicSessionModel.updateOne(
+                        { studentId: decision.student._id, academicSessionId: targetId },
+                        {
+                            $set: {
+                                status: StudentAcademicSessionStatus.CURRENT,
+                                level: decision.nextLevel,
+                                yearAttemptNumber: decision.repeat ? Number(decision.enrollment.yearAttemptNumber || 1) + 1 : 1,
+                                isRepeatYear: decision.repeat,
+                                annualOutcome: decision.repeat ? StudentAnnualOutcome.REPEATING_YEAR : StudentAnnualOutcome.IN_PROGRESS,
+                                sourceAcademicSessionId: sourceId,
+                                semesterProgressions: [],
+                                endedAt: undefined,
+                            },
+                            $setOnInsert: { startedAt: now, assignedBy: actor },
+                        },
+                        { upsert: true, session: dbSession },
+                    );
+                    await this.studentModel.updateOne(
+                        { _id: decision.student._id, academicSession: sourceId },
+                        { $set: { academicSession: targetId, currentLevel: decision.nextLevel, currentSemester: 1 } },
+                        { session: dbSession },
+                    );
+                }
+                });
+            } finally {
+                await dbSession.endSession();
+            }
+        }
+
+        return {
+            applied: Boolean(apply),
+            eligible: decisions.length,
+            progressed: apply ? decisions.length : 0,
+            ...summary,
+            sourceSession,
+            targetSession,
+        };
+    }
+
+    /**
+     * Inspect legacy index and detect duplicate sessionYear values.
+     * If `apply` is true, drop the legacy unique index when found.
+     */
+    async inspectAndRepairLegacyIndex(apply = false): Promise<{
+        legacyIndexName?: string | null;
+        duplicateCount: number;
+        duplicatesSample: Array<{ sessionYear: string; id: string }>;
+        dropped?: boolean;
+    }> {
+        try {
+            const coll = this.academicSessionModel.collection;
+
+            let legacyIndexName: string | null = null;
+            try {
+                const indexes = await coll.indexes();
+                const legacyIndex = indexes.find((index) => index.key?.sessionYear === 1 && index.unique);
+                if (legacyIndex?.name) legacyIndexName = legacyIndex.name;
+            } catch (err) {
+                this.logger.warn('Failed to list indexes on academicsessions collection:', err?.message || err);
+            }
+
+            const cursor = coll.find({}).sort({ createdAt: 1 }).batchSize(100);
+            const seen = new Map<string, string>();
+            let duplicateCount = 0;
+            const duplicatesSample: Array<{ sessionYear: string; id: string }> = [];
+
+            for await (const doc of cursor) {
+                const key = String(doc.sessionYear || '');
+                if (!seen.has(key)) {
+                    seen.set(key, String(doc._id));
+                    continue;
+                }
+
+                duplicateCount += 1;
+                if (duplicatesSample.length < 20) {
+                    duplicatesSample.push({ sessionYear: key, id: String(doc._id) });
+                }
+            }
+
+            let dropped = false;
+            if (apply && legacyIndexName) {
+                try {
+                    await coll.dropIndex(legacyIndexName);
+                    this.logger.log(`Dropped legacy academic session index: ${legacyIndexName}`);
+                    dropped = true;
+                } catch (err) {
+                    this.logger.warn('Failed to drop legacy academic session index:', err?.message || err);
+                }
+            }
+
+            return { legacyIndexName, duplicateCount, duplicatesSample, dropped };
+        } catch (error) {
+            this.logger.error('inspectAndRepairLegacyIndex failed:', error?.message || error);
+            throw error;
+        }
+    }
+}

@@ -1,0 +1,269 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - production
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and deploy production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      RELEASE_ID: ${{ github.sha }}
+      DEPLOY_HOST: ${{ secrets.ROOTLAB_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.ROOTLAB_DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.ROOTLAB_DEPLOY_PORT }}
+      DEPLOY_PATH: ${{ secrets.ROOTLAB_DEPLOY_PATH }}
+      DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.ROOTLAB_SSH_PRIVATE_KEY }}
+      PM2_APP_NAME: alecons-api
+      API_PORT: "8084"
+      DATABASE_URL: ${{ secrets[format('{0}', 'DATABASE_URL')] }}
+      JWT_SECRET: ${{ secrets[format('{0}', 'JWT_SECRET')] }}
+      PAYSTACK_SECRET_KEY: ${{ secrets[format('{0}', 'PAYSTACK_SECRET_KEY')] }}
+      SPACES_KEY: ${{ secrets[format('{0}', 'SPACES_KEY')] }}
+      SPACES_SECRET: ${{ secrets[format('{0}', 'SPACES_SECRET')] }}
+      GOOGLE_CLIENT_ID: ${{ secrets[format('{0}', 'GOOGLE_CLIENT_ID')] }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets[format('{0}', 'GOOGLE_CLIENT_SECRET')] }}
+      GOOGLE_REFRESH_TOKEN: ${{ secrets[format('{0}', 'GOOGLE_REFRESH_TOKEN')] }}
+      REDIS_PASSWORD: ${{ secrets[format('{0}', 'REDIS_PASSWORD')] }}
+      VITE_APP_FULL_NAME: ${{ vars.VITE_APP_FULL_NAME }}
+      VITE_APP_SITE_URL: ${{ vars.VITE_APP_SITE_URL }}
+      VITE_APP_PHONE: ${{ vars.VITE_APP_PHONE }}
+      VITE_APP_APPLICATION_PORTAL_URL: ${{ vars.VITE_APP_APPLICATION_PORTAL_URL }}
+      VITE_APP_STUDENT_PORTAL_URL: ${{ vars.VITE_APP_STUDENT_PORTAL_URL }}
+      VITE_APP_STAFF_PORTAL_URL: ${{ vars.VITE_APP_STAFF_PORTAL_URL }}
+      VITE_APP_API_URL: ${{ vars.VITE_APP_API_URL }}
+      VITE_APP_CBT_URL: ${{ vars.VITE_APP_CBT_URL }}
+      VITE_APP_SCHOOL_ADDRESS: ${{ vars.VITE_APP_SCHOOL_ADDRESS }}
+      VITE_APP_TENANCY_START_DATE: ${{ vars.VITE_APP_TENANCY_START_DATE }}
+      VITE_PAYSTACK_PUBLIC_KEY: ${{ vars.VITE_PAYSTACK_PUBLIC_KEY }}
+      VITE_APP_ENV: ${{ vars.VITE_APP_ENV }}
+      VITE_APP_DEBUG: ${{ vars.VITE_APP_DEBUG }}
+      VITE_CBT_APP_NAME: ${{ vars.VITE_CBT_APP_NAME }}
+      VITE_APP_VERSION: ${{ vars.VITE_APP_VERSION }}
+      VITE_LOG_LEVEL: ${{ vars.VITE_LOG_LEVEL }}
+      VITE_ENABLE_DEV_TOOLS: ${{ vars.VITE_ENABLE_DEV_TOOLS }}
+      SPACES_BUCKET_NAME: ${{ vars[format('{0}', 'SPACES_BUCKET_NAME')] }}
+      SPACES_CDN_URL: ${{ vars[format('{0}', 'SPACES_CDN_URL')] }}
+      SPACES_ENDPOINT: ${{ vars[format('{0}', 'SPACES_ENDPOINT')] }}
+      SPACES_REGION: ${{ vars[format('{0}', 'SPACES_REGION')] }}
+      SMTP_USER: ${{ vars[format('{0}', 'SMTP_USER')] }}
+      REDIS_HOST: ${{ vars[format('{0}', 'REDIS_HOST')] }}
+      REDIS_PORT: ${{ vars[format('{0}', 'REDIS_PORT')] }}
+      JWT_EXPIRATION: ${{ vars[format('{0}', 'JWT_EXPIRATION')] }}
+      WEBSITE_URL: ${{ vars[format('{0}', 'WEBSITE_URL')] }}
+      APPLICATION_PORTAL_URL: ${{ vars[format('{0}', 'APPLICATION_PORTAL_URL')] }}
+      STUDENT_PORTAL_URL: ${{ vars[format('{0}', 'STUDENT_PORTAL_URL')] }}
+      STAFF_PORTAL_URL: ${{ vars[format('{0}', 'STAFF_PORTAL_URL')] }}
+      CBT_PORTAL_URL: ${{ vars[format('{0}', 'CBT_PORTAL_URL')] }}
+      PUPPETEER_EXECUTABLE_PATH: ${{ vars[format('{0}', 'PUPPETEER_EXECUTABLE_PATH')] }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_secrets=(
+            DEPLOY_HOST
+            DEPLOY_USER
+            DEPLOY_PORT
+            DEPLOY_PATH
+            DEPLOY_SSH_PRIVATE_KEY
+            DATABASE_URL
+            JWT_SECRET
+            PAYSTACK_SECRET_KEY
+            SPACES_KEY
+            SPACES_SECRET
+            GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET
+            GOOGLE_REFRESH_TOKEN
+            REDIS_PASSWORD
+          )
+          for secret_name in "${required_secrets[@]}"; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "Missing required GitHub secret: ${secret_name}" >&2
+              exit 1
+            fi
+          done
+
+          required_vars=(
+            VITE_APP_FULL_NAME
+            VITE_APP_SITE_URL
+            VITE_APP_PHONE
+            VITE_APP_APPLICATION_PORTAL_URL
+            VITE_APP_STUDENT_PORTAL_URL
+            VITE_APP_STAFF_PORTAL_URL
+            VITE_APP_API_URL
+            VITE_PAYSTACK_PUBLIC_KEY
+            SPACES_BUCKET_NAME
+            SPACES_CDN_URL
+            SMTP_USER
+          )
+
+          for var_name in "${required_vars[@]}"; do
+            if [[ -z "${!var_name:-}" ]]; then
+              echo "Missing required GitHub variable: ${var_name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Install workspace dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f package-lock.json ]]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Render frontend production env files
+        shell: bash
+        run: bash scripts/deploy/render-frontend-envs.sh "$GITHUB_WORKSPACE"
+
+      - name: Render backend production env file
+        shell: bash
+        run: bash scripts/deploy/render-backend-envs.sh "$GITHUB_WORKSPACE/release-artifacts/backend-env/.env.production"
+
+      - name: Build frontend applications
+        shell: bash
+        run: npm run build:frontend
+
+      - name: Validate API build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build --workspace=packages/api
+
+      - name: Prepare API runtime artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release-artifacts/api-runtime
+          mkdir -p release-artifacts/api-runtime
+
+          cp packages/api/package.json release-artifacts/api-runtime/
+          cp packages/api/ecosystem.config.cjs release-artifacts/api-runtime/
+          cp -R packages/api/dist release-artifacts/api-runtime/dist
+
+          pushd release-artifacts/api-runtime >/dev/null
+          PUPPETEER_SKIP_DOWNLOAD=1 npm install --omit=dev
+          popd >/dev/null
+
+      - name: Package deployment artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release-artifacts/frontend \
+                 release-artifacts/frontend-dist.tar.gz \
+                 release-artifacts/api-release.tar.gz
+          mkdir -p release-artifacts/frontend
+
+          cp -R apps/website/dist release-artifacts/frontend/website-dist
+          cp -R apps/application-portal/dist release-artifacts/frontend/application-portal-dist
+          cp -R apps/student-portal/dist release-artifacts/frontend/student-portal-dist
+          cp -R apps/staff-portal/dist release-artifacts/frontend/staff-portal-dist
+          cp -R apps/cbt/dist release-artifacts/frontend/cbt-dist
+
+          tar -C release-artifacts/frontend -czf release-artifacts/frontend-dist.tar.gz .
+          test -d release-artifacts/api-runtime
+          tar -C release-artifacts/api-runtime -czf release-artifacts/api-release.tar.gz .
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ env.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Trust deploy host key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Validate deploy host prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" '
+            set -euo pipefail
+
+            # If a supported system browser already exists, deploy can proceed
+            # without apt privileges.
+            if command -v google-chrome-stable >/dev/null 2>&1 \
+              || command -v google-chrome >/dev/null 2>&1 \
+              || [[ -x /opt/google/chrome/google-chrome ]] \
+              || [[ -x /usr/bin/google-chrome-stable ]] \
+              || [[ -x /usr/bin/google-chrome ]]; then
+              exit 0
+            fi
+
+            if ! command -v sudo >/dev/null 2>&1; then
+              echo "No browser is available for Puppeteer and sudo is not available for install." >&2
+              echo "Run scripts/deploy/prepare-droplet.sh as root on the droplet." >&2
+              exit 1
+            fi
+
+            if ! sudo -n /usr/bin/apt-get --version >/dev/null 2>&1; then
+              echo "No browser is available for Puppeteer and deploy user cannot run apt-get without password." >&2
+              echo "Run scripts/deploy/prepare-droplet.sh as root on the droplet to configure sudoers and Google Chrome." >&2
+              echo "Bootstrap the server as root, then re-run the workflow." >&2
+              exit 1
+            fi
+          '
+
+      - name: Create remote staging directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p ~/tmp/alecons/$RELEASE_ID"
+
+      - name: Upload deployment artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -P "$DEPLOY_PORT" release-artifacts/frontend-dist.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:tmp/alecons/$RELEASE_ID/frontend-dist.tar.gz"
+          scp -P "$DEPLOY_PORT" release-artifacts/api-release.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:tmp/alecons/$RELEASE_ID/api-release.tar.gz"
+          scp -P "$DEPLOY_PORT" release-artifacts/backend-env/.env.production "$DEPLOY_USER@$DEPLOY_HOST:tmp/alecons/$RELEASE_ID/api.env.production"
+
+      - name: Deploy on host
+        shell: bash
+        run: |
+          set -euo pipefail
+          API_ENV_FILE_VALUE="$DEPLOY_PATH/shared/env/.env.production"
+          STAGED_API_ENV_FILE_VALUE="tmp/alecons/$RELEASE_ID/api.env.production"
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "RELEASE_ID='$RELEASE_ID' FRONTEND_RELEASES_ROOT='$DEPLOY_PATH/releases/frontend' API_ROOT='$DEPLOY_PATH/api' FRONTEND_LIVE_ROOT='$DEPLOY_PATH/current' API_ENV_FILE='$API_ENV_FILE_VALUE' STAGED_API_ENV_FILE='$STAGED_API_ENV_FILE_VALUE' PM2_APP_NAME='$PM2_APP_NAME' PORT='$API_PORT' bash -s" \
+            < scripts/deploy/remote-deploy.sh
+
+      - name: Verify production endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS https://api.alecons.edu.ng/api/v1/health >/dev/null
+          curl -fsSI https://alecons.edu.ng >/dev/null
+          curl -fsSI https://apply.alecons.edu.ng >/dev/null
+          curl -fsSI https://portal.alecons.edu.ng >/dev/null
+          curl -fsSI https://staff.alecons.edu.ng >/dev/null
+          curl -fsSI https://cbt.alecons.edu.ng >/dev/null

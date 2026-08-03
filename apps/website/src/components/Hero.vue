@@ -1,0 +1,117 @@
+<script lang="js">
+export default {
+  name: "Hero",
+  components: {},
+  computed: {
+    registrationUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
+    },
+    applicationPortalUrl() {
+      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
+    }
+  }
+};
+</script>
+
+<template>
+  <div class="hero-section text-white text-start d-flex align-items-start justify-content-start p-5 pb-3">
+    <div class="overlay"></div>
+    <div class="hero-content">
+      <h1 class="fw-bold display-2 mb-0 lh-1">Excellence in</h1>
+      <h1 class="fw-bold display-2 acon-text-secondary lh-1">
+        Nursing Education
+      </h1>
+
+      <div class="row">
+        <div class="col-md-7">
+          <p class="fs-4 my-4">
+            Empowering the next generation of healthcare professionals in Ekiti
+            State, Nigeria. Join ALECONS and transform lives through
+            compassionate care and clinical excellence.
+          </p>
+        </div>
+      </div>
+
+      <div class="d-grid gap-2 d-md-block">
+                <a
+          :href="registrationUrl"
+          target="_blank"
+          class="btn btn-acon-primary btn-lg icon-link icon-link-hover me-0 me-md-3 px-4"
+          rel="noopener noreferrer"
+        >
+          Start Your Journey <i class="bi bi-arrow-right-short h3"></i>
+        </a>
+        <router-link to="/programs" class="btn btn-outline-light btn-lg px-4" style="--bs-btn-hover-color: #a81e1e">
+          Explore Programs
+        </router-link>
+      </div>
+
+      <!-- TODO: Show when updated stats are available -->
+      <!-- <div class="col-md-9">
+        <div
+          class="stats-container mt-5 p-4 px-md-5 py-md-3 rounded-4 text-white d-flex flex-column flex-md-row justify-content-around align-items-center gap-4">
+          <div class="">
+            <div class="d-flex align-items-end justify-content-center">
+              <i class="bi bi-people h2 acon-text-accent me-2"></i>
+              <h2 class="fw-bold mt-2">500+</h2>
+            </div>
+
+            <p class="mb-0">Nursing Students</p>
+          </div>
+
+          <div class="">
+            <div class="d-flex align-items-end justify-content-center">
+              <i class="bi bi-award h2 acon-text-accent me-2"></i>
+              <h2 class="fw-bold mt-2">95%</h2>
+            </div>
+            <p class="mb-0">Graduate Success Rate</p>
+          </div>
+
+          <div>
+            <div class="d-flex align-items-end justify-content-center">
+              <i class="bi bi-geo-alt h2 acon-text-accent me-2"></i>
+              <h2 class="fw-bold mt-2">15+</h2>
+            </div>
+            <p class="mb-0">Years of Excellence</p>
+          </div>
+        </div>
+      </div> -->
+
+      <div class="d-flex justify-content-center mt-5">
+        <i class="bi bi-mouse fs-1"></i>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.hero-section {
+  position: relative;
+  background-image: url("@shared/assets/schoolImg2.jpg");
+  background-size: cover;
+  background-position: center;
+  height: 100%;
+  overflow: hidden;
+}
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #000;
+  opacity: 0.5;
+  z-index: 1;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+}
+
+.stats-container {
+  background-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+}
+</style>

@@ -1,5 +1,8 @@
-# Dependencies
+# Dependencies and generated files
 node_modules/
+**/node_modules/
+.vite/
+**/.vite/
 
 # Build output
 dist/

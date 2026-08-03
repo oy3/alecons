@@ -5,10 +5,14 @@ import RevealOnScroll from "../components/RevealOnScroll.vue";
 import FacilityCard from "../components/FacilityCard.vue";
 import FacultyCard from "../components/FacultyCard.vue";
 import CtaSection from "../components/CtaSection.vue";
+import { useCountUpStatistics } from "../composables/useCountUpStatistics";
 import { statistics } from "../data/site";
 import { facilities } from "../data/facilities";
 import { leadership } from "../data/faculty";
 import campus from "../assets/img/campus2.jpg";
+
+const { target: aboutStats, displayedValues } =
+  useCountUpStatistics(statistics);
 
 const values = [
   {
@@ -56,8 +60,8 @@ const milestones = [
   },
   {
     year: "2026 Q2",
-    title: "First applicants",
-    text: "The college welcomed its first cohort of applicants and began its mission to produce excellent nursing professionals.",
+    title: "First students",
+    text: "The college welcomed its first cohort of students and began its mission to produce excellent nursing professionals.",
   },
 ];
 </script>
@@ -90,7 +94,7 @@ const milestones = [
           :src="campus"
           alt="ALECONS campus buildings and lawn"
           width="720"
-          height="620"
+          height="420"
           loading="lazy"
       /></RevealOnScroll>
     </div>
@@ -115,10 +119,15 @@ const milestones = [
           </p></RevealOnScroll
         >
       </div>
-      <div class="about-stats">
-        <div v-for="stat in statistics" :key="stat.label">
-          <strong>{{ stat.value }}{{ stat.suffix }}</strong
-          ><span>{{ stat.label }}</span
+      <div ref="aboutStats" class="about-stats">
+        <div v-for="(stat, index) in statistics" :key="stat.label">
+          <strong
+            ><span class="about-stats__value" aria-hidden="true"
+              >{{ displayedValues[index] }}{{ stat.suffix }}</span
+            ><span class="visually-hidden"
+              >{{ stat.value }}{{ stat.suffix }}</span
+            ></strong
+          ><span class="about-stats__label">{{ stat.label }}</span
           ><small>{{ stat.note }}</small>
         </div>
       </div>
@@ -136,12 +145,13 @@ const milestones = [
           v-for="(value, index) in values"
           :key="value.title"
           :delay="index * 60"
-          ><article>
+        >
+          <article>
             <span>0{{ index + 1 }}</span>
             <h3>{{ value.title }}</h3>
             <p>{{ value.text }}</p>
-          </article></RevealOnScroll
-        >
+          </article>
+        </RevealOnScroll>
       </div>
     </div>
   </section>
@@ -153,15 +163,15 @@ const milestones = [
         description="From our first building in the community to a dedicated college of nursing sciences."
       />
       <ol class="timeline">
-        <RevealOnScroll v-for="milestone in milestones" :key="milestone.year"
-          ><li>
+        <RevealOnScroll v-for="milestone in milestones" :key="milestone.year">
+          <li>
             <span>{{ milestone.year }}</span>
             <div>
               <h3>{{ milestone.title }}</h3>
               <p>{{ milestone.text }}</p>
             </div>
-          </li></RevealOnScroll
-        >
+          </li>
+        </RevealOnScroll>
       </ol>
     </div>
   </section>
@@ -240,7 +250,10 @@ const milestones = [
   font-family: var(--font-display);
   font-size: 2rem;
 }
-.about-stats span {
+.about-stats__value {
+  font: inherit;
+}
+.about-stats__label {
   font-size: 0.78rem;
   font-weight: 650;
 }
@@ -264,7 +277,7 @@ const milestones = [
   font-weight: 700;
 }
 .values-grid h3 {
-  margin: 2.5rem 0 0.6rem;
+  margin: 1rem 0 0.6rem;
 }
 .values-grid p {
   margin: 0;

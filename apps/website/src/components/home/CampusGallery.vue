@@ -3,5 +3,69 @@ import { campusGallery } from "../../data/facilities";
 import SectionHeading from "../SectionHeading.vue";
 import RevealOnScroll from "../RevealOnScroll.vue";
 </script>
-<template><section class="section section--subtle"><div class="site-container"><SectionHeading eyebrow="Campus" title="Where our students learn" description="Modern spaces for focused study, practical training and campus life." /><div class="campus-gallery"><RevealOnScroll v-for="(image,index) in campusGallery" :key="image.src" :delay="index*60"><figure><img :src="image.src" :alt="image.alt" width="720" height="540" loading="lazy" /></figure></RevealOnScroll></div><RouterLink to="/about" class="text-link mt-4">More about the campus <i class="bi bi-arrow-right" aria-hidden="true"></i></RouterLink></div></section></template>
-<style scoped>.campus-gallery{display:grid;grid-template-columns:1.4fr .8fr .8fr;grid-template-rows:15rem 15rem;gap:1rem}.campus-gallery :deep(.reveal:first-child){grid-row:1/3}.campus-gallery figure{height:100%;margin:0;overflow:hidden;border-radius:var(--radius)}.campus-gallery img{width:100%;height:100%;object-fit:cover;transition:transform 500ms var(--ease)}.campus-gallery figure:hover img{transform:scale(1.035)}@media(max-width:767.98px){.campus-gallery{grid-template-columns:1fr 1fr;grid-template-rows:16rem 12rem 12rem}.campus-gallery :deep(.reveal:first-child){grid-column:1/3;grid-row:auto}}</style>
+<template>
+  <section class="section section--subtle">
+    <div class="site-container">
+      <SectionHeading
+        eyebrow="Campus"
+        title="Where our students learn"
+        description="Modern spaces for focused study, practical training and campus life."
+      />
+      <div class="campus-gallery">
+        <RevealOnScroll
+          v-for="(image, index) in campusGallery"
+          :key="image.src"
+          :delay="index * 60"
+          ><figure>
+            <img
+              :src="image.src"
+              :alt="image.alt"
+              width="720"
+              height="540"
+              loading="lazy"
+            /></figure
+        ></RevealOnScroll>
+      </div>
+      <RouterLink to="/about" class="button button--outline mt-4">
+        More about the campus
+        <i class="bi bi-arrow-right" aria-hidden="true"></i>
+      </RouterLink>
+    </div>
+  </section>
+</template>
+<style scoped>
+.campus-gallery {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr 0.8fr;
+  grid-template-rows: 15rem 15rem;
+  gap: 1rem;
+}
+.campus-gallery :deep(.reveal:first-child) {
+  grid-row: 1/3;
+}
+.campus-gallery figure {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+.campus-gallery img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 500ms var(--ease);
+}
+.campus-gallery figure:hover img {
+  transform: scale(1.035);
+}
+@media (max-width: 767.98px) {
+  .campus-gallery {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 16rem 12rem 12rem;
+  }
+  .campus-gallery :deep(.reveal:first-child) {
+    grid-column: 1/3;
+    grid-row: auto;
+  }
+}
+</style>

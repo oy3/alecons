@@ -13,9 +13,14 @@ export const site = {
   ],
 };
 
-const applicationPortalUrl = import.meta.env.VITE_APP_APPLICATION_PORTAL_URL || "https://apply.alecons.edu.ng";
-const studentPortalUrl = import.meta.env.VITE_APP_STUDENT_PORTAL_URL || "https://portal.alecons.edu.ng";
-const staffPortalUrl = import.meta.env.VITE_APP_STAFF_PORTAL_URL || "https://staff.alecons.edu.ng";
+const applicationPortalUrl =
+  import.meta.env.VITE_APP_APPLICATION_PORTAL_URL ||
+  "https://apply.alecons.edu.ng";
+const studentPortalUrl =
+  import.meta.env.VITE_APP_STUDENT_PORTAL_URL ||
+  "https://portal.alecons.edu.ng";
+const staffPortalUrl =
+  import.meta.env.VITE_APP_STAFF_PORTAL_URL || "https://staff.alecons.edu.ng";
 
 export const portalLinks = [
   {
@@ -53,10 +58,30 @@ export const announcement = {
 export const whatsappUrl = "https://wa.me/2347084601610";
 
 export const statistics = [
-  { value: 11, suffix: "+", label: "Years of excellence", note: "Serving Ekiti State" },
-  { value: 60, suffix: "+", label: "Active students", note: "Learning from expert faculty" },
-  { value: 15, suffix: "+", label: "Expert faculty", note: "Experienced professionals" },
-  { value: 100, suffix: "%", label: "Digital admissions", note: "Simple, secure and paperless" },
+  {
+    value: 11,
+    suffix: "+",
+    label: "Years of excellence",
+    note: "Serving Ekiti State",
+  },
+  {
+    value: 60,
+    suffix: "+",
+    label: "Active students",
+    note: "Learning from expert faculty",
+  },
+  {
+    value: 15,
+    suffix: "+",
+    label: "Expert faculty",
+    note: "Experienced professionals",
+  },
+  {
+    value: 100,
+    suffix: "%",
+    label: "Digital admissions",
+    note: "Simple, secure and paperless",
+  },
 ];
 
 export const socialLinks = [

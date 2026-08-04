@@ -148,13 +148,13 @@ git switch -c staging
 git push -u origin staging
 ```
 
-For subsequent releases, merge approved `feature/website-v2` changes into `staging`. A manual run is also available under **Actions → Deploy Website Staging → Run workflow**.
+For subsequent releases, merge approved `feature/website-v2` changes into `staging`. A manual run is also available under **Actions → Deploy Staging → Run workflow**.
 
 The repository currently has no root lockfile. The workflow therefore uses `npm install --no-package-lock`; if a reviewed lockfile is restored later, it automatically switches to `npm ci` for reproducible installs.
 
 ## 6. First deployment checks
 
-Watch **Actions → Deploy Website Staging** until every step passes. Then run locally:
+Watch **Actions → Deploy Staging** until every step passes. Then run locally:
 
 ```bash
 BASIC_AUTH_USERNAME=rootlab \

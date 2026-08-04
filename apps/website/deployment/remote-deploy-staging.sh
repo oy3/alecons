@@ -2,33 +2,41 @@
 set -euo pipefail
 
 RELEASE_ID="${RELEASE_ID:-}"
-STAGING_WEBSITE_ROOT="${STAGING_WEBSITE_ROOT:-}"
+STAGING_ROOT="${STAGING_ROOT:-}"
+STAGING_ROOT="${STAGING_ROOT%/}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
 PAYLOAD_ROOT="${PAYLOAD_ROOT:-$HOME/tmp/alecons-staging}"
 
-if [[ -z "$RELEASE_ID" || -z "$STAGING_WEBSITE_ROOT" ]]; then
-    echo "RELEASE_ID and STAGING_WEBSITE_ROOT are required" >&2
+if [[ -z "$RELEASE_ID" || -z "$STAGING_ROOT" ]]; then
+    echo "RELEASE_ID and STAGING_ROOT are required" >&2
     exit 1
 fi
 
-if [[ "$STAGING_WEBSITE_ROOT" != */staging/* ]]; then
-    echo "Refusing to deploy outside a /staging/ path: $STAGING_WEBSITE_ROOT" >&2
+if [[ "$STAGING_ROOT" != */staging ]]; then
+    echo "Refusing to deploy outside a path ending in /staging: $STAGING_ROOT" >&2
+    exit 1
+fi
+
+if [[ ! -d "$STAGING_ROOT" || ! -w "$STAGING_ROOT" ]]; then
+    echo "Staging root must exist and be writable by $(id -un): $STAGING_ROOT" >&2
+    echo "On the server, grant the deploy user ownership of this staging directory before retrying." >&2
     exit 1
 fi
 
 PAYLOAD_DIR="$PAYLOAD_ROOT/$RELEASE_ID"
 TARBALL="$PAYLOAD_DIR/website-dist.tar.gz"
-RELEASES_DIR="$STAGING_WEBSITE_ROOT/releases"
+RELEASES_DIR="$STAGING_ROOT/releases/website"
 RELEASE_DIR="$RELEASES_DIR/$RELEASE_ID"
-CURRENT_LINK="$STAGING_WEBSITE_ROOT/current"
-NEXT_LINK="$STAGING_WEBSITE_ROOT/.current-$RELEASE_ID"
+CURRENT_DIR="$STAGING_ROOT/current"
+CURRENT_LINK="$CURRENT_DIR/website"
+NEXT_LINK="$CURRENT_DIR/.website-$RELEASE_ID"
 
 if [[ ! -f "$TARBALL" ]]; then
     echo "Website artifact not found: $TARBALL" >&2
     exit 1
 fi
 
-mkdir -p "$RELEASES_DIR"
+mkdir -p "$RELEASES_DIR" "$CURRENT_DIR"
 rm -rf "$RELEASE_DIR" "$NEXT_LINK"
 mkdir -p "$RELEASE_DIR"
 tar -xzf "$TARBALL" -C "$RELEASE_DIR"

@@ -3,7 +3,7 @@ server {
     listen [::]:443 ssl;
     server_name staging.alecons.com.ng;
 
-    root /home/rootlab/apps/alecons/staging/website/current;
+    root /home/rootlab/apps/alecons/staging/current/website;
     index index.html;
 
     auth_basic "ALECONS Website Staging";

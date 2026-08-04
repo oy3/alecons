@@ -5,12 +5,15 @@
 ## Deployment layout
 
 ```text
-/home/rootlab/apps/alecons/staging/website/
-├── current -> releases/<git-sha>
-└── releases/<git-sha>/
+/home/rootlab/apps/alecons/staging/
+├── current/
+│   └── website -> ../releases/website/<git-sha>
+├── releases/
+│   └── website/<git-sha>/
+└── shared/                         # reserved for future staging services
 ```
 
-The five newest releases are retained. Nginx serves the `current` symlink, making activation and rollback atomic.
+The five newest website releases are retained. Nginx serves `current/website`, while the staging root remains available for future API and portal deployments.
 
 ## 1. Create DNS
 
@@ -35,7 +38,15 @@ SSH into the droplet and run:
 
 ```bash
 sudo install -d -m 755 -o rootlab -g rootlab \
-  /home/rootlab/apps/alecons/staging/website/releases
+  /home/rootlab/apps/alecons/staging
+sudo install -d -m 755 -o rootlab -g rootlab \
+  /home/rootlab/apps/alecons/staging/current
+sudo install -d -m 755 -o rootlab -g rootlab \
+  /home/rootlab/apps/alecons/staging/releases/website
+sudo install -d -m 755 -o rootlab -g rootlab \
+  /home/rootlab/apps/alecons/staging/shared
+sudo chown -R rootlab:rootlab \
+  /home/rootlab/apps/alecons/staging
 sudo install -d -m 755 /var/www/html/.well-known/acme-challenge
 
 sudo apt-get update
@@ -110,7 +121,7 @@ Add these Environment variables:
 
 | Variable | Value |
 | --- | --- |
-| `ROOTLAB_STAGING_WEBSITE_ROOT` | `/home/rootlab/apps/alecons/staging/website` |
+| `ROOTLAB_STAGING_ROOT` | `/home/rootlab/apps/alecons/staging` |
 | `STAGING_BASIC_AUTH_USERNAME` | `rootlab` |
 | `VITE_APP_API_URL` | `https://api.alecons.edu.ng/api/v1` |
 | `VITE_API_BASE_URL` | `https://api.alecons.edu.ng/api/v1` |
@@ -133,7 +144,7 @@ feature/website-v2 → pull request → staging → automatic staging deployment
 staging → pull request → production → automatic production deployment
 ```
 
-The existing `.github/workflows/deploy-production.yml` listens to `production`. The new `.github/workflows/deploy-website-staging.yml` listens to `staging` and deploys only Website V2.
+The existing `.github/workflows/deploy-production.yml` listens to `production`. The new `.github/workflows/deploy-staging.yml` listens to `staging` and deploys only Website V2.
 
 Check branches before creating anything:
 
@@ -189,16 +200,16 @@ Expected:
 List retained releases:
 
 ```bash
-ls -1dt /home/rootlab/apps/alecons/staging/website/releases/*
+ls -1dt /home/rootlab/apps/alecons/staging/releases/website/*
 ```
 
 Activate a known-good release:
 
 ```bash
-STAGING_ROOT=/home/rootlab/apps/alecons/staging/website
-ROLLBACK_RELEASE="$STAGING_ROOT/releases/<git-sha>"
-ln -s "$ROLLBACK_RELEASE" "$STAGING_ROOT/.rollback-current"
-mv -Tf "$STAGING_ROOT/.rollback-current" "$STAGING_ROOT/current"
+STAGING_ROOT=/home/rootlab/apps/alecons/staging
+ROLLBACK_RELEASE="$STAGING_ROOT/releases/website/<git-sha>"
+ln -s "$ROLLBACK_RELEASE" "$STAGING_ROOT/current/.website-rollback"
+mv -Tf "$STAGING_ROOT/current/.website-rollback" "$STAGING_ROOT/current/website"
 ```
 
 No Nginx reload is needed. The deployment workflow and remote script reject any staging path that does not contain `/staging/`, preventing an accidental production overwrite.

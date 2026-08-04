@@ -1,4 +1,4 @@
-name: Deploy Website Staging
+name: Deploy Staging
 
 on:
   push:
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Build and deploy website staging
+    name: Build and deploy staging
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: staging

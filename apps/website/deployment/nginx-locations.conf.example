@@ -1,0 +1,40 @@
+# Place these directives inside the alecons.edu.ng HTTPS server block.
+# The build emits extensionless public URLs as matching .html files.
+
+root /home/rootlab/apps/alecons/current/website;
+index index.html;
+
+location = / {
+    try_files /index.html =404;
+}
+
+# Verification tokens are public utilities, not search or analytics content.
+location ^~ /verify/v1/ {
+    try_files /verify.html =404;
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+    add_header Cache-Control "no-store" always;
+}
+
+location ^~ /assets/ {
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+location = /robots.txt {
+    try_files $uri =404;
+}
+
+location = /sitemap.xml {
+    try_files $uri =404;
+}
+
+# Prefer a prerendered page, then a real static file. Unknown paths are 404s.
+location / {
+    try_files $uri.html $uri =404;
+}
+
+error_page 404 /404.html;
+location = /404.html {
+    internal;
+}

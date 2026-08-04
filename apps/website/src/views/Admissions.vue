@@ -1,674 +1,320 @@
-<script lang="js">
-export default {
-  metaInfo: {
-    title: "Admissions - Alecons College of Nursing Sciences",
-    meta: [
-      {
-        name: "description",
-        content:
-          "Apply now to Alecons College of Nursing Sciences. Learn about our admissions process, requirements, and deadlines.",
-      },
-      {
-        name: "keywords",
-        content:
-          "nursing school, admissions, Alecons College of Nursing Sciences, alecons",
-      },
-    ],
-  },
-  name: "Admissions",
-  components: {},
-  computed: {
-    registrationUrl() {
-      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL + "/register";
-    },
-    applicationPortalUrl() {
-      return import.meta.env.VITE_APP_APPLICATION_PORTAL_URL;
-    },
-  },
-};
+<script setup>
+import PageHero from "../components/PageHero.vue";
+import SectionHeading from "../components/SectionHeading.vue";
+import FaqAccordion from "../components/FaqAccordion.vue";
+import RevealOnScroll from "../components/RevealOnScroll.vue";
+import { applyUrl } from "../data/site";
+import {
+  admissionsConfig,
+  admissionDates,
+  admissionSteps,
+  faqs,
+  fees,
+  requirements,
+} from "../data/admissions";
 </script>
-
 <template>
-  <div class="container-fluid p-0" style="margin-top: 117px">
-    <div class="acon-bg-primary p-5 text-center">
-      <h1 class="text-uppercase fw-bold">Admissions</h1>
-      <p class="fs-4 mx-0 mx-md-5 fw-light mb-4">
-        Join the next generation of healthcare professionals. Start your journey
-        towards a rewarding career in nursing at ALECONS.
+  <PageHero
+    eyebrow="Admissions"
+    title="Apply to ALECONS"
+    :description="`Applications for the ${admissionsConfig.academicSession} academic session are submitted and tracked through the ALECONS Applicant Portal.`"
+    :breadcrumbs="[{ label: 'Admissions' }]"
+  >
+    <a
+      :href="applyUrl"
+      class="button button--primary mt-3"
+      target="_blank"
+      rel="noopener noreferrer"
+      data-umami-event="apply-click"
+      >Start your application</a>
+  </PageHero>
+  <section class="section">
+    <div class="site-container requirements-grid">
+      <SectionHeading
+        eyebrow="Entry requirements"
+        title="Before you apply"
+        description="Confirm that you meet each published requirement for the Basic Nursing programme."
+      />
+      <ul class="requirements-list">
+        <li v-for="requirement in requirements" :key="requirement">
+          <i class="bi bi-check2" aria-hidden="true"></i>{{ requirement }}
+        </li>
+      </ul>
+    </div>
+  </section>
+  <section class="section section--subtle">
+    <div class="site-container">
+      <SectionHeading
+        eyebrow="How to apply"
+        title="The application process"
+        description="Each stage is completed online. Keep your credentials and payment receipts to hand."
+      />
+      <ol class="admission-timeline">
+        <RevealOnScroll
+          v-for="(step, index) in admissionSteps"
+          :key="step.title"
+          ><li>
+            <span>{{ index + 1 }}</span>
+            <article>
+              <div>
+                <h3>{{ step.title }}</h3>
+                <strong>{{ step.period }}</strong>
+              </div>
+              <p>{{ step.description }}</p>
+              <ul>
+                <li v-for="item in step.items" :key="item">
+                  <i class="bi bi-check2" aria-hidden="true"></i>{{ item }}
+                </li>
+              </ul>
+            </article>
+          </li></RevealOnScroll>
+      </ol>
+    </div>
+  </section>
+  <section class="section">
+    <div class="site-container">
+      <SectionHeading
+        eyebrow="Key dates"
+        :title="`${admissionsConfig.academicSession} session calendar`"
+      />
+      <div class="dates-grid">
+        <article v-for="date in admissionDates" :key="date.label">
+          <h3>{{ date.label }}</h3>
+          <p><strong>Batch A</strong> - {{ date.batchA }}</p>
+          <p><strong>Batch B</strong> - {{ date.batchB }}</p>
+        </article>
+      </div>
+    </div>
+  </section>
+  <section class="section section--subtle">
+    <div class="site-container">
+      <SectionHeading
+        eyebrow="Fees"
+        title="Schedule of charges"
+        description="The figures below are the fees published by the college for the current session."
+      />
+      <div class="fees-grid">
+        <article class="fees-card">
+          <header>
+            <h3>Nursing Programme</h3>
+            <span>Per session</span>
+          </header>
+          <dl>
+            <div v-for="fee in fees" :key="fee.label">
+              <dt>{{ fee.label }}</dt>
+              <dd>{{ fee.amount }}</dd>
+            </div>
+            <div class="fees-card__total">
+              <dt class="fw-bold text-dark">Total per session</dt>
+              <dd class="fw-bold">N805,000</dd>
+            </div>
+          </dl>
+        </article>
+        <article class="fees-card fees-card--pending">
+          <header>
+            <h3>Post-Basic Nursing</h3>
+            <span>18 months</span>
+          </header>
+          <p>Programme charges have not yet been published.</p>
+          <RouterLink to="/contact" class="text-link">Contact Admissions
+            <i class="bi bi-arrow-right" aria-hidden="true"></i></RouterLink>
+        </article>
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <div class="site-container faq-grid">
+      <SectionHeading
+        eyebrow="Questions"
+        title="Admissions FAQ"
+        description="Still unsure about something? Our admissions office is happy to help."
+      /><FaqAccordion :items="faqs" />
+    </div>
+  </section>
+  <section class="cta-section">
+    <div class="site-container cta-section__inner">
+      <p class="eyebrow">Ready to apply?</p>
+      <h2>Take the first step towards your nursing career</h2>
+      <p>
+        Our admissions team is here to help you through every step of the
+        process.
       </p>
-      <div class="d-grid d-md-flex justify-content-center gap-3 mx-auto">
+      <div class="button-row">
         <a
-          :href="registrationUrl"
+          :href="applyUrl"
+          class="button button--primary"
           target="_blank"
-          class="btn btn-acon-secondary px-4 icon-link icon-link-hover d-inline-flex align-items-center justify-content-center gap-1"
           rel="noopener noreferrer"
-        >
-          Apply Now <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-        </a>
-        <button
-          class="btn btn-outline-light px-4 d-inline-flex align-items-center gap-2"
-          style="--bs-btn-hover-color: #2d7d7d"
-          disabled
-        >
-          Download Brochure <i class="bi bi-download"></i>
-        </button>
+          data-umami-event="apply-click"
+          >Start application</a><RouterLink to="/contact" class="button button--outline-light">Contact Admissions</RouterLink>
       </div>
     </div>
-
-    <div class="p-5 text-center">
-      <h3 class="fw-bold acon-text-primary">Important Dates</h3>
-      <p class="fw-light fs-5 text-muted mb-5">
-        Mark your calendar with these key dates for the 2026/2027 academic
-        session.
-      </p>
-
-      <div class="row g-4 mb-5">
-        <div class="col-12 col-md-6 col-lg-3">
-          <div class="card border-0 shadow p-1 h-100 text-center">
-            <div class="card-body">
-              <i class="bi bi-calendar-event h4 acon-text-primary"></i>
-              <h6 class="acon-text-primary fw-bold mt-2">Application Opens</h6>
-              <p class="acon-text-secondary">
-                March 28, 2026 <br />
-                July 15, 2026
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-12 col-md-6 col-lg-3">
-          <div class="card border-0 shadow p-1 h-100 text-center">
-            <div class="card-body">
-              <i class="bi bi-calendar-event h4 acon-text-primary"></i>
-              <h6 class="acon-text-primary fw-bold mt-2">
-                Application Deadline
-              </h6>
-              <p class="acon-text-secondary">
-                April 30, 2026 <br />
-                September 15, 2026
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-12 col-md-6 col-lg-3">
-          <div class="card border-0 shadow p-1 h-100 text-center">
-            <div class="card-body">
-              <i class="bi bi-calendar-event h4 acon-text-primary"></i>
-              <h6 class="acon-text-primary fw-bold mt-2">
-                Entrance Examination
-              </h6>
-              <p class="acon-text-secondary">
-                May 6, 2026 <br />
-                September 15, 2026
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-12 col-md-6 col-lg-3">
-          <div class="card border-0 shadow p-1 h-100 text-center">
-            <div class="card-body">
-              <i class="bi bi-calendar-event h4 acon-text-primary"></i>
-              <h6 class="acon-text-primary fw-bold mt-2">Screening Period</h6>
-              <p class="acon-text-secondary">
-                May 11-13, 2026 <br />
-                September 15-20, 2026
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-12 col-md-6 col-lg-3">
-          <div class="card border-0 shadow p-1 h-100 text-center">
-            <div class="card-body">
-              <i class="bi bi-calendar-event h4 acon-text-primary"></i>
-              <h6 class="acon-text-primary fw-bold mt-2">Admission Results</h6>
-              <p class="acon-text-secondary">
-                May 15, 2026 <br />
-                September 18, 2026
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-12 col-md-6 col-lg-3">
-          <div class="card border-0 shadow p-1 h-100 text-center">
-            <div class="card-body">
-              <i class="bi bi-calendar-event h4 acon-text-primary"></i>
-              <h6 class="acon-text-primary fw-bold mt-2">
-                Course Registration Begins
-              </h6>
-              <p class="acon-text-secondary">
-                May 18, 2026 <br />
-                October 19, 2026
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-12 col-md-6 col-lg-3">
-          <div class="card border-0 shadow p-1 h-100 text-center">
-            <div class="card-body">
-              <i class="bi bi-calendar-event h4 acon-text-primary"></i>
-              <h6 class="acon-text-primary fw-bold mt-2">Orientation Week</h6>
-              <p class="acon-text-secondary">
-                May 19-22, 2026 <br />
-                October 26-30, 2026
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-12 col-md-6 col-lg-3">
-          <div class="card border-0 shadow p-1 h-100 text-center">
-            <div class="card-body">
-              <i class="bi bi-calendar-event h4 acon-text-primary"></i>
-              <h6 class="acon-text-primary fw-bold mt-2">Classes Begin</h6>
-              <p class="acon-text-secondary">
-                May 25, 2026 <br />
-                November 2, 2026
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="acon-bg-light p-5 text-center">
-      <h3 class="fw-bold acon-text-primary">Admission Process</h3>
-      <p class="fw-light fs-5 text-muted mb-3">
-        Follow these four simple steps to secure your place at ALECONS.
-      </p>
-
-      <!-- <div
-        class="bg-warning p-2 text-dark bg-opacity-25 mb-5 text-start border-start border-4 border-warning"
-      >
-        <b>NOTE:</b> Only Direct entry JAMB candidates and graduates from
-        <b>Community Midwifery and Nursing</b> program should select
-        <b>Full-Time (CM&N)</b> program mode during registration. All other
-        applicants should select the <b>Full-Time</b> program mode. Please
-        ensure you select the correct program mode to avoid any issues with your
-        application.
-      </div> -->
-
-      <div class="row gy-4">
-        <!-- Step 1 -->
-        <div class="col-md-6">
-          <div class="card border-0 shadow h-100 text-start p-3">
-            <div class="card-body">
-              <div class="d-inline-flex align-items-center">
-                <span
-                  class="d-inline-flex justify-content-center align-items-center rounded-circle acon-bg-primary me-3"
-                  style="width: 36px; height: 36px; aspect-ratio: 1 / 1"
-                >
-                  1
-                </span>
-                <h5 class="fw-bold acon-text-primary">
-                  Application Submission
-                </h5>
-                <span
-                  class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
-                >
-                  March - September
-                </span>
-              </div>
-
-              <p class="mb-3 text-secondary">
-                Complete and submit your application form with all required
-                documents
-              </p>
-              <ul class="list-unstyled text-secondary fw-light">
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Completed application form
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  WASSCE/NABTEB certificate
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Birth certificate
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Passport photographs
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Two reference letters
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 2 -->
-        <div class="col-md-6">
-          <div class="card border-0 shadow h-100 text-start p-3">
-            <div class="card-body">
-              <div class="d-inline-flex align-items-center">
-                <span
-                  class="d-inline-flex justify-content-center align-items-center rounded-circle acon-bg-primary me-3"
-                  style="width: 36px; height: 36px; aspect-ratio: 1 / 1"
-                >
-                  2
-                </span>
-                <h5 class="fw-bold acon-text-primary">Entrance Examination</h5>
-                <span
-                  class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
-                >
-                  May & September
-                </span>
-              </div>
-
-              <p class="mb-3 text-secondary">
-                Take the ALECONS entrance examination or use 2026 JAMB UTME
-                score
-              </p>
-              <ul class="list-unstyled text-secondary fw-light">
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Valid 2026 JAMB UTME score
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  ALECONS entrance examination
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Minimum score requirements
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Examination fee payment
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 3 -->
-        <div class="col-md-6">
-          <div class="card border-0 shadow h-100 text-start p-3">
-            <div class="card-body">
-              <div class="d-inline-flex align-items-center">
-                <span
-                  class="d-inline-flex justify-content-center align-items-center rounded-circle acon-bg-primary me-3"
-                  style="width: 36px; height: 36px; aspect-ratio: 1 / 1"
-                >
-                  3
-                </span>
-                <h5 class="fw-bold acon-text-primary">Interview & Screening</h5>
-                <span
-                  class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
-                >
-                  May & September
-                </span>
-              </div>
-
-              <p class="mb-3 text-secondary">
-                Attend mandatory interview and document verification
-              </p>
-              <ul class="list-unstyled text-secondary fw-light">
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Original certificates
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Character references
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Interview attendance
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Document verification
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 4 -->
-        <div class="col-md-6">
-          <div class="card border-0 shadow h-100 text-start p-3">
-            <div class="card-body">
-              <div class="d-inline-flex align-items-center">
-                <span
-                  class="d-inline-flex justify-content-center align-items-center rounded-circle acon-bg-primary me-3"
-                  style="width: 36px; height: 36px; aspect-ratio: 1 / 1"
-                >
-                  4
-                </span>
-                <h5 class="fw-bold acon-text-primary">Admission Offer</h5>
-                <span
-                  class="badge rounded-pill bg-light text-secondary fw-normal ms-2"
-                >
-                  May & September
-                </span>
-              </div>
-
-              <p class="mb-3 text-secondary">
-                Receive admission offer and complete registration
-              </p>
-              <ul class="list-unstyled text-secondary fw-light">
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Acceptance of offer
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Payment of fees
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Registration completion
-                </li>
-                <li>
-                  <i class="bi bi-check2-circle acon-text-secondary me-2"></i>
-                  Orientation attendance
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="p-5 text-center">
-      <h3 class="fw-bold acon-text-primary">Tuition & Fees</h3>
-      <p class="fw-light fs-5 text-muted mb-5">
-        Affordable education tailored to support your nursing career goals.
-      </p>
-
-      <div class="row gy-4">
-        <!-- Basic Nursing Program -->
-        <div class="col-md-4">
-          <div class="card border-0 shadow text-center h-100">
-            <div class="card-body">
-              <h5 class="fw-bold acon-text-primary">Nursing Program</h5>
-              <!-- <p class="acon-text-secondary mb-4">3 Years</p> -->
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Application fee:</span>
-                <span class="fw-medium">₦20,000</span>
-              </div>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Acceptance fee:</span>
-                <span class="fw-medium">₦50,000</span>
-              </div>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Sundry Fees:</span>
-                <span class="fw-medium">₦280,000</span>
-              </div>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Tuition fee:</span>
-                <span class="fw-medium">₦350,000</span>
-              </div>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Accommodation fee:</span>
-                <span class="fw-medium">₦105,000</span>
-              </div>
-
-              <hr />
-
-              <div class="d-flex justify-content-between acon-text-primary">
-                <span class="fw-medium">Total:</span>
-                <span class="fw-bold">₦805,000</span>
-              </div>
-
-              <p class="mt-2 text-muted fw-light small">per session</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- TODO: Add Post-Basic Nursing details when available -->
-        <!-- Post-Basic Nursing -->
-        <div class="col-md-4">
-          <div
-            class="card border-0 shadow text-center h-100 position-relative overflow-hidden"
-          >
-            <div class="program-coming-soon">Coming Soon</div>
-            <div class="card-body">
-              <h5 class="fw-bold acon-text-primary">Post-Basic Nursing</h5>
-              <p class="acon-text-secondary mb-4">18 Months</p>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Application fee:</span>
-                <span class="fw-medium">-</span>
-              </div>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Acceptance fee:</span>
-                <span class="fw-medium">-</span>
-              </div>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Sundry Fees:</span>
-                <span class="fw-medium">-</span>
-              </div>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Tuition fee:</span>
-                <span class="fw-medium">-</span>
-              </div>
-
-              <hr />
-
-              <div class="d-flex justify-content-between acon-text-primary">
-                <span class="fw-medium">Total:</span>
-                <span class="fw-bold">-</span>
-              </div>
-
-              <p class="mt-2 text-muted fw-light small">per session</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- TODO: Add Midwifery Program details when available -->
-        <!-- Midwifery Program -->
-        <div class="col-md-4">
-          <div
-            class="card border-0 shadow text-center h-100 position-relative overflow-hidden"
-          >
-            <div class="program-coming-soon">Coming Soon</div>
-            <div class="card-body">
-              <h5 class="fw-bold acon-text-primary">Midwifery Program</h5>
-              <p class="acon-text-secondary mb-4">2 Years</p>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Application fee:</span>
-                <span class="fw-medium">-</span>
-              </div>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Acceptance fee:</span>
-                <span class="fw-medium">-</span>
-              </div>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Sundry Fees:</span>
-                <span class="fw-medium">-</span>
-              </div>
-
-              <div class="d-flex justify-content-between">
-                <span class="text-muted fw-light">Tuition fee:</span>
-                <span class="fw-medium">-</span>
-              </div>
-
-              <hr />
-
-              <div class="d-flex justify-content-between acon-text-primary">
-                <span class="fw-medium">Total:</span>
-                <span class="fw-bold">-</span>
-              </div>
-
-              <p class="mt-2 text-muted fw-light small">per session</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="acon-bg-primary p-3 p-md-5 m-5 text-center rounded-3">
-      <h4 class="fw-bold">Payment Plans Available</h4>
-      <p class="fs-6 fw-light mx-0 mx-md-5">
-        We offer flexible payment plans to help make your nursing education more
-        affordable. Contact our financial aid office for more information.
-      </p>
-      <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-        <button class="btn btn-acon-secondary px-5" type="button">
-          Learn About Payment Plans
-        </button>
-        <router-link
-          to="/contact"
-          class="btn btn-outline-light px-5 d-inline-flex align-items-center justify-content-center"
-          style="--bs-btn-hover-color: #a81e1e"
-        >
-          Contact Financial Services
-        </router-link>
-      </div>
-    </div>
-
-    <!-- TODO: Add scholarship and financial aid information when available -->
-    <!-- <div class="acon-bg-light p-5 text-center">
-      <h3 class="fw-bold acon-text-primary">Scholarships & Financial Aid</h3>
-      <p class="fw-light fs-5 text-muted mb-5">
-        Don't let financial constraints limit your dreams. Explore our
-        scholarship opportunities.
-      </p>
-
-      <div class="row gy-4">
-        <div class="col-md-4">
-          <div class="card border-0 shadow text-center h-100">
-            <div class="card-body">
-              <div
-                class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-circle mb-3"
-                style="width: 50px; height: 50px"
-              >
-                <i class="bi bi-credit-card h3 m-0 text-white lh-1"></i>
-              </div>
-              <h5 class="fw-bold acon-text-primary">
-                Academic Excellence Scholarship
-              </h5>
-              <h4 class="acon-text-secondary mb-4">50% tuition reduction</h4>
-
-              <div class="text-start">
-                <h6 class="acon-text-primary">Criteria:</h6>
-                <p class="fw-light small">
-                  Top 5% of entrance examination scores
-                </p>
-                <h6 class="acon-text-primary">Renewable:</h6>
-                <p class="fw-light small mb-0">
-                  Yes, based on academic performance
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-4">
-          <div class="card border-0 shadow text-center h-100">
-            <div class="card-body">
-              <div
-                class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-circle mb-3"
-                style="width: 50px; height: 50px"
-              >
-                <i class="bi bi-credit-card h3 m-0 text-white lh-1"></i>
-              </div>
-              <h5 class="fw-bold acon-text-primary">
-                Need-Based Financial Aid
-              </h5>
-              <h4 class="acon-text-secondary mb-4">Up to ₦100,000</h4>
-
-              <div class="text-start">
-                <h6 class="acon-text-primary">Criteria:</h6>
-                <p class="fw-light small">Demonstrated financial need</p>
-                <h6 class="acon-text-primary">Renewable:</h6>
-                <p class="fw-light small mb-0">Yes, subject to annual review</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-4">
-          <div class="card border-0 shadow text-center h-100">
-            <div class="card-body">
-              <div
-                class="d-inline-flex justify-content-center align-items-center acon-bg-primary rounded-circle mb-3"
-                style="width: 50px; height: 50px"
-              >
-                <i class="bi bi-credit-card h3 m-0 text-white lh-1"></i>
-              </div>
-              <h5 class="fw-bold acon-text-primary">
-                Rural Community Scholarship
-              </h5>
-              <h4 class="acon-text-secondary mb-4">25% tuition reduction</h4>
-
-              <div class="text-start">
-                <h6 class="acon-text-primary">Criteria:</h6>
-                <p class="fw-light small">
-                  Students from underserved rural areas
-                </p>
-                <h6 class="acon-text-primary">Renewable:</h6>
-                <p class="fw-light small mb-0">
-                  Yes, with community service requirement
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div> -->
-
-    <div class="acon-bg-secondary p-5 text-center">
-      <h2 class="fw-bold">Ready to Apply?</h2>
-      <p class="fs-5 fw-light mx-0 mx-md-5 mb-4" style="color: #fff3f0">
-        Take the first step towards your nursing career. Our admissions team is
-        here to help you through every step of the process.
-      </p>
-      <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-        <a
-          :href="registrationUrl"
-          target="_blank"
-          class="btn btn-acon-dark px-5 icon-link icon-link-hover d-inline-flex align-items-center justify-content-center gap-1"
-          rel="noopener noreferrer"
-        >
-          Start Application <i class="bi bi-arrow-right-short fs-4 h-auto"></i>
-        </a>
-        <router-link
-          to="/contact"
-          class="btn btn-outline-light px-5 d-inline-flex align-items-center justify-content-center"
-          style="--bs-btn-hover-color: #a85a45"
-        >
-          Contact Admissions
-        </router-link>
-      </div>
-    </div>
-  </div>
+  </section>
 </template>
-
 <style scoped>
-.program-coming-soon {
-  position: absolute;
-  inset: 0;
+.requirements-grid {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 6rem;
+}
+.requirements-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.requirements-list li {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.requirements-list i {
+  color: var(--color-primary);
+}
+.admission-timeline {
+  max-width: 65rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  border-left: 1px solid var(--color-border);
+}
+.admission-timeline > :deep(.reveal) > li {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  gap: 1rem;
+  margin-left: -1rem;
+  padding-bottom: 1.5rem;
+}
+.admission-timeline > :deep(.reveal) > li > span {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.admission-timeline article {
+  padding: 1.5rem;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.admission-timeline article > div {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: rgba(227, 227, 227, 0.82);
-  color: #a81e1e;
-  font-weight: 700;
-  font-size: 1.25rem;
-  letter-spacing: 0.04em;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.admission-timeline strong {
+  color: var(--color-primary);
+  font-size: 0.65rem;
   text-transform: uppercase;
-  z-index: 1;
+}
+.admission-timeline ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+}
+.admission-timeline ul i {
+  color: var(--color-primary);
+  margin-right: 0.4rem;
+}
+.dates-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+}
+.dates-grid article {
+  padding: 1.5rem 1.5rem 1.5rem 0;
+  border-top: 1px solid var(--color-border);
+}
+.dates-grid h3 {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+.dates-grid p {
+  margin: 0.2rem 0;
+  font-size: 0.75rem;
+}
+.dates-grid strong {
+  color: var(--color-primary);
+}
+.fees-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.fees-card {
+  padding: 1.75rem;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.fees-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.fees-card header span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+.fees-card dl div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.82rem;
+}
+.fees-card dt {
+  font-weight: 400;
+}
+.fees-card dd {
+  margin: 0;
+  font-weight: 400;
+}
+.fees-card__total {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+.fees-card--pending {
+  opacity: 0.75;
+}
+.faq-grid {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr;
+  gap: 6rem;
+}
+.cta-section__inner {
+  max-width: 48rem;
+}
+@media (max-width: 767.98px) {
+  .requirements-grid,
+  .faq-grid,
+  .fees-grid {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+  .admission-timeline article > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .admission-timeline ul {
+    grid-template-columns: 1fr;
+  }
+  .dates-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dates-grid article {
+    padding-right: 0.8rem;
+  }
 }
 </style>

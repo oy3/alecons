@@ -1,0 +1,141 @@
+name: Deploy Website Staging
+
+on:
+  push:
+    branches:
+      - staging
+    paths:
+      - "apps/website/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-website-staging.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: website-staging-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and deploy website staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+    env:
+      RELEASE_ID: ${{ github.sha }}
+      DEPLOY_HOST: ${{ secrets.ROOTLAB_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.ROOTLAB_DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.ROOTLAB_DEPLOY_PORT }}
+      DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.ROOTLAB_SSH_PRIVATE_KEY }}
+      STAGING_WEBSITE_ROOT: ${{ vars.ROOTLAB_STAGING_WEBSITE_ROOT }}
+      BASIC_AUTH_USERNAME: ${{ vars.STAGING_BASIC_AUTH_USERNAME }}
+      BASIC_AUTH_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+      VITE_APP_SITE_URL: https://alecons.edu.ng
+      VITE_SITE_NOINDEX: "true"
+      VITE_APP_API_URL: ${{ vars.VITE_APP_API_URL }}
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      VITE_APP_APPLICATION_PORTAL_URL: ${{ vars.VITE_APP_APPLICATION_PORTAL_URL }}
+      VITE_APP_STUDENT_PORTAL_URL: ${{ vars.VITE_APP_STUDENT_PORTAL_URL }}
+      VITE_APP_STAFF_PORTAL_URL: ${{ vars.VITE_APP_STAFF_PORTAL_URL }}
+      VITE_CONTACT_FORM_ENDPOINT: ${{ vars.VITE_CONTACT_FORM_ENDPOINT }}
+      VITE_GOOGLE_SITE_VERIFICATION: ""
+      VITE_UMAMI_WEBSITE_ID: ${{ vars.VITE_UMAMI_WEBSITE_ID }}
+      VITE_UMAMI_SCRIPT_URL: https://cloud.umami.is/script.js
+      VITE_UMAMI_DOMAINS: staging.alecons.com.ng
+      VITE_UMAMI_ENABLE_PERFORMANCE: "false"
+      EXPECT_NOINDEX: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate staging configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          required_values=(
+            DEPLOY_HOST
+            DEPLOY_USER
+            DEPLOY_PORT
+            DEPLOY_SSH_PRIVATE_KEY
+            STAGING_WEBSITE_ROOT
+            BASIC_AUTH_USERNAME
+            BASIC_AUTH_PASSWORD
+            VITE_APP_API_URL
+            VITE_APP_APPLICATION_PORTAL_URL
+            VITE_APP_STUDENT_PORTAL_URL
+            VITE_APP_STAFF_PORTAL_URL
+          )
+
+          for value_name in "${required_values[@]}"; do
+            if [[ -z "${!value_name:-}" ]]; then
+              echo "Missing staging secret or variable: $value_name" >&2
+              exit 1
+            fi
+          done
+
+          if [[ "$STAGING_WEBSITE_ROOT" != */staging/* ]]; then
+            echo "ROOTLAB_STAGING_WEBSITE_ROOT must contain /staging/" >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [[ -f package-lock.json ]]; then
+            npm ci
+          else
+            npm install --no-package-lock
+          fi
+
+      - name: Check website
+        run: |
+          npm run lint --workspace=apps/website
+          npm run test --workspace=apps/website
+          npm run build --workspace=apps/website
+
+      - name: Package website artifact
+        shell: bash
+        run: tar -C apps/website/dist -czf website-dist.tar.gz .
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ env.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Trust deploy host key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload website artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mkdir -p ~/tmp/alecons-staging/$RELEASE_ID"
+          scp -P "$DEPLOY_PORT" website-dist.tar.gz \
+            "$DEPLOY_USER@$DEPLOY_HOST:tmp/alecons-staging/$RELEASE_ID/website-dist.tar.gz"
+
+      - name: Activate staging release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "RELEASE_ID='$RELEASE_ID' STAGING_WEBSITE_ROOT='$STAGING_WEBSITE_ROOT' bash -s" \
+            < apps/website/deployment/remote-deploy-staging.sh
+
+      - name: Verify staging deployment
+        run: npm run verify:deployment --workspace=apps/website -- https://staging.alecons.com.ng

@@ -1,6 +1,6 @@
 <script>
 import { publicApiService } from "../services/publicApi";
-import { toTitleCase } from "@shared/utils/string";
+import { toTitleCase } from "../utils/string";
 
 export default {
   name: "VerifyIdentity",
@@ -87,7 +87,7 @@ export default {
 
 <template>
   <section class="verify-page py-5">
-    <div class="container" style="margin-top: 117px">
+    <div class="container py-5">
       <div class="row justify-content-center">
         <div class="col-lg-9 col-xl-8">
           <div class="verify-shell shadow-sm border-0 overflow-hidden">

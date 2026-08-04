@@ -117,10 +117,12 @@ Add these Environment variables:
 | `VITE_APP_APPLICATION_PORTAL_URL` | `https://apply.alecons.edu.ng` |
 | `VITE_APP_STUDENT_PORTAL_URL` | `https://portal.alecons.edu.ng` |
 | `VITE_APP_STAFF_PORTAL_URL` | `https://staff.alecons.edu.ng` |
-| `VITE_CONTACT_FORM_ENDPOINT` | Empty until the endpoint exists |
-| `VITE_UMAMI_WEBSITE_ID` | Empty, or a separate staging Umami website ID |
+| `VITE_CONTACT_FORM_ENDPOINT` | Do not create until the endpoint exists |
+| `VITE_UMAMI_WEBSITE_ID` | Do not create, or use a separate staging Umami website ID |
 
 The workflow sets `VITE_SITE_NOINDEX=true`, disables Google verification and performance analytics, restricts any staging Umami tracker to the staging hostname, and preserves production canonical/schema URLs for QA.
+
+Do not use `-`, `none`, or another placeholder for an optional Vite variable. An unset variable must be absent; otherwise its placeholder is compiled into the application as a real value.
 
 Optional: configure required reviewers on the GitHub Environment if staging deployments need manual approval.
 

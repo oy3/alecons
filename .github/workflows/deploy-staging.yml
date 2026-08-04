@@ -30,7 +30,7 @@ jobs:
       DEPLOY_USER: ${{ secrets.ROOTLAB_DEPLOY_USER }}
       DEPLOY_PORT: ${{ secrets.ROOTLAB_DEPLOY_PORT }}
       DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.ROOTLAB_SSH_PRIVATE_KEY }}
-      STAGING_WEBSITE_ROOT: ${{ vars.ROOTLAB_STAGING_WEBSITE_ROOT }}
+      STAGING_ROOT: ${{ vars.ROOTLAB_STAGING_ROOT }}
       BASIC_AUTH_USERNAME: ${{ vars.STAGING_BASIC_AUTH_USERNAME }}
       BASIC_AUTH_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
       VITE_APP_SITE_URL: https://alecons.edu.ng
@@ -63,7 +63,7 @@ jobs:
             DEPLOY_USER
             DEPLOY_PORT
             DEPLOY_SSH_PRIVATE_KEY
-            STAGING_WEBSITE_ROOT
+            STAGING_ROOT
             BASIC_AUTH_USERNAME
             BASIC_AUTH_PASSWORD
             VITE_APP_API_URL
@@ -79,8 +79,8 @@ jobs:
             fi
           done
 
-          if [[ "$STAGING_WEBSITE_ROOT" != */staging/* ]]; then
-            echo "ROOTLAB_STAGING_WEBSITE_ROOT must contain /staging/" >&2
+          if [[ "$STAGING_ROOT" != */staging ]]; then
+            echo "ROOTLAB_STAGING_ROOT must end with /staging" >&2
             exit 1
           fi
 
@@ -134,7 +134,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "RELEASE_ID='$RELEASE_ID' STAGING_WEBSITE_ROOT='$STAGING_WEBSITE_ROOT' bash -s" \
+            "RELEASE_ID='$RELEASE_ID' STAGING_ROOT='$STAGING_ROOT' bash -s" \
             < apps/website/deployment/remote-deploy-staging.sh
 
       - name: Verify staging deployment

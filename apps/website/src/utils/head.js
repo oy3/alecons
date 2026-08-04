@@ -32,6 +32,10 @@ function getSiteUrl() {
   );
 }
 
+function isGlobalNoindex() {
+  return import.meta.env.VITE_SITE_NOINDEX === "true";
+}
+
 function absoluteUrl(path) {
   return `${getSiteUrl()}${path.startsWith("/") ? path : `/${path}`}`;
 }
@@ -175,7 +179,7 @@ export function resolveRouteMeta(route) {
     title,
     description,
     canonicalUrl,
-    robots: route.meta.noindex
+    robots: route.meta.noindex || isGlobalNoindex()
       ? "noindex, nofollow, noarchive"
       : "index, follow, max-image-preview:large",
     socialImage,

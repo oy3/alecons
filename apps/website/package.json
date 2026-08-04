@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && vite build --ssr src/entry-server.js --outDir dist-server && node ./scripts/prerender.mjs && node ./scripts/generate-sitemap.mjs && node ./scripts/validate-seo.mjs",
+    "build": "vite build && vite build --ssr src/entry-server.js --outDir dist-server && node ./scripts/prerender.mjs && node ./scripts/generate-robots.mjs && node ./scripts/generate-sitemap.mjs && node ./scripts/validate-seo.mjs",
     "preview": "node ./scripts/preview-production.mjs",
     "verify:deployment": "node ./scripts/verify-deployment.mjs",
     "clean": "rm -rf node_modules yarn.lock package-lock.json dist*",

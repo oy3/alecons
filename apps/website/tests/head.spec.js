@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyRouteMeta,
   buildStructuredData,
@@ -7,6 +7,7 @@ import {
 
 describe("route metadata", () => {
   afterEach(() => {
+    vi.unstubAllEnvs();
     document.head.querySelectorAll('meta, link[rel="canonical"], #alecons-structured-data').forEach((element) => element.remove());
   });
 
@@ -40,5 +41,20 @@ describe("route metadata", () => {
     expect(structuredData["@graph"].some((item) => item["@type"] === "AboutPage")).toBe(true);
     expect(structuredData["@graph"].some((item) => item["@type"] === "BreadcrumbList")).toBe(true);
     expect(head).toContain('<link rel="canonical" href="https://alecons.edu.ng/about">');
+  });
+
+  it("keeps production canonicals while making staging globally non-indexable", () => {
+    vi.stubEnv("VITE_SITE_NOINDEX", "true");
+    const route = {
+      name: "About",
+      path: "/about",
+      params: {},
+      meta: { title: "About ALECONS", description: "About the college" },
+    };
+    const head = renderRouteHead(route);
+
+    expect(head).toContain('content="noindex, nofollow, noarchive"');
+    expect(head).toContain('<link rel="canonical" href="https://alecons.edu.ng/about">');
+    expect(head).toContain("alecons-structured-data");
   });
 });

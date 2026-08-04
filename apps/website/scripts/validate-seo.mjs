@@ -6,6 +6,7 @@ const manifest = JSON.parse(
   await readFile(resolve(output, "prerender-manifest.json"), "utf8"),
 );
 const failures = [];
+const globalNoindex = process.env.VITE_SITE_NOINDEX === "true";
 
 for (const page of manifest.pages) {
   const html = await readFile(resolve(output, page.output), "utf8");
@@ -36,6 +37,9 @@ for (const page of manifest.pages) {
   if (!page.indexable && !html.includes("noindex, nofollow, noarchive")) {
     failures.push(`${page.path}: missing noindex directive`);
   }
+  if (globalNoindex && !html.includes("noindex, nofollow, noarchive")) {
+    failures.push(`${page.path}: staging build is missing noindex directive`);
+  }
   if (html.includes('<div id="app"></div>')) {
     failures.push(`${page.path}: app content was not prerendered`);
   }
@@ -45,6 +49,13 @@ await access(resolve(output, "robots.txt"));
 await access(resolve(output, "sitemap.xml"));
 
 const sitemap = await readFile(resolve(output, "sitemap.xml"), "utf8");
+const robots = await readFile(resolve(output, "robots.txt"), "utf8");
+if (globalNoindex && !/^Disallow: \/$/m.test(robots)) {
+  failures.push("staging robots.txt must disallow all crawling");
+}
+if (!globalNoindex && !robots.includes("Sitemap:")) {
+  failures.push("production robots.txt is missing its sitemap reference");
+}
 for (const page of manifest.pages.filter(({ indexable }) => indexable)) {
   if (!sitemap.includes(page.path === "/" ? "alecons.edu.ng/</loc>" : `${page.path}</loc>`)) {
     failures.push(`${page.path}: missing from sitemap`);

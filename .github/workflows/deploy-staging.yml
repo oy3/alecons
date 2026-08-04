@@ -8,7 +8,7 @@ on:
       - "apps/website/**"
       - "package.json"
       - "package-lock.json"
-      - ".github/workflows/deploy-website-staging.yml"
+      - ".github/workflows/deploy-staging.yml"
   workflow_dispatch:
 
 concurrency:

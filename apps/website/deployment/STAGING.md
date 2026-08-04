@@ -133,7 +133,7 @@ feature/website-v2 → pull request → staging → automatic staging deployment
 staging → pull request → production → automatic production deployment
 ```
 
-The existing `.github/workflows/deploy-production.yml` listens to `production`. The new `.github/workflows/deploy-website-staging.yml` listens to `staging` and deploys only Website V2.
+The existing `.github/workflows/deploy-production.yml` listens to `production`. The new `.github/workflows/deploy-staging.yml` listens to `staging` and deploys only Website V2.
 
 Check branches before creating anything:
 

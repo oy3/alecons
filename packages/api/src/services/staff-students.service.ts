@@ -63,9 +63,21 @@ export class StaffStudentsService {
         return query;
     }
 
-    private studentPopulation() {
+    private studentPopulation(includeDemographics = false) {
+        const userFields = [
+            'firstName',
+            'otherName',
+            'lastName',
+            'email',
+            'phone',
+            'isActive',
+            'isEmailVerified',
+            'profileImageUrl',
+            ...(includeDemographics ? ['dob', 'gender'] : []),
+        ].join(' ');
+
         return [
-            { path: 'userId', select: 'firstName otherName lastName email phone isActive isEmailVerified profileImageUrl' },
+            { path: 'userId', select: userFields },
             { path: 'programId', select: 'name code programTypeId programModeId', populate: [{ path: 'programTypeId', select: 'type' }, { path: 'programModeId', select: 'mode' }] },
             { path: 'academicSession', select: 'title sessionYear status' },
             { path: 'entryAcademicSession', select: 'title sessionYear status' },
@@ -122,7 +134,7 @@ export class StaffStudentsService {
 
     async getStudentById(id: string) {
         const studentId = this.asObjectId(id, 'student id');
-        const student = await this.studentModel.findById(studentId).populate(this.studentPopulation()).lean();
+        const student = await this.studentModel.findById(studentId).populate(this.studentPopulation(true)).lean();
         if (!student) throw new NotFoundException('Student record not found');
         const [sessionHistory, payments, courseRegistrations] = await Promise.all([
             this.studentAcademicSessionModel.find({ studentId }).populate('academicSessionId', 'title sessionYear status').sort({ startedAt: -1 }).lean(),

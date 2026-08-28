@@ -132,6 +132,17 @@ export const MODULE_DEFINITIONS = {
             { value: 'manage', label: 'Manage All' },
         ],
     },
+    notifications: {
+        label: 'Notifications',
+        permissions: [
+            { value: 'view', label: 'View' },
+            { value: 'create', label: 'Create' },
+            { value: 'edit', label: 'Edit Drafts' },
+            { value: 'send', label: 'Send or Schedule' },
+            { value: 'archive', label: 'Archive' },
+            { value: 'manage', label: 'Manage All' },
+        ],
+    },
 }
 
 /**

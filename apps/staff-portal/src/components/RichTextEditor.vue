@@ -87,8 +87,7 @@ export default {
                 'formula': this.insertFormula,
                 'image': this.insertImage
               }
-            },
-            formula: true
+            }
           },
           formats: [
             'bold', 'italic', 'underline',
@@ -117,18 +116,16 @@ export default {
                 'formula': this.insertFormula,
                 'image': this.insertImage
               }
-            },
-            formula: true
+            }
           },
           formats: [
             'header', 'font', 'size',
             'bold', 'italic', 'underline', 'strike',
             'color', 'background',
             'script',
-            'list', 'bullet', 'indent', 'align',
+            'list', 'indent', 'align',
             'blockquote', 'code-block',
-            'formula', 'image',
-            'clean'
+            'formula', 'image'
           ]
         }
       }
@@ -387,14 +384,14 @@ export default {
         content-type="html"
         @update:content="handleContentChange"
         @ready="onEditorReady"
-        :class="{ 'is-invalid': hasError }"
+        :class="{ 'is-invalid': hasError || contentLength > maxLength }"
       />
     </div>
     <div v-if="hasError" class="invalid-feedback d-block">
       {{ errorMessage }}
     </div>
     <div v-if="showCharCount && !compact" class="char-count mt-2">
-      <small class="text-muted">
+      <small :class="contentLength > maxLength ? 'text-danger' : 'text-muted'">
         {{ contentLength }}/{{ maxLength }} characters
       </small>
     </div>
@@ -427,6 +424,21 @@ export default {
 .editor-container :deep(.ql-editor) {
   min-height: 200px;
   padding: 12px 15px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.rich-text-editor:not(.compact) .editor-container :deep(.ql-container) {
+  height: clamp(240px, 36vh, 340px);
+  min-height: 240px;
+}
+
+.rich-text-editor:not(.compact) .editor-container :deep(.ql-editor) {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .editor-container :deep(.ql-editor.ql-blank::before) {

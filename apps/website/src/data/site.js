@@ -27,7 +27,8 @@ const staffPortalUrl =
 export const portalLinks = [
   {
     label: "Applicant Portal",
-    href: `${applicationPortalUrl.replace(/\/$/, "")}/register`,
+    // href: `${applicationPortalUrl.replace(/\/$/, "")}/register`,
+    href: applicationPortalUrl,
   },
   {
     label: "Student Portal",

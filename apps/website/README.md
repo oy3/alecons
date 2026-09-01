@@ -53,6 +53,6 @@ Umami Cloud's Hobby plan is free and intended for low-traffic sites. Umami count
 
 ## Contact Form
 
-Set `VITE_CONTACT_FORM_ENDPOINT` to the future public contact endpoint. The form sends a JSON `POST` request. Until this variable is configured, valid submissions show the admissions email and phone fallback without pretending the enquiry was delivered.
+The contact form posts to `/public/contact-enquiries` using the website's existing `VITE_API_BASE_URL` or `VITE_APP_API_URL`. No contact-specific endpoint variable is required.
 
 The application also reads the existing website, API, and portal URL variables from the environment files used for each deployment mode.

@@ -66,6 +66,12 @@ export const staffNavigationItems = [
     module: "notifications",
   },
   {
+    title: "Enquiries",
+    icon: "bi-inbox",
+    route: "/enquiries",
+    module: "enquiries",
+  },
+  {
     title: "ID Cards",
     icon: "bi-person-badge",
     route: "/id-cards",

@@ -151,6 +151,18 @@ export const MODULE_DEFINITIONS = {
             { value: 'manage', label: 'Manage All' },
         ],
     },
+    enquiries: {
+        label: 'Contact Enquiries',
+        permissions: [
+            { value: 'view', label: 'View Assigned' },
+            { value: 'respond', label: 'Respond' },
+            { value: 'add_note', label: 'Add Internal Notes' },
+            { value: 'update_status', label: 'Update Status' },
+            { value: 'assign', label: 'View All & Assign' },
+            { value: 'export', label: 'Export' },
+            { value: 'manage', label: 'Manage All' },
+        ],
+    },
 }
 
 /**

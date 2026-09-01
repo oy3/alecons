@@ -55,8 +55,21 @@ export class EmailService {
 
   private async testConnection(): Promise<void> {
     try {
-      await this.gmail.users.getProfile({ userId: "me" });
-      this.logger.log("Gmail API connection verified successfully");
+      const accessTokenResponse = await this.oauth2Client.getAccessToken();
+      const accessToken = accessTokenResponse?.token;
+
+      if (!accessToken) {
+        throw new Error("Google OAuth did not return an access token");
+      }
+
+      const tokenInfo = await this.oauth2Client.getTokenInfo(accessToken);
+      const requiredScope = "https://www.googleapis.com/auth/gmail.send";
+
+      if (!tokenInfo.scopes.includes(requiredScope)) {
+        throw new Error(`Google OAuth token is missing required scope: ${requiredScope}`);
+      }
+
+      this.logger.log("Gmail API send authorization verified successfully");
     } catch (error) {
       this.logger.error("Gmail API connection failed:", error.message);
     }
@@ -66,7 +79,7 @@ export class EmailService {
    * Send email using Gmail API
    * This method uses HTTPS (port 443) instead of SMTP ports which may be blocked by cloud providers
    */
-  private async sendEmailViaGmailAPI(mailOptions: any): Promise<void> {
+  private async sendEmailViaGmailAPI(mailOptions: any): Promise<string | undefined> {
     try {
       let message: string;
 
@@ -80,6 +93,7 @@ export class EmailService {
           `From: ${mailOptions.from}`,
           `To: ${mailOptions.to}`,
           `Subject: ${mailOptions.subject}`,
+          ...(mailOptions.replyTo ? [`Reply-To: ${mailOptions.replyTo}`] : []),
           "MIME-Version: 1.0",
           `Content-Type: multipart/mixed; boundary="${boundary}"`,
           "",
@@ -120,6 +134,7 @@ export class EmailService {
           `From: ${mailOptions.from}`,
           `To: ${mailOptions.to}`,
           `Subject: ${mailOptions.subject}`,
+          ...(mailOptions.replyTo ? [`Reply-To: ${mailOptions.replyTo}`] : []),
           "MIME-Version: 1.0",
           'Content-Type: text/html; charset="UTF-8"',
           "",
@@ -144,6 +159,7 @@ export class EmailService {
       });
 
       this.logger.log(`Email sent via Gmail API. Message ID: ${res.data.id}`);
+      return res.data.id || undefined;
     } catch (error) {
       this.logger.error("Failed to send email via Gmail API:", error.message);
       throw error;
@@ -153,14 +169,14 @@ export class EmailService {
   private async sendEmailWithRetry(
     mailOptions: any,
     maxRetries: number = 3,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     let lastError: Error;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        await this.sendEmailViaGmailAPI(mailOptions);
+        const messageId = await this.sendEmailViaGmailAPI(mailOptions);
         this.logger.log(`Email sent successfully on attempt ${attempt}`);
-        return;
+        return messageId;
       } catch (error) {
         lastError = error;
         this.logger.warn(
@@ -177,6 +193,86 @@ export class EmailService {
     }
 
     throw lastError;
+  }
+
+  async sendContactEnquiryAcknowledgement(input: {
+    to: string;
+    firstName: string;
+    reference: string;
+    categoryLabel: string;
+  }): Promise<string | undefined> {
+    const infoAddress = process.env.CONTACT_REPLY_TO_EMAIL || 'info@alecons.edu.ng';
+    return this.sendEmailWithRetry({
+      from: `ALECONS Enquiries <${process.env.SMTP_USER}>`,
+      replyTo: infoAddress,
+      to: input.to,
+      subject: `We received your enquiry (${input.reference})`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#242424;max-width:640px;margin:auto">
+          <h2 style="color:#9f2528">Thank you for contacting ALECONS</h2>
+          <p>Hello ${this.escapeHtml(input.firstName)},</p>
+          <p>We have received your ${this.escapeHtml(input.categoryLabel.toLowerCase())}. A member of our team will review it and respond to this email address.</p>
+          <p><strong>Enquiry reference:</strong> ${this.escapeHtml(input.reference)}</p>
+          <p>Please include this reference if you contact us about the enquiry.</p>
+          <p>Regards,<br>ALECONS Enquiries Team</p>
+        </div>`,
+    });
+  }
+
+  async sendContactEnquiryResponse(input: {
+    to: string;
+    name: string;
+    reference: string;
+    response: string;
+    responderName: string;
+  }): Promise<string | undefined> {
+    const infoAddress = process.env.CONTACT_REPLY_TO_EMAIL || 'info@alecons.edu.ng';
+    return this.sendEmailWithRetry({
+      from: `ALECONS Enquiries <${process.env.SMTP_USER}>`,
+      replyTo: infoAddress,
+      to: input.to,
+      subject: `Re: ALECONS enquiry ${input.reference}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#242424;max-width:640px;margin:auto">
+          <p>Hello ${this.escapeHtml(input.name)},</p>
+          <div style="white-space:pre-wrap">${this.escapeHtml(input.response)}</div>
+          <p>Regards,<br>${this.escapeHtml(input.responderName)}<br>ALECONS Enquiries Team</p>
+          <hr style="border:0;border-top:1px solid #ddd">
+          <p style="font-size:12px;color:#666">Reference: ${this.escapeHtml(input.reference)}. Replies are directed to ${this.escapeHtml(infoAddress)}.</p>
+        </div>`,
+    });
+  }
+
+  async sendContactEnquiryInternalAlert(input: {
+    reference: string;
+    enquirerName: string;
+    categoryLabel: string;
+  }): Promise<string | undefined> {
+    const infoAddress = process.env.CONTACT_REPLY_TO_EMAIL || 'info@alecons.edu.ng';
+    const staffUrl = `${String(process.env.STAFF_PORTAL_URL || '').replace(/\/$/, '')}/enquiries`;
+    return this.sendEmailWithRetry({
+      from: `ALECONS Enquiries <${process.env.SMTP_USER}>`,
+      to: infoAddress,
+      subject: `New website enquiry (${input.reference})`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#242424;max-width:640px;margin:auto">
+          <h2 style="color:#9f2528">New contact enquiry</h2>
+          <p><strong>Reference:</strong> ${this.escapeHtml(input.reference)}</p>
+          <p><strong>From:</strong> ${this.escapeHtml(input.enquirerName)}</p>
+          <p><strong>Category:</strong> ${this.escapeHtml(input.categoryLabel)}</p>
+          <p>Open the Enquiries module in the Staff Portal to review and assign it.</p>
+          ${process.env.STAFF_PORTAL_URL ? `<p><a href="${this.escapeHtml(staffUrl)}">Open Enquiries</a></p>` : ''}
+        </div>`,
+    });
+  }
+
+  private escapeHtml(value: string): string {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   async sendReportEmail(

@@ -78,7 +78,7 @@ export const staffNavigationItems = [
     module: "utilities",
   },
   {
-    title: "Reports",
+    title: "Reports & Analytics",
     icon: "bi-graph-up",
     route: "/reports",
     module: "reports",

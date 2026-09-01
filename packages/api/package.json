@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "rm -f tsconfig.build.tsbuildinfo && nest build",
+    "build": "rm -f tsconfig.build.tsbuildinfo && NODE_OPTIONS=--max-old-space-size=4096 nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "rm -f tsconfig.build.tsbuildinfo && NODE_OPTIONS=--max-old-space-size=4096 NODE_ENV=development NODE_NO_WARNINGS=1 tsc-watch --project tsconfig.build.json --onSuccess \"node dist/main.js\"",

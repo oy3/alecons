@@ -31,7 +31,9 @@ function sendFile(response, filePath, status = 200, headers = {}) {
 }
 
 function resolvePublicFile(pathname) {
-  const safePath = normalize(decodeURIComponent(pathname)).replace(/^(\.\.(\/|\\|$))+/, "");
+  const safePath = normalize(decodeURIComponent(pathname))
+    .replace(/^(\.\.(\/|\\|$))+/, "")
+    .replace(/^[/\\]+/, "");
   const directPath = join(distDir, safePath);
   if (existsSync(directPath) && statSync(directPath).isFile()) return directPath;
 

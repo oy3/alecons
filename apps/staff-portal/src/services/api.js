@@ -341,6 +341,67 @@ class StaffApiService {
         return this.makeRequest(`/staff/reports/${type}${queryParams ? `?${queryParams}` : ''}`)
     }
 
+    async getReportFilterOptions() {
+        return this.makeRequest('/staff/reports/filter-options')
+    }
+
+    async getAnalyticsReport(type, filters = {}, refresh = false) {
+        const params = new URLSearchParams({ ...filters, ...(refresh ? { refresh: 'true' } : {}) })
+        return this.makeRequest(`/staff/reports/${type}?${params.toString()}`)
+    }
+
+    async getWebsiteAnalytics(filters = {}) {
+        const params = new URLSearchParams(filters)
+        return this.makeRequest(`/staff/reports/website?${params.toString()}`)
+    }
+
+    async getReportSchedules() {
+        return this.makeRequest('/staff/reports/schedules')
+    }
+
+    async createReportSchedule(payload) {
+        return this.makeRequest('/staff/reports/schedules', { method: 'POST', body: JSON.stringify(payload) })
+    }
+
+    async updateReportSchedule(id, payload) {
+        return this.makeRequest(`/staff/reports/schedules/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+    }
+
+    async getReportExportHistory() {
+        return this.makeRequest('/staff/reports/exports')
+    }
+
+    async syncFeeObligations(academicSessionId) {
+        return this.makeRequest(`/staff/reports/fee-obligations/sync/${academicSessionId}`, { method: 'POST' })
+    }
+
+    async syncAllFeeObligations() {
+        return this.makeRequest('/staff/reports/fee-obligations/sync-all', { method: 'POST' })
+    }
+
+    async exportAnalyticsReport(payload) {
+        const response = await fetch(`${this.baseURL}/staff/reports/export`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
+            body: JSON.stringify(payload),
+        })
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}))
+            throw new Error(error.message || 'Report export failed')
+        }
+        const blob = await response.blob()
+        const disposition = response.headers.get('content-disposition') || ''
+        const match = disposition.match(/filename="?([^";]+)"?/i)
+        const link = document.createElement('a')
+        link.href = URL.createObjectURL(blob)
+        link.download = match?.[1] || `alecons-report.${payload.format}`
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(link.href)
+        return { success: true }
+    }
+
     // System settings
     async getSystemSettings() {
         return this.makeRequest('/staff/settings')

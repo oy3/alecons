@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
+import { trackPortalActivity } from '@shared/utils/portalActivity'
 
 // Import views
 import Login from '../views/Login.vue'
@@ -136,6 +137,18 @@ router.beforeEach(async (to, from, next) => {
 
     // Allow navigation
     next();
+})
+
+router.afterEach((to) => {
+    const token = localStorage.getItem('student_token')
+    if (!token || !to.meta.requiresAuth) return
+    trackPortalActivity({
+        baseUrl: import.meta.env.VITE_APP_API_URL || 'http://localhost:8000/api/v1',
+        token,
+        portal: 'student',
+        routeName: to.name || 'unknown',
+        pathTemplate: to.matched.at(-1)?.path,
+    })
 })
 
 export default router

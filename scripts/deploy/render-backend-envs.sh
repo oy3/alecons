@@ -64,6 +64,10 @@ export SPACES_REGION="${SPACES_REGION:-lon1}"
 export REDIS_HOST="${REDIS_HOST:-localhost}"
 export REDIS_PORT="${REDIS_PORT:-6379}"
 export PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-/opt/google/chrome/google-chrome}"
+export TZ="${TZ:-Africa/Lagos}"
+export UMAMI_API_URL="${UMAMI_API_URL:-}"
+export UMAMI_API_TOKEN="${UMAMI_API_TOKEN:-}"
+export UMAMI_WEBSITE_ID="${UMAMI_WEBSITE_ID:-}"
 
 write_env_file "$OUTPUT_PATH" \
     NODE_ENV \
@@ -90,6 +94,10 @@ write_env_file "$OUTPUT_PATH" \
     REDIS_HOST \
     REDIS_PORT \
     REDIS_PASSWORD \
-    PUPPETEER_EXECUTABLE_PATH
+    PUPPETEER_EXECUTABLE_PATH \
+    TZ \
+    UMAMI_API_URL \
+    UMAMI_API_TOKEN \
+    UMAMI_WEBSITE_ID
 
 echo "Backend production environment file generated successfully at $OUTPUT_PATH"

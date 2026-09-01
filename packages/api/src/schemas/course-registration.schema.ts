@@ -148,3 +148,4 @@ CourseRegistrationSchema.index(
     { studentId: 1, academicSessionId: 1, level: 1, semester: 1 },
     { unique: true, name: 'uniq_student_session_semester_registration' }
 );
+CourseRegistrationSchema.index({ academicSessionId: 1, programId: 1, level: 1, semester: 1, status: 1 });

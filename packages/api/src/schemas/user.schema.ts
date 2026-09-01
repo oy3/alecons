@@ -67,6 +67,7 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+UserSchema.index({ role: 1, isActive: 1, createdAt: -1 });
 
 // Hash password before saving
 UserSchema.pre('save', async function (next) {

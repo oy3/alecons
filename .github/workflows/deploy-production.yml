@@ -73,6 +73,10 @@ jobs:
       STAFF_PORTAL_URL: ${{ vars[format('{0}', 'STAFF_PORTAL_URL')] }}
       CBT_PORTAL_URL: ${{ vars[format('{0}', 'CBT_PORTAL_URL')] }}
       PUPPETEER_EXECUTABLE_PATH: ${{ vars[format('{0}', 'PUPPETEER_EXECUTABLE_PATH')] }}
+      TZ: Africa/Lagos
+      UMAMI_API_URL: ${{ vars.UMAMI_API_URL }}
+      UMAMI_API_TOKEN: ${{ secrets.UMAMI_API_TOKEN }}
+      UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

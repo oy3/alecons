@@ -156,7 +156,7 @@ export default {
     <Sidebar v-if="showLayout" />
 
     <!-- Main Content -->
-    <main class="flex-grow-1 d-flex flex-column min-vh-100">
+    <main class="staff-main flex-grow-1 d-flex flex-column min-vh-100">
       <!-- Navbar -->
       <Navbar v-if="showLayout" />
       
@@ -176,6 +176,10 @@ export default {
 </template>
 
 <style scoped>
+.staff-main {
+  min-width: 0;
+}
+
 .fade-in {
   animation: fadeIn 0.3s ease-in;
 }

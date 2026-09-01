@@ -55,6 +55,8 @@ export class Student {
 }
 
 export const StudentSchema = SchemaFactory.createForClass(Student);
+StudentSchema.index({ academicSession: 1, programId: 1, currentLevel: 1, status: 1 });
+StudentSchema.index({ entryAcademicSession: 1, programId: 1 });
 
 // Note: Matriculation number generation is now handled by MatriculationService
 // to ensure proper format (ALC/programType/YY/programCode+sequence) and uniqueness

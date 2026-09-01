@@ -110,10 +110,18 @@ export const MODULE_DEFINITIONS = {
         ],
     },
     reports: {
-        label: 'Reports',
+        label: 'Reports & Analytics',
         permissions: [
-            { value: 'view', label: 'View' },
+            { value: 'view', label: 'View Overview' },
+            { value: 'view_admissions', label: 'View Admissions' },
+            { value: 'view_students', label: 'View Students' },
+            { value: 'view_finance', label: 'View Finance' },
+            { value: 'view_academics', label: 'View Academics' },
+            { value: 'view_exams', label: 'View Exams' },
+            { value: 'view_communications', label: 'View Communications' },
+            { value: 'view_activity', label: 'View Activity & Website' },
             { value: 'export', label: 'Export' },
+            { value: 'manage', label: 'Manage All' },
         ],
     },
     settings: {
@@ -129,6 +137,17 @@ export const MODULE_DEFINITIONS = {
             { value: 'view', label: 'View' },
             { value: 'generate', label: 'Generate' },
             { value: 'export', label: 'Export' },
+            { value: 'manage', label: 'Manage All' },
+        ],
+    },
+    notifications: {
+        label: 'Notifications',
+        permissions: [
+            { value: 'view', label: 'View' },
+            { value: 'create', label: 'Create' },
+            { value: 'edit', label: 'Edit Drafts' },
+            { value: 'send', label: 'Send or Schedule' },
+            { value: 'archive', label: 'Archive' },
             { value: 'manage', label: 'Manage All' },
         ],
     },

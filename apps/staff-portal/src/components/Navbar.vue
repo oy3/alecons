@@ -2,9 +2,12 @@
 import { useAuthStore } from '../stores/auth.js'
 import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
+import NotificationCenter from '@shared/components/NotificationCenter.vue'
+import { apiService } from '../services/api.js'
 
 export default {
   name: 'StaffNavbar',
+  components: { NotificationCenter },
   setup() {
     const authStore = useAuthStore()
     const router = useRouter()
@@ -39,7 +42,8 @@ export default {
 
     return {
       authStore,
-      logout
+      logout,
+      apiService,
     }
   }
 }
@@ -83,49 +87,9 @@ export default {
       </div>
 
       <!-- Right Side Icons -->
-      <div class="d-flex align-items-center">
+      <div class="d-flex align-items-center gap-2">
         <!-- Notifications -->
-        <div class="dropdown me-3">
-          <!-- <button
-            class="btn btn-link text-dark p-1"
-            type="button"
-            id="notificationsDropdown"
-            data-bs-toggle="dropdown"
-            aria-expanded="false"
-          >
-            <i class="bi bi-bell fs-5 position-relative">
-              <span
-                class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                style="font-size: 0.5rem"
-              >
-                3
-              </span>
-            </i>
-          </button> -->
-          <ul
-            class="dropdown-menu dropdown-menu-end"
-            aria-labelledby="notificationsDropdown"
-          >
-            <li><h6 class="dropdown-header">Notifications</h6></li>
-            <li>
-              <a class="dropdown-item" href="#"
-                ><small>New application submitted</small></a
-              >
-            </li>
-            <li>
-              <a class="dropdown-item" href="#"
-                ><small>System update available</small></a
-              >
-            </li>
-            <li>
-              <a class="dropdown-item" href="#"
-                ><small>Weekly report ready</small></a
-              >
-            </li>
-            <li><hr class="dropdown-divider" /></li>
-            <li><a class="dropdown-item text-center" href="#">View all</a></li>
-          </ul>
-        </div>
+        <NotificationCenter :api="apiService" accent-color="var(--staff-primary, #1a5f5f)"/>
 
         <!-- User Profile -->
         <div class="d-flex align-items-center">

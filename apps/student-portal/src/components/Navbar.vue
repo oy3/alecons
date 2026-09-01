@@ -2,9 +2,12 @@
 import { useAuthStore } from '../stores/auth.js';
 import { useRouter } from 'vue-router';
 import Swal from 'sweetalert2';
+import NotificationCenter from '@shared/components/NotificationCenter.vue';
+import { apiService } from '../services/api.js';
 
 export default {
   name: "Navbar",
+  components: { NotificationCenter },
   setup() {
     const auth = useAuthStore();
     const router = useRouter();
@@ -35,15 +38,6 @@ export default {
       }
     };
 
-    const showNotifications = () => {
-      Swal.fire({
-        icon: 'info',
-        title: 'Coming Soon',
-        text: 'Notifications feature will be available soon.',
-        confirmButtonText: 'OK'
-      });
-    };
-
     const showMessages = () => {
       Swal.fire({
         icon: 'info',
@@ -56,8 +50,8 @@ export default {
     return {
       auth,
       logout,
-      showNotifications,
-      showMessages
+      showMessages,
+      apiService,
     };
   }
 };
@@ -95,12 +89,7 @@ export default {
         <!-- Right Icons -->
         <div class="d-flex align-items-center ms-auto">
           <!-- Notifications -->
-          <div class="position-relative me-3">
-            <i class="bi bi-bell fs-5 text-muted cursor-pointer" @click="showNotifications"></i>
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger small">
-              0
-            </span>
-          </div>
+          <NotificationCenter :api="apiService" accent-color="var(--acon-secondary, #2d7d7d)" class="me-3" />
 
           <!-- Messages -->
           <div class="position-relative me-3 d-none d-sm-block">

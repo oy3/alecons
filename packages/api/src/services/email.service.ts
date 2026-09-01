@@ -179,6 +179,21 @@ export class EmailService {
     throw lastError;
   }
 
+  async sendReportEmail(
+    recipients: string[],
+    subject: string,
+    html: string,
+    attachment: { filename: string; content: Buffer; contentType: string },
+  ): Promise<void> {
+    await this.sendEmailWithRetry({
+      from: `ALECONS <${process.env.SMTP_USER}>`,
+      to: recipients.join(', '),
+      subject,
+      html,
+      attachments: [attachment],
+    });
+  }
+
   async sendVerificationEmail(
     email: string,
     firstName: string,

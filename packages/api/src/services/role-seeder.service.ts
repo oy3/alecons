@@ -51,6 +51,10 @@ export class RoleSeederService implements OnModuleInit {
                         {
                             module: 'settings',
                             permissions: ['view', 'manage']
+                        },
+                        {
+                            module: 'notifications',
+                            permissions: ['view', 'create', 'edit', 'send', 'archive', 'manage']
                         }
                     ],
                     active: true

@@ -60,6 +60,12 @@ export const staffNavigationItems = [
     module: "payments",
   },
   {
+    title: "Notifications",
+    icon: "bi-bell",
+    route: "/notifications",
+    module: "notifications",
+  },
+  {
     title: "ID Cards",
     icon: "bi-person-badge",
     route: "/id-cards",
@@ -72,7 +78,7 @@ export const staffNavigationItems = [
     module: "utilities",
   },
   {
-    title: "Reports",
+    title: "Reports & Analytics",
     icon: "bi-graph-up",
     route: "/reports",
     module: "reports",

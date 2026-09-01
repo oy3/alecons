@@ -4,6 +4,8 @@ import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import BrandLogo from "./BrandLogo.vue";
 import { useAuthStore } from "../stores/auth.js";
+import NotificationCenter from "@shared/components/NotificationCenter.vue";
+import { apiService } from "../services/api.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -44,7 +46,12 @@ async function logout() {
     class="account-header px-4 py-3 d-flex align-items-center justify-content-between"
   >
     <BrandLogo />
-    <div class="dropdown">
+    <div class="d-flex align-items-center gap-2">
+      <NotificationCenter
+        :api="apiService"
+        accent-color="var(--acon-primary, #9e2a2b)"
+      />
+      <div class="dropdown">
       <a
         href="#"
         class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark"
@@ -122,6 +129,7 @@ async function logout() {
           >
         </li>
       </ul>
+      </div>
     </div>
   </header>
 </template>

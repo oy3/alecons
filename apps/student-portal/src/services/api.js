@@ -345,6 +345,23 @@ class ApiService {
             method: 'POST',
         });
     }
+
+    async getNotificationInbox(params = {}) {
+        const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString();
+        return this.makeRequest(`/notifications${query ? `?${query}` : ''}`);
+    }
+
+    async getNotificationUnreadCount() {
+        return this.makeRequest('/notifications/unread-count');
+    }
+
+    async markNotificationRead(id) {
+        return this.patch(`/notifications/${id}/read`, {});
+    }
+
+    async markAllNotificationsRead() {
+        return this.patch('/notifications/read-all', {});
+    }
 }
 
 // Create and export a singleton instance

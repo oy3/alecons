@@ -1,8 +1,10 @@
+import { site } from "../data/site";
+
 const CONTACT_ENDPOINT = import.meta.env.VITE_CONTACT_FORM_ENDPOINT?.trim();
 
 export class ContactEndpointUnavailableError extends Error {
   constructor() {
-    super("Online form delivery is being configured. Please email admissions@alecons.edu.ng or call the admissions office.");
+    super(`Online form delivery is being configured. Please email ${site.admissionsEmail} or call the admissions office.`);
     this.name = "ContactEndpointUnavailableError";
   }
 }

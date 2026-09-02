@@ -241,7 +241,7 @@ onBeforeUnmount(() => {
           v-else
           :key="item.id"
           type="button"
-          class="notification-row w-100 border-0 border-bottom text-start"
+          class="notification-row w-100 border-0 border-bottom text-start rounded-0"
           :class="{ unread: !item.isRead }"
           @click="openNotification(item)"
         >

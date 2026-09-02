@@ -313,9 +313,46 @@ export class ContactEnquiriesService {
 
   async respond(userId: string, id: string, payload: ContactEnquiryMessageDto) {
     const context = await this.access.assertPermission(userId, 'respond');
-    const enquiry = await this.findAccessible(context, id);
+    let enquiry = await this.findAccessible(context, id);
     if ([ContactEnquiryStatus.CLOSED, ContactEnquiryStatus.SPAM].includes(enquiry.status)) {
       throw new BadRequestException('Reopen this enquiry before sending a response');
+    }
+    if (!enquiry.assignedToUserId) {
+      const previousStatus = enquiry.status;
+      const now = new Date();
+      const assigned = await this.enquiryModel.findOneAndUpdate(
+        {
+          _id: enquiry._id,
+          $or: [
+            { assignedToUserId: { $exists: false } },
+            { assignedToUserId: null },
+          ],
+        },
+        {
+          $set: {
+            assignedToUserId: context.actorId,
+            assignedByUserId: context.actorId,
+            assignedAt: now,
+            status: enquiry.status === ContactEnquiryStatus.NEW
+              ? ContactEnquiryStatus.ASSIGNED
+              : enquiry.status,
+            lastActivityAt: now,
+          },
+        },
+        { new: true },
+      );
+      if (assigned) {
+        enquiry = assigned;
+        await this.activityModel.create({
+          enquiryId: enquiry._id,
+          actorUserId: context.actorId,
+          action: 'auto_assigned_on_response',
+          previousState: previousStatus,
+          newState: enquiry.status,
+        });
+      } else {
+        enquiry = await this.getById(id);
+      }
     }
     const message = await this.messageModel.create({
       enquiryId: enquiry._id,

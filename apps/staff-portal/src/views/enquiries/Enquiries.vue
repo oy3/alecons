@@ -537,7 +537,7 @@ export default {
                   {{ item.firstName }} {{ item.lastName }}
                 </div>
                 <div class="small text-muted">
-                  {{ item.reference }} · {{ item.email }}
+                  {{ item.reference }} <br> {{ item.email }}
                 </div>
               </td>
               <td>

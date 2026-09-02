@@ -50,3 +50,75 @@ test('the public honeypot returns a generic receipt without persisting or sendin
   assert.equal(result.received, true);
   assert.match(result.reference, /^ENQ-\d{4}-[A-F0-9]{8}$/);
 });
+
+test('the first responding staff member atomically owns an unassigned enquiry', async () => {
+  const actorId = new Types.ObjectId();
+  const enquiryId = new Types.ObjectId();
+  const enquiry: any = {
+    _id: enquiryId,
+    status: 'new',
+    assignedToUserId: undefined,
+  };
+  const assigned = {
+    ...enquiry,
+    status: 'assigned',
+    assignedToUserId: actorId,
+  };
+  let assignmentFilter: any;
+  let activity: any;
+  const enquiries = new ContactEnquiriesService(
+    {
+      findOneAndUpdate: async (filter: any) => {
+        assignmentFilter = filter;
+        return assigned;
+      },
+    } as any,
+    { create: async () => ({ _id: new Types.ObjectId() }) } as any,
+    { create: async (value: any) => { activity = value; } } as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {
+      assertPermission: async () => ({ actorId }),
+    } as any,
+    {} as any,
+    {} as any,
+    {} as any,
+  );
+  (enquiries as any).findAccessible = async () => enquiry;
+  (enquiries as any).deliverResponse = async (_context: any, owner: any) => owner;
+
+  const result: any = await enquiries.respond(String(actorId), String(enquiryId), { body: 'A response' });
+  assert.equal(String(result.assignedToUserId), String(actorId));
+  assert.equal(String(assignmentFilter._id), String(enquiryId));
+  assert.equal(activity.action, 'auto_assigned_on_response');
+});
+
+test('responding never silently replaces an existing assignee', async () => {
+  const actorId = new Types.ObjectId();
+  const existingAssignee = new Types.ObjectId();
+  const enquiry: any = {
+    _id: new Types.ObjectId(),
+    status: 'assigned',
+    assignedToUserId: existingAssignee,
+  };
+  let attemptedAssignment = false;
+  const enquiries = new ContactEnquiriesService(
+    { findOneAndUpdate: async () => { attemptedAssignment = true; } } as any,
+    { create: async () => ({ _id: new Types.ObjectId() }) } as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    { assertPermission: async () => ({ actorId }) } as any,
+    {} as any,
+    {} as any,
+    {} as any,
+  );
+  (enquiries as any).findAccessible = async () => enquiry;
+  (enquiries as any).deliverResponse = async (_context: any, owner: any) => owner;
+
+  const result: any = await enquiries.respond(String(actorId), String(enquiry._id), { body: 'A response' });
+  assert.equal(attemptedAssignment, false);
+  assert.equal(String(result.assignedToUserId), String(existingAssignee));
+});

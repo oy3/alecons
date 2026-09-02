@@ -4,10 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "rm -f tsconfig.build.tsbuildinfo && nest build",
+    "build": "rm -f tsconfig.build.tsbuildinfo && NODE_OPTIONS=--max-old-space-size=4096 nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
-    "start:dev": "rm -f tsconfig.build.tsbuildinfo && NODE_OPTIONS=--max-old-space-size=4096 NODE_ENV=development NODE_NO_WARNINGS=1 tsc-watch --onSuccess \"node dist/main.js\"",
+    "start:dev": "rm -f tsconfig.build.tsbuildinfo && NODE_OPTIONS=--max-old-space-size=4096 NODE_ENV=development NODE_NO_WARNINGS=1 tsc-watch --project tsconfig.build.json --onSuccess \"node dist/main.js\"",
     "start:dev:safe": "npm run start:dev",
     "start:dev:nest": "rm -f tsconfig.build.tsbuildinfo && NODE_OPTIONS=--max-old-space-size=4096 NODE_ENV=development NODE_NO_WARNINGS=1 nest start --watch",
     "start:dev:verbose": "rm -f tsconfig.build.tsbuildinfo && NODE_ENV=development nest start --watch",

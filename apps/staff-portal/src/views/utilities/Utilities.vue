@@ -2,9 +2,13 @@
 import Swal from 'sweetalert2'
 import { apiService } from '../../services/api.js'
 import { logger } from '@shared/utils/logger'
+import { useAuthStore } from '../../stores/auth.js'
 
 export default {
   name: 'StaffUtilities',
+  setup() {
+    return { authStore: useAuthStore() }
+  },
   data() {
     return {
       academicSessions: [],
@@ -20,6 +24,7 @@ export default {
       isMigratingAcademicResults: false,
       isRebuildingAcademicSummaries: false,
       isMigratingAcademicProgression: false,
+      isBackfillingFeeObligations: false,
       counterStats: null,
       counterRecord: null,
       programDriftSummary: null,
@@ -71,6 +76,14 @@ export default {
           variant: 'success',
           description: 'Create session-history records from each student’s entry session, current session, and existing payment ledger.',
           actionLabel: 'Inspect & Backfill'
+        },
+        {
+          id: 'backfill-student-fee-obligations',
+          title: 'Backfill Student Fee Obligations',
+          icon: 'bi-database-check',
+          variant: 'success',
+          description: 'Create missing fee obligations from each academic session’s student payment controls and reconcile them against successful student payments.',
+          actionLabel: 'Run Backfill'
         },
         {
           id: 'academic-results-readiness',
@@ -202,6 +215,35 @@ export default {
     }
   },
   methods: {
+    async runBackfillFeeObligations() {
+      const confirmation = await Swal.fire({
+        title: 'Backfill Student Fee Obligations?',
+        html: '<div class="text-start utility-confirmation"><p class="small mb-2">This scans every academic session, creates missing obligations from its retained payment controls, and marks matches from successful student payments as paid.</p><ul class="small mb-0"><li>It does not charge students or create payment transactions.</li><li>Existing obligation amounts are not overwritten.</li><li>The operation is safe to run again.</li></ul></div>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Run Backfill',
+        confirmButtonColor: '#198754'
+      })
+      if (!confirmation.isConfirmed) return
+
+      this.isBackfillingFeeObligations = true
+      try {
+        const response = await apiService.syncAllFeeObligations()
+        if (!response.success) throw new Error(response.error || 'Fee obligation backfill failed')
+        const data = response.data || {}
+        await Swal.fire({
+          icon: 'success',
+          title: data.created ? 'Backfill Complete' : 'Already Up to Date',
+          html: `<ul class="text-start small mb-0"><li>Academic sessions scanned: <strong>${data.sessions || 0}</strong></li><li>Obligations created: <strong>${data.created || 0}</strong></li><li>Successful payments reconciled: <strong>${data.paid || 0}</strong></li></ul>`,
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Student fee obligation backfill failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Backfill Failed', text: error.message || 'Unable to backfill student fee obligations.' })
+      } finally {
+        this.isBackfillingFeeObligations = false
+      }
+    },
     async loadAcademicSessions() {
       try {
         const response = await apiService.getAcademicSessions()
@@ -1022,6 +1064,17 @@ export default {
                 <span v-if="isBackfillingStudentSessionHistory" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-clock-history me-2"></i>
                 {{ isBackfillingStudentSessionHistory ? 'Backfilling...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'backfill-student-fee-obligations' && authStore.hasPermission('utilities', 'manage')"
+                class="btn btn-success"
+                :disabled="isLoading || isBackfillingFeeObligations"
+                @click="runBackfillFeeObligations"
+              >
+                <span v-if="isBackfillingFeeObligations" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-database-check me-2"></i>
+                {{ isBackfillingFeeObligations ? 'Backfilling...' : utility.actionLabel }}
               </button>
 
               <button

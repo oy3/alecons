@@ -341,6 +341,67 @@ class StaffApiService {
         return this.makeRequest(`/staff/reports/${type}${queryParams ? `?${queryParams}` : ''}`)
     }
 
+    async getReportFilterOptions() {
+        return this.makeRequest('/staff/reports/filter-options')
+    }
+
+    async getAnalyticsReport(type, filters = {}, refresh = false) {
+        const params = new URLSearchParams({ ...filters, ...(refresh ? { refresh: 'true' } : {}) })
+        return this.makeRequest(`/staff/reports/${type}?${params.toString()}`)
+    }
+
+    async getWebsiteAnalytics(filters = {}) {
+        const params = new URLSearchParams(filters)
+        return this.makeRequest(`/staff/reports/website?${params.toString()}`)
+    }
+
+    async getReportSchedules() {
+        return this.makeRequest('/staff/reports/schedules')
+    }
+
+    async createReportSchedule(payload) {
+        return this.makeRequest('/staff/reports/schedules', { method: 'POST', body: JSON.stringify(payload) })
+    }
+
+    async updateReportSchedule(id, payload) {
+        return this.makeRequest(`/staff/reports/schedules/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+    }
+
+    async getReportExportHistory() {
+        return this.makeRequest('/staff/reports/exports')
+    }
+
+    async syncFeeObligations(academicSessionId) {
+        return this.makeRequest(`/staff/reports/fee-obligations/sync/${academicSessionId}`, { method: 'POST' })
+    }
+
+    async syncAllFeeObligations() {
+        return this.makeRequest('/staff/reports/fee-obligations/sync-all', { method: 'POST' })
+    }
+
+    async exportAnalyticsReport(payload) {
+        const response = await fetch(`${this.baseURL}/staff/reports/export`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
+            body: JSON.stringify(payload),
+        })
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}))
+            throw new Error(error.message || 'Report export failed')
+        }
+        const blob = await response.blob()
+        const disposition = response.headers.get('content-disposition') || ''
+        const match = disposition.match(/filename="?([^";]+)"?/i)
+        const link = document.createElement('a')
+        link.href = URL.createObjectURL(blob)
+        link.download = match?.[1] || `alecons-report.${payload.format}`
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(link.href)
+        return { success: true }
+    }
+
     // System settings
     async getSystemSettings() {
         return this.makeRequest('/staff/settings')
@@ -1478,6 +1539,37 @@ class StaffApiService {
     async scheduleNotification(id, scheduledAt) { return this.post(`/staff/notifications/${id}/schedule`, { scheduledAt }) }
     async cancelNotification(id, comment = '') { return this.post(`/staff/notifications/${id}/cancel`, { comment }) }
     async archiveNotification(id, comment = '') { return this.patch(`/staff/notifications/${id}/archive`, { comment }) }
+
+    // Contact Enquiries
+    async getContactEnquiries(params = {}) {
+        const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
+        return this.makeRequest(`/staff/enquiries${query ? `?${query}` : ''}`)
+    }
+    async getContactEnquiryStats() { return this.makeRequest('/staff/enquiries/stats') }
+    async getContactEnquiry(id) { return this.makeRequest(`/staff/enquiries/${id}`) }
+    async getContactEnquiryAssignees(search = '') { return this.makeRequest(`/staff/enquiries/assignees${search ? `?search=${encodeURIComponent(search)}` : ''}`) }
+    async assignContactEnquiry(id, assignedToUserId) { return this.post(`/staff/enquiries/${id}/assign`, { assignedToUserId }) }
+    async updateContactEnquiry(id, payload) { return this.patch(`/staff/enquiries/${id}`, payload) }
+    async addContactEnquiryNote(id, body) { return this.post(`/staff/enquiries/${id}/notes`, { body }) }
+    async respondToContactEnquiry(id, body) { return this.post(`/staff/enquiries/${id}/responses`, { body }) }
+    async retryContactEnquiryResponse(id, messageId) { return this.post(`/staff/enquiries/${id}/responses/${messageId}/retry`) }
+    async exportContactEnquiries(params = {}) {
+        const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
+        const response = await fetch(`${this.baseURL}/staff/enquiries/export${query ? `?${query}` : ''}`, {
+            headers: { Authorization: `Bearer ${this.token}`, Accept: 'text/csv' },
+        })
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}))
+            throw new Error(error.message || 'Could not export enquiries')
+        }
+        const blob = await response.blob()
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `contact-enquiries-${new Date().toISOString().slice(0, 10)}.csv`
+        link.click()
+        URL.revokeObjectURL(url)
+    }
 
     // Current user's notification inbox
     async getNotificationInbox(params = {}) {

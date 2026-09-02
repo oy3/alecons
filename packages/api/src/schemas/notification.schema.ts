@@ -74,11 +74,14 @@ export class Notification {
     @Prop({ enum: NotificationStatus, default: NotificationStatus.DRAFT, index: true })
     status: NotificationStatus;
 
-    @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-    createdBy: Types.ObjectId;
+    @Prop({ type: Types.ObjectId, ref: 'User', index: true })
+    createdBy?: Types.ObjectId;
 
-    @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-    updatedBy: Types.ObjectId;
+    @Prop({ type: Types.ObjectId, ref: 'User' })
+    updatedBy?: Types.ObjectId;
+
+    @Prop({ default: false, index: true })
+    systemGenerated: boolean;
 
     @Prop()
     scheduledAt?: Date;

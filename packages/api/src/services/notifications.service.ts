@@ -49,6 +49,43 @@ export class NotificationsService {
         private readonly sanitizer: ContentSanitizationService,
     ) {}
 
+    async createSystemNotification(input: {
+        actorUserId?: string | Types.ObjectId;
+        recipientUserId: string | Types.ObjectId;
+        title: string;
+        message: string;
+        actionUrl?: string;
+        actionLabel?: string;
+        category?: string;
+        priority?: string;
+    }) {
+        const actorId = input.actorUserId ? this.objectId(input.actorUserId, 'actor') : undefined;
+        const recipientId = this.objectId(input.recipientUserId, 'recipient');
+        const recipient = await this.userModel.findOne({ _id: recipientId, isActive: true }).select('_id').lean();
+        if (!recipient) throw new BadRequestException('Notification recipient is inactive or unavailable');
+        const messageText = String(input.message || '').trim().slice(0, NOTIFICATION_MESSAGE_TEXT_MAX_LENGTH);
+        if (!messageText) throw new BadRequestException('System notification message is required');
+        const notification = await this.notificationModel.create({
+            title: String(input.title || '').trim().slice(0, 140),
+            messageHtml: `<p>${this.escapeHtml(messageText)}</p>`,
+            messageText,
+            category: input.category || 'general',
+            priority: input.priority || 'normal',
+            action: input.actionUrl ? {
+                label: String(input.actionLabel || 'Open').slice(0, 50),
+                url: this.validateActionUrl(input.actionUrl),
+            } : undefined,
+            audience: { type: NotificationAudienceType.SPECIFIC_USERS, userIds: [recipientId] },
+            audienceSummary: '1 specific user',
+            status: NotificationStatus.PROCESSING,
+            createdBy: actorId,
+            updatedBy: actorId,
+            systemGenerated: true,
+        });
+        await this.audit(notification._id, actorId, 'system_notification_created', undefined, NotificationStatus.PROCESSING);
+        return notification;
+    }
+
     async assertPermission(userId: string, permission: string) {
         const actorId = this.objectId(userId, 'user');
         const user = await this.userModel.findById(actorId).select('role').lean();
@@ -276,7 +313,7 @@ export class NotificationsService {
         await this.assertPermission(userId, 'view');
         const page = Math.max(1, Number(filters.page) || 1);
         const limit = Math.min(100, Math.max(1, Number(filters.limit) || 20));
-        const query: FilterQuery<NotificationDocument> = {};
+        const query: FilterQuery<NotificationDocument> = { systemGenerated: { $ne: true } };
         if (filters.status) query.status = filters.status as NotificationStatus;
         if (filters.category) query.category = filters.category;
         if (filters.search?.trim()) {
@@ -303,13 +340,16 @@ export class NotificationsService {
 
     async managementStats(userId: string) {
         await this.assertPermission(userId, 'view');
+        const campaignFilter: FilterQuery<NotificationDocument> = { systemGenerated: { $ne: true } };
+        const campaignIds = await this.notificationModel.distinct('_id', campaignFilter);
+        const recipientFilter = { notificationId: { $in: campaignIds } };
         const [total, drafts, scheduled, sent, recipientTotal, readTotal] = await Promise.all([
-            this.notificationModel.countDocuments({ status: { $ne: NotificationStatus.ARCHIVED } }),
-            this.notificationModel.countDocuments({ status: NotificationStatus.DRAFT }),
-            this.notificationModel.countDocuments({ status: NotificationStatus.SCHEDULED }),
-            this.notificationModel.countDocuments({ status: { $in: [NotificationStatus.SENT, NotificationStatus.PARTIALLY_FAILED] } }),
-            this.recipientModel.countDocuments(),
-            this.recipientModel.countDocuments({ readAt: { $ne: null } }),
+            this.notificationModel.countDocuments({ ...campaignFilter, status: { $ne: NotificationStatus.ARCHIVED } }),
+            this.notificationModel.countDocuments({ ...campaignFilter, status: NotificationStatus.DRAFT }),
+            this.notificationModel.countDocuments({ ...campaignFilter, status: NotificationStatus.SCHEDULED }),
+            this.notificationModel.countDocuments({ ...campaignFilter, status: { $in: [NotificationStatus.SENT, NotificationStatus.PARTIALLY_FAILED] } }),
+            this.recipientModel.countDocuments(recipientFilter),
+            this.recipientModel.countDocuments({ ...recipientFilter, readAt: { $ne: null } }),
         ]);
         return { total, drafts, scheduled, sent, recipientTotal, readTotal, readRate: recipientTotal ? Math.round((readTotal / recipientTotal) * 1000) / 10 : 0 };
     }
@@ -317,7 +357,7 @@ export class NotificationsService {
     async managementDetail(id: string) {
         const notificationId = this.objectId(id, 'notification');
         const [notification, audits, readCount] = await Promise.all([
-            this.notificationModel.findById(notificationId)
+            this.notificationModel.findOne({ _id: notificationId, systemGenerated: { $ne: true } })
                 .populate('createdBy', 'firstName lastName email')
                 .populate('updatedBy', 'firstName lastName email')
                 .populate('audience.programId', 'name code durationYears')
@@ -560,9 +600,20 @@ export class NotificationsService {
         return notification;
     }
 
-    private async audit(notificationId: any, actorUserId: Types.ObjectId, action: string, previousState?: string, newState?: string, metadata?: any, comment?: string) {
-        const actor = await this.userModel.findById(actorUserId).select('role').lean();
-        await this.auditModel.create({ notificationId, actorUserId, actorRole: actor?.role || 'staff', action, previousState, newState, metadata, comment: comment?.trim() || undefined });
+    private async audit(notificationId: any, actorUserId: Types.ObjectId | undefined, action: string, previousState?: string, newState?: string, metadata?: any, comment?: string) {
+        const actor = actorUserId
+            ? await this.userModel.findById(actorUserId).select('role').lean()
+            : null;
+        await this.auditModel.create({
+            notificationId,
+            actorUserId,
+            actorRole: actor?.role || 'system',
+            action,
+            previousState,
+            newState,
+            metadata,
+            comment: comment?.trim() || undefined,
+        });
     }
 
     private serializeInboxRow(row: any) {
@@ -603,5 +654,9 @@ export class NotificationsService {
 
     private escapeRegex(value: string) {
         return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    private escapeHtml(value: string) {
+        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 }

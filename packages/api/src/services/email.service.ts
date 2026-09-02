@@ -1,5 +1,12 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { google } from "googleapis";
+import { randomBytes } from "crypto";
+
+export type GmailDeliveryReceipt = {
+  messageId?: string;
+  threadId?: string;
+  internetMessageId?: string;
+};
 
 @Injectable()
 export class EmailService {
@@ -55,8 +62,21 @@ export class EmailService {
 
   private async testConnection(): Promise<void> {
     try {
-      await this.gmail.users.getProfile({ userId: "me" });
-      this.logger.log("Gmail API connection verified successfully");
+      const accessTokenResponse = await this.oauth2Client.getAccessToken();
+      const accessToken = accessTokenResponse?.token;
+
+      if (!accessToken) {
+        throw new Error("Google OAuth did not return an access token");
+      }
+
+      const tokenInfo = await this.oauth2Client.getTokenInfo(accessToken);
+      const requiredScope = "https://www.googleapis.com/auth/gmail.send";
+
+      if (!tokenInfo.scopes.includes(requiredScope)) {
+        throw new Error(`Google OAuth token is missing required scope: ${requiredScope}`);
+      }
+
+      this.logger.log("Gmail API send authorization verified successfully");
     } catch (error) {
       this.logger.error("Gmail API connection failed:", error.message);
     }
@@ -66,7 +86,7 @@ export class EmailService {
    * Send email using Gmail API
    * This method uses HTTPS (port 443) instead of SMTP ports which may be blocked by cloud providers
    */
-  private async sendEmailViaGmailAPI(mailOptions: any): Promise<void> {
+  private async sendEmailViaGmailAPI(mailOptions: any): Promise<GmailDeliveryReceipt> {
     try {
       let message: string;
 
@@ -80,6 +100,10 @@ export class EmailService {
           `From: ${mailOptions.from}`,
           `To: ${mailOptions.to}`,
           `Subject: ${mailOptions.subject}`,
+          ...(mailOptions.replyTo ? [`Reply-To: ${mailOptions.replyTo}`] : []),
+          ...(mailOptions.messageId ? [`Message-ID: ${mailOptions.messageId}`] : []),
+          ...(mailOptions.inReplyTo ? [`In-Reply-To: ${mailOptions.inReplyTo}`] : []),
+          ...(mailOptions.references?.length ? [`References: ${mailOptions.references.join(" ")}`] : []),
           "MIME-Version: 1.0",
           `Content-Type: multipart/mixed; boundary="${boundary}"`,
           "",
@@ -120,6 +144,10 @@ export class EmailService {
           `From: ${mailOptions.from}`,
           `To: ${mailOptions.to}`,
           `Subject: ${mailOptions.subject}`,
+          ...(mailOptions.replyTo ? [`Reply-To: ${mailOptions.replyTo}`] : []),
+          ...(mailOptions.messageId ? [`Message-ID: ${mailOptions.messageId}`] : []),
+          ...(mailOptions.inReplyTo ? [`In-Reply-To: ${mailOptions.inReplyTo}`] : []),
+          ...(mailOptions.references?.length ? [`References: ${mailOptions.references.join(" ")}`] : []),
           "MIME-Version: 1.0",
           'Content-Type: text/html; charset="UTF-8"',
           "",
@@ -144,6 +172,11 @@ export class EmailService {
       });
 
       this.logger.log(`Email sent via Gmail API. Message ID: ${res.data.id}`);
+      return {
+        messageId: res.data.id || undefined,
+        threadId: res.data.threadId || undefined,
+        internetMessageId: mailOptions.messageId,
+      };
     } catch (error) {
       this.logger.error("Failed to send email via Gmail API:", error.message);
       throw error;
@@ -153,14 +186,14 @@ export class EmailService {
   private async sendEmailWithRetry(
     mailOptions: any,
     maxRetries: number = 3,
-  ): Promise<void> {
+  ): Promise<GmailDeliveryReceipt> {
     let lastError: Error;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        await this.sendEmailViaGmailAPI(mailOptions);
+        const receipt = await this.sendEmailViaGmailAPI(mailOptions);
         this.logger.log(`Email sent successfully on attempt ${attempt}`);
-        return;
+        return receipt;
       } catch (error) {
         lastError = error;
         this.logger.warn(
@@ -177,6 +210,101 @@ export class EmailService {
     }
 
     throw lastError;
+  }
+
+  async sendContactEnquiryAcknowledgement(input: {
+    to: string;
+    firstName: string;
+    reference: string;
+    categoryLabel: string;
+  }): Promise<GmailDeliveryReceipt> {
+    const messageId = this.contactMessageId(input.reference);
+    return this.sendEmailWithRetry({
+      from: `ALECONS Enquiries <${process.env.SMTP_USER}>`,
+      replyTo: this.contactReplyAddress(input.reference),
+      messageId,
+      to: input.to,
+      subject: `We received your enquiry (${input.reference})`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#242424;max-width:640px;margin:auto">
+          <h2 style="color:#9f2528">Thank you for contacting ALECONS</h2>
+          <p>Hello ${this.escapeHtml(input.firstName)},</p>
+          <p>We have received your ${this.escapeHtml(input.categoryLabel.toLowerCase())}. A member of our team will review it and respond to this email address.</p>
+          <p><strong>Enquiry reference:</strong> ${this.escapeHtml(input.reference)}</p>
+          <p>Please include this reference if you contact us about the enquiry.</p>
+          <p>Regards,<br>ALECONS Enquiries Team</p>
+        </div>`,
+    });
+  }
+
+  async sendContactEnquiryResponse(input: {
+    to: string;
+    name: string;
+    reference: string;
+    response: string;
+    responderName: string;
+    inReplyTo?: string;
+    references?: string[];
+  }): Promise<GmailDeliveryReceipt> {
+    const replyAddress = this.contactReplyAddress(input.reference);
+    const messageId = this.contactMessageId(input.reference);
+    return this.sendEmailWithRetry({
+      from: `ALECONS Enquiries <${process.env.SMTP_USER}>`,
+      replyTo: replyAddress,
+      messageId,
+      inReplyTo: input.inReplyTo,
+      references: input.references,
+      to: input.to,
+      subject: `Re: ALECONS enquiry ${input.reference}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#242424;max-width:640px;margin:auto">
+          <p>Hello ${this.escapeHtml(input.name)},</p>
+          <div style="white-space:pre-wrap">${this.escapeHtml(input.response)}</div>
+          <p>Regards,<br>${this.escapeHtml(input.responderName)}<br>ALECONS Enquiries Team</p>
+          <hr style="border:0;border-top:1px solid #ddd">
+          <p style="font-size:12px;color:#666">Reference: ${this.escapeHtml(input.reference)}. Reply to this email to continue the conversation.</p>
+        </div>`,
+    });
+  }
+
+  private contactReplyAddress(reference: string): string {
+    const mailbox = String(process.env.GOOGLE_INBOUND_MAILBOX || '').trim().toLowerCase();
+    const separator = mailbox.lastIndexOf('@');
+    if (separator <= 0) throw new Error('GOOGLE_INBOUND_MAILBOX is not configured correctly');
+    const localPart = mailbox.slice(0, separator).split('+')[0];
+    const domain = mailbox.slice(separator + 1);
+    return `${localPart}+${reference.toUpperCase()}@${domain}`;
+  }
+
+  private contactMessageId(reference: string): string {
+    const domain = String(process.env.CONTACT_REPLY_DOMAIN || 'alecons.edu.ng')
+      .trim()
+      .toLowerCase();
+    return `<${reference.toLowerCase()}.${randomBytes(12).toString('hex')}@${domain}>`;
+  }
+
+  private escapeHtml(value: string): string {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  async sendReportEmail(
+    recipients: string[],
+    subject: string,
+    html: string,
+    attachment: { filename: string; content: Buffer; contentType: string },
+  ): Promise<void> {
+    await this.sendEmailWithRetry({
+      from: `ALECONS <${process.env.SMTP_USER}>`,
+      to: recipients.join(', '),
+      subject,
+      html,
+      attachments: [attachment],
+    });
   }
 
   async sendVerificationEmail(

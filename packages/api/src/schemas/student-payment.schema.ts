@@ -181,6 +181,8 @@ StudentPaymentSchema.index({
         status: PaymentStatus.SUCCESSFUL,
     },
 });
+StudentPaymentSchema.index({ academicSessionId: 1, status: 1, paymentId: 1, paidAt: -1 });
+StudentPaymentSchema.index({ userId: 1, academicSessionId: 1, paymentId: 1, status: 1 });
 
 StudentPaymentSchema.index({
     method: 1,

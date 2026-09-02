@@ -127,6 +127,7 @@ function formatListDate(value) {
   const time = new Intl.DateTimeFormat("en-NG", {
     hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   }).format(date);
 
   if (date.toDateString() === today.toDateString()) return `Today, ${time}`;
@@ -240,7 +241,7 @@ onBeforeUnmount(() => {
           v-else
           :key="item.id"
           type="button"
-          class="notification-row w-100 border-0 border-bottom text-start"
+          class="notification-row w-100 border-0 border-bottom text-start rounded-0"
           :class="{ unread: !item.isRead }"
           @click="openNotification(item)"
         >

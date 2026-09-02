@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import { logger } from '@shared/utils/logger'
+import { trackPortalActivity } from '@shared/utils/portalActivity'
 
 const routes = [
     {
@@ -98,6 +99,18 @@ const routes = [
         meta: { requiresAuth: true, module: 'notifications' }
     },
     {
+        path: '/enquiries',
+        name: 'Enquiries',
+        component: () => import('../views/enquiries/Enquiries.vue'),
+        meta: { requiresAuth: true, module: 'enquiries' }
+    },
+    {
+        path: '/reports',
+        name: 'Reports',
+        component: () => import('../views/reports/Reports.vue'),
+        meta: { requiresAuth: true, module: 'reports' }
+    },
+    {
         path: '/utilities',
         name: 'Utilities',
         component: () => import('../views/utilities/Utilities.vue'),
@@ -109,12 +122,6 @@ const routes = [
         component: () => import('../views/id-cards/IdCardGenerator.vue'),
         meta: { requiresAuth: true, module: 'idCards' }
     },
-    //   {
-    //     path: '/reports',
-    //     name: 'Reports',
-    //     component: () => import('../views/reports/Reports.vue'),
-    //     meta: { requiresAuth: true, permissions: ['read:reports'] }
-    //   },
     //   {
     //     path: '/:pathMatch(.*)*',
     //     name: 'NotFound',
@@ -174,6 +181,18 @@ router.beforeEach(async (to, from, next) => {
     }
 
     next()
+})
+
+router.afterEach((to) => {
+    const token = localStorage.getItem('staffAuthToken')
+    if (!token || to.meta.requiresAuth === false) return
+    trackPortalActivity({
+        baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1',
+        token,
+        portal: 'staff',
+        routeName: to.name || 'unknown',
+        pathTemplate: to.matched.at(-1)?.path,
+    })
 })
 
 export default router

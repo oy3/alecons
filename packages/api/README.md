@@ -133,6 +133,33 @@ const loginResponse = await fetch('http://localhost:8000/api/v1/auth/login', {
 - `GET /api/v1/` - Basic health check
 - `GET /api/v1/health` - Detailed health status
 
+## Contact enquiry email replies
+
+The contact-enquiry module can ingest replies from the dedicated Google Workspace
+mailbox through Gmail API push notifications. Pub/Sub only signals mailbox changes;
+the API reads messages with a separate read-only OAuth credential, validates the
+sender against the original enquiry, and stores each provider message once.
+
+Set these API variables to enable the integration:
+
+```env
+CONTACT_INBOUND_EMAIL_ENABLED=true
+GOOGLE_INBOUND_CLIENT_ID=your-inbound-oauth-client-id
+GOOGLE_INBOUND_CLIENT_SECRET=your-inbound-oauth-client-secret
+GOOGLE_INBOUND_REFRESH_TOKEN=your-readonly-mailbox-refresh-token
+GOOGLE_INBOUND_MAILBOX=enquiries@alecons.edu.ng
+GOOGLE_GMAIL_PUBSUB_TOPIC=projects/api-mailer-01/topics/alecons-contact-enquiries-inbound
+GOOGLE_GMAIL_PUBSUB_AUDIENCE=https://api.alecons.edu.ng/api/v1/webhooks/google/gmail
+GOOGLE_GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT=alecons-contact-enquiries-push@api-mailer-01.iam.gserviceaccount.com
+CONTACT_REPLY_DOMAIN=alecons.edu.ng
+```
+
+Keep the inbound OAuth secrets separate from the outbound Gmail credentials. The
+inbound refresh token needs `gmail.readonly`; the public webhook accepts only a
+Google-signed OIDC token for the configured audience and push service account.
+The API registers and renews the Gmail watch automatically while the feature flag
+is enabled, and performs a periodic recovery sync for missed notifications.
+
 ## 📊 Database Collections
 
 | Collection | Purpose |

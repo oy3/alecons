@@ -1,0 +1,8 @@
+<script setup>
+import { admissionSteps } from "../../data/admissions";
+import { applyUrl } from "../../data/site";
+import SectionHeading from "../SectionHeading.vue";
+import RevealOnScroll from "../RevealOnScroll.vue";
+</script>
+<template><section class="section"><div class="site-container"><SectionHeading eyebrow="Admissions journey" title="Four steps from enquiry to enrolment" description="A clear, fully online process supported by our admissions team." /><div class="journey-grid"><RevealOnScroll v-for="(step,index) in admissionSteps" :key="step.title" :delay="index*70"><article><span>0{{ index+1 }}</span><h3>{{ step.title }}</h3><p>{{ step.description }}</p></article></RevealOnScroll></div><div class="button-row journey-actions"><a :href="applyUrl" target="_blank" rel="noopener noreferrer" class="button button--primary" data-umami-event="apply-click">Create an applicant account</a><RouterLink to="/admissions" class="button button--outline">Admissions details</RouterLink></div></div></section></template>
+<style scoped>.journey-grid{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--color-border)}.journey-grid article{min-height:14rem;padding:2rem 1.5rem 1.5rem;border-right:1px solid var(--color-border)}.journey-grid article:last-child{border-right:0}.journey-grid span{color:var(--color-primary);font-size:.72rem;font-weight:700}.journey-grid h3{margin:2.8rem 0 .6rem}.journey-grid p{font-size:.86rem}.journey-actions{margin-top:2rem}@media(max-width:767.98px){.journey-grid{grid-template-columns:1fr}.journey-grid article{min-height:0;border-right:0;border-bottom:1px solid var(--color-border)}.journey-grid h3{margin:1.4rem 0 .6rem}}</style>

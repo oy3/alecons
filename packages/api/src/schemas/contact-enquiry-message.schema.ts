@@ -44,8 +44,29 @@ export class ContactEnquiryMessage {
 
   @Prop({ maxlength: 255 })
   providerMessageId?: string;
+
+  @Prop({ maxlength: 255 })
+  providerThreadId?: string;
+
+  @Prop({ maxlength: 998 })
+  internetMessageId?: string;
+
+  @Prop({ maxlength: 998 })
+  inReplyTo?: string;
+
+  @Prop({ type: [String], default: undefined })
+  references?: string[];
+
+  @Prop()
+  receivedAt?: Date;
+
+  @Prop({ enum: ['website', 'staff_portal', 'gmail'], default: 'staff_portal' })
+  source?: string;
 }
 
 export const ContactEnquiryMessageSchema = SchemaFactory.createForClass(ContactEnquiryMessage);
 ContactEnquiryMessageSchema.index({ enquiryId: 1, createdAt: 1 });
-
+ContactEnquiryMessageSchema.index(
+  { providerMessageId: 1 },
+  { unique: true, sparse: true, name: 'uniq_contact_message_provider_id' },
+);

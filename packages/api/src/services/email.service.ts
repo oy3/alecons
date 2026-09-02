@@ -1,5 +1,12 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { google } from "googleapis";
+import { randomBytes } from "crypto";
+
+export type GmailDeliveryReceipt = {
+  messageId?: string;
+  threadId?: string;
+  internetMessageId?: string;
+};
 
 @Injectable()
 export class EmailService {
@@ -79,7 +86,7 @@ export class EmailService {
    * Send email using Gmail API
    * This method uses HTTPS (port 443) instead of SMTP ports which may be blocked by cloud providers
    */
-  private async sendEmailViaGmailAPI(mailOptions: any): Promise<string | undefined> {
+  private async sendEmailViaGmailAPI(mailOptions: any): Promise<GmailDeliveryReceipt> {
     try {
       let message: string;
 
@@ -94,6 +101,9 @@ export class EmailService {
           `To: ${mailOptions.to}`,
           `Subject: ${mailOptions.subject}`,
           ...(mailOptions.replyTo ? [`Reply-To: ${mailOptions.replyTo}`] : []),
+          ...(mailOptions.messageId ? [`Message-ID: ${mailOptions.messageId}`] : []),
+          ...(mailOptions.inReplyTo ? [`In-Reply-To: ${mailOptions.inReplyTo}`] : []),
+          ...(mailOptions.references?.length ? [`References: ${mailOptions.references.join(" ")}`] : []),
           "MIME-Version: 1.0",
           `Content-Type: multipart/mixed; boundary="${boundary}"`,
           "",
@@ -135,6 +145,9 @@ export class EmailService {
           `To: ${mailOptions.to}`,
           `Subject: ${mailOptions.subject}`,
           ...(mailOptions.replyTo ? [`Reply-To: ${mailOptions.replyTo}`] : []),
+          ...(mailOptions.messageId ? [`Message-ID: ${mailOptions.messageId}`] : []),
+          ...(mailOptions.inReplyTo ? [`In-Reply-To: ${mailOptions.inReplyTo}`] : []),
+          ...(mailOptions.references?.length ? [`References: ${mailOptions.references.join(" ")}`] : []),
           "MIME-Version: 1.0",
           'Content-Type: text/html; charset="UTF-8"',
           "",
@@ -159,7 +172,11 @@ export class EmailService {
       });
 
       this.logger.log(`Email sent via Gmail API. Message ID: ${res.data.id}`);
-      return res.data.id || undefined;
+      return {
+        messageId: res.data.id || undefined,
+        threadId: res.data.threadId || undefined,
+        internetMessageId: mailOptions.messageId,
+      };
     } catch (error) {
       this.logger.error("Failed to send email via Gmail API:", error.message);
       throw error;
@@ -169,14 +186,14 @@ export class EmailService {
   private async sendEmailWithRetry(
     mailOptions: any,
     maxRetries: number = 3,
-  ): Promise<string | undefined> {
+  ): Promise<GmailDeliveryReceipt> {
     let lastError: Error;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const messageId = await this.sendEmailViaGmailAPI(mailOptions);
+        const receipt = await this.sendEmailViaGmailAPI(mailOptions);
         this.logger.log(`Email sent successfully on attempt ${attempt}`);
-        return messageId;
+        return receipt;
       } catch (error) {
         lastError = error;
         this.logger.warn(
@@ -200,11 +217,12 @@ export class EmailService {
     firstName: string;
     reference: string;
     categoryLabel: string;
-  }): Promise<string | undefined> {
-    const infoAddress = process.env.CONTACT_REPLY_TO_EMAIL || 'info@alecons.edu.ng';
+  }): Promise<GmailDeliveryReceipt> {
+    const messageId = this.contactMessageId(input.reference);
     return this.sendEmailWithRetry({
       from: `ALECONS Enquiries <${process.env.SMTP_USER}>`,
-      replyTo: infoAddress,
+      replyTo: this.contactReplyAddress(input.reference),
+      messageId,
       to: input.to,
       subject: `We received your enquiry (${input.reference})`,
       html: `
@@ -225,11 +243,17 @@ export class EmailService {
     reference: string;
     response: string;
     responderName: string;
-  }): Promise<string | undefined> {
-    const infoAddress = process.env.CONTACT_REPLY_TO_EMAIL || 'info@alecons.edu.ng';
+    inReplyTo?: string;
+    references?: string[];
+  }): Promise<GmailDeliveryReceipt> {
+    const replyAddress = this.contactReplyAddress(input.reference);
+    const messageId = this.contactMessageId(input.reference);
     return this.sendEmailWithRetry({
       from: `ALECONS Enquiries <${process.env.SMTP_USER}>`,
-      replyTo: infoAddress,
+      replyTo: replyAddress,
+      messageId,
+      inReplyTo: input.inReplyTo,
+      references: input.references,
       to: input.to,
       subject: `Re: ALECONS enquiry ${input.reference}`,
       html: `
@@ -238,32 +262,25 @@ export class EmailService {
           <div style="white-space:pre-wrap">${this.escapeHtml(input.response)}</div>
           <p>Regards,<br>${this.escapeHtml(input.responderName)}<br>ALECONS Enquiries Team</p>
           <hr style="border:0;border-top:1px solid #ddd">
-          <p style="font-size:12px;color:#666">Reference: ${this.escapeHtml(input.reference)}. Replies are directed to ${this.escapeHtml(infoAddress)}.</p>
+          <p style="font-size:12px;color:#666">Reference: ${this.escapeHtml(input.reference)}. Reply to this email to continue the conversation.</p>
         </div>`,
     });
   }
 
-  async sendContactEnquiryInternalAlert(input: {
-    reference: string;
-    enquirerName: string;
-    categoryLabel: string;
-  }): Promise<string | undefined> {
-    const infoAddress = process.env.CONTACT_REPLY_TO_EMAIL || 'info@alecons.edu.ng';
-    const staffUrl = `${String(process.env.STAFF_PORTAL_URL || '').replace(/\/$/, '')}/enquiries`;
-    return this.sendEmailWithRetry({
-      from: `ALECONS Enquiries <${process.env.SMTP_USER}>`,
-      to: infoAddress,
-      subject: `New website enquiry (${input.reference})`,
-      html: `
-        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#242424;max-width:640px;margin:auto">
-          <h2 style="color:#9f2528">New contact enquiry</h2>
-          <p><strong>Reference:</strong> ${this.escapeHtml(input.reference)}</p>
-          <p><strong>From:</strong> ${this.escapeHtml(input.enquirerName)}</p>
-          <p><strong>Category:</strong> ${this.escapeHtml(input.categoryLabel)}</p>
-          <p>Open the Enquiries module in the Staff Portal to review and assign it.</p>
-          ${process.env.STAFF_PORTAL_URL ? `<p><a href="${this.escapeHtml(staffUrl)}">Open Enquiries</a></p>` : ''}
-        </div>`,
-    });
+  private contactReplyAddress(reference: string): string {
+    const mailbox = String(process.env.GOOGLE_INBOUND_MAILBOX || '').trim().toLowerCase();
+    const separator = mailbox.lastIndexOf('@');
+    if (separator <= 0) throw new Error('GOOGLE_INBOUND_MAILBOX is not configured correctly');
+    const localPart = mailbox.slice(0, separator).split('+')[0];
+    const domain = mailbox.slice(separator + 1);
+    return `${localPart}+${reference.toUpperCase()}@${domain}`;
+  }
+
+  private contactMessageId(reference: string): string {
+    const domain = String(process.env.CONTACT_REPLY_DOMAIN || 'alecons.edu.ng')
+      .trim()
+      .toLowerCase();
+    return `<${reference.toLowerCase()}.${randomBytes(12).toString('hex')}@${domain}>`;
   }
 
   private escapeHtml(value: string): string {

@@ -739,7 +739,11 @@ export default {
               <td>
                 <div class="small">{{ formatDate(item.createdAt) }}</div>
                 <div class="text-muted small">
-                  {{ item.createdBy?.firstName }} {{ item.createdBy?.lastName }}
+                  {{
+                    item.systemGenerated
+                      ? "System"
+                      : `${item.createdBy?.firstName || ""} ${item.createdBy?.lastName || ""}`.trim()
+                  }}
                 </div>
               </td>
               <td class="text-end text-nowrap">

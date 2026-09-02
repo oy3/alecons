@@ -111,6 +111,7 @@ export default {
   async mounted() {
     document.addEventListener("keydown", this.handleKeydown);
     await Promise.all([this.loadEnquiries(), this.loadStats()]);
+    await this.openLinkedEnquiry();
   },
   beforeUnmount() {
     clearTimeout(this.filterTimer);
@@ -138,6 +139,14 @@ export default {
       } finally {
         this.loading = false;
       }
+    },
+    async openLinkedEnquiry() {
+      const enquiryId = String(this.$route.query.open || "").trim();
+      if (!enquiryId) return;
+      await this.openDetail({ _id: enquiryId });
+      await this.$router.replace({
+        query: { ...this.$route.query, open: undefined },
+      });
     },
     async loadStats() {
       try {
@@ -712,10 +721,16 @@ export default {
                   : `${enquiry.firstName} ${enquiry.lastName}`
               }}</strong
               ><span class="text-muted">{{
-                formatDate(message.createdAt)
+                formatDate(message.receivedAt || message.sentAt || message.createdAt)
               }}</span>
             </div>
             <p class="mb-1 text-prewrap">{{ message.body }}</p>
+            <div
+              v-if="message.source === 'gmail'"
+              class="small text-muted"
+            >
+              <i class="bi bi-envelope-check me-1"></i>Received by email
+            </div>
             <div
               v-if="message.deliveryStatus === 'failed'"
               class="small text-danger"

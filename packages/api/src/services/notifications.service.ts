@@ -50,7 +50,7 @@ export class NotificationsService {
     ) {}
 
     async createSystemNotification(input: {
-        actorUserId: string | Types.ObjectId;
+        actorUserId?: string | Types.ObjectId;
         recipientUserId: string | Types.ObjectId;
         title: string;
         message: string;
@@ -59,7 +59,7 @@ export class NotificationsService {
         category?: string;
         priority?: string;
     }) {
-        const actorId = this.objectId(input.actorUserId, 'actor');
+        const actorId = input.actorUserId ? this.objectId(input.actorUserId, 'actor') : undefined;
         const recipientId = this.objectId(input.recipientUserId, 'recipient');
         const recipient = await this.userModel.findOne({ _id: recipientId, isActive: true }).select('_id').lean();
         if (!recipient) throw new BadRequestException('Notification recipient is inactive or unavailable');
@@ -80,6 +80,7 @@ export class NotificationsService {
             status: NotificationStatus.PROCESSING,
             createdBy: actorId,
             updatedBy: actorId,
+            systemGenerated: true,
         });
         await this.audit(notification._id, actorId, 'system_notification_created', undefined, NotificationStatus.PROCESSING);
         return notification;
@@ -312,7 +313,7 @@ export class NotificationsService {
         await this.assertPermission(userId, 'view');
         const page = Math.max(1, Number(filters.page) || 1);
         const limit = Math.min(100, Math.max(1, Number(filters.limit) || 20));
-        const query: FilterQuery<NotificationDocument> = {};
+        const query: FilterQuery<NotificationDocument> = { systemGenerated: { $ne: true } };
         if (filters.status) query.status = filters.status as NotificationStatus;
         if (filters.category) query.category = filters.category;
         if (filters.search?.trim()) {
@@ -339,13 +340,16 @@ export class NotificationsService {
 
     async managementStats(userId: string) {
         await this.assertPermission(userId, 'view');
+        const campaignFilter: FilterQuery<NotificationDocument> = { systemGenerated: { $ne: true } };
+        const campaignIds = await this.notificationModel.distinct('_id', campaignFilter);
+        const recipientFilter = { notificationId: { $in: campaignIds } };
         const [total, drafts, scheduled, sent, recipientTotal, readTotal] = await Promise.all([
-            this.notificationModel.countDocuments({ status: { $ne: NotificationStatus.ARCHIVED } }),
-            this.notificationModel.countDocuments({ status: NotificationStatus.DRAFT }),
-            this.notificationModel.countDocuments({ status: NotificationStatus.SCHEDULED }),
-            this.notificationModel.countDocuments({ status: { $in: [NotificationStatus.SENT, NotificationStatus.PARTIALLY_FAILED] } }),
-            this.recipientModel.countDocuments(),
-            this.recipientModel.countDocuments({ readAt: { $ne: null } }),
+            this.notificationModel.countDocuments({ ...campaignFilter, status: { $ne: NotificationStatus.ARCHIVED } }),
+            this.notificationModel.countDocuments({ ...campaignFilter, status: NotificationStatus.DRAFT }),
+            this.notificationModel.countDocuments({ ...campaignFilter, status: NotificationStatus.SCHEDULED }),
+            this.notificationModel.countDocuments({ ...campaignFilter, status: { $in: [NotificationStatus.SENT, NotificationStatus.PARTIALLY_FAILED] } }),
+            this.recipientModel.countDocuments(recipientFilter),
+            this.recipientModel.countDocuments({ ...recipientFilter, readAt: { $ne: null } }),
         ]);
         return { total, drafts, scheduled, sent, recipientTotal, readTotal, readRate: recipientTotal ? Math.round((readTotal / recipientTotal) * 1000) / 10 : 0 };
     }
@@ -353,7 +357,7 @@ export class NotificationsService {
     async managementDetail(id: string) {
         const notificationId = this.objectId(id, 'notification');
         const [notification, audits, readCount] = await Promise.all([
-            this.notificationModel.findById(notificationId)
+            this.notificationModel.findOne({ _id: notificationId, systemGenerated: { $ne: true } })
                 .populate('createdBy', 'firstName lastName email')
                 .populate('updatedBy', 'firstName lastName email')
                 .populate('audience.programId', 'name code durationYears')
@@ -596,9 +600,20 @@ export class NotificationsService {
         return notification;
     }
 
-    private async audit(notificationId: any, actorUserId: Types.ObjectId, action: string, previousState?: string, newState?: string, metadata?: any, comment?: string) {
-        const actor = await this.userModel.findById(actorUserId).select('role').lean();
-        await this.auditModel.create({ notificationId, actorUserId, actorRole: actor?.role || 'staff', action, previousState, newState, metadata, comment: comment?.trim() || undefined });
+    private async audit(notificationId: any, actorUserId: Types.ObjectId | undefined, action: string, previousState?: string, newState?: string, metadata?: any, comment?: string) {
+        const actor = actorUserId
+            ? await this.userModel.findById(actorUserId).select('role').lean()
+            : null;
+        await this.auditModel.create({
+            notificationId,
+            actorUserId,
+            actorRole: actor?.role || 'system',
+            action,
+            previousState,
+            newState,
+            metadata,
+            comment: comment?.trim() || undefined,
+        });
     }
 
     private serializeInboxRow(row: any) {

@@ -127,6 +127,7 @@ function formatListDate(value) {
   const time = new Intl.DateTimeFormat("en-NG", {
     hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   }).format(date);
 
   if (date.toDateString() === today.toDateString()) return `Today, ${time}`;

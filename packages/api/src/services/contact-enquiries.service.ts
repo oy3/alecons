@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -60,6 +61,8 @@ const STATUS_TRANSITIONS: Record<ContactEnquiryStatus, ContactEnquiryStatus[]> =
 
 @Injectable()
 export class ContactEnquiriesService {
+  private readonly logger = new Logger(ContactEnquiriesService.name);
+
   constructor(
     @InjectModel(ContactEnquiry.name) private readonly enquiryModel: Model<ContactEnquiryDocument>,
     @InjectModel(ContactEnquiryMessage.name) private readonly messageModel: Model<ContactEnquiryMessageDocument>,
@@ -106,12 +109,13 @@ export class ContactEnquiriesService {
         body: payload.message,
         senderEmail: payload.email,
         deliveryStatus: ContactMessageDeliveryStatus.NOT_APPLICABLE,
+        source: 'website',
       }),
       this.activityModel.create({ enquiryId: enquiry._id, action: 'created', newState: ContactEnquiryStatus.NEW }),
     ]);
 
     try {
-      const providerMessageId = await this.emailService.sendContactEnquiryAcknowledgement({
+      const receipt = await this.emailService.sendContactEnquiryAcknowledgement({
         to: enquiry.email,
         firstName: enquiry.firstName,
         reference: enquiry.reference,
@@ -120,7 +124,7 @@ export class ContactEnquiriesService {
       await this.activityModel.create({
         enquiryId: enquiry._id,
         action: 'acknowledgement_sent',
-        metadata: { providerMessageId },
+        metadata: receipt,
       });
     } catch (error: any) {
       await this.activityModel.create({
@@ -130,16 +134,11 @@ export class ContactEnquiriesService {
       });
     }
 
-    try {
-      const providerMessageId = await this.emailService.sendContactEnquiryInternalAlert({
-        reference: enquiry.reference,
-        enquirerName: `${enquiry.firstName} ${enquiry.lastName}`,
-        categoryLabel: CATEGORY_LABELS[enquiry.category],
-      });
-      await this.activityModel.create({ enquiryId: enquiry._id, action: 'intake_alert_sent', metadata: { providerMessageId } });
-    } catch (error: any) {
-      await this.activityModel.create({ enquiryId: enquiry._id, action: 'intake_alert_failed', comment: this.errorMessage(error) });
-    }
+    await this.notifyEnquiryManagers(
+      `New enquiry: ${enquiry.reference}`,
+      `${enquiry.firstName} ${enquiry.lastName} submitted a ${CATEGORY_LABELS[enquiry.category].toLowerCase()}.`,
+      String(enquiry._id),
+    );
 
     return { reference: enquiry.reference, received: true };
   }
@@ -239,8 +238,8 @@ export class ContactEnquiriesService {
         recipientUserId: assigneeId,
         title: `Enquiry assigned: ${enquiry.reference}`,
         message: `${enquiry.firstName} ${enquiry.lastName}'s ${CATEGORY_LABELS[enquiry.category].toLowerCase()} has been assigned to you.`,
-        actionUrl: '/enquiries',
-        actionLabel: 'Open enquiries',
+        actionUrl: `/enquiries?open=${encodeURIComponent(String(enquiry._id))}`,
+        actionLabel: 'Open enquiry',
         category: 'general',
         priority: enquiry.priority === 'urgent' ? 'urgent' : enquiry.priority,
       });
@@ -324,6 +323,7 @@ export class ContactEnquiriesService {
       body: payload.body,
       createdByUserId: context.actorId,
       deliveryStatus: ContactMessageDeliveryStatus.PENDING,
+      source: 'staff_portal',
     });
     return this.deliverResponse(context, enquiry, message);
   }
@@ -370,18 +370,29 @@ export class ContactEnquiriesService {
   private async deliverResponse(context: ContactEnquiryAccessContext, enquiry: ContactEnquiryDocument, message: ContactEnquiryMessageDocument) {
     const actor = await this.userModel.findById(context.actorId).select('firstName otherName lastName').lean();
     const responderName = [actor?.firstName, actor?.otherName, actor?.lastName].filter(Boolean).join(' ') || 'ALECONS Staff';
+    const threadMessages = await this.messageModel.find({
+      enquiryId: enquiry._id,
+      internetMessageId: { $exists: true, $ne: null },
+    }).select('internetMessageId').sort({ createdAt: 1 }).limit(30).lean();
+    const references = threadMessages
+      .map((item) => item.internetMessageId)
+      .filter((value): value is string => Boolean(value));
     try {
-      const providerMessageId = await this.emailService.sendContactEnquiryResponse({
+      const receipt = await this.emailService.sendContactEnquiryResponse({
         to: enquiry.email,
         name: enquiry.firstName,
         reference: enquiry.reference,
         response: message.body,
         responderName,
+        inReplyTo: references.length ? references[references.length - 1] : undefined,
+        references,
       });
       const now = new Date();
       message.deliveryStatus = ContactMessageDeliveryStatus.SENT;
       message.sentAt = now;
-      message.providerMessageId = providerMessageId;
+      message.providerMessageId = receipt.messageId;
+      message.providerThreadId = receipt.threadId;
+      message.internetMessageId = receipt.internetMessageId;
       await message.save();
       const previousStatus = enquiry.status;
       enquiry.status = ContactEnquiryStatus.AWAITING_ENQUIRER;
@@ -396,7 +407,7 @@ export class ContactEnquiriesService {
         action: 'response_sent',
         previousState: previousStatus,
         newState: enquiry.status,
-        metadata: { messageId: String(message._id), providerMessageId },
+        metadata: { messageId: String(message._id), ...receipt },
       });
       return this.detail(String(context.actorId), String(enquiry._id));
     } catch (error: any) {
@@ -413,6 +424,164 @@ export class ContactEnquiriesService {
         metadata: { messageId: String(message._id) },
       });
       throw new BadGatewayException('Response was saved but email delivery failed. You can retry it from the enquiry.');
+    }
+  }
+
+  async recordInboundReply(input: {
+    reference: string;
+    providerMessageId: string;
+    providerThreadId?: string;
+    internetMessageId?: string;
+    inReplyTo?: string;
+    references?: string[];
+    senderEmail: string;
+    body: string;
+    receivedAt: Date;
+  }): Promise<{ status: 'processed' | 'duplicate' | 'unmatched' | 'sender_mismatch'; enquiryId?: string; reason?: string }> {
+    const session = await this.enquiryModel.db.startSession();
+    let notificationTarget: { enquiry: ContactEnquiryDocument; assignedToUserId?: Types.ObjectId } | undefined;
+    let result: { status: 'processed' | 'duplicate' | 'unmatched' | 'sender_mismatch'; enquiryId?: string; reason?: string };
+    try {
+      await session.withTransaction(async () => {
+        const enquiry = await this.enquiryModel.findOne({ reference: input.reference.toUpperCase() }).session(session);
+        if (!enquiry) {
+          result = { status: 'unmatched', reason: 'No enquiry matches the supplied reference' };
+          return;
+        }
+        if (enquiry.email.toLowerCase() !== input.senderEmail.toLowerCase()) {
+          result = {
+            status: 'sender_mismatch',
+            enquiryId: String(enquiry._id),
+            reason: 'Sender address does not match the enquiry address',
+          };
+          return;
+        }
+
+        const existing = await this.messageModel.findOne({ providerMessageId: input.providerMessageId })
+          .select('_id').session(session).lean();
+        if (existing) {
+          result = { status: 'duplicate', enquiryId: String(enquiry._id) };
+          return;
+        }
+
+        await this.messageModel.create([{
+          enquiryId: enquiry._id,
+          kind: ContactMessageKind.ENQUIRER_MESSAGE,
+          body: input.body,
+          senderEmail: input.senderEmail,
+          deliveryStatus: ContactMessageDeliveryStatus.NOT_APPLICABLE,
+          providerMessageId: input.providerMessageId,
+          providerThreadId: input.providerThreadId,
+          internetMessageId: input.internetMessageId,
+          inReplyTo: input.inReplyTo,
+          references: input.references,
+          receivedAt: input.receivedAt,
+          source: 'gmail',
+        }], { session });
+
+        const previousStatus = enquiry.status;
+        if ([
+          ContactEnquiryStatus.ASSIGNED,
+          ContactEnquiryStatus.AWAITING_ENQUIRER,
+          ContactEnquiryStatus.RESOLVED,
+          ContactEnquiryStatus.CLOSED,
+        ].includes(enquiry.status)) {
+          enquiry.status = ContactEnquiryStatus.IN_PROGRESS;
+        }
+        enquiry.resolvedAt = undefined;
+        enquiry.closedAt = undefined;
+        enquiry.lastMessageAt = input.receivedAt;
+        enquiry.lastActivityAt = new Date();
+        await enquiry.save({ session });
+        await this.activityModel.create([{
+          enquiryId: enquiry._id,
+          action: 'inbound_reply_received',
+          previousState: previousStatus,
+          newState: enquiry.status,
+          metadata: {
+            providerMessageId: input.providerMessageId,
+            internetMessageId: input.internetMessageId,
+            senderEmail: input.senderEmail,
+          },
+        }], { session });
+        notificationTarget = {
+          enquiry,
+          assignedToUserId: enquiry.assignedToUserId,
+        };
+        result = { status: 'processed', enquiryId: String(enquiry._id) };
+      });
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        const existing = await this.messageModel.findOne({ providerMessageId: input.providerMessageId })
+          .select('enquiryId').lean();
+        if (existing?.enquiryId) return { status: 'duplicate', enquiryId: String(existing.enquiryId) };
+      }
+      throw error;
+    } finally {
+      await session.endSession();
+    }
+
+    if (notificationTarget) {
+      const enquiry = notificationTarget.enquiry;
+      const title = `Enquirer replied: ${enquiry.reference}`;
+      const description = `${enquiry.firstName} ${enquiry.lastName} replied to their enquiry.`;
+      if (notificationTarget.assignedToUserId) {
+        await this.sendSystemNotification(notificationTarget.assignedToUserId, title, description, String(enquiry._id));
+      } else {
+        await this.notifyEnquiryManagers(title, description, String(enquiry._id));
+      }
+    }
+    return result!;
+  }
+
+  private async notifyEnquiryManagers(title: string, message: string, enquiryId: string): Promise<void> {
+    try {
+      const roles = await this.roleModel.find({
+        active: true,
+        modules: { $elemMatch: { module: 'enquiries', permissions: { $in: ['assign', 'manage'] } } },
+      }).select('_id').lean();
+      const [staff, admins] = await Promise.all([
+        this.staffModel.find({ isActive: true, roleId: { $in: roles.map((role) => role._id) } }).select('userId').lean(),
+        this.userModel.find({ role: UserRole.ADMIN, isActive: true }).select('_id').lean(),
+      ]);
+      const recipients = new Map<string, Types.ObjectId>();
+      staff.forEach((item: any) => recipients.set(String(item.userId), item.userId));
+      admins.forEach((item: any) => recipients.set(String(item._id), item._id));
+      await Promise.all([...recipients.values()].map((recipient) =>
+        this.sendSystemNotification(recipient, title, message, enquiryId),
+      ));
+    } catch (error: any) {
+      this.logger.warn(`Could not notify enquiry managers: ${this.errorMessage(error)}`);
+    }
+  }
+
+  private async sendSystemNotification(
+    recipientUserId: Types.ObjectId,
+    title: string,
+    message: string,
+    enquiryId: string,
+  ): Promise<void> {
+    let notification: any;
+    try {
+      notification = await this.notificationsService.createSystemNotification({
+        recipientUserId,
+        title,
+        message,
+        actionUrl: `/enquiries?open=${encodeURIComponent(enquiryId)}`,
+        actionLabel: 'Open enquiry',
+        category: 'general',
+        priority: 'normal',
+      });
+      await this.notificationDelivery.enqueue(String(notification._id));
+    } catch (error: any) {
+      if (notification?._id) {
+        await this.notificationsService.releaseQueueClaim(
+          String(notification._id),
+          NotificationStatus.PARTIALLY_FAILED,
+          error,
+        );
+      }
+      this.logger.warn(`Could not queue enquiry notification: ${this.errorMessage(error)}`);
     }
   }
 

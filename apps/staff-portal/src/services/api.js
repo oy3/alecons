@@ -1540,6 +1540,37 @@ class StaffApiService {
     async cancelNotification(id, comment = '') { return this.post(`/staff/notifications/${id}/cancel`, { comment }) }
     async archiveNotification(id, comment = '') { return this.patch(`/staff/notifications/${id}/archive`, { comment }) }
 
+    // Contact Enquiries
+    async getContactEnquiries(params = {}) {
+        const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
+        return this.makeRequest(`/staff/enquiries${query ? `?${query}` : ''}`)
+    }
+    async getContactEnquiryStats() { return this.makeRequest('/staff/enquiries/stats') }
+    async getContactEnquiry(id) { return this.makeRequest(`/staff/enquiries/${id}`) }
+    async getContactEnquiryAssignees(search = '') { return this.makeRequest(`/staff/enquiries/assignees${search ? `?search=${encodeURIComponent(search)}` : ''}`) }
+    async assignContactEnquiry(id, assignedToUserId) { return this.post(`/staff/enquiries/${id}/assign`, { assignedToUserId }) }
+    async updateContactEnquiry(id, payload) { return this.patch(`/staff/enquiries/${id}`, payload) }
+    async addContactEnquiryNote(id, body) { return this.post(`/staff/enquiries/${id}/notes`, { body }) }
+    async respondToContactEnquiry(id, body) { return this.post(`/staff/enquiries/${id}/responses`, { body }) }
+    async retryContactEnquiryResponse(id, messageId) { return this.post(`/staff/enquiries/${id}/responses/${messageId}/retry`) }
+    async exportContactEnquiries(params = {}) {
+        const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
+        const response = await fetch(`${this.baseURL}/staff/enquiries/export${query ? `?${query}` : ''}`, {
+            headers: { Authorization: `Bearer ${this.token}`, Accept: 'text/csv' },
+        })
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}))
+            throw new Error(error.message || 'Could not export enquiries')
+        }
+        const blob = await response.blob()
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `contact-enquiries-${new Date().toISOString().slice(0, 10)}.csv`
+        link.click()
+        URL.revokeObjectURL(url)
+    }
+
     // Current user's notification inbox
     async getNotificationInbox(params = {}) {
         const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()

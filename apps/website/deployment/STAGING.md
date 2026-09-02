@@ -128,7 +128,6 @@ Add these Environment variables:
 | `VITE_APP_APPLICATION_PORTAL_URL` | `https://apply.alecons.edu.ng` |
 | `VITE_APP_STUDENT_PORTAL_URL` | `https://portal.alecons.edu.ng` |
 | `VITE_APP_STAFF_PORTAL_URL` | `https://staff.alecons.edu.ng` |
-| `VITE_CONTACT_FORM_ENDPOINT` | Do not create until the endpoint exists |
 | `VITE_UMAMI_WEBSITE_ID` | Do not create, or use a separate staging Umami website ID |
 
 The workflow sets `VITE_SITE_NOINDEX=true`, disables Google verification and performance analytics, restricts any staging Umami tracker to the staging hostname, and preserves production canonical/schema URLs for QA.

@@ -43,7 +43,6 @@ import { ContentSanitizationService } from '../services/content-sanitization.ser
         NotificationScheduleService,
         ContentSanitizationService,
     ],
-    exports: [NotificationsService],
+    exports: [NotificationsService, NotificationDeliveryService],
 })
 export class NotificationsModule {}
-

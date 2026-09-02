@@ -35,6 +35,7 @@ async function bootstrap() {
                 'https://api.alecons.edu.ng',
                 // Explicit production origins (old domain, transitional)
                 'https://alecons.com.ng',
+                'https://staging.alecons.com.ng',
                 // Development origins
                 'http://localhost:3000',
                 'http://localhost:3001',

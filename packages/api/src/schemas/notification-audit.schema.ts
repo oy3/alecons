@@ -8,8 +8,8 @@ export class NotificationAudit {
     @Prop({ type: Types.ObjectId, ref: 'Notification', required: true, index: true })
     notificationId: Types.ObjectId;
 
-    @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-    actorUserId: Types.ObjectId;
+    @Prop({ type: Types.ObjectId, ref: 'User' })
+    actorUserId?: Types.ObjectId;
 
     @Prop({ required: true, trim: true })
     actorRole: string;
@@ -32,4 +32,3 @@ export class NotificationAudit {
 
 export const NotificationAuditSchema = SchemaFactory.createForClass(NotificationAudit);
 NotificationAuditSchema.index({ notificationId: 1, createdAt: 1 });
-

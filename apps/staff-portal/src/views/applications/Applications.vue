@@ -3662,7 +3662,15 @@ export default {
                               </div>
                               <div class="small text-muted">
                                 {{ getAuditActorName(entry) }}
-                                <span v-if="entry.actorRole">
+                                <span
+                                  v-if="
+                                    entry.actorRole &&
+                                    !(
+                                      !entry.performedBy &&
+                                      entry.actorRole === 'system'
+                                    )
+                                  "
+                                >
                                   • {{ formatLabel(entry.actorRole) }}
                                 </span>
                               </div>

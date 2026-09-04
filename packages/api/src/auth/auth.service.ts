@@ -176,6 +176,16 @@ export class AuthService {
                 olevelResults: [],
                 referenceLetters: []
             },
+            auditTrail: [{
+                action: 'application_created',
+                description: 'Application was created by the applicant.',
+                performedBy: data.userId,
+                actorRole: UserRole.APPLICANT,
+                metadata: {
+                    initialStage: data.isEmailVerified ? 2 : 1,
+                },
+                createdAt: new Date(),
+            }],
         };
 
         if (data.dateOfBirth) applicationData.dob = new Date(data.dateOfBirth);

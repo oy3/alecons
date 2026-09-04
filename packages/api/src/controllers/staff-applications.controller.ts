@@ -339,6 +339,51 @@ export class StaffApplicationsController {
         });
     }
 
+    private buildApplicationAuditTrail(application: Record<string, any>) {
+        const recordedEntries = Array.isArray(application.auditTrail)
+            ? application.auditTrail
+            : [];
+        const auditTrail = [...recordedEntries];
+        const hasCreationEntry = auditTrail.some(
+            (entry) => entry?.action === 'application_created',
+        );
+
+        if (!hasCreationEntry && application.createdAt) {
+            auditTrail.push({
+                action: 'application_created',
+                description: 'Application record was created.',
+                performedBy: application.userId,
+                actorRole: UserRole.APPLICANT,
+                metadata: {
+                    source: 'application_record',
+                },
+                createdAt: application.createdAt,
+            });
+        }
+
+        if (
+            recordedEntries.length === 0 &&
+            application.updatedAt &&
+            new Date(application.updatedAt).getTime() >
+                new Date(application.createdAt || 0).getTime()
+        ) {
+            auditTrail.push({
+                action: 'legacy_state_snapshot',
+                description:
+                    'Current state captured from an application created before detailed audit tracking was enabled.',
+                actorRole: 'system',
+                metadata: {
+                    status: application.status,
+                    admissionDecision: application.admissionDecision,
+                    currentStage: application.currentStage,
+                },
+                createdAt: application.updatedAt,
+            });
+        }
+
+        return auditTrail;
+    }
+
     private normalizeAuditMetadata(value: unknown, key?: string): unknown {
         if (value === null || value === undefined) {
             return value;
@@ -889,6 +934,7 @@ export class StaffApplicationsController {
             }
 
             const { currentStage, admissionFlow } = await this.getApplicationAdmissionFlow(application);
+            const applicationObject = application.toObject();
             const userId = this.extractEntityId(application.userId);
             const applicationId = this.extractEntityId(application._id);
             const academicSessionId = this.extractEntityId(application.entryAcademicSession);
@@ -913,7 +959,11 @@ export class StaffApplicationsController {
                 success: true,
                 data: {
                     application: {
-                        ...application.toObject(),
+                        ...applicationObject,
+                        auditTrail: this.buildApplicationAuditTrail({
+                            ...applicationObject,
+                            currentStage,
+                        }),
                         programDisplay: this.formatProgramDisplay(application),
                         currentStage,
                         admissionFlow,

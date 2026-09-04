@@ -2200,21 +2200,25 @@ export class EmailService {
   async sendApplicationExpiredEmail(
     email: string,
     firstName: string,
+    applicationNumber: string,
+    reason: string,
     sessionYear?: string,
   ): Promise<void> {
-    const sessionLabel = sessionYear ? ` for the ${sessionYear} Academic Session` : '';
+    const sessionLabel = sessionYear
+      ? ` for the ${this.escapeHtml(sessionYear)} Academic Session`
+      : '';
 
     const mailOptions = {
       from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: 'Application Window Closed - ALECONS',
+      subject: `Application ${applicationNumber} Expired - ALECONS`,
       html: `
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Application Window Closed</title>
+            <title>Application Expired</title>
             <style>
                 body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
                 .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
@@ -2227,16 +2231,16 @@ export class EmailService {
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>Application Window Closed</h1>
+                    <h1>Application Expired</h1>
                     <p style="margin: 5px 0 0 0; opacity: 0.9;">Alebiosu College of Nursing Sciences</p>
                 </div>
 
-                <h2>Dear ${firstName},</h2>
+                <h2>Dear ${this.escapeHtml(firstName)},</h2>
 
-                <p>We are writing to let you know that the application window${sessionLabel} has now been closed.</p>
+                <p>Your application <strong>${this.escapeHtml(applicationNumber)}</strong>${sessionLabel} has been marked as expired.</p>
 
                 <div class="notice">
-                    <p style="margin: 0;">Your application was not completed before the window closed — specifically, the application form fee had not been paid. As a result, your application record has been marked as <strong>expired</strong>.</p>
+                    <p style="margin: 0;"><strong>Reason:</strong> ${this.escapeHtml(reason)}</p>
                 </div>
 
                 <div class="info">
@@ -2248,7 +2252,7 @@ export class EmailService {
                     </ul>
                 </div>
 
-                <p>We appreciate your interest in Alebiosu College of Nursing Sciences and encourage you to apply again in a future intake.</p>
+                <p>This expiration is an administrative closure of this application record and is not an admission rejection.</p>
 
                 <p>If you have any questions, please reach out to our Admissions Office.</p>
 

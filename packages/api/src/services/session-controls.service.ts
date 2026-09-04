@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import {
@@ -6,12 +6,6 @@ import {
     SessionControlDocument,
 } from "../schemas/session-control.schema";
 import { Payment, PaymentDocument } from "../schemas/payment.schema";
-import {
-    Application,
-    AdmissionDecision,
-    ApplicationDocument,
-    ApplicationStatus,
-} from "../schemas/application.schema";
 
 export interface AdmissionFlowConfig {
     entranceExamEnabled: boolean;
@@ -58,8 +52,6 @@ export class SessionControlsService {
         private sessionControlModel: Model<SessionControlDocument>,
         @InjectModel(Payment.name)
         private paymentModel: Model<PaymentDocument>,
-        @InjectModel(Application.name)
-        private applicationModel: Model<ApplicationDocument>,
     ) { }
 
     private getDefaultControls() {
@@ -158,6 +150,56 @@ export class SessionControlsService {
         return null;
     }
 
+    async isControlEnabled(
+        academicSessionId:
+            | Types.ObjectId
+            | { _id?: Types.ObjectId | string }
+            | string
+            | undefined,
+        controlName: string,
+    ): Promise<boolean> {
+        const sessionId = this.extractSessionId(academicSessionId);
+        if (!sessionId || !Types.ObjectId.isValid(sessionId)) return false;
+
+        const sessionControl = await this.sessionControlModel.findOne({
+            academicSessionId: new Types.ObjectId(sessionId),
+        });
+        if (!sessionControl) return false;
+
+        await this.ensureDefaultControls(sessionControl);
+        return sessionControl.controls.some(
+            (control) => control.name === controlName && control.active === true,
+        );
+    }
+
+    async assertApplicationIntakeOpen(
+        academicSessionId:
+            | Types.ObjectId
+            | { _id?: Types.ObjectId | string }
+            | string
+            | undefined,
+    ): Promise<void> {
+        if (!(await this.isControlEnabled(academicSessionId, "application"))) {
+            throw new ConflictException(
+                "Applications for this academic session are currently closed",
+            );
+        }
+    }
+
+    async assertAdmissionProcessingEnabled(
+        academicSessionId:
+            | Types.ObjectId
+            | { _id?: Types.ObjectId | string }
+            | string
+            | undefined,
+    ): Promise<void> {
+        if (!(await this.isControlEnabled(academicSessionId, "admissionProcessing"))) {
+            throw new ConflictException(
+                "Admission processing is currently paused for this academic session",
+            );
+        }
+    }
+
     private shouldAllowJambExemptEntranceExam(
         application?: AdmissionFlowApplicationContext,
     ) {
@@ -212,7 +254,7 @@ export class SessionControlsService {
             }>;
         },
         updatedBy: string,
-    ): Promise<{ sessionControl: SessionControl; expiredApplicants: Array<{ email: string; firstName: string }> }> {
+    ): Promise<SessionControl> {
         const sessionControl = await this.sessionControlModel.findOne({
             academicSessionId: new Types.ObjectId(academicSessionId),
         });
@@ -223,22 +265,7 @@ export class SessionControlsService {
 
         await this.ensureDefaultControls(sessionControl);
 
-        // Detect if the application control is being toggled OFF
-        let shouldExpireStaleApplications = false;
         if (controlsData.controls) {
-            const previousApplicationControl = sessionControl.controls.find(
-                (c) => c.name === "application",
-            );
-            const incomingApplicationControl = controlsData.controls.find(
-                (c) => c.name === "application",
-            );
-            if (
-                previousApplicationControl?.active === true &&
-                incomingApplicationControl?.active === false
-            ) {
-                shouldExpireStaleApplications = true;
-            }
-
             sessionControl.controls = this.normalizeControls(
                 controlsData.controls,
             ).controls;
@@ -257,62 +284,7 @@ export class SessionControlsService {
 
         sessionControl.updatedBy = new Types.ObjectId(updatedBy);
         await sessionControl.save();
-
-        const expiredApplicants = shouldExpireStaleApplications
-            ? await this.expireStaleApplicationsForSession(academicSessionId, updatedBy)
-            : [];
-
-        return { sessionControl, expiredApplicants };
-    }
-
-    async expireStaleApplicationsForSession(
-        academicSessionId: string,
-        updatedBy?: string,
-    ): Promise<Array<{ email: string; firstName: string }>> {
-        // Expire all pending applications where no admission decision has been made yet.
-        // This covers stages 1–5: applicants who have not been admitted (admissionDecision still AWAITING_DECISION).
-        // Stage 6 (screening) is intentionally excluded — admissionDecision is already GRANTED there.
-        const affected = await this.applicationModel
-            .find({
-                entryAcademicSession: new Types.ObjectId(academicSessionId),
-                status: ApplicationStatus.PENDING,
-                admissionDecision: AdmissionDecision.AWAITING_DECISION,
-            })
-            .populate('userId', 'email firstName')
-            .exec();
-
-        if (affected.length === 0) {
-            return [];
-        }
-
-        const ids = affected.map((a) => (a as any)._id);
-        const auditEntry = {
-            action: 'application_expired',
-            description:
-                'Application expired automatically: the application window was closed and no admission decision had been made.',
-
-            performedBy: updatedBy ? new Types.ObjectId(updatedBy) : undefined,
-            actorRole: 'system',
-            createdAt: new Date(),
-        };
-
-        await this.applicationModel.updateMany(
-            { _id: { $in: ids } },
-            {
-                $set: { status: ApplicationStatus.EXPIRED },
-                $push: { auditTrail: auditEntry } as any,
-            },
-        );
-
-        return affected
-            .map((a) => {
-                const user = (a as any).userId;
-                return {
-                    email: user?.email || '',
-                    firstName: user?.firstName || '',
-                };
-            })
-            .filter((u) => Boolean(u.email));
+        return sessionControl;
     }
 
     async toggleControl(

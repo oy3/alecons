@@ -7,6 +7,7 @@ import {
     UseGuards,
     Request,
     BadRequestException,
+    ConflictException,
     HttpException,
     HttpStatus,
     Logger
@@ -16,7 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UploadService } from '../services/upload.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
+import { AdmissionDecision, Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
 import { Program, ProgramDocument } from '../schemas/program.schema';
 import { ProgramType, ProgramTypeDocument } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeDocument } from '../schemas/program-mode.schema';
@@ -45,6 +46,18 @@ export class ApplicationUploadController {
         @InjectModel(ProgramMode.name) private programModeModel: Model<ProgramModeDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
     ) { }
+
+    private async assertApplicationEditable(application: ApplicationDocument): Promise<void> {
+        if (
+            application.status !== ApplicationStatus.PENDING ||
+            application.admissionDecision !== AdmissionDecision.AWAITING_DECISION
+        ) {
+            throw new ConflictException('This application can no longer be modified');
+        }
+        await this.sessionControlsService.assertApplicationIntakeOpen(
+            application.entryAcademicSession,
+        );
+    }
 
     private appendAuditEntry(application: any, payload: {
         action: string;
@@ -143,6 +156,8 @@ export class ApplicationUploadController {
             if (!applicationNumber) {
                 throw new BadRequestException('Application not found. Please complete registration first.');
             }
+
+            await this.assertApplicationEditable(application);
 
             // Upload to DigitalOcean Spaces temp storage using application number
             const uploadResult = await this.uploadService.uploadToSpaces(
@@ -316,6 +331,8 @@ export class ApplicationUploadController {
                     HttpStatus.NOT_FOUND
                 );
             }
+
+            await this.assertApplicationEditable(application);
 
             this.logger.log('Updating existing application:', application._id.toString());
 
@@ -716,6 +733,8 @@ export class ApplicationUploadController {
                 throw new BadRequestException('Application not found or you do not have permission to modify it');
             }
 
+            await this.assertApplicationEditable(application);
+
             // Extract key from URL for Spaces deletion
             const urlParts = removeData.documentUrl.split('/');
             const key = urlParts.slice(-3).join('/'); // Get applications/{id}/{filename}
@@ -763,6 +782,8 @@ export class ApplicationUploadController {
                 documentType: removeData.documentType,
                 error: error.message
             });
+
+            if (error instanceof HttpException) throw error;
 
             throw new HttpException(
                 {

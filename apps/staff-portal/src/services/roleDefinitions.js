@@ -15,6 +15,7 @@ export const MODULE_DEFINITIONS = {
             { value: 'create', label: 'Create' },
             { value: 'edit', label: 'Edit' },
             { value: 'delete', label: 'Delete' },
+            { value: 'expire', label: 'Expire Application' },
             { value: 'approve', label: 'Approve' },
             { value: 'export', label: 'Export' },
             { value: 'manage', label: 'Manage All' },

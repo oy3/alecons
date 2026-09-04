@@ -16,6 +16,8 @@ import {
     Res,
     Request,
     UseInterceptors,
+    ForbiddenException,
+    ConflictException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -45,6 +47,8 @@ import { AdmissionLetterPdfService } from '../services/admission-letter-pdf.serv
 import { UploadService } from '../services/upload.service';
 import { SessionControlsService } from '../services/session-controls.service';
 import { PaymentsService } from '../payments/payments.service';
+import { RolesService } from '../services/roles.service';
+import { ExpireApplicationDto } from '../dto/expire-application.dto';
 import { resolveProgramSelection } from '../utils/program-relation.util';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
@@ -142,7 +146,44 @@ export class StaffApplicationsController {
         private uploadService: UploadService,
         private sessionControlsService: SessionControlsService,
         private paymentsService: PaymentsService,
+        private rolesService: RolesService,
     ) { }
+
+    private requestUserId(req: any): string {
+        return String(req.user?._id || req.user?.userId || '');
+    }
+
+    private async assertModulePermission(
+        req: any,
+        module: string,
+        permission: string,
+    ): Promise<void> {
+        if (req.user?.role === UserRole.ADMIN) return;
+
+        const access = await this.rolesService.getUserModuleAccess(
+            this.requestUserId(req),
+            module,
+        );
+        if (
+            !access ||
+            (!access.permissions.includes(permission) &&
+                !access.permissions.includes('manage'))
+        ) {
+            throw new ForbiddenException(
+                `You do not have permission to ${permission.replace(/_/g, ' ')} ${module}`,
+            );
+        }
+    }
+
+    private async assertAdmissionMutationAllowed(application: ApplicationDocument, req: any) {
+        await this.assertModulePermission(req, 'admissions', 'approve');
+        await this.sessionControlsService.assertAdmissionProcessingEnabled(
+            application.entryAcademicSession,
+        );
+        if (application.status === ApplicationStatus.EXPIRED) {
+            throw new ConflictException('Expired applications cannot be processed for admission');
+        }
+    }
 
     private extractEntityId(value: unknown): string | undefined {
         if (!value) {
@@ -241,6 +282,14 @@ export class StaffApplicationsController {
         }).select('_id');
 
         const blockers: string[] = [];
+
+        if (application?.status === ApplicationStatus.EXPIRED) {
+            blockers.push('application is expired');
+        }
+
+        if (application?.status === ApplicationStatus.REJECTED) {
+            blockers.push('application is rejected');
+        }
 
         if (application?.status === ApplicationStatus.COMPLETED) {
             blockers.push('application is already completed');
@@ -1615,6 +1664,15 @@ export class StaffApplicationsController {
         @Request() req,
     ) {
         try {
+            if (updateData.status === ApplicationStatus.EXPIRED) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Use the dedicated expire action and provide an expiration reason',
+                    },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
             this.logger.log('Updating application status:', {
                 applicationId: id,
                 newStatus: updateData.status,
@@ -1651,6 +1709,12 @@ export class StaffApplicationsController {
                         message: 'Application not found'
                     },
                     HttpStatus.NOT_FOUND
+                );
+            }
+
+            if (application.status === ApplicationStatus.EXPIRED) {
+                throw new ConflictException(
+                    'Expired applications cannot be changed through the status action',
                 );
             }
 
@@ -1701,6 +1765,116 @@ export class StaffApplicationsController {
                 HttpStatus.INTERNAL_SERVER_ERROR
             );
         }
+    }
+
+    @Patch(':id/expire')
+    @ApiOperation({ summary: 'Expire one eligible application with a reason' })
+    @ApiResponse({ status: 200, description: 'Application expired successfully' })
+    async expireApplication(
+        @Param('id') id: string,
+        @Body() payload: ExpireApplicationDto,
+        @Request() req,
+    ) {
+        if (!Types.ObjectId.isValid(id)) {
+            throw new HttpException('Invalid application ID format', HttpStatus.BAD_REQUEST);
+        }
+
+        await this.assertModulePermission(req, 'applications', 'expire');
+
+        const applicationId = new Types.ObjectId(id);
+        const existing = await this.applicationModel
+            .findById(applicationId)
+            .select('status admissionDecision matriculationNumber applicationNumber userId entryAcademicSession')
+            .lean();
+
+        if (!existing) {
+            throw new HttpException('Application not found', HttpStatus.NOT_FOUND);
+        }
+        if (
+            existing.status !== ApplicationStatus.PENDING ||
+            existing.admissionDecision !== AdmissionDecision.AWAITING_DECISION
+        ) {
+            throw new ConflictException(
+                'Only pending applications awaiting an admission decision can be expired',
+            );
+        }
+        if (existing.matriculationNumber) {
+            throw new ConflictException('A matriculated application cannot be expired');
+        }
+
+        const studentExists = await this.studentModel.exists({ applicationId });
+        if (studentExists) {
+            throw new ConflictException('An application linked to a student record cannot be expired');
+        }
+
+        const actorId = new Types.ObjectId(this.requestUserId(req));
+        const expiredAt = new Date();
+        const auditEntry = {
+            action: 'application_expired',
+            description: 'Application expired manually by an authorized staff member.',
+            performedBy: actorId,
+            actorRole: req.user?.role,
+            metadata: {
+                previousStatus: existing.status,
+                nextStatus: ApplicationStatus.EXPIRED,
+                reason: payload.reason,
+            },
+            createdAt: expiredAt,
+        };
+
+        const application = await this.applicationModel
+            .findOneAndUpdate(
+                {
+                    _id: applicationId,
+                    status: ApplicationStatus.PENDING,
+                    admissionDecision: AdmissionDecision.AWAITING_DECISION,
+                    $or: [
+                        { matriculationNumber: { $exists: false } },
+                        { matriculationNumber: null },
+                        { matriculationNumber: '' },
+                    ],
+                },
+                {
+                    $set: {
+                        status: ApplicationStatus.EXPIRED,
+                        expiredAt,
+                        expiredBy: actorId,
+                        expirationReason: payload.reason,
+                    },
+                    $push: { auditTrail: auditEntry },
+                },
+                { new: true },
+            )
+            .populate('userId', 'email firstName')
+            .populate('entryAcademicSession', 'sessionYear title')
+            .exec();
+
+        if (!application) {
+            throw new ConflictException(
+                'The application changed while it was being expired. Refresh and try again',
+            );
+        }
+
+        const user = application.userId as any;
+        const session = application.entryAcademicSession as any;
+        if (user?.email) {
+            this.emailService.sendApplicationExpiredEmail(
+                user.email,
+                user.firstName || 'Applicant',
+                application.applicationNumber,
+                payload.reason,
+                session?.title || session?.sessionYear,
+            ).catch((error) => this.logger.error(
+                `Application ${application.applicationNumber} expired, but its notification email failed`,
+                error,
+            ));
+        }
+
+        return {
+            success: true,
+            message: 'Application expired successfully',
+            data: { application },
+        };
     }
 
     @Get('stats/summary')
@@ -1795,6 +1969,7 @@ export class StaffApplicationsController {
                 );
             }
 
+            await this.assertAdmissionMutationAllowed(application, req);
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
@@ -1846,6 +2021,7 @@ export class StaffApplicationsController {
 
         } catch (error) {
             this.logger.error('Error scheduling exam:', error.message);
+            if (error instanceof HttpException) throw error;
             throw new HttpException(
                 {
                     success: false,
@@ -1883,6 +2059,7 @@ export class StaffApplicationsController {
                 );
             }
 
+            await this.assertAdmissionMutationAllowed(application, req);
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
@@ -2019,6 +2196,7 @@ export class StaffApplicationsController {
                 );
             }
 
+            await this.assertAdmissionMutationAllowed(application, req);
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
@@ -2235,6 +2413,7 @@ export class StaffApplicationsController {
 
         } catch (error) {
             this.logger.error('Error making admission decision:', error.message);
+            if (error instanceof HttpException) throw error;
             throw new HttpException(
                 {
                     success: false,
@@ -2276,6 +2455,7 @@ export class StaffApplicationsController {
                 );
             }
 
+            await this.assertAdmissionMutationAllowed(application, req);
             if (application.admissionDecision !== AdmissionDecision.GRANTED) {
                 throw new HttpException(
                     { success: false, message: 'Admission letter can only be sent for admitted applications' },
@@ -2415,6 +2595,7 @@ export class StaffApplicationsController {
                 );
             }
 
+            await this.assertAdmissionMutationAllowed(application, req);
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
@@ -2470,6 +2651,7 @@ export class StaffApplicationsController {
 
         } catch (error) {
             this.logger.error('Error updating exam score:', error.message);
+            if (error instanceof HttpException) throw error;
             throw new HttpException(
                 {
                     success: false,
@@ -2497,6 +2679,7 @@ export class StaffApplicationsController {
                 );
             }
 
+            await this.assertAdmissionMutationAllowed(application, req);
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
@@ -2545,6 +2728,7 @@ export class StaffApplicationsController {
 
         } catch (error) {
             this.logger.error('Error completing screening:', error.message);
+            if (error instanceof HttpException) throw error;
             throw new HttpException(
                 {
                     success: false,
@@ -2572,6 +2756,10 @@ export class StaffApplicationsController {
                     { success: false, message: 'Application not found' },
                     HttpStatus.NOT_FOUND
                 );
+            }
+
+            if (application.status === ApplicationStatus.EXPIRED) {
+                throw new ConflictException('Expired applications cannot be matriculated');
             }
 
             // Check if application is in the correct stage (school fees paid - stage 10)

@@ -17,7 +17,7 @@ import {
     PaymentDestinationChannelType,
     PaymentDestinationProviderType,
 } from '../schemas/payment-destination-account.schema';
-import { Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
+import { AdmissionDecision, Application, ApplicationDocument, ApplicationStatus } from '../schemas/application.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
 import { AcademicSession, AcademicSessionDocument } from '../schemas/academic-session.schema';
@@ -608,7 +608,7 @@ export class PaymentsService {
 
             const selectedApplication = await this.applicationModel
                 .findOne({ _id: new Types.ObjectId(applicationId), userId: userObjectId })
-                .select('_id applicationNumber entryAcademicSession currentStage')
+                .select('_id applicationNumber entryAcademicSession currentStage status admissionDecision')
                 .lean();
 
             if (!selectedApplication) {
@@ -619,12 +619,14 @@ export class PaymentsService {
                 applicationId: selectedApplication._id as Types.ObjectId,
                 applicationNumber: selectedApplication.applicationNumber,
                 academicSessionId: selectedApplication.entryAcademicSession as Types.ObjectId,
+                status: selectedApplication.status,
+                admissionDecision: selectedApplication.admissionDecision,
             };
         }
 
         const directApplication = await this.applicationModel
             .findOne({ userId: userObjectId })
-            .select('_id applicationNumber entryAcademicSession currentStage')
+            .select('_id applicationNumber entryAcademicSession currentStage status admissionDecision')
             .lean();
 
         if (directApplication) {
@@ -632,6 +634,8 @@ export class PaymentsService {
                 applicationId: directApplication._id as Types.ObjectId,
                 applicationNumber: directApplication.applicationNumber,
                 academicSessionId: directApplication.entryAcademicSession as Types.ObjectId,
+                status: directApplication.status,
+                admissionDecision: directApplication.admissionDecision,
             };
         }
 
@@ -654,6 +658,31 @@ export class PaymentsService {
             applicationNumber: undefined,
             academicSessionId: undefined,
         };
+    }
+
+    private async assertApplicationPortalPaymentAllowed(linkedApplication: {
+        academicSessionId?: Types.ObjectId;
+        status?: ApplicationStatus;
+        admissionDecision?: AdmissionDecision;
+    }): Promise<void> {
+        if (
+            linkedApplication.status === ApplicationStatus.EXPIRED ||
+            linkedApplication.status === ApplicationStatus.REJECTED
+        ) {
+            throw new Error('This application can no longer receive payments');
+        }
+
+        if (linkedApplication.admissionDecision !== AdmissionDecision.AWAITING_DECISION) {
+            return;
+        }
+
+        const sessionControl = await this.paymentModel.db.collection('sessioncontrols').findOne({
+            academicSessionId: linkedApplication.academicSessionId,
+            controls: { $elemMatch: { name: 'application', active: true } },
+        });
+        if (!sessionControl) {
+            throw new Error('Applications for this academic session are currently closed');
+        }
     }
 
     private async assertAccommodationPaymentEligibility(userId: string, payment: PaymentDocument | Payment) {
@@ -954,6 +983,7 @@ export class PaymentsService {
 
             // Check if student has already made a successful payment for this charge
             const linkedApplication = await this.resolveLinkedApplication(userId, applicationId);
+            await this.assertApplicationPortalPaymentAllowed(linkedApplication);
             const existingSuccessfulPayment = await this.studentPaymentModel.findOne({
                 userId: new Types.ObjectId(userId),
                 paymentId: new Types.ObjectId(paymentId),
@@ -3292,6 +3322,9 @@ export class PaymentsService {
         const linkedApplication = await this.resolveLinkedApplication(userId, options.applicationId);
         if (!linkedApplication.applicationNumber) {
             throw new Error('Application record not found for receipt storage');
+        }
+        if (options.context === 'application-portal') {
+            await this.assertApplicationPortalPaymentAllowed(linkedApplication);
         }
 
         const manualTransferDestinationAccount = await this.resolveDestinationForPayment(

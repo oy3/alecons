@@ -27,6 +27,7 @@ export default {
       // Session controls data
       selectedSession: null,
       sessionControls: null,
+      initialControlStates: {},
       controlsLoading: false,
       availablePayments: [],
     };
@@ -587,6 +588,12 @@ export default {
 
         if (response.success) {
           this.sessionControls = response.data.controls;
+          this.initialControlStates = Object.fromEntries(
+            (this.sessionControls.controls || []).map((control) => [
+              control.name,
+              control.active,
+            ]),
+          );
           logger.info("Loaded session controls:", this.sessionControls);
         } else {
           logger.error("Failed to load session controls:", response);
@@ -696,6 +703,7 @@ export default {
                     <div class="d-flex justify-content-between align-items-center">
                     <div>
                       <strong>${this.formatControlName(control.name)}</strong>
+                      <div class="small text-muted mt-1">${this.getControlDescription(control.name)}</div>
                     </div>
                     <div class="form-check form-switch">
                       <input 
@@ -795,6 +803,18 @@ export default {
       return names[controlName] || controlName;
     },
 
+    getControlDescription(controlName) {
+      const descriptions = {
+        application:
+          "Controls new applications and unfinished application changes.",
+        admissionProcessing:
+          "Allows authorized staff to process exams, decisions, admission letters, and screening.",
+        entranceExam: "Includes the entrance examination in this session's admission flow.",
+        screening: "Includes screening and interview in this session's admission flow.",
+      };
+      return descriptions[controlName] || "Controls availability for this academic session.";
+    },
+
     initializeControlsModal() {
       // Add event listeners for control switches
       document.querySelectorAll(".control-switch").forEach((switchEl) => {
@@ -874,6 +894,33 @@ export default {
 
     async saveSessionControls() {
       try {
+        const newlyDisabled = this.sessionControls.controls.filter(
+          (control) =>
+            ["application", "admissionProcessing"].includes(control.name) &&
+            this.initialControlStates[control.name] === true &&
+            control.active === false,
+        );
+        if (newlyDisabled.length) {
+          const labels = newlyDisabled
+            .map((control) => this.formatControlName(control.name))
+            .join(" and ");
+          const confirmation = await this.$swal.fire({
+            icon: "warning",
+            title: `Disable ${labels}?`,
+            text: newlyDisabled.some((control) => control.name === "application")
+              ? "This closes the intake and prevents unfinished application changes. Existing applications will not be expired."
+              : "Authorized staff will be unable to perform admission-processing actions until it is enabled again.",
+            showCancelButton: true,
+            confirmButtonText: "Disable",
+            confirmButtonColor: "#dc3545",
+            cancelButtonColor: "#6c757d",
+          });
+          if (!confirmation.isConfirmed) {
+            await this.showControlsModal(this.selectedSession);
+            return;
+          }
+        }
+
         const controlsData = {
           controls: this.sessionControls.controls,
           payments: this.sessionControls.payments.map((p) => ({

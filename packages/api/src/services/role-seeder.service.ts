@@ -34,7 +34,7 @@ export class RoleSeederService implements OnModuleInit {
                         },
                         {
                             module: 'applications',
-                            permissions: ['view', 'create', 'read', 'update', 'delete', 'approve', 'export', 'manage']
+                            permissions: ['view', 'create', 'read', 'update', 'delete', 'expire', 'approve', 'export', 'manage']
                         },
                         {
                             module: 'courseRegistrations',
@@ -65,7 +65,11 @@ export class RoleSeederService implements OnModuleInit {
                     modules: [
                         {
                             module: 'applications',
-                            permissions: ['view', 'create', 'read', 'edit', 'approve', 'export']
+                            permissions: ['view', 'create', 'read', 'edit', 'expire', 'approve', 'export']
+                        },
+                        {
+                            module: 'admissions',
+                            permissions: ['view', 'approve', 'export', 'manage']
                         },
                         {
                             module: 'courseRegistrations',

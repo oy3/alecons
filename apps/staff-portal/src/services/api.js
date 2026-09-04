@@ -233,6 +233,13 @@ class StaffApiService {
         })
     }
 
+    async expireApplication(id, reason) {
+        return this.makeRequest(`/staff/applications/${id}/expire`, {
+            method: 'PATCH',
+            body: JSON.stringify({ reason }),
+        })
+    }
+
     async updateApplication(id, payload) {
         return this.makeRequest(`/staff/applications/${id}`, {
             method: 'PUT',

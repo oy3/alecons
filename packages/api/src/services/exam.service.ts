@@ -23,6 +23,7 @@ import { ExamResult, ExamResultDocument } from "../schemas/exam-result.schema";
 import {
     Application,
     ApplicationDocument,
+    ApplicationStatus,
 } from "../schemas/application.schema";
 import { User, UserDocument } from "../schemas/user.schema";
 import { EmailService } from "./email.service";
@@ -63,7 +64,7 @@ export class ExamService {
     private async getUserApplication(userId: string) {
         return this.applicationModel
             .findOne({ userId: new Types.ObjectId(userId) })
-            .select('programId entryAcademicSession currentStage isJambExempt')
+            .select('programId entryAcademicSession currentStage isJambExempt status')
             .exec();
     }
 
@@ -906,6 +907,9 @@ export class ExamService {
                         );
 
                         if (userRole === 'applicant') {
+                            if (application.status === ApplicationStatus.EXPIRED) {
+                                return [];
+                            }
                             const flowConfig = await this.sessionControlsService.getAdmissionFlowConfig(
                                 application.entryAcademicSession,
                                 application,
@@ -1207,6 +1211,9 @@ export class ExamService {
             const application = await this.getUserApplication(userId);
 
             if (application) {
+                if (application.status === ApplicationStatus.EXPIRED) {
+                    throw new BadRequestException('Expired applications cannot start an entrance examination');
+                }
                 const flowConfig = await this.sessionControlsService.getAdmissionFlowConfig(
                     application.entryAcademicSession,
                     application,

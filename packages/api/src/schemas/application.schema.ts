@@ -297,6 +297,15 @@ export class Application {
     @Prop()
     matriculationNumber?: string;
 
+    @Prop()
+    expiredAt?: Date;
+
+    @Prop({ type: Types.ObjectId, ref: 'User' })
+    expiredBy?: Types.ObjectId;
+
+    @Prop({ trim: true, maxlength: 1000 })
+    expirationReason?: string;
+
     // Audit Trail
     @Prop({
         type: [{

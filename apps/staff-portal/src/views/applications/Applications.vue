@@ -603,11 +603,86 @@ export default {
       }
 
       return (
+        application.status !== "expired" &&
+        application.status !== "rejected" &&
         application.status !== "completed" &&
         Number(application.currentStage || 0) < 10 &&
         !application.matriculationNumber &&
         application?.userId?.role !== "student"
       );
+    },
+
+    canExpireApplication(application) {
+      return Boolean(
+        application &&
+          application.status === "pending" &&
+          application.admissionDecision === "pending" &&
+          !application.matriculationNumber,
+      );
+    },
+
+    async expireApplication(application) {
+      const result = await this.$swal.fire({
+        icon: "warning",
+        title: "Expire Application",
+        text: `Expire ${application.applicationNumber}? This closes only this application and is not an admission rejection.`,
+        input: "textarea",
+        inputLabel: "Reason",
+        inputValue:
+          "The application was not completed within the permitted application period and has therefore expired for this admission cycle.",
+        inputPlaceholder: "Enter the reason for expiring this application",
+        inputAttributes: { maxlength: "1000" },
+        showCancelButton: true,
+        confirmButtonText: "Expire Application",
+        confirmButtonColor: "#dc3545",
+        cancelButtonColor: "#6c757d",
+        inputValidator: (value) => {
+          const reason = value?.trim() || "";
+          if (reason.length < 5) {
+            return "Enter a reason of at least 5 characters";
+          }
+          return undefined;
+        },
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        this.$swal.fire({
+          title: "Expiring Application...",
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          didOpen: () => this.$swal.showLoading(),
+        });
+
+        const response = await apiService.expireApplication(
+          application.id,
+          result.value.trim(),
+        );
+        if (!response.success) {
+          throw new Error(response.message || "Failed to expire application");
+        }
+
+        await this.loadApplications();
+        if (this.selectedApplicationId === application.id) {
+          await this.reloadSelectedApplicationDetails();
+        }
+
+        await this.$swal.fire({
+          icon: "success",
+          title: "Application Expired",
+          text: `${application.applicationNumber} has been expired successfully.`,
+          confirmButtonColor: "#1a5f5f",
+        });
+      } catch (error) {
+        logger.error("Failed to expire application:", error);
+        await this.$swal.fire({
+          icon: "error",
+          title: "Expiration Failed",
+          text: error.message || "Failed to expire application",
+          confirmButtonColor: "#dc3545",
+        });
+      }
     },
 
     populateEditApplicationForm(application) {
@@ -1939,6 +2014,23 @@ export default {
                               Application
                             </a>
                           </li>
+                          <li
+                            v-if="
+                              authStore.hasPermission(
+                                'applications',
+                                'expire',
+                              ) && canExpireApplication(app)
+                            "
+                          >
+                            <a
+                              href=""
+                              class="dropdown-item text-danger"
+                              @click.prevent="expireApplication(app)"
+                            >
+                              <i class="bi bi-clock-history me-2"></i>Expire
+                              Application
+                            </a>
+                          </li>
                           <li v-if="app.status === 'completed'" class="">
                             <a
                               class="dropdown-item"
@@ -2195,6 +2287,17 @@ export default {
                         @click="deleteApplication(app)"
                       >
                         <i class="bi bi-trash me-1"></i>Delete
+                      </button>
+                      <button
+                        v-if="
+                          authStore.hasPermission('applications', 'expire') &&
+                          canExpireApplication(app)
+                        "
+                        type="button"
+                        class="btn btn-sm btn-outline-danger"
+                        @click="expireApplication(app)"
+                      >
+                        <i class="bi bi-clock-history me-1"></i>Expire
                       </button>
                       <button
                         v-if="
@@ -2847,6 +2950,29 @@ export default {
             </div>
 
             <div v-else-if="selectedApplication">
+              <div
+                v-if="selectedApplication.status === 'expired'"
+                class="alert alert-warning d-flex align-items-start gap-2 mb-4"
+                role="status"
+              >
+                <i class="bi bi-clock-history fs-5 flex-shrink-0"></i>
+                <div>
+                  <div class="fw-semibold">Application expired</div>
+                  <div>
+                    {{
+                      selectedApplication.expirationReason ||
+                      "No reason recorded"
+                    }}
+                  </div>
+                  <small
+                    v-if="selectedApplication.expiredAt"
+                    class="text-muted"
+                  >
+                    {{ formatDateTime(selectedApplication.expiredAt) }}
+                  </small>
+                </div>
+              </div>
+
               <div class="application-hero card border-0 shadow-sm mb-4">
                 <div class="card-body p-4">
                   <div class="row g-4 align-items-start">

@@ -1484,6 +1484,18 @@ export class PaymentsService {
                 return;
             }
 
+            if (
+                application.status === ApplicationStatus.EXPIRED ||
+                application.status === ApplicationStatus.REJECTED
+            ) {
+                this.logger.warn('Skipping payment stage progression for a closed application', {
+                    applicationId: application._id.toString(),
+                    status: application.status,
+                    paymentCode: payment.paymentCode,
+                });
+                return;
+            }
+
             // Map payment codes to next stages
             // Based on the payment code, determine what stage to advance to
             const stageProgressions: { [key: string]: number } = {

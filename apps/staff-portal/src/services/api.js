@@ -240,6 +240,13 @@ class StaffApiService {
         })
     }
 
+    async revokeAdmissionDecision(id, reason) {
+        return this.makeRequest(`/staff/applications/${id}/revoke-admission`, {
+            method: 'PATCH',
+            body: JSON.stringify({ reason }),
+        })
+    }
+
     async updateApplication(id, payload) {
         return this.makeRequest(`/staff/applications/${id}`, {
             method: 'PUT',

@@ -552,6 +552,7 @@ export class ApplicationUploadController {
 
                 // Application status
                 application.status = ApplicationStatus.PENDING;
+                application.submittedAt = new Date();
                 application.currentStage = await this.sessionControlsService.getNextStageAfterApplicationForm(
                     application.entryAcademicSession,
                     application,

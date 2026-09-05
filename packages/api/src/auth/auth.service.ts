@@ -58,6 +58,7 @@ export class AuthService {
             applicationNumber: application.applicationNumber,
             currentStage,
             status: application.status,
+            submittedAt: application.submittedAt,
             admissionDecision: application.admissionDecision,
             program: getNestedProgramRelation(application).program,
             programType: getNestedProgramRelation(application).programType,

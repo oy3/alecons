@@ -26,6 +26,7 @@ export const MODULE_DEFINITIONS = {
         permissions: [
             { value: 'view', label: 'View' },
             { value: 'approve', label: 'Approve' },
+            { value: 'revoke', label: 'Revoke Admission Decision' },
             { value: 'export', label: 'Export' },
             { value: 'manage', label: 'Manage All' },
         ],

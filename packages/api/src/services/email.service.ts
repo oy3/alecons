@@ -2279,4 +2279,42 @@ export class EmailService {
       throw error;
     }
   }
+
+  async sendAdmissionDecisionRevokedEmail(
+    email: string,
+    firstName: string,
+    applicationNumber: string,
+    reason: string,
+    sessionYear?: string,
+  ): Promise<void> {
+    const sessionLabel = sessionYear
+      ? ` for the ${this.escapeHtml(sessionYear)} Academic Session`
+      : '';
+    const mailOptions = {
+      from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: `Admission Decision Update - ${applicationNumber}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+        <body style="font-family:Arial,sans-serif;line-height:1.6;background:#f4f4f4;margin:0;padding:20px">
+          <div style="max-width:600px;margin:0 auto;background:#fff;padding:24px;border-radius:8px">
+            <h2 style="color:#2d7d7d">Admission Decision Update</h2>
+            <p>Dear ${this.escapeHtml(firstName)},</p>
+            <p>The admission decision for application <strong>${this.escapeHtml(applicationNumber)}</strong>${sessionLabel} has been returned for administrative review.</p>
+            <div style="background:#f8f9fa;border-left:4px solid #6c757d;padding:15px;margin:20px 0">
+              <strong>Reason:</strong> ${this.escapeHtml(reason)}
+            </div>
+            <p>Your application record and any payment records remain available. The Admissions Office will contact you when its review is complete.</p>
+            <p>Regards,<br><strong>ALECONS Admissions Office</strong></p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    await this.sendEmailWithRetry(mailOptions);
+    this.logger.log(`Admission decision revocation notification sent to ${email}`);
+  }
 }

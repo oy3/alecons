@@ -273,9 +273,10 @@ export default {
             admissionLetterUrl: app.admissionLetter || "",
             currentStage: app.currentStage,
             profileImageUrl: app.profileImageUrl,
-            submittedAt: app.createdAt,
+            submittedAt: app.submittedAt || app.createdAt,
             lastUpdated: app.updatedAt,
             matriculationNumber: app.matriculationNumber,
+            userRole: app.userRole,
           }));
 
           this.totalApplications = response.data.pagination.totalItems;
@@ -608,6 +609,7 @@ export default {
         application.status !== "completed" &&
         Number(application.currentStage || 0) < 10 &&
         !application.matriculationNumber &&
+        application.userRole !== "student" &&
         application?.userId?.role !== "student"
       );
     },
@@ -615,9 +617,17 @@ export default {
     canExpireApplication(application) {
       return Boolean(
         application &&
-          application.status === "pending" &&
-          application.admissionDecision === "pending" &&
-          !application.matriculationNumber,
+          !["completed", "rejected", "expired"].includes(application.status) &&
+          !application.matriculationNumber &&
+          application.userRole !== "student" &&
+          application?.userId?.role !== "student",
+      );
+    },
+
+    canRevokeAdmissionDecision(application) {
+      return Boolean(
+        this.canExpireApplication(application) &&
+          application.admissionDecision === "admitted",
       );
     },
 
@@ -625,7 +635,7 @@ export default {
       const result = await this.$swal.fire({
         icon: "warning",
         title: "Expire Application",
-        text: `Expire ${application.applicationNumber}? This closes only this application and is not an admission rejection.`,
+        text: `Expire ${application.applicationNumber}? This closes only this application and is not an admission rejection. Existing payment records are retained and no refund is performed.`,
         input: "textarea",
         inputLabel: "Reason",
         inputValue:
@@ -681,6 +691,69 @@ export default {
           title: "Expiration Failed",
           text: error.message || "Failed to expire application",
           confirmButtonColor: "#dc3545",
+        });
+      }
+    },
+
+    async revokeAdmissionDecision(application) {
+      const result = await this.$swal.fire({
+        icon: "warning",
+        title: "Revoke Admission Decision",
+        text: `Return ${application.applicationNumber} to admission review? Its application and payment records will be retained.`,
+        input: "textarea",
+        inputLabel: "Reason",
+        inputValue:
+          "The admission decision was revoked for administrative review.",
+        inputPlaceholder: "Enter the reason for revoking this decision",
+        inputAttributes: { maxlength: "1000" },
+        showCancelButton: true,
+        confirmButtonText: "Revoke Decision",
+        confirmButtonColor: "#dc3545",
+        cancelButtonColor: "#6c757d",
+        inputValidator: (value) => {
+          if ((value?.trim() || "").length < 5) {
+            return "Enter a reason of at least 5 characters";
+          }
+          return undefined;
+        },
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        this.$swal.fire({
+          title: "Revoking Admission Decision...",
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          didOpen: () => this.$swal.showLoading(),
+        });
+
+        const response = await apiService.revokeAdmissionDecision(
+          application.id,
+          result.value.trim(),
+        );
+        if (!response.success) {
+          throw new Error(response.message || "Failed to revoke admission decision");
+        }
+
+        await this.loadApplications();
+        if (this.selectedApplicationId === application.id) {
+          await this.reloadSelectedApplicationDetails();
+        }
+
+        await this.$swal.fire({
+          icon: "success",
+          title: "Admission Decision Revoked",
+          text: `${application.applicationNumber} has been returned for admission review.`,
+          confirmButtonColor: "#1a5f5f",
+        });
+      } catch (error) {
+        logger.error("Failed to revoke admission decision:", error);
+        await this.$swal.fire({
+          icon: "error",
+          title: "Could Not Revoke Decision",
+          text: error.message || "Please try again.",
+          confirmButtonColor: "#1a5f5f",
         });
       }
     },
@@ -2000,6 +2073,23 @@ export default {
                           <li
                             v-if="
                               authStore.hasPermission(
+                                'admissions',
+                                'revoke',
+                              ) && canRevokeAdmissionDecision(app)
+                            "
+                          >
+                            <a
+                              href=""
+                              class="dropdown-item text-danger"
+                              @click.prevent="revokeAdmissionDecision(app)"
+                            >
+                              <i class="bi bi-arrow-counterclockwise me-2"></i
+                              >Revoke Admission Decision
+                            </a>
+                          </li>
+                          <li
+                            v-if="
+                              authStore.hasPermission(
                                 'applications',
                                 'delete',
                               ) && canModifyApplication(app)
@@ -2287,6 +2377,18 @@ export default {
                         @click="deleteApplication(app)"
                       >
                         <i class="bi bi-trash me-1"></i>Delete
+                      </button>
+                      <button
+                        v-if="
+                          authStore.hasPermission('admissions', 'revoke') &&
+                          canRevokeAdmissionDecision(app)
+                        "
+                        type="button"
+                        class="btn btn-sm btn-outline-danger"
+                        @click="revokeAdmissionDecision(app)"
+                      >
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Revoke
+                        Decision
                       </button>
                       <button
                         v-if="
@@ -3617,6 +3719,18 @@ export default {
                           <span class="details-label">Rejection Reason</span>
                           <p class="details-value mb-0">
                             {{ selectedApplication.rejectionReason }}
+                          </p>
+                        </div>
+                        <div v-if="selectedApplication.admissionRevokedAt">
+                          <span class="details-label">Last Revoked</span>
+                          <span class="details-value">{{
+                            formatDate(selectedApplication.admissionRevokedAt)
+                          }}</span>
+                        </div>
+                        <div v-if="selectedApplication.admissionRevocationReason">
+                          <span class="details-label">Revocation Reason</span>
+                          <p class="details-value mb-0">
+                            {{ selectedApplication.admissionRevocationReason }}
                           </p>
                         </div>
                       </div>

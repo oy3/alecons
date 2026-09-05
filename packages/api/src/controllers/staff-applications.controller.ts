@@ -49,7 +49,14 @@ import { SessionControlsService } from '../services/session-controls.service';
 import { PaymentsService } from '../payments/payments.service';
 import { RolesService } from '../services/roles.service';
 import { ExpireApplicationDto } from '../dto/expire-application.dto';
+import { RevokeAdmissionDecisionDto } from '../dto/revoke-admission-decision.dto';
 import { resolveProgramSelection } from '../utils/program-relation.util';
+import {
+    canRevokeAdmissionDecision,
+    getScheduledLagosDateTime,
+    hasSubmittedApplication,
+    isUnfinishedApplication,
+} from '../utils/application-lifecycle.util';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 type StaffUploadedFilePayload = {
@@ -180,8 +187,40 @@ export class StaffApplicationsController {
         await this.sessionControlsService.assertAdmissionProcessingEnabled(
             application.entryAcademicSession,
         );
-        if (application.status === ApplicationStatus.EXPIRED) {
-            throw new ConflictException('Expired applications cannot be processed for admission');
+        if (!isUnfinishedApplication(application as any)) {
+            throw new ConflictException(
+                'Completed, rejected, expired, or matriculated applications cannot be processed for admission',
+            );
+        }
+    }
+
+    private async assertApplicationHasNotBecomeStudent(application: any): Promise<void> {
+        const userId = this.extractEntityId(application.userId);
+        const applicationId = this.extractEntityId(application._id);
+        const [user, student] = await Promise.all([
+            userId
+                ? this.userModel.findById(userId).select('role').lean()
+                : null,
+            this.studentModel.findOne({
+                $or: [
+                    ...(applicationId ? [{ applicationId: new Types.ObjectId(applicationId) }] : []),
+                    ...(userId ? [{ userId: new Types.ObjectId(userId) }] : []),
+                ],
+            }).select('_id').lean(),
+        ]);
+
+        if (user?.role === UserRole.STUDENT || student) {
+            throw new ConflictException(
+                'This application belongs to a student and can no longer be changed through the applicant workflow',
+            );
+        }
+    }
+
+    private assertApplicationWasSubmitted(application: ApplicationDocument): void {
+        if (!hasSubmittedApplication(application as any)) {
+            throw new ConflictException(
+                'The application form must be submitted before admission processing can continue',
+            );
         }
     }
 
@@ -759,6 +798,7 @@ export class StaffApplicationsController {
                         applicantName: { $concat: ['$user.firstName', ' ', '$user.lastName'] },
                         email: '$user.email',
                         phone: '$user.phone',
+                        userRole: '$user.role',
                         programName: '$program.name',
                         programTypeLabel: '$programType.type',
                         programModeLabel: '$programMode.description',
@@ -814,6 +854,7 @@ export class StaffApplicationsController {
                     applicantName: 1,
                     email: 1,
                     phone: 1,
+                    userRole: 1,
                     programName: 1,
                     programTypeLabel: 1,
                     programModeLabel: 1,
@@ -828,6 +869,9 @@ export class StaffApplicationsController {
                     entryAcademicSession: 1,
                     matriculationNumber: 1,
                     profileImageUrl: 1,
+                    submittedAt: 1,
+                    admissionRevokedAt: 1,
+                    admissionRevocationReason: 1,
                     createdAt: 1,
                     updatedAt: 1
                 }
@@ -1702,119 +1746,21 @@ export class StaffApplicationsController {
     }
 
     @Patch(':id/status')
-    @ApiOperation({ summary: 'Update application status' })
-    @ApiResponse({ status: 200, description: 'Application status updated successfully' })
-    @ApiResponse({ status: 404, description: 'Application not found' })
+    @ApiOperation({ summary: 'Legacy direct status update endpoint (disabled)' })
+    @ApiResponse({ status: 400, description: 'Use a dedicated application workflow action' })
     async updateApplicationStatus(
-        @Param('id') id: string,
-        @Body() updateData: {
+        @Param('id') _id: string,
+        @Body() _updateData: {
             status: ApplicationStatus;
             remarks?: string;
         },
         @Request() req,
     ) {
-        try {
-            if (updateData.status === ApplicationStatus.EXPIRED) {
-                throw new HttpException(
-                    {
-                        success: false,
-                        message: 'Use the dedicated expire action and provide an expiration reason',
-                    },
-                    HttpStatus.BAD_REQUEST,
-                );
-            }
-            this.logger.log('Updating application status:', {
-                applicationId: id,
-                newStatus: updateData.status,
-                hasRemarks: !!updateData.remarks
-            });
-
-            if (!Types.ObjectId.isValid(id)) {
-                throw new HttpException(
-                    {
-                        success: false,
-                        message: 'Invalid application ID format'
-                    },
-                    HttpStatus.BAD_REQUEST
-                );
-            }
-
-            // Validate status
-            if (!Object.values(ApplicationStatus).includes(updateData.status)) {
-                throw new HttpException(
-                    {
-                        success: false,
-                        message: 'Invalid application status'
-                    },
-                    HttpStatus.BAD_REQUEST
-                );
-            }
-
-            const application = await this.applicationModel.findById(id);
-
-            if (!application) {
-                throw new HttpException(
-                    {
-                        success: false,
-                        message: 'Application not found'
-                    },
-                    HttpStatus.NOT_FOUND
-                );
-            }
-
-            if (application.status === ApplicationStatus.EXPIRED) {
-                throw new ConflictException(
-                    'Expired applications cannot be changed through the status action',
-                );
-            }
-
-            const previousStatus = application.status;
-
-            // Update application status
-            application.status = updateData.status;
-            this.appendAuditEntry(application, {
-                action: 'status_updated',
-                description: `Application status changed from ${previousStatus} to ${updateData.status}.`,
-                actor: req.user,
-                metadata: {
-                    previousStatus,
-                    nextStatus: updateData.status,
-                    remarks: updateData.remarks,
-                },
-            });
-            await application.save();
-
-            this.logger.log('Application status updated successfully:', {
-                applicationId: id,
-                oldStatus: application.status,
-                newStatus: updateData.status
-            });
-
-            return {
-                success: true,
-                data: {
-                    applicationId: id,
-                    status: updateData.status,
-                    message: 'Application status updated successfully'
-                }
-            };
-
-        } catch (error) {
-            this.logger.error('Error updating application status:', error.message);
-
-            if (error instanceof HttpException) {
-                throw error;
-            }
-
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Failed to update application status',
-                    error: error.message
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR
-            );
-        }
+        await this.assertModulePermission(req, 'applications', 'edit');
+        throw new HttpException(
+            'Direct status changes are disabled. Use the dedicated admission, expiry, screening, payment, or matriculation action',
+            HttpStatus.BAD_REQUEST,
+        );
     }
 
     @Patch(':id/expire')
@@ -1834,28 +1780,18 @@ export class StaffApplicationsController {
         const applicationId = new Types.ObjectId(id);
         const existing = await this.applicationModel
             .findById(applicationId)
-            .select('status admissionDecision matriculationNumber applicationNumber userId entryAcademicSession')
+            .select('status admissionDecision currentStage matriculationNumber applicationNumber userId entryAcademicSession')
             .lean();
 
         if (!existing) {
             throw new HttpException('Application not found', HttpStatus.NOT_FOUND);
         }
-        if (
-            existing.status !== ApplicationStatus.PENDING ||
-            existing.admissionDecision !== AdmissionDecision.AWAITING_DECISION
-        ) {
+        if (!isUnfinishedApplication(existing as any)) {
             throw new ConflictException(
-                'Only pending applications awaiting an admission decision can be expired',
+                'Completed, rejected, expired, or matriculated applications cannot be expired',
             );
         }
-        if (existing.matriculationNumber) {
-            throw new ConflictException('A matriculated application cannot be expired');
-        }
-
-        const studentExists = await this.studentModel.exists({ applicationId });
-        if (studentExists) {
-            throw new ConflictException('An application linked to a student record cannot be expired');
-        }
+        await this.assertApplicationHasNotBecomeStudent(existing);
 
         const actorId = new Types.ObjectId(this.requestUserId(req));
         const expiredAt = new Date();
@@ -1867,6 +1803,10 @@ export class StaffApplicationsController {
             metadata: {
                 previousStatus: existing.status,
                 nextStatus: ApplicationStatus.EXPIRED,
+                previousAdmissionDecision: existing.admissionDecision,
+                nextAdmissionDecision: existing.admissionDecision,
+                previousStage: existing.currentStage,
+                nextStage: existing.currentStage,
                 reason: payload.reason,
             },
             createdAt: expiredAt,
@@ -1876,8 +1816,13 @@ export class StaffApplicationsController {
             .findOneAndUpdate(
                 {
                     _id: applicationId,
-                    status: ApplicationStatus.PENDING,
-                    admissionDecision: AdmissionDecision.AWAITING_DECISION,
+                    status: {
+                        $nin: [
+                            ApplicationStatus.COMPLETED,
+                            ApplicationStatus.REJECTED,
+                            ApplicationStatus.EXPIRED,
+                        ],
+                    },
                     $or: [
                         { matriculationNumber: { $exists: false } },
                         { matriculationNumber: null },
@@ -1923,6 +1868,134 @@ export class StaffApplicationsController {
         return {
             success: true,
             message: 'Application expired successfully',
+            data: { application },
+        };
+    }
+
+    @Patch(':id/revoke-admission')
+    @ApiOperation({ summary: 'Revoke an admission decision before student conversion' })
+    @ApiResponse({ status: 200, description: 'Admission decision revoked successfully' })
+    async revokeAdmissionDecision(
+        @Param('id') id: string,
+        @Body() payload: RevokeAdmissionDecisionDto,
+        @Request() req,
+    ) {
+        if (!Types.ObjectId.isValid(id)) {
+            throw new HttpException('Invalid application ID format', HttpStatus.BAD_REQUEST);
+        }
+
+        await this.assertModulePermission(req, 'admissions', 'revoke');
+
+        const applicationId = new Types.ObjectId(id);
+        const existing = await this.applicationModel
+            .findById(applicationId)
+            .select(
+                'status admissionDecision currentStage matriculationNumber userId entryAcademicSession admissionDate admissionLetter screening',
+            )
+            .lean();
+
+        if (!existing) {
+            throw new HttpException('Application not found', HttpStatus.NOT_FOUND);
+        }
+
+        await this.sessionControlsService.assertAdmissionProcessingEnabled(
+            existing.entryAcademicSession,
+        );
+
+        if (!canRevokeAdmissionDecision(existing as any)) {
+            throw new ConflictException(
+                'Only unfinished admitted applications can have their admission decision revoked',
+            );
+        }
+        await this.assertApplicationHasNotBecomeStudent(existing);
+
+        const actorId = new Types.ObjectId(this.requestUserId(req));
+        const revokedAt = new Date();
+        const auditEntry = {
+            action: 'admission_decision_revoked',
+            description: 'Admission decision was revoked and returned for review.',
+            performedBy: actorId,
+            actorRole: req.user?.role,
+            metadata: {
+                reason: payload.reason,
+                previousStatus: existing.status,
+                nextStatus: ApplicationStatus.PENDING,
+                previousAdmissionDecision: existing.admissionDecision,
+                nextAdmissionDecision: AdmissionDecision.AWAITING_DECISION,
+                previousStage: existing.currentStage,
+                nextStage: 5,
+                previousAdmissionDate: existing.admissionDate,
+                previousAdmissionLetter: existing.admissionLetter,
+                previousScreening: existing.screening,
+            },
+            createdAt: revokedAt,
+        };
+        const setValues: Record<string, unknown> = {
+            status: ApplicationStatus.PENDING,
+            admissionDecision: AdmissionDecision.AWAITING_DECISION,
+            currentStage: 5,
+            admissionRevokedAt: revokedAt,
+            admissionRevokedBy: actorId,
+            admissionRevocationReason: payload.reason,
+        };
+        const application = await this.applicationModel
+            .findOneAndUpdate(
+                {
+                    _id: applicationId,
+                    admissionDecision: AdmissionDecision.GRANTED,
+                    status: {
+                        $nin: [
+                            ApplicationStatus.COMPLETED,
+                            ApplicationStatus.REJECTED,
+                            ApplicationStatus.EXPIRED,
+                        ],
+                    },
+                    $or: [
+                        { matriculationNumber: { $exists: false } },
+                        { matriculationNumber: null },
+                        { matriculationNumber: '' },
+                    ],
+                },
+                {
+                    $set: setValues,
+                    $unset: {
+                        admissionDate: 1,
+                        admissionLetter: 1,
+                        rejectionReason: 1,
+                        screening: 1,
+                    },
+                    $push: { auditTrail: auditEntry },
+                },
+                { new: true },
+            )
+            .populate('userId', 'email firstName role')
+            .populate('entryAcademicSession', 'sessionYear title')
+            .exec();
+
+        if (!application) {
+            throw new ConflictException(
+                'The application changed while the admission was being revoked. Refresh and try again',
+            );
+        }
+
+        const user = application.userId as any;
+        const session = application.entryAcademicSession as any;
+        if (user?.email) {
+            this.emailService.sendAdmissionDecisionRevokedEmail(
+                user.email,
+                user.firstName || 'Applicant',
+                application.applicationNumber,
+                payload.reason,
+                session?.title || session?.sessionYear,
+            ).catch((error) => this.logger.error(
+                `Admission for ${application.applicationNumber} was revoked, but its notification email failed`,
+                error,
+            ));
+        }
+
+        return {
+            success: true,
+            message: 'Admission decision revoked successfully',
             data: { application },
         };
     }
@@ -2020,6 +2093,22 @@ export class StaffApplicationsController {
             }
 
             await this.assertAdmissionMutationAllowed(application, req);
+            this.assertApplicationWasSubmitted(application);
+            await this.assertApplicationHasNotBecomeStudent(application);
+
+            if (
+                application.status !== ApplicationStatus.PENDING ||
+                application.admissionDecision !== AdmissionDecision.AWAITING_DECISION
+            ) {
+                throw new ConflictException(
+                    'An entrance examination cannot be scheduled after an admission decision has been recorded',
+                );
+            }
+            if (application.entranceExam) {
+                throw new ConflictException(
+                    'An entrance examination is already scheduled for this application',
+                );
+            }
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
@@ -2110,6 +2199,7 @@ export class StaffApplicationsController {
             }
 
             await this.assertAdmissionMutationAllowed(application, req);
+            await this.assertApplicationHasNotBecomeStudent(application);
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
@@ -2126,6 +2216,14 @@ export class StaffApplicationsController {
                 throw new HttpException(
                     { success: false, message: 'Admission must be granted before screening can be scheduled' },
                     HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            if (application.screening) {
+                throw new ConflictException(
+                    application.screening.completed
+                        ? 'Screening has already been completed for this application'
+                        : 'Screening is already scheduled for this application',
                 );
             }
 
@@ -2247,10 +2345,34 @@ export class StaffApplicationsController {
             }
 
             await this.assertAdmissionMutationAllowed(application, req);
+            this.assertApplicationWasSubmitted(application);
+            await this.assertApplicationHasNotBecomeStudent(application);
+
+            if (
+                application.status !== ApplicationStatus.PENDING ||
+                application.admissionDecision !== AdmissionDecision.AWAITING_DECISION
+            ) {
+                throw new ConflictException(
+                    'An admission decision has already been recorded for this application',
+                );
+            }
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
             );
+
+            if (
+                admissionFlow.entranceExamEnabled &&
+                (application.entranceExam?.score === undefined || application.entranceExam?.score === null)
+            ) {
+                throw new ConflictException(
+                    'The entrance examination must be scored before an admission decision is recorded',
+                );
+            }
+
+            const previousStatus = application.status;
+            const previousAdmissionDecision = application.admissionDecision;
+            const previousStage = application.currentStage;
 
             // Update application with admission decision using correct enum
             const decisionMapping = {
@@ -2267,6 +2389,9 @@ export class StaffApplicationsController {
             }
 
             if (decisionData.decision === 'admitted') {
+                application.admissionRevokedAt = undefined;
+                application.admissionRevokedBy = undefined;
+                application.admissionRevocationReason = undefined;
                 application.status = admissionFlow.screeningEnabled
                     ? ApplicationStatus.PENDING
                     : ApplicationStatus.ADMITTED;
@@ -2448,6 +2573,12 @@ export class StaffApplicationsController {
                     decision: decisionData.decision,
                     sendProvisionalOffer: decisionData.sendProvisionalOffer === true,
                     reason: decisionData.reason,
+                    previousStatus,
+                    nextStatus: application.status,
+                    previousAdmissionDecision,
+                    nextAdmissionDecision: application.admissionDecision,
+                    previousStage,
+                    nextStage: application.currentStage,
                 },
             });
 
@@ -2506,6 +2637,7 @@ export class StaffApplicationsController {
             }
 
             await this.assertAdmissionMutationAllowed(application, req);
+            await this.assertApplicationHasNotBecomeStudent(application);
             if (application.admissionDecision !== AdmissionDecision.GRANTED) {
                 throw new HttpException(
                     { success: false, message: 'Admission letter can only be sent for admitted applications' },
@@ -2646,6 +2778,16 @@ export class StaffApplicationsController {
             }
 
             await this.assertAdmissionMutationAllowed(application, req);
+            this.assertApplicationWasSubmitted(application);
+            await this.assertApplicationHasNotBecomeStudent(application);
+            if (
+                application.status !== ApplicationStatus.PENDING ||
+                application.admissionDecision !== AdmissionDecision.AWAITING_DECISION
+            ) {
+                throw new ConflictException(
+                    'An entrance examination score cannot be recorded after an admission decision',
+                );
+            }
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
@@ -2663,6 +2805,15 @@ export class StaffApplicationsController {
                 throw new HttpException(
                     { success: false, message: 'Entrance exam not scheduled yet' },
                     HttpStatus.BAD_REQUEST
+                );
+            }
+
+            if (
+                application.entranceExam.score !== undefined &&
+                application.entranceExam.score !== null
+            ) {
+                throw new ConflictException(
+                    'An entrance examination score has already been recorded for this application',
                 );
             }
 
@@ -2730,6 +2881,7 @@ export class StaffApplicationsController {
             }
 
             await this.assertAdmissionMutationAllowed(application, req);
+            await this.assertApplicationHasNotBecomeStudent(application);
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
@@ -2749,12 +2901,36 @@ export class StaffApplicationsController {
                 );
             }
 
-            // Update screening completion status using grouped structure
             if (!application.screening) {
-                application.screening = { completed: true };
-            } else {
-                application.screening.completed = true;
+                throw new ConflictException(
+                    'Screening must be scheduled before it can be completed',
+                );
             }
+
+            if (application.screening.completed) {
+                throw new ConflictException(
+                    'Screening has already been completed for this application',
+                );
+            }
+
+            const scheduledAt = getScheduledLagosDateTime(
+                application.screening.date,
+                application.screening.time,
+            );
+            if (!scheduledAt) {
+                throw new ConflictException(
+                    'The scheduled screening date or time is invalid',
+                );
+            }
+            if (scheduledAt.getTime() > Date.now()) {
+                throw new ConflictException(
+                    'Screening cannot be completed before its scheduled date and time',
+                );
+            }
+
+            const previousStatus = application.status;
+            const previousStage = application.currentStage;
+            application.screening.completed = true;
             application.status = ApplicationStatus.ADMITTED;
             application.currentStage = 7; // Move to acceptance fee stage
             this.appendAuditEntry(application, {
@@ -2762,7 +2938,10 @@ export class StaffApplicationsController {
                 description: 'Screening was marked as completed.',
                 actor: req.user,
                 metadata: {
+                    scheduledAt,
+                    previousStatus,
                     resultingStatus: application.status,
+                    previousStage,
                     resultingStage: application.currentStage,
                 },
             });

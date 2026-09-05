@@ -69,7 +69,7 @@ export class RoleSeederService implements OnModuleInit {
                         },
                         {
                             module: 'admissions',
-                            permissions: ['view', 'approve', 'export', 'manage']
+                            permissions: ['view', 'approve', 'revoke', 'export', 'manage']
                         },
                         {
                             module: 'courseRegistrations',

@@ -132,6 +132,9 @@ export class Application {
     @Prop({ default: 1 })
     currentStage: number;
 
+    @Prop()
+    submittedAt?: Date;
+
     // Personal Information
     @Prop()
     dob?: Date;
@@ -293,6 +296,15 @@ export class Application {
 
     @Prop()
     rejectionReason?: string;
+
+    @Prop()
+    admissionRevokedAt?: Date;
+
+    @Prop({ type: Types.ObjectId, ref: 'User' })
+    admissionRevokedBy?: Types.ObjectId;
+
+    @Prop({ trim: true, maxlength: 1000 })
+    admissionRevocationReason?: string;
 
     @Prop()
     matriculationNumber?: string;

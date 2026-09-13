@@ -91,6 +91,10 @@ export class AccommodationService {
     return randomBytes(32).toString("base64url");
   }
 
+  private escapeRegex(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
   private async audit(
     applicationId: Types.ObjectId,
     action: string,
@@ -1088,14 +1092,67 @@ export class AccommodationService {
     sessionId?: string;
     status?: string;
     applicantType?: string;
+    search?: string;
     page?: number;
     limit?: number;
   }) {
     const query: any = {};
-    if (filters.sessionId)
+    if (filters.sessionId) {
+      if (!Types.ObjectId.isValid(filters.sessionId))
+        throw new BadRequestException("Invalid academic session ID");
       query.academicSessionId = new Types.ObjectId(filters.sessionId);
+    }
     if (filters.status) query.status = filters.status;
     if (filters.applicantType) query.applicantType = filters.applicantType;
+    const search = filters.search?.trim();
+    if (search) {
+      const expression = new RegExp(this.escapeRegex(search), "i");
+      const userConditions: any[] = [
+        { firstName: expression },
+        { otherName: expression },
+        { lastName: expression },
+        { email: expression },
+      ];
+      const nameTokens = search.split(/\s+/).filter(Boolean);
+      if (nameTokens.length > 1) {
+        userConditions.push({
+          $and: nameTokens.map((token) => {
+            const tokenExpression = new RegExp(this.escapeRegex(token), "i");
+            return {
+              $or: [
+                { firstName: tokenExpression },
+                { otherName: tokenExpression },
+                { lastName: tokenExpression },
+              ],
+            };
+          }),
+        });
+      }
+      if (Types.ObjectId.isValid(search)) {
+        userConditions.push({ _id: new Types.ObjectId(search) });
+      }
+      const [matchingUsers, matchingExternalResidents] = await Promise.all([
+        this.userModel.find({ $or: userConditions }).select("_id").lean(),
+        this.externalResidentModel
+          .find({ externalResidentNumber: expression })
+          .select("_id")
+          .lean(),
+      ]);
+      const searchConditions: any[] = [
+        { applicationNumber: expression },
+        { userId: { $in: matchingUsers.map((user) => user._id) } },
+        {
+          externalResidentId: {
+            $in: matchingExternalResidents.map((resident) => resident._id),
+          },
+        },
+      ];
+      if (Types.ObjectId.isValid(search)) {
+        const objectId = new Types.ObjectId(search);
+        searchConditions.push({ _id: objectId }, { userId: objectId });
+      }
+      query.$or = searchConditions;
+    }
     const page = Math.max(1, Number(filters.page || 1));
     const limit = Math.min(100, Math.max(1, Number(filters.limit || 25)));
     const [items, total] = await Promise.all([
@@ -1133,11 +1190,12 @@ export class AccommodationService {
 
   async inventory(sessionId?: string) {
     let academicSessionId: Types.ObjectId | undefined;
-    if (sessionId) {
+    const allSessions = sessionId === "all";
+    if (sessionId && !allSessions) {
       if (!Types.ObjectId.isValid(sessionId))
         throw new BadRequestException("Invalid academic session ID");
       academicSessionId = new Types.ObjectId(sessionId);
-    } else {
+    } else if (!allSessions) {
       const activeSession = await this.academicSessionModel
         .findOne({ active: true })
         .sort({ startDate: -1 })
@@ -1150,9 +1208,14 @@ export class AccommodationService {
       this.blockModel.find().sort({ active: -1, allocationOrder: 1 }).lean(),
       this.roomModel.find().sort({ active: -1, allocationOrder: 1 }).lean(),
     ]);
-    const occupancy = academicSessionId
+    const occupancy = academicSessionId || allSessions
       ? await this.assignmentModel.aggregate([
-          { $match: { academicSessionId, status: "active" } },
+          {
+            $match: {
+              ...(academicSessionId ? { academicSessionId } : {}),
+              status: "active",
+            },
+          },
           { $group: { _id: "$roomId", occupiedCount: { $sum: 1 } } },
         ])
       : [];
@@ -1160,7 +1223,8 @@ export class AccommodationService {
       occupancy.map((item) => [item._id.toString(), item.occupiedCount]),
     );
     return {
-      academicSessionId,
+      academicSessionId: academicSessionId || null,
+      sessionScope: allSessions ? "all" : "single",
       hostels,
       blocks,
       rooms: rooms.map((room) => {

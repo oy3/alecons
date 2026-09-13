@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import Swal from "sweetalert2";
 import { apiService } from "../../services/api";
 import { useAuthStore } from "../../stores/auth";
@@ -12,6 +12,7 @@ const total = ref(0);
 const sessions = ref([]);
 const inventory = reactive({ hostels: [], blocks: [], rooms: [] });
 const inventoryLoading = ref(false);
+const inventorySessionId = ref("");
 const expandedBlocks = ref(new Set());
 const inventoryPage = ref(1);
 const inventoryFilters = reactive({
@@ -22,6 +23,7 @@ const inventoryFilters = reactive({
   limit: 6,
 });
 const filters = reactive({
+  search: "",
   sessionId: "",
   status: "",
   applicantType: "",
@@ -120,7 +122,7 @@ async function loadInventory() {
   inventoryLoading.value = true;
   try {
     const result = await apiService.getAccommodationInventory(
-      filters.sessionId,
+      inventorySessionId.value,
     );
     const data = result.data || result;
     Object.assign(inventory, data);
@@ -142,10 +144,11 @@ async function loadSessions() {
       sessions.value.find((session) => session.active)?.id ||
       sessions.value.find((session) => session.active)?._id ||
       "";
+  if (!inventorySessionId.value) inventorySessionId.value = filters.sessionId;
 }
 async function changeSession() {
   filters.page = 1;
-  await Promise.all([loadApplications(), loadInventory()]);
+  await loadApplications();
 }
 async function changePage(page) {
   filters.page = Math.min(totalPages.value, Math.max(1, page));
@@ -668,6 +671,18 @@ watch(
 watch(inventoryPages, (pages) => {
   inventoryPage.value = Math.min(inventoryPage.value, pages);
 });
+let applicationSearchTimer;
+watch(
+  () => filters.search,
+  () => {
+    window.clearTimeout(applicationSearchTimer);
+    applicationSearchTimer = window.setTimeout(() => {
+      filters.page = 1;
+      loadApplications();
+    }, 350);
+  },
+);
+onBeforeUnmount(() => window.clearTimeout(applicationSearchTimer));
 onMounted(async () => {
   await loadSessions();
   await Promise.all([loadApplications(), loadInventory()]);
@@ -709,6 +724,18 @@ onMounted(async () => {
 
     <template v-if="activeTab === 'applications'">
       <section class="filter-band mb-3">
+        <div class="input-group application-search">
+          <span class="input-group-text bg-white" aria-hidden="true">
+            <i class="bi bi-search"></i>
+          </span>
+          <input
+            v-model="filters.search"
+            type="search"
+            class="form-control border-start-0"
+            placeholder="Search name, ID or email"
+            aria-label="Search accommodation applications by resident name, ID or email"
+          />
+        </div>
         <select
           v-model="filters.sessionId"
           class="form-select"
@@ -929,10 +956,11 @@ onMounted(async () => {
           <label for="inventory-session">Academic session</label>
           <select
             id="inventory-session"
-            v-model="filters.sessionId"
+            v-model="inventorySessionId"
             class="form-select"
             @change="loadInventory"
           >
+            <option value="all">All sessions</option>
             <option
               v-for="session in sessions"
               :key="session.id || session._id"
@@ -1395,11 +1423,14 @@ onMounted(async () => {
 }
 .filter-band {
   display: grid;
-  grid-template-columns: repeat(3, minmax(160px, 240px)) 44px;
+  grid-template-columns: minmax(250px, 1.5fr) repeat(3, minmax(160px, 1fr)) 44px;
   gap: 0.75rem;
   padding: 1rem;
   background: #fff;
   border: 1px solid #e3e7ea;
+}
+.application-search {
+  min-width: 0;
 }
 .inventory-toolbar {
   display: grid;

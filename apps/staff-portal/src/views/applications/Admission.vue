@@ -55,6 +55,7 @@ export default {
         examLinkType: "cbt",
         examLink: "",
       },
+      examScheduleMode: "schedule",
       examFormProcessing: false,
 
       screeningForm: {
@@ -62,7 +63,10 @@ export default {
         screeningTime: "",
         venue: SCHOOL_ADDRESS,
       },
+      screeningScheduleMode: "schedule",
       screeningFormProcessing: false,
+      scheduleNow: Date.now(),
+      scheduleClockId: null,
 
       scoreForm: {
         score: "",
@@ -167,6 +171,9 @@ export default {
     }
 
     this.registerModalA11yHandlers();
+    this.scheduleClockId = window.setInterval(() => {
+      this.scheduleNow = Date.now();
+    }, 60000);
 
     // Load data
     await Promise.all([this.loadPrograms(), this.loadAcademicSessions()]);
@@ -176,6 +183,7 @@ export default {
   },
   beforeUnmount() {
     this.unregisterModalA11yHandlers();
+    if (this.scheduleClockId) window.clearInterval(this.scheduleClockId);
   },
   methods: {
     registerModalA11yHandlers() {
@@ -431,6 +439,39 @@ export default {
       );
     },
 
+    getScheduledTimestamp(schedule) {
+      if (!schedule?.date || !/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.time || "")) {
+        return null;
+      }
+      const date = new Date(schedule.date);
+      if (Number.isNaN(date.getTime())) return null;
+      const day = date.toISOString().slice(0, 10);
+      const timestamp = new Date(`${day}T${schedule.time}:00+01:00`).getTime();
+      return Number.isNaN(timestamp) ? null : timestamp;
+    },
+
+    isUpcomingSchedule(schedule) {
+      const timestamp = this.getScheduledTimestamp(schedule);
+      return timestamp !== null && timestamp > this.scheduleNow;
+    },
+
+    toDateInputValue(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+    },
+
+    canRescheduleExam(application) {
+      return (
+        this.isEntranceExamEnabled(application) &&
+        application.currentStage === 4 &&
+        application.entranceExam &&
+        (application.entranceExam.score === undefined ||
+          application.entranceExam.score === null) &&
+        this.isUpcomingSchedule(application.entranceExam)
+      );
+    },
+
     canInputExamScore(application) {
       return (
         this.isEntranceExamEnabled(application) &&
@@ -445,6 +486,16 @@ export default {
         this.isScreeningEnabled(application) &&
         application.currentStage === 6 &&
         !application.screening
+      );
+    },
+
+    canRescheduleScreening(application) {
+      return (
+        this.isScreeningEnabled(application) &&
+        application.currentStage === 6 &&
+        application.screening &&
+        !application.screening.completed &&
+        this.isUpcomingSchedule(application.screening)
       );
     },
 
@@ -568,11 +619,26 @@ export default {
 
     scheduleExam(application) {
       this.selectedApplication = application;
+      this.examScheduleMode = "schedule";
       this.examForm = {
         examDate: "",
         examTime: "",
         examLinkType: "cbt",
         examLink: "",
+      };
+      this.showModal("scheduleExamModal");
+    },
+
+    rescheduleExam(application) {
+      const currentLink = application.entranceExam?.link || "";
+      const usesCbt = currentLink === this.cbtExamUrl;
+      this.selectedApplication = application;
+      this.examScheduleMode = "reschedule";
+      this.examForm = {
+        examDate: this.toDateInputValue(application.entranceExam?.date),
+        examTime: application.entranceExam?.time || "",
+        examLinkType: usesCbt ? "cbt" : "custom",
+        examLink: usesCbt ? "" : currentLink,
       };
       this.showModal("scheduleExamModal");
     },
@@ -611,20 +677,21 @@ export default {
 
         this.examFormProcessing = true;
 
-        const response = await apiService.scheduleExam(
-          this.selectedApplication.id,
-          {
-            examDate: this.examForm.examDate,
-            examTime: this.examForm.examTime,
-            examLink: resolvedExamLink,
-          },
-        );
+        const payload = {
+          examDate: this.examForm.examDate,
+          examTime: this.examForm.examTime,
+          examLink: resolvedExamLink,
+        };
+        const rescheduling = this.examScheduleMode === "reschedule";
+        const response = rescheduling
+          ? await apiService.rescheduleApplicationExam(this.selectedApplication.id, payload)
+          : await apiService.scheduleApplicationExam(this.selectedApplication.id, payload);
 
         if (response.success) {
           this.$swal.fire({
             icon: "success",
-            title: "Exam Scheduled",
-            text: "Entrance exam has been scheduled successfully. Student will be notified via email.",
+            title: rescheduling ? "Exam Rescheduled" : "Exam Scheduled",
+            text: `Entrance exam has been ${rescheduling ? "rescheduled" : "scheduled"} successfully. The applicant will be notified via email.`,
             confirmButtonColor: "#1a5f5f",
           });
 
@@ -632,11 +699,11 @@ export default {
           await this.loadApplications();
         }
       } catch (error) {
-        logger.error("Failed to schedule exam:", error);
+        logger.error("Failed to save exam schedule:", error);
         this.$swal.fire({
           icon: "error",
           title: "Failed",
-          text: "Failed to schedule exam. Please try again.",
+          text: error.message || "Failed to save the exam schedule. Please try again.",
           confirmButtonColor: "#1a5f5f",
         });
       } finally {
@@ -691,10 +758,22 @@ export default {
 
     scheduleScreening(application) {
       this.selectedApplication = application;
+      this.screeningScheduleMode = "schedule";
       this.screeningForm = {
         screeningDate: "",
         screeningTime: "",
         venue: this.defaultScreeningVenue,
+      };
+      this.showModal("scheduleScreeningModal");
+    },
+
+    rescheduleScreening(application) {
+      this.selectedApplication = application;
+      this.screeningScheduleMode = "reschedule";
+      this.screeningForm = {
+        screeningDate: this.toDateInputValue(application.screening?.date),
+        screeningTime: application.screening?.time || "",
+        venue: application.screening?.venue || this.defaultScreeningVenue,
       };
       this.showModal("scheduleScreeningModal");
     },
@@ -728,20 +807,23 @@ export default {
 
         this.screeningFormProcessing = true;
 
-        const response = await apiService.scheduleScreening(
-          this.selectedApplication.id,
-          {
-            screeningDate: this.screeningForm.screeningDate,
-            screeningTime: this.screeningForm.screeningTime,
-            venue,
-          },
-        );
+        const payload = {
+          screeningDate: this.screeningForm.screeningDate,
+          screeningTime: this.screeningForm.screeningTime,
+          venue,
+        };
+        const rescheduling = this.screeningScheduleMode === "reschedule";
+        const response = rescheduling
+          ? await apiService.rescheduleScreening(this.selectedApplication.id, payload)
+          : await apiService.scheduleScreening(this.selectedApplication.id, payload);
 
         if (response.success) {
           this.$swal.fire({
             icon: "success",
-            title: "Screening Scheduled",
-            text: "Screening has been scheduled successfully. Student will be notified via email.",
+            title: rescheduling
+              ? "Screening Rescheduled"
+              : "Screening Scheduled",
+            text: `Screening has been ${rescheduling ? "rescheduled" : "scheduled"} successfully. The applicant will be notified via email.`,
             confirmButtonColor: "#1a5f5f",
           });
 
@@ -1186,6 +1268,16 @@ export default {
                               Exam
                             </a>
                           </li>
+                          <li v-if="canRescheduleExam(application)">
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="rescheduleExam(application)"
+                            >
+                              <i class="bi bi-calendar2-week me-2"></i
+                              >Reschedule Exam
+                            </a>
+                          </li>
                           <li v-if="canInputExamScore(application)">
                             <a
                               class="dropdown-item"
@@ -1204,6 +1296,16 @@ export default {
                             >
                               <i class="bi bi-calendar-check me-2"></i>Schedule
                               Screening
+                            </a>
+                          </li>
+                          <li v-if="canRescheduleScreening(application)">
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="rescheduleScreening(application)"
+                            >
+                              <i class="bi bi-calendar2-week me-2"></i
+                              >Reschedule Screening
                             </a>
                           </li>
                           <li v-if="canCompleteScreening(application)">
@@ -1308,6 +1410,16 @@ export default {
                                   >Schedule Exam
                                 </a>
                               </li>
+                              <li v-if="canRescheduleExam(application)">
+                                <a
+                                  class="dropdown-item"
+                                  href="#"
+                                  @click.prevent="rescheduleExam(application)"
+                                >
+                                  <i class="bi bi-calendar2-week me-1"></i
+                                  >Reschedule Exam
+                                </a>
+                              </li>
                               <li v-if="canInputExamScore(application)">
                                 <a
                                   class="dropdown-item"
@@ -1328,6 +1440,16 @@ export default {
                                 >
                                   <i class="bi bi-calendar-check me-1"></i
                                   >Screening
+                                </a>
+                              </li>
+                              <li v-if="canRescheduleScreening(application)">
+                                <a
+                                  class="dropdown-item"
+                                  href="#"
+                                  @click.prevent="rescheduleScreening(application)"
+                                >
+                                  <i class="bi bi-calendar2-week me-1"></i
+                                  >Reschedule Screening
                                 </a>
                               </li>
                               <li v-if="canCompleteScreening(application)">
@@ -1531,7 +1653,11 @@ export default {
       <div class="modal-content">
         <div class="modal-header">
           <h5 id="scheduleExamModalLabel" class="modal-title">
-            Schedule Entrance Exam
+            {{
+              examScheduleMode === "reschedule"
+                ? "Reschedule Entrance Exam"
+                : "Schedule Entrance Exam"
+            }}
           </h5>
           <button
             type="button"
@@ -1543,7 +1669,9 @@ export default {
         <div class="modal-body">
           <form @submit.prevent="submitExamSchedule">
             <div class="mb-3">
-              <label for="examDate" class="form-label">Exam Date</label>
+              <label for="examDate" class="form-label">
+                {{ examScheduleMode === "reschedule" ? "New Exam Date" : "Exam Date" }}
+              </label>
               <input
                 id="examDate"
                 v-model="examForm.examDate"
@@ -1553,7 +1681,9 @@ export default {
               />
             </div>
             <div class="mb-3">
-              <label for="examTime" class="form-label">Exam Time</label>
+              <label for="examTime" class="form-label">
+                {{ examScheduleMode === "reschedule" ? "New Exam Time" : "Exam Time" }}
+              </label>
               <input
                 id="examTime"
                 v-model="examForm.examTime"
@@ -1614,7 +1744,7 @@ export default {
               v-if="examFormProcessing"
               class="spinner-border spinner-border-sm me-2"
             ></span>
-            Schedule Exam
+            {{ examScheduleMode === "reschedule" ? "Reschedule Exam" : "Schedule Exam" }}
           </button>
         </div>
       </div>
@@ -1633,7 +1763,11 @@ export default {
       <div class="modal-content">
         <div class="modal-header">
           <h5 id="scheduleScreeningModalLabel" class="modal-title">
-            Schedule Screening & Interview
+            {{
+              screeningScheduleMode === "reschedule"
+                ? "Reschedule Screening & Interview"
+                : "Schedule Screening & Interview"
+            }}
           </h5>
           <button
             type="button"
@@ -1646,7 +1780,7 @@ export default {
           <form @submit.prevent="submitScreeningSchedule">
             <div class="mb-3">
               <label for="screeningDate" class="form-label">
-                Screening Date
+                {{ screeningScheduleMode === "reschedule" ? "New Screening Date" : "Screening Date" }}
               </label>
               <input
                 id="screeningDate"
@@ -1658,7 +1792,7 @@ export default {
             </div>
             <div class="mb-3">
               <label for="screeningTime" class="form-label">
-                Screening Time
+                {{ screeningScheduleMode === "reschedule" ? "New Screening Time" : "Screening Time" }}
               </label>
               <input
                 id="screeningTime"
@@ -1699,7 +1833,11 @@ export default {
               v-if="screeningFormProcessing"
               class="spinner-border spinner-border-sm me-2"
             ></span>
-            Schedule Screening
+            {{
+              screeningScheduleMode === "reschedule"
+                ? "Reschedule Screening"
+                : "Schedule Screening"
+            }}
           </button>
         </div>
       </div>

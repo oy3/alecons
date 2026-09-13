@@ -267,22 +267,22 @@ async function hostelDialog(record = null) {
     title: editing ? "Edit hostel" : "Add hostel",
     width: 600,
     html: `<div class="text-start">
-      <div class="mb-3"><label for="inventory-name" class="form-label fw-semibold">Hostel name</label><input id="inventory-name" class="form-control" maxlength="120" value="${escapeHtml(record?.name)}" placeholder="e.g. Daniel Hostel"></div>
-      <div class="mb-3"><label for="inventory-gender" class="form-label fw-semibold">Gender</label><select id="inventory-gender" class="form-select"><option value="female" ${record?.gender !== "male" ? "selected" : ""}>Female</option><option value="male" ${record?.gender === "male" ? "selected" : ""}>Male</option></select></div>
-      <div><label for="inventory-description" class="form-label fw-semibold">Description <span class="text-muted fw-normal">(optional)</span></label><textarea id="inventory-description" class="form-control" rows="3" maxlength="500">${escapeHtml(record?.description)}</textarea>${editing ? '<div class="form-text">Gender cannot be changed while this hostel has active allocations.</div>' : ""}</div>
+      <div class="mb-3"><label for="hostel-dialog-name" class="form-label fw-semibold">Hostel name</label><input id="hostel-dialog-name" class="form-control" maxlength="120" value="${escapeHtml(record?.name)}" placeholder="e.g. Daniel Hostel"></div>
+      <div class="mb-3"><label for="hostel-dialog-gender" class="form-label fw-semibold">Gender</label><select id="hostel-dialog-gender" class="form-select"><option value="female" ${record?.gender !== "male" ? "selected" : ""}>Female</option><option value="male" ${record?.gender === "male" ? "selected" : ""}>Male</option></select></div>
+      <div><label for="hostel-dialog-description" class="form-label fw-semibold">Description <span class="text-muted fw-normal">(optional)</span></label><textarea id="hostel-dialog-description" class="form-control" rows="3" maxlength="500">${escapeHtml(record?.description)}</textarea>${editing ? '<div class="form-text">Gender cannot be changed while this hostel has active allocations.</div>' : ""}</div>
     </div>`,
     showCancelButton: true,
     confirmButtonText: editing ? "Save changes" : "Add hostel",
     confirmButtonColor: "#176867",
     focusConfirm: false,
     preConfirm: () => {
-      const name = document.getElementById("inventory-name").value.trim();
+      const name = document.getElementById("hostel-dialog-name").value.trim();
       if (!name) return Swal.showValidationMessage("Enter the hostel name");
       return {
         name,
-        gender: document.getElementById("inventory-gender").value,
+        gender: document.getElementById("hostel-dialog-gender").value,
         description: document
-          .getElementById("inventory-description")
+          .getElementById("hostel-dialog-description")
           .value.trim(),
       };
     },
@@ -317,25 +317,25 @@ async function blockDialog(hostel, record = null) {
     title: editing ? "Edit block" : `Add block to ${hostel.name}`,
     width: 600,
     html: `<div class="text-start">
-      <div class="mb-3"><label for="inventory-name" class="form-label fw-semibold">Block name</label><input id="inventory-name" class="form-control" maxlength="80" value="${escapeHtml(record?.name || "")}" placeholder="e.g. Block A"></div>
-      <div class="mb-3"><label for="inventory-type" class="form-label fw-semibold">Resident type</label><select id="inventory-type" class="form-select"><option value="internal" ${record?.residentType !== "external" ? "selected" : ""}>Internal students</option><option value="external" ${record?.residentType === "external" ? "selected" : ""}>External residents</option></select>${editing ? '<div class="form-text">Resident type cannot be changed while this block has active allocations.</div>' : ""}</div>
-      <div><label for="inventory-order" class="form-label fw-semibold">Allocation order</label><input id="inventory-order" type="number" min="1" class="form-control" value="${record?.allocationOrder || nextOrder}"><div class="form-text">Lower numbers are considered first during automatic allocation.</div></div>
+      <div class="mb-3"><label for="block-dialog-name" class="form-label fw-semibold">Block name</label><input id="block-dialog-name" class="form-control" maxlength="80" value="${escapeHtml(record?.name || "")}" placeholder="e.g. Block A"></div>
+      <div class="mb-3"><label for="block-dialog-type" class="form-label fw-semibold">Resident type</label><select id="block-dialog-type" class="form-select"><option value="internal" ${record?.residentType !== "external" ? "selected" : ""}>Internal students</option><option value="external" ${record?.residentType === "external" ? "selected" : ""}>External residents</option></select>${editing ? '<div class="form-text">Resident type cannot be changed while this block has active allocations.</div>' : ""}</div>
+      <div><label for="block-dialog-order" class="form-label fw-semibold">Allocation order</label><input id="block-dialog-order" type="number" min="1" class="form-control" value="${record?.allocationOrder || nextOrder}"><div class="form-text">Lower numbers are considered first during automatic allocation.</div></div>
     </div>`,
     showCancelButton: true,
     confirmButtonText: editing ? "Save changes" : "Add block",
     confirmButtonColor: "#176867",
     focusConfirm: false,
     preConfirm: () => {
-      const name = document.getElementById("inventory-name").value.trim();
+      const name = document.getElementById("block-dialog-name").value.trim();
       const allocationOrder = Number(
-        document.getElementById("inventory-order").value,
+        document.getElementById("block-dialog-order").value,
       );
       if (!name) return Swal.showValidationMessage("Enter the block name");
       if (!Number.isInteger(allocationOrder) || allocationOrder < 1)
         return Swal.showValidationMessage("Enter a valid allocation order");
       return {
         name,
-        residentType: document.getElementById("inventory-type").value,
+        residentType: document.getElementById("block-dialog-type").value,
         allocationOrder,
       };
     },
@@ -375,8 +375,8 @@ async function roomDialog(block, record = null) {
     title: editing ? "Edit room" : `Add room to ${block.name}`,
     width: 600,
     html: `<div class="text-start">
-      <div class="mb-3"><label for="inventory-name" class="form-label fw-semibold">Room name</label><input id="inventory-name" class="form-control" maxlength="80" value="${escapeHtml(record?.name || "")}" placeholder="e.g. A1"></div>
-      <div class="row g-3"><div class="col-sm-6"><label for="inventory-capacity" class="form-label fw-semibold">Bed capacity</label><input id="inventory-capacity" type="number" min="1" max="100" class="form-control" value="${record?.capacity || 8}"></div><div class="col-sm-6"><label for="inventory-order" class="form-label fw-semibold">Allocation order</label><input id="inventory-order" type="number" min="1" class="form-control" value="${record?.allocationOrder || nextOrder}"></div></div>
+      <div class="mb-3"><label for="room-dialog-name" class="form-label fw-semibold">Room name</label><input id="room-dialog-name" class="form-control" maxlength="80" value="${escapeHtml(record?.name || "")}" placeholder="e.g. A1"></div>
+      <div class="row g-3"><div class="col-sm-6"><label for="room-dialog-capacity" class="form-label fw-semibold">Bed capacity</label><input id="room-dialog-capacity" type="number" min="1" max="100" class="form-control" value="${record?.capacity || 8}"></div><div class="col-sm-6"><label for="room-dialog-order" class="form-label fw-semibold">Allocation order</label><input id="room-dialog-order" type="number" min="1" class="form-control" value="${record?.allocationOrder || nextOrder}"></div></div>
       ${editing ? '<div class="form-text mt-2">Capacity cannot be reduced below the highest currently occupied bed slot.</div>' : ""}
     </div>`,
     showCancelButton: true,
@@ -384,12 +384,12 @@ async function roomDialog(block, record = null) {
     confirmButtonColor: "#176867",
     focusConfirm: false,
     preConfirm: () => {
-      const name = document.getElementById("inventory-name").value.trim();
+      const name = document.getElementById("room-dialog-name").value.trim();
       const capacity = Number(
-        document.getElementById("inventory-capacity").value,
+        document.getElementById("room-dialog-capacity").value,
       );
       const allocationOrder = Number(
-        document.getElementById("inventory-order").value,
+        document.getElementById("room-dialog-order").value,
       );
       if (!name) return Swal.showValidationMessage("Enter the room name");
       if (!Number.isInteger(capacity) || capacity < 1 || capacity > 100)

@@ -15,6 +15,16 @@ export interface PaymentControl {
     eligibleStudentGroups?: Array<'new' | 'returning'>;
 }
 
+export interface AccommodationControl {
+    internalApplicationsOpen: boolean;
+    externalApplicationsOpen: boolean;
+    internalPaymentId?: Types.ObjectId;
+    externalPaymentId?: Types.ObjectId;
+    applicationOpenAt?: Date;
+    applicationCloseAt?: Date;
+    categories: Array<{ code: string; label: string; active: boolean; isDefault: boolean }>;
+}
+
 @Schema({ timestamps: true })
 export class SessionControl {
     @Prop({ type: Types.ObjectId, ref: 'AcademicSession', required: true })
@@ -53,6 +63,32 @@ export class SessionControl {
         }]
     })
     payments: PaymentControl[];
+
+    @Prop({
+        type: {
+            internalApplicationsOpen: { type: Boolean, default: false },
+            externalApplicationsOpen: { type: Boolean, default: false },
+            internalPaymentId: { type: Types.ObjectId, ref: 'Payment' },
+            externalPaymentId: { type: Types.ObjectId, ref: 'Payment' },
+            applicationOpenAt: Date,
+            applicationCloseAt: Date,
+            categories: {
+                type: [{
+                    code: { type: String, required: true },
+                    label: { type: String, required: true },
+                    active: { type: Boolean, default: true },
+                    isDefault: { type: Boolean, default: false },
+                }],
+                default: [{ code: 'pre_degree', label: 'Pre-degree', active: true, isDefault: true }],
+            },
+        },
+        default: () => ({
+            internalApplicationsOpen: false,
+            externalApplicationsOpen: false,
+            categories: [{ code: 'pre_degree', label: 'Pre-degree', active: true, isDefault: true }],
+        }),
+    })
+    accommodation: AccommodationControl;
 
     @Prop({ type: Types.ObjectId, ref: 'User', required: true })
     updatedBy: Types.ObjectId;

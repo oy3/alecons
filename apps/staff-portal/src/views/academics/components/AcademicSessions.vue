@@ -655,6 +655,23 @@ export default {
 
       const controls = this.sessionControls?.controls || [];
       const payments = this.sessionControls?.payments || [];
+      const accommodation = this.sessionControls?.accommodation || {
+        internalApplicationsOpen: false,
+        externalApplicationsOpen: false,
+        categories: [{ code: 'pre_degree', label: 'Pre-degree', active: true, isDefault: true }],
+      };
+      this.sessionControls.accommodation = accommodation;
+      const paymentOptions = (selected, audience) => [
+        '<option value="">Select payment</option>',
+        ...this.availablePayments
+          .filter((payment) => payment.isActive !== false && (payment.targetAudience || []).includes(audience))
+          .map((payment) => {
+            const paymentId = payment.id || payment._id;
+            if (!paymentId) return '';
+            const selectedId = selected?.id || selected?._id || selected || '';
+            return `<option value="${this.escapeHtml(String(paymentId))}" ${String(selectedId) === String(paymentId) ? 'selected' : ''}>${this.escapeHtml(payment.name)} (${this.escapeHtml(payment.paymentCode)})</option>`;
+          }),
+      ].join('');
 
       // Debug logging
       logger.info("Rendering controls modal with:", {
@@ -674,6 +691,7 @@ export default {
               No session controls found for this academic session. Please try refreshing or contact support.
             </div>
           </div>
+
         `;
       }
 
@@ -769,6 +787,27 @@ export default {
                     : '<p class="text-muted">No payment controls available</p>'
                 }
               </div>
+            </div>
+          </div>
+
+          <hr class="my-4">
+          <div class="text-start">
+            <h6 class="fw-bold mb-2"><i class="bi bi-building me-2"></i>Accommodation Intake</h6>
+            <p class="small text-muted">Open each resident flow independently and map it to the correct payment destination through its selected payment record.</p>
+            <div class="row g-3">
+              <div class="col-md-6 border-end">
+                <div class="form-check form-switch mb-3"><input id="internalAccommodationOpen" class="form-check-input" type="checkbox" ${accommodation.internalApplicationsOpen ? 'checked' : ''}><label class="form-check-label" for="internalAccommodationOpen">Internal student applications open</label></div>
+                <label class="form-label small fw-semibold" for="internalAccommodationPayment">Internal accommodation payment</label>
+                <select id="internalAccommodationPayment" class="form-select">${paymentOptions(accommodation.internalPaymentId, 'student')}</select>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check form-switch mb-3"><input id="externalAccommodationOpen" class="form-check-input" type="checkbox" ${accommodation.externalApplicationsOpen ? 'checked' : ''}><label class="form-check-label" for="externalAccommodationOpen">External applications open</label></div>
+                <label class="form-label small fw-semibold" for="externalAccommodationPayment">External accommodation payment</label>
+                <select id="externalAccommodationPayment" class="form-select">${paymentOptions(accommodation.externalPaymentId, 'external_resident')}</select>
+              </div>
+              <div class="col-md-6"><label class="form-label small fw-semibold" for="accommodationOpenAt">Applications open at (optional)</label><input id="accommodationOpenAt" class="form-control" type="datetime-local" value="${accommodation.applicationOpenAt ? new Date(accommodation.applicationOpenAt).toISOString().slice(0,16) : ''}"></div>
+              <div class="col-md-6"><label class="form-label small fw-semibold" for="accommodationCloseAt">Applications close at (optional)</label><input id="accommodationCloseAt" class="form-control" type="datetime-local" value="${accommodation.applicationCloseAt ? new Date(accommodation.applicationCloseAt).toISOString().slice(0,16) : ''}"></div>
+              <div class="col-12"><span class="badge text-bg-light border">External categories: ${(accommodation.categories || []).filter((category) => category.active).map((category) => `${category.label}${category.isDefault ? ' (default)' : ''}`).join(', ') || 'None configured'}</span></div>
             </div>
           </div>
 
@@ -921,6 +960,18 @@ export default {
           }
         }
 
+        const accommodation = {
+          ...this.sessionControls.accommodation,
+          internalApplicationsOpen: document.getElementById('internalAccommodationOpen')?.checked || false,
+          externalApplicationsOpen: document.getElementById('externalAccommodationOpen')?.checked || false,
+          internalPaymentId: document.getElementById('internalAccommodationPayment')?.value || undefined,
+          externalPaymentId: document.getElementById('externalAccommodationPayment')?.value || undefined,
+          applicationOpenAt: document.getElementById('accommodationOpenAt')?.value || undefined,
+          applicationCloseAt: document.getElementById('accommodationCloseAt')?.value || undefined,
+          categories: this.sessionControls.accommodation?.categories || [{ code: 'pre_degree', label: 'Pre-degree', active: true, isDefault: true }],
+        };
+        if (accommodation.internalApplicationsOpen && !accommodation.internalPaymentId) throw new Error('Select the internal accommodation payment before opening internal applications');
+        if (accommodation.externalApplicationsOpen && !accommodation.externalPaymentId) throw new Error('Select the external accommodation payment before opening external applications');
         const controlsData = {
           controls: this.sessionControls.controls,
           payments: this.sessionControls.payments.map((p) => ({
@@ -931,6 +982,7 @@ export default {
               "returning",
             ],
           })),
+          accommodation,
         };
 
         const response = await apiService.updateSessionControls(

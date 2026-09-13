@@ -284,9 +284,9 @@ export class ApplicationUploadController {
                     phone: string;
                     email: string;
                 }>;
-                jambRegistrationNumber?: string;
-                jambScore?: number | string;
-                isJambExempt?: boolean;
+                jambRegistrationNumber: string;
+                jambScore: number | string;
+                isJambExempt?: false;
             };
             // Uploaded files data
             uploadedFiles: Array<{
@@ -333,6 +333,25 @@ export class ApplicationUploadController {
             }
 
             await this.assertApplicationEditable(application);
+
+            const jambRegistrationNumber = applicationData.academicInfo?.jambRegistrationNumber?.trim();
+            const rawJambScore = applicationData.academicInfo?.jambScore;
+            const jambScore = Number(rawJambScore);
+
+            if (!jambRegistrationNumber || jambRegistrationNumber.length < 8) {
+                throw new BadRequestException('A valid JAMB registration number is required');
+            }
+
+            if (
+                rawJambScore === undefined ||
+                rawJambScore === null ||
+                String(rawJambScore).trim() === '' ||
+                !Number.isFinite(jambScore) ||
+                jambScore < 0 ||
+                jambScore > 400
+            ) {
+                throw new BadRequestException('JAMB score must be between 0 and 400');
+            }
 
             this.logger.log('Updating existing application:', application._id.toString());
 
@@ -478,24 +497,9 @@ export class ApplicationUploadController {
                 // Referees and examinations
                 application.referees = referees;
                 application.examinations = examinations;
-                application.isJambExempt = applicationData.academicInfo.isJambExempt === true;
-
-                if (application.isJambExempt) {
-                    application.jambRegistrationNumber = undefined;
-                    application.jambScore = undefined;
-                } else {
-                    application.jambRegistrationNumber = applicationData.academicInfo.jambRegistrationNumber?.trim() || undefined;
-
-                    if (
-                        applicationData.academicInfo.jambScore !== undefined &&
-                        applicationData.academicInfo.jambScore !== null &&
-                        applicationData.academicInfo.jambScore !== ''
-                    ) {
-                        application.jambScore = Number(applicationData.academicInfo.jambScore);
-                    } else {
-                        application.jambScore = undefined;
-                    }
-                }
+                application.isJambExempt = false;
+                application.jambRegistrationNumber = jambRegistrationNumber;
+                application.jambScore = jambScore;
 
                 // Documents using new grouped structure
                 const groupedDocuments: any = {
@@ -565,7 +569,7 @@ export class ApplicationUploadController {
                         documentsUploaded: documents.length,
                         examinationsCount: examinations.length,
                         refereesCount: referees.length,
-                        isJambExempt: application.isJambExempt === true,
+                        isJambExempt: false,
                     },
                 });
 
@@ -604,7 +608,7 @@ export class ApplicationUploadController {
                     documentsCount: documents.length,
                     examinationsCount: examinations.length,
                     refereesCount: referees.length,
-                    isJambExempt: application.isJambExempt === true,
+                    isJambExempt: false,
                     hasJambDetails: !!application.jambRegistrationNumber || application.jambScore !== undefined,
                     hasNextOfKin: !!application.nextOfKin,
                     hasAcademicBackground: !!application.academicBackground

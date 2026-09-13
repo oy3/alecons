@@ -2,12 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
-    StudentPayment,
-    StudentPaymentDocument,
+    PaymentTransaction,
+    PaymentTransactionDocument,
     PaymentMethod,
     PaymentStatus,
     RemittanceStatus,
-} from '../schemas/student-payment.schema';
+} from '../schemas/payment-transaction.schema';
 
 interface RemittanceSyncOptions {
     academicSessionId?: string;
@@ -53,8 +53,8 @@ export class PaymentRemittanceService {
     private syncInProgress = false;
 
     constructor(
-        @InjectModel(StudentPayment.name)
-        private readonly studentPaymentModel: Model<StudentPaymentDocument>,
+        @InjectModel(PaymentTransaction.name)
+        private readonly paymentTransactionModel: Model<PaymentTransactionDocument>,
     ) { }
 
     private escapeRegex(value: string): string {
@@ -157,7 +157,7 @@ export class PaymentRemittanceService {
                 candidateMatch.academicSessionId = new Types.ObjectId(options.academicSessionId);
             }
 
-            const candidates = await this.studentPaymentModel.find(candidateMatch)
+            const candidates = await this.paymentTransactionModel.find(candidateMatch)
                 .select('_id reference amount paidAt verifiedAt createdAt remittanceStatus remittanceSettlementId')
                 .lean();
 
@@ -308,7 +308,7 @@ export class PaymentRemittanceService {
             });
 
             if (operations.length) {
-                await this.studentPaymentModel.bulkWrite(operations);
+                await this.paymentTransactionModel.bulkWrite(operations);
             }
 
             return {
@@ -668,7 +668,7 @@ export class PaymentRemittanceService {
             },
         });
 
-        const [result] = await this.studentPaymentModel.aggregate(pipeline);
+        const [result] = await this.paymentTransactionModel.aggregate(pipeline);
         const records = result?.records || [];
         const totalItems = result?.totalCount?.[0]?.count || 0;
         const totalAmount = result?.totalAmount?.[0]?.total || 0;

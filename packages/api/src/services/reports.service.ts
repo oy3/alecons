@@ -24,7 +24,7 @@ import { Student, StudentDocument } from '../schemas/student.schema';
 import { StudentAcademicSession, StudentAcademicSessionDocument } from '../schemas/student-academic-session.schema';
 import { StudentAcademicSummary, StudentAcademicSummaryDocument } from '../schemas/student-academic-summary.schema';
 import { StudentFeeObligation, StudentFeeObligationDocument } from '../schemas/student-fee-obligation.schema';
-import { StudentPayment, StudentPaymentDocument, PaymentStatus } from '../schemas/student-payment.schema';
+import { PaymentTransaction, PaymentTransactionDocument, PaymentStatus } from '../schemas/payment-transaction.schema';
 import { User, UserDocument } from '../schemas/user.schema';
 import { ReportAccessScope } from './reports-access.service';
 import { StudentFeeObligationService } from './student-fee-obligation.service';
@@ -42,7 +42,7 @@ export class ReportsService {
     @InjectModel(Student.name) private readonly studentModel: Model<StudentDocument>,
     @InjectModel(StudentAcademicSession.name) private readonly enrollmentModel: Model<StudentAcademicSessionDocument>,
     @InjectModel(StudentAcademicSummary.name) private readonly academicSummaryModel: Model<StudentAcademicSummaryDocument>,
-    @InjectModel(StudentPayment.name) private readonly studentPaymentModel: Model<StudentPaymentDocument>,
+    @InjectModel(PaymentTransaction.name) private readonly paymentTransactionModel: Model<PaymentTransactionDocument>,
     @InjectModel(StudentFeeObligation.name) private readonly obligationModel: Model<StudentFeeObligationDocument>,
     @InjectModel(Payment.name) private readonly paymentModel: Model<PaymentDocument>,
     @InjectModel(Program.name) private readonly programModel: Model<ProgramDocument>,
@@ -284,7 +284,7 @@ export class ReportsService {
     const match: any = { ...this.dateMatch(filters, 'createdAt') };
     if (filters.academicSessionId) match.academicSessionId = filters.academicSessionId;
     if (filters.userIds) match.userId = { $in: filters.userIds };
-    const [totals] = await this.studentPaymentModel.aggregate([
+    const [totals] = await this.paymentTransactionModel.aggregate([
       { $match: match },
       { $group: { _id: null,
         successfulCollections: { $sum: { $cond: [{ $eq: ['$status', PaymentStatus.SUCCESSFUL] }, '$amount', 0] } },
@@ -305,13 +305,13 @@ export class ReportsService {
       } },
     ]);
     const [byStatus, byMethod, byChannel, byFee, monthlyTrend] = await Promise.all([
-      this.groupAmount(this.studentPaymentModel, match, '$status'), this.groupAmount(this.studentPaymentModel, match, '$method'), this.groupAmount(this.studentPaymentModel, match, '$channel'),
-      this.studentPaymentModel.aggregate([
+      this.groupAmount(this.paymentTransactionModel, match, '$status'), this.groupAmount(this.paymentTransactionModel, match, '$method'), this.groupAmount(this.paymentTransactionModel, match, '$channel'),
+      this.paymentTransactionModel.aggregate([
         { $match: { ...match, status: PaymentStatus.SUCCESSFUL } }, { $group: { _id: '$paymentId', count: { $sum: 1 }, amount: { $sum: '$amount' } } },
         { $lookup: { from: 'payments', localField: '_id', foreignField: '_id', as: 'payment' } }, { $unwind: { path: '$payment', preserveNullAndEmptyArrays: true } },
         { $project: { _id: 0, id: '$_id', label: { $ifNull: ['$payment.name', 'Unknown'] }, count: 1, amount: 1 } }, { $sort: { amount: -1 } },
       ]),
-      this.timeTrend(this.studentPaymentModel, { ...match, status: PaymentStatus.SUCCESSFUL }, 'paidAt', { amount: { $sum: '$amount' } }),
+      this.timeTrend(this.paymentTransactionModel, { ...match, status: PaymentStatus.SUCCESSFUL }, 'paidAt', { amount: { $sum: '$amount' } }),
     ]);
     const expected = Number(obligations?.expected || 0);
     const collected = Number(totals?.successfulCollections || 0);

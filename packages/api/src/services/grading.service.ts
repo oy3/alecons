@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Question, QuestionDocument } from '../schemas/question.schema';
+import { ExamQuestion, ExamQuestionDocument } from '../schemas/exam-question.schema';
 import { ExamResult, ExamResultDocument } from '../schemas/exam-result.schema';
 import { ExamAttempt, ExamAttemptDocument } from '../schemas/exam-attempt.schema';
 import { Exam, ExamDocument } from '../schemas/exam.schema';
@@ -35,7 +35,7 @@ export class GradingService {
     private readonly logger = new Logger(GradingService.name);
 
     constructor(
-        @InjectModel(Question.name) private questionModel: Model<QuestionDocument>,
+        @InjectModel(ExamQuestion.name) private questionModel: Model<ExamQuestionDocument>,
         @InjectModel(ExamResult.name) private resultModel: Model<ExamResultDocument>,
         @InjectModel(ExamAttempt.name) private attemptModel: Model<ExamAttemptDocument>,
         @InjectModel(Exam.name) private examModel: Model<ExamDocument>,
@@ -87,7 +87,7 @@ export class GradingService {
                     a.questionId.toString() === question._id.toString()
                 );
 
-                const result = this.gradeQuestion(question as unknown as QuestionDocument, userAnswer);
+                const result = this.gradeQuestion(question as unknown as ExamQuestionDocument, userAnswer);
                 questionResults.push(result);
 
                 if (result.requiresManualGrading) {
@@ -476,7 +476,7 @@ export class GradingService {
         return updatedResult;
     }
 
-    private gradeQuestion(question: QuestionDocument, userAnswer: any): QuestionResult {
+    private gradeQuestion(question: ExamQuestionDocument, userAnswer: any): QuestionResult {
         const maxPoints = question.mark || 1;
         let isCorrect = false;
         let pointsAwarded = 0;
@@ -603,13 +603,13 @@ export class GradingService {
         };
     }
 
-    private gradeMCQ(question: QuestionDocument, userAnswer: any): boolean {
+    private gradeMCQ(question: ExamQuestionDocument, userAnswer: any): boolean {
         const correctOption = question.answer;
         const userSelection = userAnswer.selected;
         return correctOption === userSelection;
     }
 
-    private gradeMultipleSelect(question: QuestionDocument, userAnswer: any): boolean {
+    private gradeMultipleSelect(question: ExamQuestionDocument, userAnswer: any): boolean {
         const correctAnswers = question.answer as string[];
         const userSelections = userAnswer.selected as string[];
 

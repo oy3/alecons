@@ -179,6 +179,24 @@ class ApiService {
         return this.makeRequest(endpoint, { method: 'DELETE' });
     }
 
+    async downloadFile(endpoint) {
+        const response = await fetch(`${this.baseURL}${endpoint}`, {
+            headers: this.getHeaders(),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || errorData.error || 'File download failed');
+        }
+
+        const disposition = response.headers.get('content-disposition') || '';
+        const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+        return {
+            blob: await response.blob(),
+            filename: filenameMatch?.[1] || 'payment-receipt.pdf',
+        };
+    }
+
     // Handle token expiration
     handleTokenExpiration() {
         // Import dynamically to avoid circular dependency
@@ -312,7 +330,7 @@ class ApiService {
     // Payment methods
     async getPaymentSummary(academicSessionId) {
         const params = academicSessionId ? `?academicSessionId=${academicSessionId}` : '';
-        return this.makeRequest(`/student/payments/summary${params}`);
+        return this.makeRequest(`/student/payment-transactions/summary${params}`);
     }
 
     async getPaymentHistory(academicSessionId, page = 1, limit = 10) {
@@ -321,27 +339,27 @@ class ApiService {
             limit: limit.toString(),
             ...(academicSessionId && { academicSessionId })
         }).toString();
-        return this.makeRequest(`/student/payments/history?${params}`);
+        return this.makeRequest(`/student/payment-transactions/history?${params}`);
     }
 
     async getPaymentHistorySessions() {
-        return this.makeRequest('/student/payments/history-sessions')
+        return this.makeRequest('/student/payment-transactions/history-sessions')
     }
 
     async getAvailablePayments(academicSessionId) {
         const params = academicSessionId ? `?academicSessionId=${academicSessionId}` : '';
-        return this.makeRequest(`/student/payments/available${params}`);
+        return this.makeRequest(`/student/payment-transactions/available${params}`);
     }
 
     async initializePayment(data) {
-        return this.makeRequest('/student/payments/initialize', {
+        return this.makeRequest('/student/payment-transactions/initialize', {
             method: 'POST',
             body: JSON.stringify(data),
         });
     }
 
     async verifyPayment(reference) {
-        return this.makeRequest(`/student/payments/verify/${reference}`, {
+        return this.makeRequest(`/student/payment-transactions/verify/${reference}`, {
             method: 'POST',
         });
     }

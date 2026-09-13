@@ -300,3 +300,76 @@ body {
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
+
+/* Shared portal page patterns */
+.portal-page {
+    width: 100%;
+    max-width: 1500px;
+    margin-inline: auto;
+}
+
+.portal-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(22, 34, 51, 0.05);
+    transition: none;
+}
+
+.portal-card:hover {
+    transform: none;
+    box-shadow: 0 2px 8px rgba(22, 34, 51, 0.05);
+}
+
+.portal-avatar {
+    width: 5.5rem;
+    height: 5.5rem;
+    flex: 0 0 5.5rem;
+    object-fit: cover;
+}
+
+.portal-icon-box,
+.portal-step-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.portal-icon-box {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 8px;
+    background: rgba(198, 40, 40, 0.1);
+    color: var(--primary-color);
+    font-size: 1.25rem;
+}
+
+.portal-step-indicator {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    background: #8b95a3;
+    color: #fff;
+    font-weight: 700;
+}
+
+.portal-step-indicator.is-active {
+    background: var(--primary-color);
+}
+
+.portal-step-indicator.is-complete {
+    background: var(--success-color);
+}
+
+.portal-scroll-panel {
+    max-height: 35rem;
+    overflow-y: auto;
+}
+
+@media (max-width: 767.98px) {
+    .portal-avatar {
+        width: 4.5rem;
+        height: 4.5rem;
+        flex-basis: 4.5rem;
+    }
+}

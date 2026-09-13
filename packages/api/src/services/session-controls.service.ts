@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from "@nestjs/common
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import {
+    AccommodationControl,
     SessionControl,
     SessionControlDocument,
 } from "../schemas/session-control.schema";
@@ -115,9 +116,17 @@ export class SessionControlsService {
             !(sessionControl.payments?.[index] as any)?.eligibleStudentGroups?.length,
         );
 
-        if (changed || paymentsChanged) {
+        const accommodation = sessionControl.accommodation || {
+            internalApplicationsOpen: false,
+            externalApplicationsOpen: false,
+            categories: [{ code: 'pre_degree', label: 'Pre-degree', active: true, isDefault: true }],
+        };
+        const accommodationChanged = !sessionControl.accommodation;
+
+        if (changed || paymentsChanged || accommodationChanged) {
             sessionControl.controls = controls;
             sessionControl.payments = normalizedPayments;
+            sessionControl.accommodation = accommodation as AccommodationControl;
             await sessionControl.save();
         }
 
@@ -224,6 +233,11 @@ export class SessionControlsService {
             academicSessionId,
             controls: this.getDefaultControls(),
             payments: paymentControls,
+            accommodation: {
+                internalApplicationsOpen: false,
+                externalApplicationsOpen: false,
+                categories: [{ code: 'pre_degree', label: 'Pre-degree', active: true, isDefault: true }],
+            },
             updatedBy: new Types.ObjectId(updatedBy),
         });
 
@@ -233,7 +247,7 @@ export class SessionControlsService {
     async findBySessionId(academicSessionId: string): Promise<SessionControl> {
         const sessionControl = await this.sessionControlModel
             .findOne({ academicSessionId: new Types.ObjectId(academicSessionId) })
-            .populate("payments.paymentId", "name description amount paymentCode")
+            .populate("payments.paymentId", "name description amount paymentCode targetAudience active")
             .exec();
 
         if (!sessionControl) {
@@ -252,6 +266,15 @@ export class SessionControlsService {
                 active: boolean;
                 eligibleStudentGroups?: Array<'new' | 'returning'>;
             }>;
+            accommodation?: {
+                internalApplicationsOpen: boolean;
+                externalApplicationsOpen: boolean;
+                internalPaymentId?: string;
+                externalPaymentId?: string;
+                applicationOpenAt?: string;
+                applicationCloseAt?: string;
+                categories?: Array<{ code: string; label: string; active: boolean; isDefault: boolean }>;
+            };
         },
         updatedBy: string,
     ): Promise<SessionControl> {
@@ -280,6 +303,58 @@ export class SessionControlsService {
                     ? p.eligibleStudentGroups
                     : ['new', 'returning'],
             }));
+        }
+
+        if (controlsData.accommodation) {
+            const value = controlsData.accommodation;
+            const normalizeOptionalPaymentId = (paymentId?: string) => {
+                const normalized = typeof paymentId === 'string' ? paymentId.trim() : '';
+                if (!normalized || normalized === 'undefined' || normalized === 'null') return undefined;
+                if (!Types.ObjectId.isValid(normalized)) {
+                    throw new ConflictException('Select a valid accommodation payment');
+                }
+                return normalized;
+            };
+            const internalPaymentId = normalizeOptionalPaymentId(value.internalPaymentId);
+            const externalPaymentId = normalizeOptionalPaymentId(value.externalPaymentId);
+            const categories = (value.categories || []).filter((category) => category.active);
+            if (!categories.length) {
+                throw new ConflictException('At least one active accommodation category is required');
+            }
+            if (categories.filter((category) => category.isDefault).length !== 1) {
+                throw new ConflictException('Exactly one active accommodation category must be the default');
+            }
+            const openAt = value.applicationOpenAt ? new Date(value.applicationOpenAt) : undefined;
+            const closeAt = value.applicationCloseAt ? new Date(value.applicationCloseAt) : undefined;
+            if (openAt && closeAt && openAt >= closeAt) {
+                throw new ConflictException('Accommodation closing date must be later than its opening date');
+            }
+            if (value.internalApplicationsOpen && !internalPaymentId) {
+                throw new ConflictException('Select an internal accommodation payment before opening internal applications');
+            }
+            if (value.externalApplicationsOpen && !externalPaymentId) {
+                throw new ConflictException('Select an external accommodation payment before opening external applications');
+            }
+            const selectedPaymentIds = [internalPaymentId, externalPaymentId].filter(Boolean) as string[];
+            const selectedPayments = selectedPaymentIds.length
+                ? await this.paymentModel.find({ _id: { $in: selectedPaymentIds }, active: true }).select('_id targetAudience').lean()
+                : [];
+            const paymentMap = new Map(selectedPayments.map((payment) => [payment._id.toString(), payment]));
+            if (internalPaymentId && !paymentMap.get(internalPaymentId)?.targetAudience?.includes('student' as any)) {
+                throw new ConflictException('Internal accommodation payment must be active and available to students');
+            }
+            if (externalPaymentId && !paymentMap.get(externalPaymentId)?.targetAudience?.includes('external_resident' as any)) {
+                throw new ConflictException('External accommodation payment must be active and available to external residents');
+            }
+            sessionControl.accommodation = {
+                internalApplicationsOpen: Boolean(value.internalApplicationsOpen),
+                externalApplicationsOpen: Boolean(value.externalApplicationsOpen),
+                internalPaymentId: internalPaymentId ? new Types.ObjectId(internalPaymentId) : undefined,
+                externalPaymentId: externalPaymentId ? new Types.ObjectId(externalPaymentId) : undefined,
+                applicationOpenAt: openAt,
+                applicationCloseAt: closeAt,
+                categories: value.categories || [],
+            };
         }
 
         sessionControl.updatedBy = new Types.ObjectId(updatedBy);

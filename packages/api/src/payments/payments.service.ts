@@ -1,16 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as crypto from 'crypto';
 import { Payment, PaymentDocument, PaymentAudience } from '../schemas/payment.schema';
 import {
-    StudentPayment,
-    StudentPaymentDocument,
+    PaymentTransaction,
+    PaymentTransactionDocument,
     PaymentMethod,
     PaymentStatus,
     PaymentChannel,
     RemittanceStatus,
-} from '../schemas/student-payment.schema';
+    PaymentPayerType,
+    PaymentContext,
+} from '../schemas/payment-transaction.schema';
 import {
     PaymentDestinationAccount,
     PaymentDestinationAccountDocument,
@@ -27,9 +29,12 @@ import {
     StudentAcademicSessionStatus,
 } from '../schemas/student-academic-session.schema';
 import { TenancyAgreement, TenancyAgreementDocument } from '../schemas/tenancy-agreement.schema';
+import { AccommodationApplicationStatus } from '../schemas/accommodation-application.schema';
 import { MatriculationService } from '../services/matriculation.service';
 import { EmailService } from '../services/email.service';
 import { UploadService } from '../services/upload.service';
+import { TenancyAgreementService } from '../services/tenancy-agreement.service';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 export interface PaymentSummary {
     id: string;
@@ -94,7 +99,7 @@ export interface DestinationAccountSummary {
     note?: string;
 }
 
-export interface StudentPaymentsSummary {
+export interface PaymentTransactionsSummary {
     paidFees: PaymentSummary[];
     pendingFees?: PaymentSummary[];
     unpaidFees: PaymentSummary[];
@@ -176,7 +181,7 @@ export class PaymentsService {
 
     constructor(
         @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
-        @InjectModel(StudentPayment.name) private studentPaymentModel: Model<StudentPaymentDocument>,
+        @InjectModel(PaymentTransaction.name) private paymentTransactionModel: Model<PaymentTransactionDocument>,
         @InjectModel(PaymentDestinationAccount.name) private paymentDestinationAccountModel: Model<PaymentDestinationAccountDocument>,
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
@@ -187,6 +192,7 @@ export class PaymentsService {
         private matriculationService: MatriculationService,
         private emailService: EmailService,
         private uploadService: UploadService,
+        private tenancyAgreementService: TenancyAgreementService,
     ) { }
 
     private getUserAudiencesForContext(
@@ -209,18 +215,18 @@ export class PaymentsService {
         }
     }
 
-    private isManualTransferPending(payment: Partial<StudentPayment>): boolean {
+    private isManualTransferPending(payment: Partial<PaymentTransaction>): boolean {
         return payment.status === PaymentStatus.PENDING
             && payment.method === PaymentMethod.MANUAL_TRANSFER
-            && !!payment.receiptUrl;
+            && !!(payment.receiptKey || payment.receiptUrl);
     }
 
-    private isManualTransferRejected(payment: Partial<StudentPayment>): boolean {
+    private isManualTransferRejected(payment: Partial<PaymentTransaction>): boolean {
         return payment.status === PaymentStatus.REJECTED
             && payment.method === PaymentMethod.MANUAL_TRANSFER;
     }
 
-    private toRejectedManualTransferSummary(payment: Partial<StudentPayment> & { _id?: Types.ObjectId | string }): RejectedManualTransferSummary {
+    private toRejectedManualTransferSummary(payment: Partial<PaymentTransaction> & { _id?: Types.ObjectId | string }): RejectedManualTransferSummary {
         return {
             id: payment._id?.toString() || '',
             reference: payment.reference || '',
@@ -423,7 +429,7 @@ export class PaymentsService {
                 payload.bearer = params.destinationAccount.paystackChargeBearer;
             }
 
-            if (typeof params.destinationAccount.transactionCharge === 'number') {
+            if (typeof params.destinationAccount.transactionCharge === 'number' && params.destinationAccount.transactionCharge > 0) {
                 payload.transaction_charge = Math.round(params.destinationAccount.transactionCharge * 100);
             }
         }
@@ -500,13 +506,14 @@ export class PaymentsService {
     private async initializePaystackTransactionWithFallback(
         payload: Record<string, unknown>,
         destinationAccount?: Partial<PaymentDestinationAccount> | null,
+        allowDestinationFallback = true,
     ) {
         try {
             return await this.sendPaystackInitializeRequest(payload);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Paystack initialization failed';
 
-            if (this.shouldFallbackFromInvalidSubaccount(message, destinationAccount)) {
+            if (allowDestinationFallback && this.shouldFallbackFromInvalidSubaccount(message, destinationAccount)) {
                 const fallbackPayload = { ...payload };
                 delete fallbackPayload.subaccount;
                 delete fallbackPayload.bearer;
@@ -685,10 +692,16 @@ export class PaymentsService {
         }
     }
 
-    private async assertAccommodationPaymentEligibility(userId: string, payment: PaymentDocument | Payment) {
-        if (payment.paymentCode !== 'accommodationFee') {
-            return;
-        }
+    private async assertAccommodationPaymentEligibility(
+        userId: string,
+        payment: PaymentDocument | Payment,
+        academicSessionId: string,
+    ): Promise<any | null> {
+        const control = await this.paymentModel.db.collection('sessioncontrols').findOne({
+            academicSessionId: new Types.ObjectId(academicSessionId),
+            'accommodation.internalPaymentId': (payment as any)._id,
+        });
+        if (!control) return null;
 
         const student = await this.studentModel.findOne({
             userId: new Types.ObjectId(userId),
@@ -700,13 +713,22 @@ export class PaymentsService {
 
         const tenancyAgreement = await this.tenancyAgreementModel.findOne({
             studentId: student._id,
+            academicSessionId: new Types.ObjectId(academicSessionId),
         });
 
         if (!tenancyAgreement) {
-            throw new Error('You must sign the tenancy agreement before making accommodation fee payments. Please go to the Tenancy Agreement section first.');
+            throw new Error('You must sign the accommodation agreement before making this payment. Please go to Accommodation first.');
         }
 
+        const application = await this.paymentModel.db.collection('accommodationapplications').findOne({
+            userId: new Types.ObjectId(userId),
+            academicSessionId: new Types.ObjectId(academicSessionId),
+            applicantType: 'internal',
+            status: { $in: ['awaiting_payment', 'payment_pending_review', 'paid_awaiting_allocation', 'allocated'] },
+        });
+        if (!application) throw new Error('Internal accommodation application is not ready for payment');
         this.logger.log(`Accommodation payment authorized for user ${userId} - tenancy agreement signed`);
+        return application;
     }
 
     private async resolveStudentBillableSession(
@@ -765,13 +787,13 @@ export class PaymentsService {
 
         const [history, payment] = await Promise.all([
             this.studentAcademicSessionModel.exists({ studentId: student._id, academicSessionId: sessionId }),
-            this.studentPaymentModel.exists({ userId: new Types.ObjectId(userId), academicSessionId: sessionId }),
+            this.paymentTransactionModel.exists({ userId: new Types.ObjectId(userId), academicSessionId: sessionId }),
         ]);
 
         return Boolean(history || payment);
     }
 
-    async getStudentPaymentsSummary(userId: string, context: 'application-portal' | 'student-portal' = 'application-portal', applicationId?: string): Promise<StudentPaymentsSummary> {
+    async getPaymentTransactionsSummary(userId: string, context: 'application-portal' | 'student-portal' = 'application-portal', applicationId?: string): Promise<PaymentTransactionsSummary> {
         const userObjectId = new Types.ObjectId(userId);
 
         // Get user to determine their role
@@ -808,23 +830,23 @@ export class PaymentsService {
         );
 
         // Get student's successful payments and pending manual transfers
-        const studentPaymentsQuery: any = {
+        const paymentTransactionsQuery: any = {
             userId: userObjectId,
             status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING, PaymentStatus.REJECTED] }
         };
         if (applicationId && context === 'application-portal') {
-            studentPaymentsQuery.applicationId = linkedApplication.applicationId;
+            paymentTransactionsQuery.applicationId = linkedApplication.applicationId;
         }
-        const studentPayments = await this.studentPaymentModel
-            .find(studentPaymentsQuery)
+        const paymentTransactions = await this.paymentTransactionModel
+            .find(paymentTransactionsQuery)
             .populate('paymentId')
             .lean();
 
         if (context === 'application-portal' && applicationId) {
-            for (const studentPayment of studentPayments as any[]) {
-                if (studentPayment.status !== PaymentStatus.SUCCESSFUL) continue;
+            for (const paymentTransaction of paymentTransactions as any[]) {
+                if (paymentTransaction.status !== PaymentStatus.SUCCESSFUL) continue;
 
-                const successfulPaymentId = studentPayment.paymentId?._id || studentPayment.paymentId;
+                const successfulPaymentId = paymentTransaction.paymentId?._id || paymentTransaction.paymentId;
                 if (!successfulPaymentId) continue;
 
                 await this.updateApplicationStageAfterPayment(
@@ -844,29 +866,29 @@ export class PaymentsService {
         const pendingManualPaymentsById = new Map<string, any>();
         const rejectedManualPaymentsById = new Map<string, any>();
 
-        studentPayments.forEach((studentPayment: any) => {
-            const linkedPaymentId = studentPayment.paymentId?._id?.toString();
+        paymentTransactions.forEach((paymentTransaction: any) => {
+            const linkedPaymentId = paymentTransaction.paymentId?._id?.toString();
             if (!linkedPaymentId) {
                 return;
             }
 
-            if (studentPayment.status === PaymentStatus.SUCCESSFUL) {
-                successfulPaymentsById.set(linkedPaymentId, studentPayment);
+            if (paymentTransaction.status === PaymentStatus.SUCCESSFUL) {
+                successfulPaymentsById.set(linkedPaymentId, paymentTransaction);
                 return;
             }
 
-            if (this.isManualTransferPending(studentPayment)) {
+            if (this.isManualTransferPending(paymentTransaction)) {
                 const existingPending = pendingManualPaymentsById.get(linkedPaymentId);
-                if (!existingPending || new Date(studentPayment.createdAt || 0).getTime() > new Date(existingPending.createdAt || 0).getTime()) {
-                    pendingManualPaymentsById.set(linkedPaymentId, studentPayment);
+                if (!existingPending || new Date(paymentTransaction.createdAt || 0).getTime() > new Date(existingPending.createdAt || 0).getTime()) {
+                    pendingManualPaymentsById.set(linkedPaymentId, paymentTransaction);
                 }
                 return;
             }
 
-            if (this.isManualTransferRejected(studentPayment)) {
+            if (this.isManualTransferRejected(paymentTransaction)) {
                 const existingRejected = rejectedManualPaymentsById.get(linkedPaymentId);
-                if (!existingRejected || new Date(studentPayment.rejectedAt || studentPayment.updatedAt || studentPayment.createdAt || 0).getTime() > new Date(existingRejected.rejectedAt || existingRejected.updatedAt || existingRejected.createdAt || 0).getTime()) {
-                    rejectedManualPaymentsById.set(linkedPaymentId, studentPayment);
+                if (!existingRejected || new Date(paymentTransaction.rejectedAt || paymentTransaction.updatedAt || paymentTransaction.createdAt || 0).getTime() > new Date(existingRejected.rejectedAt || existingRejected.updatedAt || existingRejected.createdAt || 0).getTime()) {
+                    rejectedManualPaymentsById.set(linkedPaymentId, paymentTransaction);
                 }
             }
         });
@@ -984,7 +1006,7 @@ export class PaymentsService {
             // Check if student has already made a successful payment for this charge
             const linkedApplication = await this.resolveLinkedApplication(userId, applicationId);
             await this.assertApplicationPortalPaymentAllowed(linkedApplication);
-            const existingSuccessfulPayment = await this.studentPaymentModel.findOne({
+            const existingSuccessfulPayment = await this.paymentTransactionModel.findOne({
                 userId: new Types.ObjectId(userId),
                 paymentId: new Types.ObjectId(paymentId),
                 applicationId: linkedApplication.applicationId,
@@ -1006,7 +1028,7 @@ export class PaymentsService {
             );
 
             // Look for any existing payment attempt (pending or failed) - reuse it
-            let existingAttempt = await this.studentPaymentModel.findOne({
+            let existingAttempt = await this.paymentTransactionModel.findOne({
                 userId: new Types.ObjectId(userId),
                 paymentId: new Types.ObjectId(paymentId),
                 applicationId: linkedApplication.applicationId,
@@ -1120,9 +1142,11 @@ export class PaymentsService {
                 );
 
                 // Create new payment attempt record
-                await this.studentPaymentModel.create({
+                await this.paymentTransactionModel.create({
                     userId: new Types.ObjectId(userId),
                     applicationId: linkedApplication.applicationId,
+                    payerType: PaymentPayerType.APPLICANT,
+                    paymentContext: PaymentContext.ADMISSION_APPLICATION,
                     academicSessionId: linkedApplication.academicSessionId,
                     paymentId: new Types.ObjectId(paymentId),
                     amount: payment.amount,
@@ -1182,16 +1206,16 @@ export class PaymentsService {
         return data;
     }
 
-    private async updatePaymentStatus(studentPayment: any, transactionData: any) {
-        studentPayment.status = PaymentStatus.SUCCESSFUL;
-        studentPayment.remarks = 'Payment successful and verified';
-        studentPayment.paidAt = new Date();
-        studentPayment.method = studentPayment.method || PaymentMethod.PAYSTACK;
-        studentPayment.channel = transactionData.channel;
-        studentPayment.gatewayId = transactionData.id;
-        studentPayment.authorizationCode = transactionData.authorization?.authorization_code;
-        this.markSuccessfulPaystackPaymentAwaitingRemittance(studentPayment, studentPayment.amount);
-        await studentPayment.save();
+    private async updatePaymentStatus(paymentTransaction: any, transactionData: any) {
+        paymentTransaction.status = PaymentStatus.SUCCESSFUL;
+        paymentTransaction.remarks = 'Payment successful and verified';
+        paymentTransaction.paidAt = new Date();
+        paymentTransaction.method = paymentTransaction.method || PaymentMethod.PAYSTACK;
+        paymentTransaction.channel = transactionData.channel;
+        paymentTransaction.gatewayId = transactionData.id;
+        paymentTransaction.authorizationCode = transactionData.authorization?.authorization_code;
+        this.markSuccessfulPaystackPaymentAwaitingRemittance(paymentTransaction, paymentTransaction.amount);
+        await paymentTransaction.save();
     }
 
     private getPaystackStatus(transaction: any): string {
@@ -1226,48 +1250,52 @@ export class PaymentsService {
         return data.data;
     }
 
-    private async applyPaystackTransactionState(studentPayment: any, transaction: any): Promise<any> {
+    private async applyPaystackTransactionState(paymentTransaction: any, transaction: any): Promise<any> {
         const paystackStatus = this.getPaystackStatus(transaction);
         const now = new Date();
 
-        studentPayment.lastVerifiedAt = now;
-        studentPayment.verificationAttempts = (studentPayment.verificationAttempts || 0) + 1;
-        studentPayment.gatewayStatus = paystackStatus || transaction?.status;
-        studentPayment.gatewayResponse = transaction?.gateway_response || studentPayment.gatewayResponse;
+        paymentTransaction.lastVerifiedAt = now;
+        paymentTransaction.verificationAttempts = (paymentTransaction.verificationAttempts || 0) + 1;
+        paymentTransaction.gatewayStatus = paystackStatus || transaction?.status;
+        paymentTransaction.gatewayResponse = transaction?.gateway_response || paymentTransaction.gatewayResponse;
 
         if (this.isPaystackSuccessStatus(paystackStatus)) {
-            studentPayment.status = PaymentStatus.SUCCESSFUL;
-            studentPayment.remarks = 'Payment successful and verified';
-            studentPayment.paidAt = transaction?.paid_at ? new Date(transaction.paid_at) : (studentPayment.paidAt || now);
-            studentPayment.method = studentPayment.method || PaymentMethod.PAYSTACK;
-            studentPayment.channel = transaction.channel;
-            studentPayment.fee = transaction.fees ? (transaction.fees / 100) : (studentPayment.fee || 0);
-            studentPayment.gatewayId = transaction.id;
-            studentPayment.authorizationCode = transaction.authorization?.authorization_code;
+            paymentTransaction.status = PaymentStatus.SUCCESSFUL;
+            paymentTransaction.remarks = 'Payment successful and verified';
+            paymentTransaction.paidAt = transaction?.paid_at ? new Date(transaction.paid_at) : (paymentTransaction.paidAt || now);
+            paymentTransaction.method = paymentTransaction.method || PaymentMethod.PAYSTACK;
+            paymentTransaction.channel = transaction.channel;
+            paymentTransaction.fee = transaction.fees ? (transaction.fees / 100) : (paymentTransaction.fee || 0);
+            paymentTransaction.gatewayId = transaction.id;
+            paymentTransaction.authorizationCode = transaction.authorization?.authorization_code;
             this.markSuccessfulPaystackPaymentAwaitingRemittance(
-                studentPayment,
-                transaction.amount ? (transaction.amount / 100) : studentPayment.amount,
+                paymentTransaction,
+                transaction.amount ? (transaction.amount / 100) : paymentTransaction.amount,
             );
         } else if (this.isPaystackFailureStatus(paystackStatus)) {
-            if (studentPayment.status !== PaymentStatus.SUCCESSFUL) {
-                studentPayment.status = PaymentStatus.FAILED;
+            if (paymentTransaction.status !== PaymentStatus.SUCCESSFUL) {
+                paymentTransaction.status = PaymentStatus.FAILED;
             }
-            studentPayment.remarks = `Payment ${paystackStatus || 'failed'}: ${transaction.gateway_response || 'Payment was not completed'}`;
+            paymentTransaction.remarks = `Payment ${paystackStatus || 'failed'}: ${transaction.gateway_response || 'Payment was not completed'}`;
         } else {
-            if (studentPayment.status !== PaymentStatus.SUCCESSFUL) {
-                studentPayment.status = PaymentStatus.PENDING;
-                studentPayment.remarks = `Payment ${paystackStatus || 'pending'}: awaiting completion`;
+            if (paymentTransaction.status !== PaymentStatus.SUCCESSFUL) {
+                paymentTransaction.status = PaymentStatus.PENDING;
+                paymentTransaction.remarks = `Payment ${paystackStatus || 'pending'}: awaiting completion`;
             }
         }
 
-        await studentPayment.save();
+        await paymentTransaction.save();
 
-        if (studentPayment.status === PaymentStatus.SUCCESSFUL) {
-            await this.updateApplicationStageAfterPayment(
-                studentPayment.userId,
-                studentPayment.paymentId,
-                studentPayment.applicationId,
-            );
+        if (paymentTransaction.status === PaymentStatus.SUCCESSFUL) {
+            if (paymentTransaction.paymentContext === PaymentContext.ACCOMMODATION_APPLICATION) {
+                await this.finalizeAccommodationPayment(paymentTransaction);
+            } else {
+                await this.updateApplicationStageAfterPayment(
+                    paymentTransaction.userId,
+                    paymentTransaction.paymentId,
+                    paymentTransaction.applicationId,
+                );
+            }
         }
 
         return {
@@ -1280,28 +1308,143 @@ export class PaymentsService {
         };
     }
 
-    async reconcileStudentPaymentById(studentPaymentId: string): Promise<any> {
-        if (!Types.ObjectId.isValid(studentPaymentId)) {
+    private async finalizeAccommodationPayment(paymentTransaction: any) {
+        const db = this.paymentTransactionModel.db;
+        const applicationId = paymentTransaction.accommodationApplicationId;
+        if (!applicationId) return;
+        const applications = db.collection('accommodationapplications');
+        const assignments = db.collection('accommodationassignments');
+        await applications.updateOne(
+            { _id: applicationId },
+            { $set: { status: 'paid_awaiting_allocation', paidAt: paymentTransaction.paidAt || new Date(), updatedAt: new Date() } },
+        );
+        await db.collection('tenancyagreements').updateOne(
+            { accommodationApplicationId: applicationId, status: 'signed_awaiting_payment' },
+            {
+                $set: {
+                    status: paymentTransaction.externalResidentId
+                        ? 'payment_confirmed_awaiting_allocation'
+                        : 'executed',
+                    updatedAt: new Date(),
+                },
+            },
+        );
+        await db.collection('accommodationaudits').updateOne(
+            { accommodationApplicationId: applicationId, action: 'payment_verified', 'metadata.reference': paymentTransaction.reference },
+            {
+                $setOnInsert: {
+                    accommodationApplicationId: applicationId,
+                    action: 'payment_verified',
+                    actorType: paymentTransaction.verifiedBy ? 'staff' : 'system',
+                    actorId: paymentTransaction.verifiedBy,
+                    metadata: { reference: paymentTransaction.reference, method: paymentTransaction.method },
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                },
+            },
+            { upsert: true },
+        );
+        if (await assignments.findOne({ accommodationApplicationId: applicationId, status: 'active' })) return;
+        const application = await applications.findOne({ _id: applicationId });
+        if (!application) return;
+
+        const hostels = await db.collection('hostels').find({ gender: application.gender, active: true }).sort({ name: 1 }).toArray();
+        for (const hostel of hostels) {
+            const blocks = await db.collection('hostelblocks').find({ hostelId: hostel._id, residentType: application.applicantType, active: true }).sort({ allocationOrder: 1, name: 1 }).toArray();
+            for (const block of blocks) {
+                const rooms = await db.collection('hostelrooms').find({ blockId: block._id, active: true }).sort({ allocationOrder: 1, name: 1 }).toArray();
+                for (const room of rooms) {
+                    const occupied = new Set((await assignments.distinct('slotNumber', { academicSessionId: application.academicSessionId, roomId: room._id, status: 'active' })).map(Number));
+                    for (let slotNumber = 1; slotNumber <= Number(room.capacity); slotNumber += 1) {
+                        if (occupied.has(slotNumber)) continue;
+                        try {
+                            const now = new Date();
+                            await assignments.insertOne({
+                                accommodationApplicationId: application._id,
+                                userId: application.userId,
+                                academicSessionId: application.academicSessionId,
+                                hostelId: hostel._id,
+                                blockId: block._id,
+                                roomId: room._id,
+                                slotNumber,
+                                status: 'active',
+                                allocationSource: 'automatic',
+                                allocatedAt: now,
+                                createdAt: now,
+                                updatedAt: now,
+                            });
+                            await applications.updateOne({ _id: application._id }, { $set: { status: 'allocated', allocatedAt: now, updatedAt: now } });
+                            await db.collection('accommodationaudits').insertOne({
+                                accommodationApplicationId: application._id,
+                                action: 'bed_allocated', actorType: 'system',
+                                metadata: { hostelId: hostel._id, blockId: block._id, roomId: room._id, slotNumber },
+                                createdAt: now, updatedAt: now,
+                            });
+                            if (paymentTransaction.externalResidentId) {
+                                try {
+                                    const resident = await db.collection('externalresidents').findOne({
+                                        _id: paymentTransaction.externalResidentId,
+                                    });
+                                    if (!resident?.externalResidentNumber) {
+                                        throw new Error('External resident record not found');
+                                    }
+                                    await this.tenancyAgreementService.finalizeExternalAccommodationDocuments(
+                                        application._id,
+                                        application.applicationNumber,
+                                        resident.externalResidentNumber,
+                                    );
+                                } catch (error) {
+                                    this.logger.error(
+                                        `Could not prepare or email external accommodation documents for ${application.applicationNumber}: ${error instanceof Error ? error.message : error}`,
+                                    );
+                                }
+                            }
+                            return;
+                        } catch (error: any) {
+                            if (error?.code !== 11000) throw error;
+                        }
+                    }
+                }
+            }
+        }
+        await db.collection('accommodationaudits').updateOne(
+            { accommodationApplicationId: applicationId, action: 'allocation_waitlisted' },
+            {
+                $setOnInsert: {
+                    accommodationApplicationId: applicationId,
+                    action: 'allocation_waitlisted',
+                    actorType: 'system',
+                    metadata: { reason: 'No matching active bed space is available' },
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                },
+            },
+            { upsert: true },
+        );
+    }
+
+    async reconcilePaymentTransactionById(paymentTransactionId: string): Promise<any> {
+        if (!Types.ObjectId.isValid(paymentTransactionId)) {
             throw new Error('Invalid payment record ID');
         }
 
-        const studentPayment = await this.studentPaymentModel.findById(studentPaymentId);
-        if (!studentPayment) {
+        const paymentTransaction = await this.paymentTransactionModel.findById(paymentTransactionId);
+        if (!paymentTransaction) {
             throw new Error('Payment record not found');
         }
 
-        if ((studentPayment.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
+        if ((paymentTransaction.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
             throw new Error('Only Paystack payments can be reconciled');
         }
 
-        const transaction = await this.verifyPaystackTransaction(studentPayment.reference);
-        const result = await this.applyPaystackTransactionState(studentPayment, transaction);
+        const transaction = await this.verifyPaystackTransaction(paymentTransaction.reference);
+        const result = await this.applyPaystackTransactionState(paymentTransaction, transaction);
 
         return {
             ...result,
-            internalStatus: studentPayment.status,
-            paymentId: studentPayment._id.toString(),
-            lastVerifiedAt: studentPayment.lastVerifiedAt,
+            internalStatus: paymentTransaction.status,
+            paymentId: paymentTransaction._id.toString(),
+            lastVerifiedAt: paymentTransaction.lastVerifiedAt,
         };
     }
 
@@ -1317,7 +1460,7 @@ export class PaymentsService {
         const olderThanDate = new Date(Date.now() - olderThanMinutes * 60 * 1000);
         const hardTimeoutDate = new Date(Date.now() - hardTimeoutHours * 60 * 60 * 1000);
 
-        const candidates = await this.studentPaymentModel.find({
+        const candidates = await this.paymentTransactionModel.find({
             status: PaymentStatus.PENDING,
             $or: [
                 { method: PaymentMethod.PAYSTACK },
@@ -1417,44 +1560,175 @@ export class PaymentsService {
             return { event, reconciled: false };
         }
 
-        const studentPayment = await this.studentPaymentModel.findOne({ reference });
-        if (!studentPayment) {
+        const paymentTransaction = await this.paymentTransactionModel.findOne({ reference });
+        if (!paymentTransaction) {
             this.logger.warn(`Paystack webhook received unknown reference: ${reference}`);
             return { event, reference, reconciled: false };
         }
 
-        if ((studentPayment.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
+        if ((paymentTransaction.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
             return { event, reference, reconciled: false };
         }
 
         const transaction = await this.verifyPaystackTransaction(reference);
-        await this.applyPaystackTransactionState(studentPayment, transaction);
+        await this.applyPaystackTransactionState(paymentTransaction, transaction);
 
         return { event, reference, reconciled: true };
     }
 
-    private markSuccessfulPaystackPaymentAwaitingRemittance(studentPayment: any, amount?: number) {
-        if ((studentPayment.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
+    private markSuccessfulPaystackPaymentAwaitingRemittance(paymentTransaction: any, amount?: number) {
+        if ((paymentTransaction.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
             return;
         }
 
-        studentPayment.remittanceStatus = RemittanceStatus.PENDING;
-        studentPayment.remittanceAmount = Number(amount ?? studentPayment.amount ?? 0);
-        studentPayment.remittanceSettlementId = undefined;
-        studentPayment.remittanceSettledAt = undefined;
-        studentPayment.remittanceLastSyncedAt = undefined;
+        paymentTransaction.remittanceStatus = RemittanceStatus.PENDING;
+        paymentTransaction.remittanceAmount = Number(amount ?? paymentTransaction.amount ?? 0);
+        paymentTransaction.remittanceSettlementId = undefined;
+        paymentTransaction.remittanceSettledAt = undefined;
+        paymentTransaction.remittanceLastSyncedAt = undefined;
     }
 
     async verifyPayment(reference: string): Promise<any> {
         const transaction = await this.verifyPaystackTransaction(reference);
 
         // Find the student payment record
-        const studentPayment = await this.studentPaymentModel.findOne({ reference });
-        if (!studentPayment) {
+        const paymentTransaction = await this.paymentTransactionModel.findOne({ reference });
+        if (!paymentTransaction) {
             throw new Error('Payment record not found');
         }
 
-        return this.applyPaystackTransactionState(studentPayment, transaction);
+        return this.applyPaystackTransactionState(paymentTransaction, transaction);
+    }
+
+    async initializeExternalAccommodationPayment(input: {
+        userId: string;
+        externalResidentId: string;
+        accommodationApplicationId: string;
+        academicSessionId: string;
+        paymentId: string;
+        email: string;
+    }): Promise<PaystackInitializeResponse> {
+        const payment = await this.paymentModel.findById(input.paymentId);
+        if (!payment || !payment.active) throw new Error('Accommodation payment is unavailable');
+        if (!payment.targetAudience.includes(PaymentAudience.EXTERNAL_RESIDENT)) {
+            throw new Error('Payment is not configured for external residents');
+        }
+
+        const destination = await this.resolveDestinationForPayment(payment, PaymentDestinationChannelType.PAYSTACK);
+        if (
+            !destination
+            || destination.providerType !== PaymentDestinationProviderType.SUBACCOUNT
+            || !destination.paystackSubaccountCode
+        ) {
+            throw new Error('External accommodation payment destination is not fully configured');
+        }
+
+        const existing = await this.paymentTransactionModel.findOne({
+            accommodationApplicationId: new Types.ObjectId(input.accommodationApplicationId),
+            paymentId: payment._id,
+            status: PaymentStatus.SUCCESSFUL,
+        });
+        if (existing) throw new Error('Accommodation payment has already been completed');
+
+        const reference = this.buildPaymentReference();
+        const payload = this.buildPaystackInitializePayload({
+            email: input.email,
+            amount: payment.amount,
+            reference,
+            userId: input.userId,
+            paymentId: input.paymentId,
+            paymentName: payment.name,
+            destinationAccount: destination,
+            callbackUrl: `${process.env.WEBSITE_URL || 'https://alecons.edu.ng'}/accommodation/external?paymentReference=${encodeURIComponent(reference)}`,
+        });
+        const response = await this.initializePaystackTransactionWithFallback(payload, destination, false);
+
+        await this.paymentTransactionModel.create({
+            userId: new Types.ObjectId(input.userId),
+            externalResidentId: new Types.ObjectId(input.externalResidentId),
+            accommodationApplicationId: new Types.ObjectId(input.accommodationApplicationId),
+            academicSessionId: new Types.ObjectId(input.academicSessionId),
+            paymentId: payment._id,
+            payerType: PaymentPayerType.EXTERNAL_RESIDENT,
+            paymentContext: PaymentContext.ACCOMMODATION_APPLICATION,
+            amount: payment.amount,
+            reference,
+            status: PaymentStatus.PENDING,
+            method: PaymentMethod.PAYSTACK,
+            remarks: 'External accommodation payment initialized - awaiting user action',
+            ...this.buildDestinationSnapshot(destination),
+        });
+
+        return {
+            authorization_url: response.data.authorization_url,
+            access_code: response.data.access_code,
+            reference,
+        };
+    }
+
+    async getExternalAccommodationPaymentOptions(paymentId: string) {
+        const payment = await this.paymentModel.findById(paymentId).lean();
+        if (!payment || !payment.active || !payment.targetAudience.includes(PaymentAudience.EXTERNAL_RESIDENT)) {
+            throw new Error('External accommodation payment is unavailable');
+        }
+        const [paystack, manual] = await Promise.all([
+            this.resolveDestinationForPayment(payment, PaymentDestinationChannelType.PAYSTACK),
+            this.resolveDestinationForPayment(payment, PaymentDestinationChannelType.MANUAL_TRANSFER),
+        ]);
+        return {
+            payment: { id: payment._id, name: payment.name, amount: payment.amount, description: payment.description },
+            paystackEnabled: Boolean(paystack?.active && paystack.providerType === PaymentDestinationProviderType.SUBACCOUNT && paystack.paystackSubaccountCode),
+            manualTransfer: manual?.active ? {
+                enabled: true,
+                accountName: manual.accountName,
+                accountNumber: manual.accountNumber,
+                bankName: manual.bankName,
+                note: manual.note,
+            } : { enabled: false },
+        };
+    }
+
+    async submitExternalAccommodationManualTransfer(input: {
+        userId: string; externalResidentId: string; accommodationApplicationId: string;
+        academicSessionId: string; applicationNumber: string; paymentId: string;
+    }, file: Express.Multer.File) {
+        if (!file) throw new Error('Payment receipt is required');
+        const payment = await this.paymentModel.findById(input.paymentId);
+        if (!payment || !payment.active || !payment.targetAudience.includes(PaymentAudience.EXTERNAL_RESIDENT)) {
+            throw new Error('External accommodation payment is unavailable');
+        }
+        const destination = await this.resolveDestinationForPayment(payment, PaymentDestinationChannelType.MANUAL_TRANSFER);
+        if (!destination?.active || !destination.accountName || !destination.accountNumber || !destination.bankName) {
+            throw new Error('External accommodation manual transfer destination is not fully configured');
+        }
+        const duplicate = await this.paymentTransactionModel.findOne({
+            accommodationApplicationId: new Types.ObjectId(input.accommodationApplicationId),
+            paymentId: payment._id,
+            status: { $in: [PaymentStatus.PENDING, PaymentStatus.SUCCESSFUL] },
+            method: PaymentMethod.MANUAL_TRANSFER,
+        });
+        if (duplicate) throw new Error('A manual transfer receipt is already awaiting review or has been approved');
+        const receipt = await this.uploadService.uploadPrivateAccommodationReceipt(file, input.applicationNumber);
+        return this.paymentTransactionModel.create({
+            userId: new Types.ObjectId(input.userId),
+            externalResidentId: new Types.ObjectId(input.externalResidentId),
+            accommodationApplicationId: new Types.ObjectId(input.accommodationApplicationId),
+            academicSessionId: new Types.ObjectId(input.academicSessionId),
+            paymentId: payment._id,
+            payerType: PaymentPayerType.EXTERNAL_RESIDENT,
+            paymentContext: PaymentContext.ACCOMMODATION_APPLICATION,
+            amount: payment.amount,
+            reference: this.buildManualTransferReference(),
+            paidAt: new Date(),
+            method: PaymentMethod.MANUAL_TRANSFER,
+            channel: PaymentChannel.MANUAL_TRANSFER,
+            status: PaymentStatus.PENDING,
+            remarks: 'External accommodation transfer submitted; awaiting staff verification',
+            receiptKey: receipt.key,
+            receiptOriginalName: file.originalname,
+            receiptUploadedAt: new Date(),
+            ...this.buildDestinationSnapshot(destination),
+        });
     }
 
     /**
@@ -2089,12 +2363,12 @@ export class PaymentsService {
 
     async deletePayment(id: string) {
         try {
-            // Check if payment is being used by any student payments
-            const studentPaymentCount = await this.studentPaymentModel.countDocuments({
+            // Check if payment is being used by any payment transactions
+            const paymentTransactionCount = await this.paymentTransactionModel.countDocuments({
                 paymentId: id
             });
 
-            if (studentPaymentCount > 0) {
+            if (paymentTransactionCount > 0) {
                 throw new Error('Cannot delete payment that has been used by students');
             }
 
@@ -2210,9 +2484,9 @@ export class PaymentsService {
     }
 
     /**
-     * Get student payments statistics for staff dashboard
+     * Get payment transactions statistics for staff dashboard
      */
-    async getStudentPaymentsStats(filters: {
+    async getPaymentTransactionsStats(filters: {
         academicSessionId?: string;
     } = {}) {
         try {
@@ -2232,7 +2506,7 @@ export class PaymentsService {
             const endOfToday = new Date(startOfToday);
             endOfToday.setDate(endOfToday.getDate() + 1);
 
-            const [summary] = await this.studentPaymentModel.aggregate([
+            const [summary] = await this.paymentTransactionModel.aggregate([
                 { $match: match },
                 {
                     $addFields: {
@@ -2347,12 +2621,12 @@ export class PaymentsService {
                 todaysSuccessfulCount: Number(todaysRevenue.count || 0),
             };
         } catch (error) {
-            this.logger.error('Error getting student payments stats:', error);
+            this.logger.error('Error getting payment transactions stats:', error);
             throw error;
         }
     }
 
-    async getStudentPaymentsForManagement(filters: {
+    async getPaymentTransactionsForManagement(filters: {
         page?: number;
         limit?: number;
         search?: string;
@@ -2433,6 +2707,34 @@ export class PaymentsService {
             },
             {
                 $lookup: {
+                    from: 'accommodationapplications',
+                    localField: 'accommodationApplicationId',
+                    foreignField: '_id',
+                    as: 'accommodationApplication',
+                },
+            },
+            {
+                $unwind: {
+                    path: '$accommodationApplication',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $lookup: {
+                    from: 'externalresidents',
+                    localField: 'externalResidentId',
+                    foreignField: '_id',
+                    as: 'externalResident',
+                },
+            },
+            {
+                $unwind: {
+                    path: '$externalResident',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $lookup: {
                     from: 'students',
                     localField: 'userId',
                     foreignField: 'userId',
@@ -2481,7 +2783,7 @@ export class PaymentsService {
                         ],
                     },
                     applicationNumber: {
-                        $ifNull: ['$application.applicationNumber', '$studentApplication.applicationNumber'],
+                        $ifNull: ['$application.applicationNumber', { $ifNull: ['$studentApplication.applicationNumber', '$accommodationApplication.applicationNumber'] }],
                     },
                     matriculationNumber: {
                         $ifNull: [
@@ -2491,6 +2793,7 @@ export class PaymentsService {
                             },
                         ],
                     },
+                    externalResidentNumber: '$externalResident.externalResidentNumber',
                     userName: {
                         $trim: {
                             input: {
@@ -2660,6 +2963,7 @@ export class PaymentsService {
                         { paymentName: searchRegex },
                         { applicationNumber: searchRegex },
                         { matriculationNumber: searchRegex },
+                        { externalResidentNumber: searchRegex },
                         { reference: searchRegex },
                     ],
                 },
@@ -2697,6 +3001,7 @@ export class PaymentsService {
                             email: '$user.email',
                             applicationNumber: 1,
                             matriculationNumber: 1,
+                            externalResidentNumber: 1,
                             programName: 1,
                             programTypeLabel: 1,
                             programModeLabel: 1,
@@ -2711,7 +3016,10 @@ export class PaymentsService {
                             effectivePaidAt: 1,
                             createdAt: 1,
                             receiptUrl: 1,
+                            receiptKey: 1,
                             receiptOriginalName: 1,
+                            payerType: 1,
+                            paymentContext: 1,
                             receiptUploadedAt: 1,
                             verificationRemarks: 1,
                             remarks: 1,
@@ -2733,7 +3041,7 @@ export class PaymentsService {
             },
         });
 
-        const [result] = await this.studentPaymentModel.aggregate(pipeline);
+        const [result] = await this.paymentTransactionModel.aggregate(pipeline);
 
         const payments = result?.payments || [];
         const totalItems = result?.totalCount?.[0]?.count || 0;
@@ -2750,9 +3058,137 @@ export class PaymentsService {
         };
     }
 
+    async getPaymentReceipt(paymentTransactionId: string, requesterId: string, requesterRole: UserRole) {
+        if (!Types.ObjectId.isValid(paymentTransactionId)) throw new NotFoundException('Payment receipt not found');
+        const transaction = await this.paymentTransactionModel.findById(paymentTransactionId).select('userId receiptKey receiptUrl receiptOriginalName').lean();
+        if (!transaction || (!transaction.receiptKey && !transaction.receiptUrl)) throw new NotFoundException('Payment receipt not found');
+        const isOwner = transaction.userId?.toString() === requesterId;
+        if (!isOwner && ![UserRole.STAFF, UserRole.ADMIN].includes(requesterRole)) {
+            throw new ForbiddenException('You cannot access this payment receipt');
+        }
+        const buffer = transaction.receiptKey
+            ? await this.uploadService.getFileBufferByKey(transaction.receiptKey)
+            : await this.uploadService.getFileBufferByUrl(transaction.receiptUrl);
+        if (!buffer) throw new NotFoundException('Payment receipt not found');
+        const filename = transaction.receiptOriginalName || 'payment-receipt';
+        const extension = filename.split('.').pop()?.toLowerCase();
+        const contentType = extension === 'pdf'
+            ? 'application/pdf'
+            : extension === 'png'
+                ? 'image/png'
+                : extension === 'webp'
+                    ? 'image/webp'
+                    : 'image/jpeg';
+        return { buffer, filename, contentType };
+    }
+
+    async generatePaymentTransactionReceipt(paymentTransactionId: string, userId: string) {
+        if (!Types.ObjectId.isValid(paymentTransactionId)) {
+            throw new NotFoundException('Payment transaction not found');
+        }
+
+        const transaction: any = await this.paymentTransactionModel
+            .findOne({
+                _id: new Types.ObjectId(paymentTransactionId),
+                userId: new Types.ObjectId(userId),
+                status: PaymentStatus.SUCCESSFUL,
+            })
+            .populate('userId', 'firstName otherName lastName email')
+            .populate('paymentId', 'name description paymentCode')
+            .populate('academicSessionId', 'sessionYear title')
+            .lean();
+
+        if (!transaction) {
+            throw new NotFoundException('A completed payment transaction was not found');
+        }
+
+        const pdf = await PDFDocument.create();
+        const page = pdf.addPage([595.28, 841.89]);
+        const regular = await pdf.embedFont(StandardFonts.Helvetica);
+        const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+        const primary = rgb(0.1, 0.37, 0.37);
+        const muted = rgb(0.38, 0.42, 0.46);
+        const user = transaction.userId || {};
+        const payment = transaction.paymentId || {};
+        const session = transaction.academicSessionId || {};
+        const payerName = [user.firstName, user.otherName, user.lastName]
+            .filter(Boolean)
+            .join(' ') || 'Student';
+        const paidAt = transaction.paidAt || transaction.updatedAt || transaction.createdAt;
+        const formatLabel = (value: unknown) => String(value || 'Not available')
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, character => character.toUpperCase());
+        const rows = [
+            ['Payer', payerName],
+            ['Email', user.email || 'Not available'],
+            ['Payment', payment.name || 'Payment'],
+            ['Academic session', session.title || session.sessionYear || 'Not available'],
+            ['Reference', transaction.reference],
+            ['Method', formatLabel(transaction.method)],
+            ['Channel', formatLabel(transaction.channel || transaction.method)],
+            ['Status', 'Paid'],
+            ['Payment date', paidAt ? new Intl.DateTimeFormat('en-NG', {
+                dateStyle: 'long',
+                timeStyle: 'short',
+                timeZone: 'Africa/Lagos',
+            }).format(new Date(paidAt)) : 'Not available'],
+        ];
+
+        page.drawText('ALEBIOSU COLLEGE OF NURSING SCIENCES', {
+            x: 48, y: 785, size: 14, font: bold, color: primary,
+        });
+        page.drawText('PAYMENT RECEIPT', {
+            x: 48, y: 742, size: 24, font: bold, color: rgb(0.08, 0.1, 0.13),
+        });
+        page.drawText('Official record of a completed payment transaction', {
+            x: 48, y: 720, size: 10, font: regular, color: muted,
+        });
+        page.drawLine({
+            start: { x: 48, y: 700 }, end: { x: 547, y: 700 }, thickness: 1, color: rgb(0.86, 0.88, 0.9),
+        });
+
+        page.drawText(`NGN ${Number(transaction.amount || 0).toLocaleString('en-NG', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        })}`, {
+            x: 48, y: 652, size: 25, font: bold, color: primary,
+        });
+
+        let y = 604;
+        for (const [label, value] of rows) {
+            page.drawText(label, { x: 48, y, size: 9, font: regular, color: muted });
+            page.drawText(String(value), {
+                x: 190, y, size: String(value).length > 48 ? 8 : 10, font: bold, color: rgb(0.08, 0.1, 0.13),
+            });
+            page.drawLine({
+                start: { x: 48, y: y - 12 }, end: { x: 547, y: y - 12 }, thickness: 0.5, color: rgb(0.9, 0.91, 0.92),
+            });
+            y -= 42;
+        }
+
+        page.drawText('This receipt was generated electronically and does not require a signature.', {
+            x: 48, y: 92, size: 9, font: regular, color: muted,
+        });
+        page.drawText(`Generated ${new Intl.DateTimeFormat('en-NG', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+            timeZone: 'Africa/Lagos',
+        }).format(new Date())}`, {
+            x: 48, y: 72, size: 8, font: regular, color: muted,
+        });
+
+        const buffer = Buffer.from(await pdf.save());
+        const safeReference = String(transaction.reference || transaction._id).replace(/[^a-zA-Z0-9_-]/g, '-');
+        return {
+            buffer,
+            filename: `payment-receipt-${safeReference}.pdf`,
+            contentType: 'application/pdf',
+        };
+    }
+
     // Student Portal Specific Methods
 
-    async getStudentPaymentsSummaryWithSession(userId: string, academicSessionId?: string): Promise<StudentPaymentsSummary> {
+    async getPaymentTransactionsSummaryWithSession(userId: string, academicSessionId?: string): Promise<PaymentTransactionsSummary> {
         const userObjectId = new Types.ObjectId(userId);
 
         // Get user to verify they exist
@@ -2783,15 +3219,15 @@ export class PaymentsService {
             : { paystackEnabled: false, manualTransferEnabled: false };
 
         // Get student's successful payments for this session
-        let studentPaymentQuery: any = {
+        let paymentTransactionQuery: any = {
             userId: userObjectId,
             status: { $in: [PaymentStatus.SUCCESSFUL, PaymentStatus.PENDING, PaymentStatus.REJECTED] }
         };
 
-        studentPaymentQuery.academicSessionId = new Types.ObjectId(selectedSessionId);
+        paymentTransactionQuery.academicSessionId = new Types.ObjectId(selectedSessionId);
 
-        const studentPayments = await this.studentPaymentModel
-            .find(studentPaymentQuery)
+        const paymentTransactions = await this.paymentTransactionModel
+            .find(paymentTransactionQuery)
             .populate('paymentId')
             .lean();
 
@@ -2812,8 +3248,8 @@ export class PaymentsService {
 
         const destinationAccountsMap = await this.getDestinationAccountsMap(
             [
-                ...studentPayments.flatMap((studentPayment: any) => {
-                    const payment = studentPayment.paymentId as any;
+                ...paymentTransactions.flatMap((paymentTransaction: any) => {
+                    const payment = paymentTransaction.paymentId as any;
                     return payment && typeof payment === 'object'
                         ? [payment.paystackDestinationAccountId, payment.manualTransferDestinationAccountId]
                         : [];
@@ -2834,37 +3270,37 @@ export class PaymentsService {
         const pendingManualPaymentsById = new Map<string, any>();
         const rejectedManualPaymentsById = new Map<string, any>();
 
-        studentPayments.forEach((studentPayment: any) => {
-            const linkedPaymentId = studentPayment.paymentId?._id?.toString();
+        paymentTransactions.forEach((paymentTransaction: any) => {
+            const linkedPaymentId = paymentTransaction.paymentId?._id?.toString();
             if (!linkedPaymentId) {
                 return;
             }
 
-            if (studentPayment.status === PaymentStatus.SUCCESSFUL) {
-                successfulPaymentsById.set(linkedPaymentId, studentPayment);
+            if (paymentTransaction.status === PaymentStatus.SUCCESSFUL) {
+                successfulPaymentsById.set(linkedPaymentId, paymentTransaction);
                 return;
             }
 
-            if (this.isManualTransferPending(studentPayment)) {
+            if (this.isManualTransferPending(paymentTransaction)) {
                 const existingPending = pendingManualPaymentsById.get(linkedPaymentId);
-                if (!existingPending || new Date(studentPayment.createdAt || 0).getTime() > new Date(existingPending.createdAt || 0).getTime()) {
-                    pendingManualPaymentsById.set(linkedPaymentId, studentPayment);
+                if (!existingPending || new Date(paymentTransaction.createdAt || 0).getTime() > new Date(existingPending.createdAt || 0).getTime()) {
+                    pendingManualPaymentsById.set(linkedPaymentId, paymentTransaction);
                 }
                 return;
             }
 
-            if (this.isManualTransferRejected(studentPayment)) {
+            if (this.isManualTransferRejected(paymentTransaction)) {
                 const existingRejected = rejectedManualPaymentsById.get(linkedPaymentId);
-                if (!existingRejected || new Date(studentPayment.rejectedAt || studentPayment.updatedAt || studentPayment.createdAt || 0).getTime() > new Date(existingRejected.rejectedAt || existingRejected.updatedAt || existingRejected.createdAt || 0).getTime()) {
-                    rejectedManualPaymentsById.set(linkedPaymentId, studentPayment);
+                if (!existingRejected || new Date(paymentTransaction.rejectedAt || paymentTransaction.updatedAt || paymentTransaction.createdAt || 0).getTime() > new Date(existingRejected.rejectedAt || existingRejected.updatedAt || existingRejected.createdAt || 0).getTime()) {
+                    rejectedManualPaymentsById.set(linkedPaymentId, paymentTransaction);
                 }
             }
         });
 
-        // First, add all paid fees from student payments (even if payment is no longer active)
-        studentPayments.forEach(studentPayment => {
-            if (studentPayment.status === PaymentStatus.SUCCESSFUL && studentPayment.paymentId && typeof studentPayment.paymentId === 'object') {
-                const payment = studentPayment.paymentId as any; // Type assertion since it's populated
+        // First, add all paid fees from payment transactions (even if payment is no longer active)
+        paymentTransactions.forEach(paymentTransaction => {
+            if (paymentTransaction.status === PaymentStatus.SUCCESSFUL && paymentTransaction.paymentId && typeof paymentTransaction.paymentId === 'object') {
+                const payment = paymentTransaction.paymentId as any; // Type assertion since it's populated
                 const paystackDestinationAccount = this.toDestinationAccountSummary(
                     destinationAccountsMap.get(payment.paystackDestinationAccountId?.toString?.() || ''),
                 );
@@ -2878,19 +3314,19 @@ export class PaymentsService {
                     id: payment._id.toString(),
                     name: payment.name,
                     description: payment.description,
-                    amount: studentPayment.amount, // Use actual paid amount
+                    amount: paymentTransaction.amount, // Use actual paid amount
                     isPaid: true,
                     paymentCode: payment.paymentCode,
-                    paidAt: studentPayment.paidAt,
-                    reference: studentPayment.reference,
-                    status: studentPayment.status,
-                    channel: studentPayment.channel,
-                    fee: studentPayment.fee,
-                    method: studentPayment.method,
-                    remarks: studentPayment.remarks,
-                    receiptUrl: studentPayment.receiptUrl,
-                    receiptOriginalName: studentPayment.receiptOriginalName,
-                    receiptUploadedAt: studentPayment.receiptUploadedAt,
+                    paidAt: paymentTransaction.paidAt,
+                    reference: paymentTransaction.reference,
+                    status: paymentTransaction.status,
+                    channel: paymentTransaction.channel,
+                    fee: paymentTransaction.fee,
+                    method: paymentTransaction.method,
+                    remarks: paymentTransaction.remarks,
+                    receiptUrl: paymentTransaction.receiptUrl,
+                    receiptOriginalName: paymentTransaction.receiptOriginalName,
+                    receiptUploadedAt: paymentTransaction.receiptUploadedAt,
                     manualTransferDetails,
                     paystackDestinationAccount,
                     manualTransferDestinationAccount,
@@ -2898,9 +3334,9 @@ export class PaymentsService {
             }
         });
 
-        Array.from(pendingManualPaymentsById.values()).forEach((studentPayment: any) => {
-            if (studentPayment.paymentId && typeof studentPayment.paymentId === 'object') {
-                const payment = studentPayment.paymentId as any;
+        Array.from(pendingManualPaymentsById.values()).forEach((paymentTransaction: any) => {
+            if (paymentTransaction.paymentId && typeof paymentTransaction.paymentId === 'object') {
+                const payment = paymentTransaction.paymentId as any;
                 const paystackDestinationAccount = this.toDestinationAccountSummary(
                     destinationAccountsMap.get(payment.paystackDestinationAccountId?.toString?.() || ''),
                 );
@@ -2914,18 +3350,18 @@ export class PaymentsService {
                     id: payment._id.toString(),
                     name: payment.name,
                     description: payment.description,
-                    amount: studentPayment.amount,
+                    amount: paymentTransaction.amount,
                     isPaid: false,
                     paymentCode: payment.paymentCode,
-                    paidAt: studentPayment.paidAt,
-                    reference: studentPayment.reference,
-                    status: studentPayment.status,
-                    channel: studentPayment.channel,
-                    method: studentPayment.method,
-                    remarks: studentPayment.remarks,
-                    receiptUrl: studentPayment.receiptUrl,
-                    receiptOriginalName: studentPayment.receiptOriginalName,
-                    receiptUploadedAt: studentPayment.receiptUploadedAt,
+                    paidAt: paymentTransaction.paidAt,
+                    reference: paymentTransaction.reference,
+                    status: paymentTransaction.status,
+                    channel: paymentTransaction.channel,
+                    method: paymentTransaction.method,
+                    remarks: paymentTransaction.remarks,
+                    receiptUrl: paymentTransaction.receiptUrl,
+                    receiptOriginalName: paymentTransaction.receiptOriginalName,
+                    receiptUploadedAt: paymentTransaction.receiptUploadedAt,
                     manualTransferDetails,
                     paystackDestinationAccount,
                     manualTransferDestinationAccount,
@@ -2982,7 +3418,7 @@ export class PaymentsService {
         };
     }
 
-    async getStudentPaymentHistory(
+    async getPaymentTransactionHistory(
         userId: string,
         academicSessionId?: string,
         options: { page?: number; limit?: number } = {}
@@ -3008,7 +3444,7 @@ export class PaymentsService {
         }
 
         // Get payments with pagination
-        const payments = await this.studentPaymentModel
+        const payments = await this.paymentTransactionModel
             .find(query)
             .populate('paymentId', 'name description amount paymentCode')
             .populate('academicSessionId', 'sessionYear')
@@ -3018,7 +3454,7 @@ export class PaymentsService {
             .lean();
 
         // Get total count for pagination
-        const totalCount = await this.studentPaymentModel.countDocuments(query);
+        const totalCount = await this.paymentTransactionModel.countDocuments(query);
 
         // Calculate summary
         const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
@@ -3052,7 +3488,7 @@ export class PaymentsService {
         };
     }
 
-    async getStudentPaymentHistorySessions(userId: string) {
+    async getPaymentTransactionHistorySessions(userId: string) {
         const student = await this.studentModel
             .findOne({ userId: new Types.ObjectId(userId) })
             .select('_id entryAcademicSession academicSession')
@@ -3068,7 +3504,7 @@ export class PaymentsService {
                 .populate('academicSessionId', 'sessionYear title startDate endDate')
                 .sort({ startedAt: -1 })
                 .lean(),
-            this.studentPaymentModel.distinct('academicSessionId', {
+            this.paymentTransactionModel.distinct('academicSessionId', {
                 userId: new Types.ObjectId(userId),
                 academicSessionId: { $exists: true, $ne: null },
             }),
@@ -3125,7 +3561,7 @@ export class PaymentsService {
             ? new Types.ObjectId(options.academicSessionId)
             : null;
 
-        const payments = await this.studentPaymentModel
+        const payments = await this.paymentTransactionModel
             .find({ userId: userObjectId })
             .populate('paymentId', 'name description amount paymentCode')
             .populate('academicSessionId', 'sessionYear')
@@ -3190,7 +3626,7 @@ export class PaymentsService {
         };
     }
 
-    async initializeStudentPayment(
+    async initializePaymentTransaction(
         userId: string,
         paymentId: string,
         email: string,
@@ -3235,17 +3671,27 @@ export class PaymentsService {
             billableSessionId,
         );
 
-        await this.assertAccommodationPaymentEligibility(userId, payment);
+        const accommodationApplication = await this.assertAccommodationPaymentEligibility(userId, payment, billableSessionId);
 
         const linkedApplication = await this.resolveLinkedApplication(userId);
+        const student = await this.studentModel.findOne({ userId: new Types.ObjectId(userId) }).select('_id').lean();
+        if (!student) {
+            throw new Error('Student record not found');
+        }
 
         // Generate unique reference
         const reference = this.buildPaymentReference();
 
         // Create student payment record
-        const studentPayment = new this.studentPaymentModel({
+        const paymentTransaction = new this.paymentTransactionModel({
             userId: new Types.ObjectId(userId),
             applicationId: linkedApplication.applicationId,
+            studentId: student._id,
+            accommodationApplicationId: accommodationApplication?._id,
+            payerType: PaymentPayerType.STUDENT,
+            paymentContext: accommodationApplication
+                ? PaymentContext.ACCOMMODATION_APPLICATION
+                : PaymentContext.STUDENT_ACCOUNT,
             paymentId: new Types.ObjectId(paymentId),
             academicSessionId: new Types.ObjectId(billableSessionId),
             amount: payment.amount,
@@ -3256,7 +3702,7 @@ export class PaymentsService {
             ...this.buildDestinationSnapshot(paystackDestinationAccount),
         });
 
-        await studentPayment.save();
+        await paymentTransaction.save();
 
         // Initialize with Paystack
         const paystackResponse = await this.initializePaystackPayment(
@@ -3312,6 +3758,7 @@ export class PaymentsService {
         }
 
         let billableSessionId: string | undefined;
+        let accommodationApplication: any = null;
         if (options.context === 'student-portal') {
             const billableSession = await this.resolveStudentBillableSession(
                 userId,
@@ -3328,7 +3775,11 @@ export class PaymentsService {
                 throw new Error('Payment is not available for the selected academic session');
             }
 
-            await this.assertAccommodationPaymentEligibility(userId, payment);
+            accommodationApplication = await this.assertAccommodationPaymentEligibility(
+                userId,
+                payment,
+                billableSessionId,
+            );
         }
 
         const linkedApplication = await this.resolveLinkedApplication(userId, options.applicationId);
@@ -3365,7 +3816,7 @@ export class PaymentsService {
             successQuery.academicSessionId = new Types.ObjectId(billableSessionId);
         }
 
-        const existingSuccessfulPayment = await this.studentPaymentModel.findOne(successQuery);
+        const existingSuccessfulPayment = await this.paymentTransactionModel.findOne(successQuery);
         if (existingSuccessfulPayment) {
             throw new Error('Payment has already been completed successfully for this charge');
         }
@@ -3384,7 +3835,7 @@ export class PaymentsService {
             pendingManualPaymentQuery.academicSessionId = new Types.ObjectId(billableSessionId);
         }
 
-        const pendingManualPayment = await this.studentPaymentModel.findOne(pendingManualPaymentQuery);
+        const pendingManualPayment = await this.paymentTransactionModel.findOne(pendingManualPaymentQuery);
 
         if (pendingManualPayment) {
             throw new Error('A manual transfer receipt has already been submitted for this payment and is awaiting staff verification');
@@ -3396,9 +3847,21 @@ export class PaymentsService {
             payment.name,
         );
 
-        const studentPayment = await this.studentPaymentModel.create({
+        const paymentTransaction = await this.paymentTransactionModel.create({
             userId: new Types.ObjectId(userId),
             applicationId: linkedApplication.applicationId,
+            studentId: options.context === 'student-portal'
+                ? (await this.studentModel.findOne({ userId: new Types.ObjectId(userId) }).select('_id').lean())?._id
+                : undefined,
+            accommodationApplicationId: accommodationApplication?._id,
+            payerType: options.context === 'student-portal'
+                ? PaymentPayerType.STUDENT
+                : PaymentPayerType.APPLICANT,
+            paymentContext: accommodationApplication
+                ? PaymentContext.ACCOMMODATION_APPLICATION
+                : options.context === 'student-portal'
+                ? PaymentContext.STUDENT_ACCOUNT
+                : PaymentContext.ADMISSION_APPLICATION,
             academicSessionId: billableSessionId
                 ? new Types.ObjectId(billableSessionId)
                 : linkedApplication.academicSessionId,
@@ -3419,121 +3882,161 @@ export class PaymentsService {
         });
 
         return {
-            id: studentPayment._id.toString(),
-            reference: studentPayment.reference,
-            amount: studentPayment.amount,
-            status: studentPayment.status,
-            method: studentPayment.method,
-            remarks: studentPayment.remarks,
-            receiptUrl: studentPayment.receiptUrl,
-            receiptOriginalName: studentPayment.receiptOriginalName,
-            receiptUploadedAt: studentPayment.receiptUploadedAt,
+            id: paymentTransaction._id.toString(),
+            reference: paymentTransaction.reference,
+            amount: paymentTransaction.amount,
+            status: paymentTransaction.status,
+            method: paymentTransaction.method,
+            remarks: paymentTransaction.remarks,
+            receiptUrl: paymentTransaction.receiptUrl,
+            receiptOriginalName: paymentTransaction.receiptOriginalName,
+            receiptUploadedAt: paymentTransaction.receiptUploadedAt,
         };
     }
 
-    async verifyManualTransferPayment(studentPaymentId: string, staffId: string, remarks?: string) {
-        if (!Types.ObjectId.isValid(studentPaymentId)) {
+    async verifyManualTransferPayment(paymentTransactionId: string, staffId: string, remarks?: string) {
+        if (!Types.ObjectId.isValid(paymentTransactionId)) {
             throw new Error('Invalid payment record ID');
         }
 
-        const studentPayment = await this.studentPaymentModel.findById(studentPaymentId);
-        if (!studentPayment) {
+        const paymentTransaction = await this.paymentTransactionModel.findById(paymentTransactionId);
+        if (!paymentTransaction) {
             throw new Error('Payment record not found');
         }
 
-        if (studentPayment.method !== PaymentMethod.MANUAL_TRANSFER) {
+        if (paymentTransaction.method !== PaymentMethod.MANUAL_TRANSFER) {
             throw new Error('Only manual transfer payments can be verified here');
         }
 
-        if (studentPayment.status !== PaymentStatus.PENDING) {
+        if (paymentTransaction.status !== PaymentStatus.PENDING) {
             throw new Error('Only pending manual transfer payments can be verified');
         }
 
         const duplicateSuccessQuery: any = {
-            _id: { $ne: studentPayment._id },
-            userId: studentPayment.userId,
-            paymentId: studentPayment.paymentId,
+            _id: { $ne: paymentTransaction._id },
+            userId: paymentTransaction.userId,
+            paymentId: paymentTransaction.paymentId,
             status: PaymentStatus.SUCCESSFUL,
         };
 
-        if (studentPayment.academicSessionId) {
-            duplicateSuccessQuery.academicSessionId = studentPayment.academicSessionId;
+        if (paymentTransaction.academicSessionId) {
+            duplicateSuccessQuery.academicSessionId = paymentTransaction.academicSessionId;
         }
 
-        const existingSuccessfulPayment = await this.studentPaymentModel.findOne(duplicateSuccessQuery);
+        const existingSuccessfulPayment = await this.paymentTransactionModel.findOne(duplicateSuccessQuery);
         if (existingSuccessfulPayment) {
             throw new Error('A successful payment already exists for this charge');
         }
 
-        studentPayment.status = PaymentStatus.SUCCESSFUL;
-        studentPayment.remarks = 'Payment successful and verified by staff';
-        studentPayment.verificationRemarks = remarks || 'Manual transfer verified by staff';
-        studentPayment.verifiedBy = new Types.ObjectId(staffId);
-        studentPayment.verifiedAt = new Date();
+        paymentTransaction.status = PaymentStatus.SUCCESSFUL;
+        paymentTransaction.remarks = 'Payment successful and verified by staff';
+        paymentTransaction.verificationRemarks = remarks || 'Manual transfer verified by staff';
+        paymentTransaction.verifiedBy = new Types.ObjectId(staffId);
+        paymentTransaction.verifiedAt = new Date();
 
-        await studentPayment.save();
-        await this.updateApplicationStageAfterPayment(
-            studentPayment.userId,
-            studentPayment.paymentId,
-            studentPayment.applicationId,
-        );
+        await paymentTransaction.save();
+        if (paymentTransaction.paymentContext === PaymentContext.ACCOMMODATION_APPLICATION) {
+            await this.finalizeAccommodationPayment(paymentTransaction);
+        } else {
+            await this.updateApplicationStageAfterPayment(
+                paymentTransaction.userId,
+                paymentTransaction.paymentId,
+                paymentTransaction.applicationId,
+            );
+        }
 
         return {
-            id: studentPayment._id.toString(),
-            reference: studentPayment.reference,
-            status: studentPayment.status,
-            remarks: studentPayment.remarks,
-            verificationRemarks: studentPayment.verificationRemarks,
-            verifiedAt: studentPayment.verifiedAt,
+            id: paymentTransaction._id.toString(),
+            reference: paymentTransaction.reference,
+            status: paymentTransaction.status,
+            remarks: paymentTransaction.remarks,
+            verificationRemarks: paymentTransaction.verificationRemarks,
+            verifiedAt: paymentTransaction.verifiedAt,
         };
     }
 
-    async rejectManualTransferPayment(studentPaymentId: string, staffId: string, remarks?: string) {
-        if (!Types.ObjectId.isValid(studentPaymentId)) {
+    async rejectManualTransferPayment(paymentTransactionId: string, staffId: string, remarks?: string) {
+        if (!Types.ObjectId.isValid(paymentTransactionId)) {
             throw new Error('Invalid payment record ID');
         }
 
-        const studentPayment = await this.studentPaymentModel.findById(studentPaymentId);
-        if (!studentPayment) {
+        const paymentTransaction = await this.paymentTransactionModel.findById(paymentTransactionId);
+        if (!paymentTransaction) {
             throw new Error('Payment record not found');
         }
 
-        if (studentPayment.method !== PaymentMethod.MANUAL_TRANSFER) {
+        if (paymentTransaction.method !== PaymentMethod.MANUAL_TRANSFER) {
             throw new Error('Only manual transfer payments can be rejected here');
         }
 
-        if (studentPayment.status !== PaymentStatus.PENDING) {
+        if (paymentTransaction.status !== PaymentStatus.PENDING) {
             throw new Error('Only pending manual transfer payments can be rejected');
         }
 
-        studentPayment.status = PaymentStatus.REJECTED;
-        studentPayment.remarks = 'Manual transfer receipt rejected by staff';
-        studentPayment.verificationRemarks = remarks || 'Manual transfer rejected by staff';
-        studentPayment.rejectedBy = new Types.ObjectId(staffId);
-        studentPayment.rejectedAt = new Date();
+        paymentTransaction.status = PaymentStatus.REJECTED;
+        paymentTransaction.remarks = 'Manual transfer receipt rejected by staff';
+        paymentTransaction.verificationRemarks = remarks || 'Manual transfer rejected by staff';
+        paymentTransaction.rejectedBy = new Types.ObjectId(staffId);
+        paymentTransaction.rejectedAt = new Date();
 
-        await studentPayment.save();
+        await paymentTransaction.save();
+
+        let externalAccommodationResumeToken: string | undefined;
+        if (
+            paymentTransaction.payerType === PaymentPayerType.EXTERNAL_RESIDENT
+            && paymentTransaction.paymentContext === PaymentContext.ACCOMMODATION_APPLICATION
+            && paymentTransaction.accommodationApplicationId
+        ) {
+            externalAccommodationResumeToken = crypto.randomBytes(32).toString('hex');
+            const now = new Date();
+            const applications = this.paymentTransactionModel.db.collection('accommodationapplications');
+            await applications.updateOne(
+                { _id: paymentTransaction.accommodationApplicationId },
+                {
+                    $set: {
+                        status: AccommodationApplicationStatus.AWAITING_PAYMENT,
+                        resumeTokenHash: crypto.createHash('sha256').update(externalAccommodationResumeToken).digest('hex'),
+                        resumeTokenExpiresAt: new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000)),
+                        updatedAt: now,
+                    },
+                },
+            );
+            await this.paymentTransactionModel.db.collection('accommodationaudits').insertOne({
+                accommodationApplicationId: paymentTransaction.accommodationApplicationId,
+                action: 'manual_transfer_rejected',
+                actorType: 'staff',
+                actorId: new Types.ObjectId(staffId),
+                metadata: {
+                    reference: paymentTransaction.reference,
+                    reason: paymentTransaction.verificationRemarks,
+                },
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
 
         try {
             const [user, payment] = await Promise.all([
-                this.userModel.findById(studentPayment.userId).lean(),
-                this.paymentModel.findById(studentPayment.paymentId).lean(),
+                this.userModel.findById(paymentTransaction.userId).lean(),
+                this.paymentModel.findById(paymentTransaction.paymentId).lean(),
             ]);
 
             if (user?.email) {
-                const portalUrl = user.role === UserRole.STUDENT
-                    ? process.env.STUDENT_PORTAL_URL
-                    : process.env.APPLICATION_PORTAL_URL;
+                const portalUrl = externalAccommodationResumeToken
+                    ? `${process.env.WEBSITE_URL || 'https://alecons.edu.ng'}/accommodation/external?resumeToken=${encodeURIComponent(externalAccommodationResumeToken)}`
+                    : user.role === UserRole.STUDENT
+                        ? process.env.STUDENT_PORTAL_URL
+                        : process.env.APPLICATION_PORTAL_URL;
 
                 await this.emailService.sendManualPaymentRejectedEmail(
                     user.email,
                     user.firstName || 'Applicant',
                     {
                         paymentName: payment?.name || 'Payment',
-                        amount: studentPayment.amount,
-                        reference: studentPayment.reference,
-                        rejectedAt: studentPayment.rejectedAt,
-                        reason: studentPayment.verificationRemarks,
+                        amount: paymentTransaction.amount,
+                        reference: paymentTransaction.reference,
+                        rejectedAt: paymentTransaction.rejectedAt,
+                        reason: paymentTransaction.verificationRemarks,
                         portalUrl,
                     },
                 );
@@ -3543,16 +4046,16 @@ export class PaymentsService {
         }
 
         return {
-            id: studentPayment._id.toString(),
-            reference: studentPayment.reference,
-            status: studentPayment.status,
-            remarks: studentPayment.remarks,
-            verificationRemarks: studentPayment.verificationRemarks,
-            rejectedAt: studentPayment.rejectedAt,
+            id: paymentTransaction._id.toString(),
+            reference: paymentTransaction.reference,
+            status: paymentTransaction.status,
+            remarks: paymentTransaction.remarks,
+            verificationRemarks: paymentTransaction.verificationRemarks,
+            rejectedAt: paymentTransaction.rejectedAt,
         };
     }
 
-    async getAvailableStudentPayments(userId: string, academicSessionId?: string) {
+    async getAvailablePaymentTransactions(userId: string, academicSessionId?: string) {
         // Get user to verify they are a student
         const user = await this.userModel.findById(userId);
         if (!user) {
@@ -3585,7 +4088,7 @@ export class PaymentsService {
 
         paidQuery.academicSessionId = new Types.ObjectId(billableSessionId);
 
-        const paidPayments = await this.studentPaymentModel
+        const paidPayments = await this.paymentTransactionModel
             .find(paidQuery)
             .select('paymentId')
             .lean();

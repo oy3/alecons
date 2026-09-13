@@ -7,7 +7,7 @@ import { Payment, PaymentAudience, PaymentDocument } from '../schemas/payment.sc
 import { SessionControl, SessionControlDocument } from '../schemas/session-control.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
 import { StudentAcademicSession, StudentAcademicSessionDocument } from '../schemas/student-academic-session.schema';
-import { StudentPayment, StudentPaymentDocument, PaymentStatus } from '../schemas/student-payment.schema';
+import { PaymentTransaction, PaymentTransactionDocument, PaymentStatus } from '../schemas/payment-transaction.schema';
 import { StudentFeeObligation, StudentFeeObligationDocument } from '../schemas/student-fee-obligation.schema';
 
 @Injectable()
@@ -18,7 +18,7 @@ export class StudentFeeObligationService {
     @InjectModel(Payment.name) private readonly paymentModel: Model<PaymentDocument>,
     @InjectModel(Student.name) private readonly studentModel: Model<StudentDocument>,
     @InjectModel(StudentAcademicSession.name) private readonly enrollmentModel: Model<StudentAcademicSessionDocument>,
-    @InjectModel(StudentPayment.name) private readonly studentPaymentModel: Model<StudentPaymentDocument>,
+    @InjectModel(PaymentTransaction.name) private readonly paymentTransactionModel: Model<PaymentTransactionDocument>,
     @InjectModel(StudentFeeObligation.name) private readonly obligationModel: Model<StudentFeeObligationDocument>,
   ) {}
 
@@ -95,7 +95,7 @@ export class StudentFeeObligationService {
     }
     const writeResult = operations.length ? await this.obligationModel.bulkWrite(operations, { ordered: false }) : null;
 
-    const successfulPayments = await this.studentPaymentModel.find({
+    const successfulPayments = await this.paymentTransactionModel.find({
       academicSessionId: sessionId,
       status: PaymentStatus.SUCCESSFUL,
     }).select('_id userId paymentId paidAt verifiedAt createdAt').sort({ paidAt: 1, createdAt: 1 }).lean();

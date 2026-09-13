@@ -28,6 +28,7 @@ API_RELEASE_DIR="$API_RELEASES_ROOT/$RELEASE_ID"
 STAGED_API_ENV_FILE="${STAGED_API_ENV_FILE:-}"
 PREVIOUS_API_ENV_FILE_BACKUP=""
 HAD_PREVIOUS_API_ENV_FILE="false"
+PAYMENT_COLLECTION_RENAMED="false"
 
 require_file() {
     local file_path="$1"
@@ -233,12 +234,13 @@ if [[ ! -d "$API_RELEASE_DIR/node_modules" ]]; then
     exit 1
 fi
 
+# Migration utilities load .env.production from their release directory.
+install -m 600 "$API_ENV_FILE" "$API_RELEASE_DIR/.env.production"
+
 PREVIOUS_API_RELEASE=""
 if [[ -L "$API_CURRENT_LINK" ]]; then
     PREVIOUS_API_RELEASE="$(readlink -f "$API_CURRENT_LINK" || true)"
 fi
-
-ln -sfn "$API_RELEASE_DIR" "$API_CURRENT_LINK"
 
 # Ensure a non-snap browser is present. Google Chrome is preferred because the
 # Ubuntu chromium-browser package often resolves to a snap wrapper that fails
@@ -285,6 +287,41 @@ export ALECONS_API_CWD="$API_CURRENT_LINK"
 unset CHROME_PATH
 export PUPPETEER_EXECUTABLE_PATH="$BROWSER_BIN"
 
+PAYMENT_MIGRATION_DRY_RUN="$(cd "$API_RELEASE_DIR" && NODE_ENV=production node dist/scripts/migrate-payment-transactions.js 2>&1)"
+printf '%s\n' "$PAYMENT_MIGRATION_DRY_RUN"
+if grep -q '"sourceExists": true' <<< "$PAYMENT_MIGRATION_DRY_RUN"; then
+    PAYMENT_COLLECTION_RENAMED="true"
+fi
+
+# The old API must not write while its backing collection is renamed.
+pm2 stop "$PM2_APP_NAME" >/dev/null 2>&1 || true
+if ! (
+    cd "$API_RELEASE_DIR"
+    NODE_ENV=production node dist/scripts/migrate-payment-transactions.js --apply
+    NODE_ENV=production node dist/scripts/migrate-accommodation-foundation.js --apply
+); then
+    echo "Database migration failed; restoring the previous payment collection and API." >&2
+    if [[ "$PAYMENT_COLLECTION_RENAMED" == "true" ]]; then
+        (cd "$API_RELEASE_DIR" && NODE_ENV=production node dist/scripts/migrate-payment-transactions.js --rollback) || true
+    fi
+    if [[ -n "$STAGED_API_ENV_FILE" ]]; then
+        if [[ "$HAD_PREVIOUS_API_ENV_FILE" == "true" && -f "$PREVIOUS_API_ENV_FILE_BACKUP" ]]; then
+            install -m 600 "$PREVIOUS_API_ENV_FILE_BACKUP" "$API_ENV_FILE"
+        elif [[ "$HAD_PREVIOUS_API_ENV_FILE" == "false" ]]; then
+            rm -f "$API_ENV_FILE"
+        fi
+    fi
+    if [[ -n "$PREVIOUS_API_RELEASE" && -d "$PREVIOUS_API_RELEASE" ]]; then
+        export ALECONS_API_CWD="$PREVIOUS_API_RELEASE"
+        pm2 startOrReload "$PREVIOUS_API_RELEASE/ecosystem.config.cjs" --update-env || true
+        pm2 save || true
+    fi
+    exit 1
+fi
+
+ln -sfn "$API_RELEASE_DIR" "$API_CURRENT_LINK"
+export ALECONS_API_CWD="$API_CURRENT_LINK"
+
 pm2 startOrReload "$API_CURRENT_LINK/ecosystem.config.cjs" --update-env
 pm2 save
 
@@ -301,6 +338,11 @@ done
 
 if [[ -n "$PREVIOUS_API_RELEASE" && -d "$PREVIOUS_API_RELEASE" ]]; then
     echo "Health check failed. Rolling back API symlink to previous release: $PREVIOUS_API_RELEASE" >&2
+    pm2 stop "$PM2_APP_NAME" >/dev/null 2>&1 || true
+    if [[ "$PAYMENT_COLLECTION_RENAMED" == "true" ]]; then
+        echo "Restoring the legacy payment collection for the previous API release" >&2
+        (cd "$API_RELEASE_DIR" && NODE_ENV=production node dist/scripts/migrate-payment-transactions.js --rollback) || true
+    fi
     ln -sfn "$PREVIOUS_API_RELEASE" "$API_CURRENT_LINK"
 
     if [[ -n "$STAGED_API_ENV_FILE" ]]; then

@@ -1,6 +1,6 @@
 <script>
 import { useAuthStore } from '../stores/auth.js'
-import { studentPaymentService } from '../services/payment.js'
+import { paymentTransactionService } from '../services/payment.js'
 import { apiService } from '../services/api.js'
 import { logger } from '@shared/utils/logger'
 
@@ -110,7 +110,7 @@ export default {
                 this.isLoadingFinance = true;
                 
                 // Load academic sessions first
-                const sessionsResponse = await studentPaymentService.getAcademicSessions();
+                const sessionsResponse = await paymentTransactionService.getAcademicSessions();
                 if (sessionsResponse.success) {
                     this.academicSessions = (sessionsResponse.data.sessions || []).map(session => ({
                         id: session._id,
@@ -126,7 +126,7 @@ export default {
                 
                 // Load payment summary for the current session
                 if (this.selectedSessionId) {
-                    const summaryResponse = await studentPaymentService.getPaymentSummary(this.selectedSessionId);
+                    const summaryResponse = await paymentTransactionService.getPaymentSummary(this.selectedSessionId);
                     if (summaryResponse.success) {
                         this.paymentSummary = summaryResponse.data;
                         logger.info('Dashboard: Loaded payment summary');
@@ -141,7 +141,7 @@ export default {
         },
         
         formatCurrency(amount) {
-            return studentPaymentService.formatCurrency(amount);
+            return paymentTransactionService.formatCurrency(amount);
         },
 
         getCourseInstructor(course) {
@@ -167,7 +167,7 @@ export default {
       <div class="col-12">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <h2 class="h3 fw-bold text-dark mb-1">Welcome back, {{ auth.userFirstName }}! 👋</h2>
+            <h2 class="h3 fw-bold text-dark mb-1">Welcome back, <span class="text-capitalize">{{ auth.userFirstName }}</span>! 👋</h2>
             <p class="text-muted mb-0">Here's what's happening with your studies today.</p>
           </div>
           <div class="d-none d-md-flex">

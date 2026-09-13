@@ -10,7 +10,7 @@ import { ProgramType, ProgramTypeSchema } from '../schemas/program-type.schema';
 import { ProgramMode, ProgramModeSchema } from '../schemas/program-mode.schema';
 import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
 import { StudentAcademicSession, StudentAcademicSessionSchema } from '../schemas/student-academic-session.schema';
-import { StudentPayment, StudentPaymentSchema } from '../schemas/student-payment.schema';
+import { PaymentTransaction, PaymentTransactionSchema } from '../schemas/payment-transaction.schema';
 import { CourseRegistration, CourseRegistrationSchema } from '../schemas/course-registration.schema';
 
 @Module({
@@ -24,7 +24,7 @@ import { CourseRegistration, CourseRegistrationSchema } from '../schemas/course-
             { name: ProgramMode.name, schema: ProgramModeSchema },
             { name: AcademicSession.name, schema: AcademicSessionSchema },
             { name: StudentAcademicSession.name, schema: StudentAcademicSessionSchema },
-            { name: StudentPayment.name, schema: StudentPaymentSchema },
+            { name: PaymentTransaction.name, schema: PaymentTransactionSchema },
             { name: CourseRegistration.name, schema: CourseRegistrationSchema },
         ]),
     ],

@@ -7,11 +7,13 @@ import {
     Body,
     Param,
     Query,
+    Res,
     UseGuards,
     HttpException,
     HttpStatus,
     Logger,
 } from "@nestjs/common";
+import { Response } from "express";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../guards/roles.guard";
 import { Roles } from "../decorators/roles.decorator";
@@ -91,6 +93,18 @@ export class UserManagementController {
                 HttpStatus.INTERNAL_SERVER_ERROR
             );
         }
+    }
+
+    @Get(":id/profile-image")
+    async getExternalResidentProfileImage(
+        @Param("id") id: string,
+        @Res() response: Response,
+    ) {
+        const image = await this.userManagementService.getExternalResidentProfileImage(id);
+        response.setHeader("Content-Type", image.contentType);
+        response.setHeader("Content-Disposition", 'inline; filename="profile-image"');
+        response.setHeader("Cache-Control", "private, max-age=300");
+        response.send(image.buffer);
     }
 
     @Get(":id")

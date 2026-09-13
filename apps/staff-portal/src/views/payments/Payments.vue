@@ -95,7 +95,7 @@ export default {
       await this.$swal.fire({
         icon: "error",
         title: "Access Denied",
-        text: "You do not have permission to view student payments.",
+        text: "You do not have permission to view payment transactions.",
         confirmButtonColor: "#1a5f5f",
       });
       return;
@@ -303,13 +303,13 @@ export default {
 
         const params = this.buildPaymentQueryParams();
 
-        logger.info("Loading student payments for management...", { params });
+        logger.info("Loading payment transactions for management...", { params });
 
-        const response = await apiService.getStudentPayments(params);
+        const response = await apiService.getPaymentTransactions(params);
 
         if (!response.success) {
           throw new Error(
-            response.message || "Failed to load student payments",
+            response.message || "Failed to load payment transactions",
           );
         }
 
@@ -318,11 +318,11 @@ export default {
         this.currentPage = response.data?.pagination?.currentPage || 1;
         this.apiTotalPages = response.data?.pagination?.totalPages || 1;
       } catch (error) {
-        logger.error("Failed to load student payments:", error);
+        logger.error("Failed to load payment transactions:", error);
         await this.$swal.fire({
           icon: "error",
           title: "Load Failed",
-          text: error.message || "Failed to load student payments.",
+          text: error.message || "Failed to load payment transactions.",
           confirmButtonColor: "#1a5f5f",
         });
       } finally {
@@ -338,13 +338,13 @@ export default {
           params.academicSessionId = this.filters.academicSessionId;
         }
 
-        logger.info("Loading student payment stats...", { params });
+        logger.info("Loading payment transaction stats...", { params });
 
-        const response = await apiService.getStudentPaymentsStats(params);
+        const response = await apiService.getPaymentTransactionsStats(params);
 
         if (!response.success) {
           throw new Error(
-            response.message || "Failed to load student payment stats",
+            response.message || "Failed to load payment transaction stats",
           );
         }
 
@@ -357,7 +357,7 @@ export default {
           pendingRemittance: Number(response.data?.pendingRemittance || 0),
         };
       } catch (error) {
-        logger.error("Failed to load student payment stats:", error);
+        logger.error("Failed to load payment transaction stats:", error);
         this.paymentStats = {
           totalRevenue: 0,
           awaitingVerification: 0,
@@ -755,7 +755,7 @@ export default {
       this.refreshRemittanceModalContent();
 
       try {
-        const response = await apiService.getStudentPaymentRemittanceRecords(
+        const response = await apiService.getPaymentTransactionRemittanceRecords(
           this.buildRemittanceQueryParams(nextState),
         );
 
@@ -840,7 +840,7 @@ export default {
         const payload = this.filters.academicSessionId
           ? { academicSessionId: this.filters.academicSessionId }
           : {};
-        const response = await apiService.syncStudentPaymentRemittance(payload);
+        const response = await apiService.syncPaymentTransactionRemittance(payload);
 
         if (!response.success) {
           throw new Error(
@@ -1009,7 +1009,7 @@ export default {
 
     buildExportFileName(extension) {
       const dateStamp = new Date().toISOString().slice(0, 10);
-      return `student-payments-${dateStamp}.${extension}`;
+      return `payment-transactions-${dateStamp}.${extension}`;
     },
 
     async fetchAllFilteredPaymentsForExport() {
@@ -1019,7 +1019,7 @@ export default {
       const allPayments = [];
 
       do {
-        const response = await apiService.getStudentPayments(
+        const response = await apiService.getPaymentTransactions(
           this.buildPaymentQueryParams({
             page,
             limit: exportPageSize,
@@ -1045,7 +1045,7 @@ export default {
       return allPayments;
     },
 
-    async exportStudentPayments(format) {
+    async exportPaymentTransactions(format) {
       if (this.exportingFormat) {
         return;
       }
@@ -1081,20 +1081,20 @@ export default {
           await this.$swal.fire({
             icon: "info",
             title: "Nothing to Export",
-            text: "No student payments match the current filters.",
+            text: "No payment transactions match the current filters.",
             confirmButtonColor: "#1a5f5f",
           });
           return;
         }
 
         if (format === "pdf") {
-          await apiService.exportStudentPaymentsPDF(exportParams);
+          await apiService.exportPaymentTransactionsPDF(exportParams);
 
           Swal.close();
           await this.$swal.fire({
             icon: "success",
             title: "PDF Export Ready",
-            text: "The filtered student payments PDF has been generated and downloaded.",
+            text: "The filtered payment transactions PDF has been generated and downloaded.",
             confirmButtonColor: "#1a5f5f",
           });
           return;
@@ -1159,12 +1159,12 @@ export default {
           return;
         }
       } catch (error) {
-        logger.error("Failed to export student payments:", error);
+        logger.error("Failed to export payment transactions:", error);
         Swal.close();
         await this.$swal.fire({
           icon: "error",
           title: "Export Failed",
-          text: error.message || "Failed to export student payments.",
+          text: error.message || "Failed to export payment transactions.",
           confirmButtonColor: "#1a5f5f",
         });
       } finally {
@@ -1179,12 +1179,13 @@ export default {
 
     getIdentifierLabel(payment) {
       if (payment.matriculationNumber) return "Matric No.";
+      if (payment.externalResidentNumber) return "Resident No.";
       if (payment.applicationNumber) return "Application No.";
       return "Identifier";
     },
 
     getIdentifierValue(payment) {
-      return payment.matriculationNumber || payment.applicationNumber || "N/A";
+      return payment.matriculationNumber || payment.externalResidentNumber || payment.applicationNumber || "N/A";
     },
 
     getReferenceDisplay(reference) {
@@ -1451,7 +1452,7 @@ export default {
     },
 
     canPreviewReceipt(payment) {
-      return !!payment?.receiptUrl;
+      return !!(payment?.receiptUrl || payment?.receiptKey);
       // && payment?.status !== "rejected"
     },
 
@@ -1459,7 +1460,7 @@ export default {
       return (
         this.isManualTransferPayment(payment) &&
         payment.status === "pending" &&
-        !!payment.receiptUrl
+        !!(payment.receiptKey || payment.receiptUrl)
       );
     },
 
@@ -1499,12 +1500,23 @@ export default {
       }
 
       const extension = this.getReceiptExtension(payment);
+      let receiptUrl = payment.receiptUrl;
+      let privateObjectUrl = null;
+      if (payment.receiptKey) {
+        try {
+          privateObjectUrl = URL.createObjectURL(await apiService.getPaymentReceiptBlob(payment._id));
+          receiptUrl = privateObjectUrl;
+        } catch (error) {
+          await Swal.fire('Receipt unavailable', error.message || 'Could not load the receipt.', 'error');
+          return;
+        }
+      }
       let html = "";
 
       if (["png", "jpg", "jpeg", "webp"].includes(extension)) {
-        html = `<img src="${payment.receiptUrl}" alt="Receipt preview" style="max-width:100%; max-height:70vh; border-radius:12px;" />`;
+        html = `<img src="${receiptUrl}" alt="Receipt preview" style="max-width:100%; max-height:70vh; border-radius:12px;" />`;
       } else if (extension === "pdf") {
-        html = `<iframe src="${payment.receiptUrl}" title="Receipt preview" style="width:100%; height:70vh; border:0; border-radius:12px;"></iframe>`;
+        html = `<iframe src="${receiptUrl}" title="Receipt preview" style="width:100%; height:70vh; border:0; border-radius:12px;"></iframe>`;
       } else {
         html = `
           <div class="text-center py-4">
@@ -1529,8 +1541,9 @@ export default {
       });
 
       if (result.isConfirmed) {
-        window.open(payment.receiptUrl, "_blank", "noopener,noreferrer");
+        window.open(receiptUrl, "_blank", "noopener,noreferrer");
       }
+      if (privateObjectUrl) setTimeout(() => URL.revokeObjectURL(privateObjectUrl), result.isConfirmed ? 60000 : 0);
     },
 
     async verifyManualTransferPayment(payment) {
@@ -1715,7 +1728,7 @@ export default {
 
         this.processingPaymentId = payment._id;
 
-        const response = await apiService.reconcileStudentPayment(payment._id);
+        const response = await apiService.reconcilePaymentTransaction(payment._id);
 
         if (!response.success) {
           throw new Error(response.message || "Failed to reconcile payment");
@@ -1776,7 +1789,7 @@ export default {
       <div>
         <h2 class="fw-bold text-staff-primary mb-1">Payments Management</h2>
         <p class="text-muted mb-0">
-          Search, filter, and manage student payment records across academic
+          Search, filter, and manage payment transactions across academic
           sessions and programmes.
         </p>
       </div>
@@ -1807,7 +1820,7 @@ export default {
                 href="#"
                 :class="{ disabled: !!exportingFormat || isLoading }"
                 :aria-disabled="!!exportingFormat || isLoading"
-                @click.prevent="exportStudentPayments('csv')"
+                @click.prevent="exportPaymentTransactions('csv')"
                 ><i class="bi bi-filetype-csv"></i> Export as CSV</a
               >
             </li>
@@ -1817,7 +1830,7 @@ export default {
                 href="#"
                 :class="{ disabled: !!exportingFormat || isLoading }"
                 :aria-disabled="!!exportingFormat || isLoading"
-                @click.prevent="exportStudentPayments('pdf')"
+                @click.prevent="exportPaymentTransactions('pdf')"
                 ><i class="bi bi-file-earmark-pdf"></i> Export as PDF</a
               >
             </li>
@@ -1965,7 +1978,7 @@ export default {
       <div class="spinner-border text-staff-primary" role="status">
         <span class="visually-hidden">Loading...</span>
       </div>
-      <p class="mt-3 text-muted mb-0">Loading student payment records...</p>
+      <p class="mt-3 text-muted mb-0">Loading payment transactions...</p>
     </div>
 
     <div class="card border-0 shadow-sm p-0">
@@ -2099,8 +2112,8 @@ export default {
             <p class="mb-0">
               {{
                 hasActiveFilters
-                  ? "No student payments match your current filters."
-                  : "Student payment records will appear here once payments are created."
+                  ? "No payment transactions match your current filters."
+                  : "Payment transactions will appear here once payments are created."
               }}
             </p>
           </div>

@@ -28,7 +28,7 @@ import { Student, StudentSchema } from '../schemas/student.schema';
 import { StudentAcademicSession, StudentAcademicSessionSchema } from '../schemas/student-academic-session.schema';
 import { StudentAcademicSummary, StudentAcademicSummarySchema } from '../schemas/student-academic-summary.schema';
 import { StudentFeeObligation, StudentFeeObligationSchema } from '../schemas/student-fee-obligation.schema';
-import { StudentPayment, StudentPaymentSchema } from '../schemas/student-payment.schema';
+import { PaymentTransaction, PaymentTransactionSchema } from '../schemas/payment-transaction.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { EmailService } from '../services/email.service';
 import { PortalActivityService } from '../services/portal-activity.service';
@@ -53,7 +53,7 @@ import { StudentFeeObligationService } from '../services/student-fee-obligation.
     { name: SessionControl.name, schema: SessionControlSchema }, { name: Staff.name, schema: StaffSchema },
     { name: Student.name, schema: StudentSchema }, { name: StudentAcademicSession.name, schema: StudentAcademicSessionSchema },
     { name: StudentAcademicSummary.name, schema: StudentAcademicSummarySchema }, { name: StudentFeeObligation.name, schema: StudentFeeObligationSchema },
-    { name: StudentPayment.name, schema: StudentPaymentSchema }, { name: User.name, schema: UserSchema },
+    { name: PaymentTransaction.name, schema: PaymentTransactionSchema }, { name: User.name, schema: UserSchema },
   ])],
   controllers: [ReportsController, PortalActivityController],
   providers: [ReportsService, ReportsAccessService, ReportExportService, ScheduledReportsService, StudentFeeObligationService, PortalActivityService, EmailService],

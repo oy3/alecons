@@ -26,7 +26,7 @@ export class StudentFeeObligation {
   @Prop({ required: true, enum: ['due', 'paid', 'waived', 'cancelled'], default: 'due', index: true })
   status: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'StudentPayment' })
+  @Prop({ type: Types.ObjectId, ref: 'PaymentTransaction' })
   settledByPaymentId?: Types.ObjectId;
 
   @Prop()

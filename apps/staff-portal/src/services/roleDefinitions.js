@@ -165,6 +165,16 @@ export const MODULE_DEFINITIONS = {
             { value: 'manage', label: 'Manage All' },
         ],
     },
+    accommodation: {
+        label: 'Accommodation',
+        permissions: [
+            { value: 'view', label: 'View Applications & Inventory' },
+            { value: 'configure', label: 'Configure Hostels' },
+            { value: 'allocate', label: 'Allocate & Transfer Bed Spaces' },
+            { value: 'export', label: 'Export' },
+            { value: 'manage', label: 'Manage All' },
+        ],
+    },
 }
 
 /**

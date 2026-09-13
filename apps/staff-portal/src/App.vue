@@ -113,6 +113,7 @@ export default {
     }
 
     onMounted(async () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
       await authStore.initialize()
       
       window.addEventListener('focus', handleWindowFocus)
@@ -151,17 +152,17 @@ export default {
 </script>
 
 <template>
-  <div class="d-flex vh-100 bg-light">
+  <div class="staff-shell d-flex bg-light">
     <!-- Sidebar (Desktop) -->
     <Sidebar v-if="showLayout" />
 
     <!-- Main Content -->
-    <main class="staff-main flex-grow-1 d-flex flex-column min-vh-100">
+    <main class="staff-main flex-grow-1 d-flex flex-column">
       <!-- Navbar -->
       <Navbar v-if="showLayout" />
       
       <!-- Content Area -->
-      <div class="flex-grow-1 overflow-auto p-0">
+      <div class="staff-content flex-grow-1 overflow-auto p-0">
         <RouterView v-slot="{ Component }">
           <div class="fade-in">
             <component :is="Component" />
@@ -176,8 +177,29 @@ export default {
 </template>
 
 <style scoped>
+:global(html),
+:global(body),
+:global(#app) {
+  height: 100%;
+  overflow: hidden;
+}
+
+.staff-shell {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 .staff-main {
+  height: 100%;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.staff-content {
+  min-height: 0;
+  overscroll-behavior: contain;
 }
 
 .fade-in {

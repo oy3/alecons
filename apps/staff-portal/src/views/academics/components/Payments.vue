@@ -250,6 +250,7 @@ export default {
                 <option value="student">Student</option>
                 <option value="academic_staff">Academic Staff</option>
                 <option value="admin_staff">Admin Staff</option>
+                <option value="external_resident">External Resident</option>
               </select>
               <div class="form-text">Hold Ctrl/Cmd to select multiple audiences</div>
             </div>
@@ -415,6 +416,7 @@ export default {
                 <option value="student" ${payment.targetAudience?.includes("student") ? "selected" : ""}>Student</option>
                 <option value="academic_staff" ${payment.targetAudience?.includes("academic_staff") ? "selected" : ""}>Academic Staff</option>
                 <option value="admin_staff" ${payment.targetAudience?.includes("admin_staff") ? "selected" : ""}>Admin Staff</option>
+                <option value="external_resident" ${payment.targetAudience?.includes("external_resident") ? "selected" : ""}>External Resident</option>
               </select>
               <div class="form-text">Hold Ctrl/Cmd to select multiple audiences</div>
             </div>
@@ -686,7 +688,7 @@ export default {
             <div class="alert alert-light border small mb-3">
               <div class="fw-semibold mb-2">Example values</div>
               <div><strong>Main Paystack account:</strong> Title = Main Revenue Account, Code = MAIN_PAYSTACK, Channel = Paystack, Provider = Main</div>
-              <div><strong>Accommodation Paystack subaccount:</strong> Title = Accommodation Account, Code = ACCOMMODATION_PAYSTACK, Channel = Paystack, Provider = Subaccount, Paystack Subaccount Code = ACCT_8f3sdfk0kdl</div>
+              <div><strong>Accommodation Paystack subaccount:</strong> Title = Accommodation Account, Code = ACCOMMODATION_PAYSTACK, Channel = Paystack, Provider = Subaccount, Paystack Subaccount Code = ACCT_...</div>
               <div><strong>Manual transfer account:</strong> Title = Accommodation Manual Account, Code = ACCOMMODATION_MANUAL, Channel = Manual Transfer, Provider = Bank Account, Account Name = Alecons Accommodation, Bank Name = Wema Bank, Account Number = 0123456789</div>
             </div>
             <div class="row g-3 text-start">
@@ -731,7 +733,7 @@ export default {
             </div>
             <div class="col-md-6">
               <label for="swal-destination-subaccount" class="form-label">Paystack Subaccount Code</label>
-              <input id="swal-destination-subaccount" class="form-control" value="${account?.paystackSubaccountCode || ""}" placeholder="e.g. ACCT_8f3sdfk0kdl">
+              <input id="swal-destination-subaccount" class="form-control" value="${account?.paystackSubaccountCode || ""}" placeholder="e.g. ACCT_...">
               <div class="form-text">Required only when Channel = Paystack and Provider Type = Subaccount.</div>
             </div>
             <div class="col-12">
@@ -932,6 +934,7 @@ export default {
         student: "Student",
         academic_staff: "Academic Staff",
         admin_staff: "Admin Staff",
+        external_resident: "External Resident",
       };
       return labels[audience] || audience;
     },

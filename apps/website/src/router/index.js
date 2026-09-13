@@ -93,6 +93,16 @@ export const routes = [
     },
   },
   {
+    path: "/accommodation/external",
+    name: "ExternalAccommodation",
+    component: () => import("../views/ExternalAccommodation.vue"),
+    meta: {
+      title: "External Accommodation Application - ALECONS",
+      description: "Apply for ALECONS external pre-degree accommodation and securely continue an existing application.",
+      noindex: true,
+    },
+  },
+  {
     path: "/privacy-policy",
     name: "PrivacyPolicy",
     component: () => import("../views/PrivacyPolicy.vue"),

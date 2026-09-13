@@ -30,6 +30,7 @@ export default {
       showUserModal: false,
       selectedUser: null,
       isEditMode: false,
+      profileImageObjectUrls: {},
 
       userForm: {
         firstName: "",
@@ -91,6 +92,9 @@ export default {
     await this.loadUsers();
     await this.loadRoles();
   },
+  beforeUnmount() {
+    this.releaseProfileImageObjectUrls();
+  },
   computed: {
     roleOptions() {
       return [
@@ -142,9 +146,11 @@ export default {
         const response = await apiService.getUsers(params);
 
         if (response.success) {
+          this.releaseProfileImageObjectUrls();
           this.users = response.data.users;
           this.totalUsers = response.data.pagination.total;
           this.totalPages = response.data.pagination.pages;
+          await this.loadPrivateProfileImages();
           logger.info("Users loaded successfully");
         }
       } catch (error) {
@@ -157,6 +163,30 @@ export default {
       } finally {
         this.isLoading = false;
       }
+    },
+
+    releaseProfileImageObjectUrls() {
+      Object.values(this.profileImageObjectUrls).forEach((url) => URL.revokeObjectURL(url));
+      this.profileImageObjectUrls = {};
+    },
+
+    async loadPrivateProfileImages() {
+      const externalUsers = this.users.filter(
+        (user) => user.role === "external" && user.hasPrivateProfileImage,
+      );
+      await Promise.all(externalUsers.map(async (user) => {
+        try {
+          const blob = await apiService.getUserProfileImageBlob(user._id);
+          const objectUrl = URL.createObjectURL(blob);
+          this.profileImageObjectUrls[user._id] = objectUrl;
+          user.profileImageUrl = objectUrl;
+        } catch (error) {
+          logger.warn("Could not load external resident profile image", {
+            userId: user._id,
+            error: error.message,
+          });
+        }
+      }));
     },
 
     async loadRoles() {
@@ -194,7 +224,7 @@ export default {
       const roleClasses = {
         admin: "bg-danger text-white",
         staff: "bg-info text-white",
-        student: "bg-secondary text-white",
+        student: "bg-success text-white",
         applicant: "bg-warning text-dark",
       };
       return roleClasses[role] || "bg-secondary text-white";
@@ -243,7 +273,7 @@ export default {
     },
 
     hasStudentProfileImage(user) {
-      return user?.role === "student" && !!user?.profileImageUrl;
+      return ["student", "external"].includes(user?.role) && !!user?.profileImageUrl;
     },
 
     viewUser(user) {
@@ -256,8 +286,7 @@ export default {
             <img
               src="${user.profileImageUrl}"
               alt="${user.firstName} ${user.lastName}"
-              class="img-thumbnail border"
-              style="width: 88px; height: 88px; object-fit: cover"
+              class="user-profile-image img-thumbnail rounded-circle border"
             />
           </div>
         `
@@ -294,7 +323,14 @@ export default {
             <div class="col-sm-8">${user.staffId}</div>
           </div>
           `
-          : user.matriculationNumber
+          : user.externalResidentNumber
+            ? `
+          <div class="row mb-3">
+            <div class="col-sm-4"><strong>External Resident No:</strong></div>
+            <div class="col-sm-8">${user.externalResidentNumber}</div>
+          </div>
+          `
+            : user.matriculationNumber
             ? `
           <div class="row mb-3">
             <div class="col-sm-4"><strong>Matric No:</strong></div>
@@ -1424,10 +1460,9 @@ export default {
                   <td>
                     <div class="d-flex align-items-center">
                       <div
-                        class="bg-staff-light rounded-circle overflow-hidden d-flex align-items-center justify-content-center me-2"
-                        style="width: 40px; height: 40px">
+                        class="user-avatar bg-staff-light rounded-circle overflow-hidden d-flex align-items-center justify-content-center flex-shrink-0 me-2">
                         <img v-if="hasStudentProfileImage(user)" :src="user.profileImageUrl"
-                          :alt="`${user.firstName} ${user.lastName}`" class="w-100 h-100" style="object-fit: cover" />
+                          :alt="`${user.firstName} ${user.lastName}`" class="user-avatar-image rounded-circle" />
                         <i v-else class="bi bi-person text-staff-primary"></i>
                       </div>
                       <div>
@@ -1437,6 +1472,9 @@ export default {
                         </div>
                         <div class="small text-muted" v-if="user.staffId">
                           Staff ID: {{ user.staffId }}
+                        </div>
+                        <div class="small text-muted" v-else-if="user.externalResidentNumber">
+                          External Resident No: {{ user.externalResidentNumber }}
                         </div>
                         <div class="small text-muted" v-else-if="user.matriculationNumber">
                           Matric No: {{ user.matriculationNumber }}
@@ -1844,6 +1882,33 @@ export default {
 
 .contact-details {
   line-height: 1.35;
+}
+
+.user-avatar {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  aspect-ratio: 1;
+}
+
+.user-avatar-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+:global(.user-details-modal .user-profile-image) {
+  display: inline-block;
+  width: 88px;
+  min-width: 88px;
+  height: 88px;
+  min-height: 88px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  object-position: center;
 }
 
 @keyframes modalFadeIn {

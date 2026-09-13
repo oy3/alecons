@@ -187,13 +187,13 @@ export default {
         </router-link>
 
         <router-link
-          to="/tenancy-agreement"
+          to="/accommodation"
           class="nav-link text-white py-3 acon-mobile-link rounded mb-2"
           active-class="active"
           @click="closeOffcanvas"
         >
-          <i class="bi bi-file-text h5 me-3 mb-0"></i>
-          <span>Tenancy Agreement</span>
+          <i class="bi bi-building h5 me-3 mb-0"></i>
+          <span>Accommodation</span>
         </router-link>
 
         <router-link

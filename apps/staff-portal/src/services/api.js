@@ -67,7 +67,7 @@ class StaffApiService {
                 method: config.method,
                 url,
                 success: data.success !== false,
-                hasData: !!data.data
+                hasData: !!data.data,
             })
 
             return data
@@ -75,7 +75,7 @@ class StaffApiService {
             logger.error('Staff API request failed:', {
                 method: config.method,
                 url,
-                error: error.message
+                error: error.message,
             })
 
             if (error.message.includes('fetch')) {
@@ -212,7 +212,10 @@ class StaffApiService {
                 fileName,
             })
 
-            return { success: true, message: 'Application details exported successfully' }
+            return {
+                success: true,
+                message: 'Application details exported successfully',
+            }
         } catch (error) {
             logger.error('Application details export PDF failed:', {
                 id,
@@ -286,9 +289,10 @@ class StaffApiService {
         })
     }
 
-    async completeScreening(id) {
+    async completeScreening(id, completionData = {}) {
         return this.makeRequest(`/staff/applications/${id}/complete-screening`, {
             method: 'PATCH',
+            body: JSON.stringify(completionData),
         })
     }
 
@@ -360,7 +364,10 @@ class StaffApiService {
     }
 
     async getAnalyticsReport(type, filters = {}, refresh = false) {
-        const params = new URLSearchParams({ ...filters, ...(refresh ? { refresh: 'true' } : {}) })
+        const params = new URLSearchParams({
+            ...filters,
+            ...(refresh ? { refresh: 'true' } : {}),
+        })
         return this.makeRequest(`/staff/reports/${type}?${params.toString()}`)
     }
 
@@ -374,11 +381,17 @@ class StaffApiService {
     }
 
     async createReportSchedule(payload) {
-        return this.makeRequest('/staff/reports/schedules', { method: 'POST', body: JSON.stringify(payload) })
+        return this.makeRequest('/staff/reports/schedules', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        })
     }
 
     async updateReportSchedule(id, payload) {
-        return this.makeRequest(`/staff/reports/schedules/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        return this.makeRequest(`/staff/reports/schedules/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+        })
     }
 
     async getReportExportHistory() {
@@ -390,13 +403,18 @@ class StaffApiService {
     }
 
     async syncAllFeeObligations() {
-        return this.makeRequest('/staff/reports/fee-obligations/sync-all', { method: 'POST' })
+        return this.makeRequest('/staff/reports/fee-obligations/sync-all', {
+            method: 'POST',
+        })
     }
 
     async exportAnalyticsReport(payload) {
         const response = await fetch(`${this.baseURL}/staff/reports/export`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
+            headers: {
+                'Content-Type': 'application/json',
+                ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+            },
             body: JSON.stringify(payload),
         })
         if (!response.ok) {
@@ -472,6 +490,13 @@ class StaffApiService {
         return this.makeRequest('/admin/maintenance/migrate-user-demographics', {
             method: 'POST',
             body: JSON.stringify({ apply }),
+        })
+    }
+
+    async migrateQuestionBank({ apply = false, finalize = false } = {}) {
+        return this.makeRequest('/admin/maintenance/migrate-question-bank', {
+            method: 'POST',
+            body: JSON.stringify({ apply, finalize }),
         })
     }
 
@@ -574,17 +599,15 @@ class StaffApiService {
         })
     }
 
-    // Student Payments
-    async getStudentPayments(filters = {}) {
+    // Payment Transactions
+    async getPaymentTransactions(filters = {}) {
         const queryParams = new URLSearchParams(filters).toString()
-        return this.makeRequest(`/staff/payments/student-payments${queryParams ? `?${queryParams}` : ''}`)
+        return this.makeRequest(`/staff/payments/payment-transactions${queryParams ? `?${queryParams}` : ''}`)
     }
 
-    async exportStudentPaymentsPDF(filters = {}) {
+    async exportPaymentTransactionsPDF(filters = {}) {
         const queryParams = new URLSearchParams(filters).toString()
-        const url = queryParams
-            ? `${this.baseURL}/staff/payments/student-payments/export-pdf?${queryParams}`
-            : `${this.baseURL}/staff/payments/student-payments/export-pdf`
+        const url = queryParams ? `${this.baseURL}/staff/payments/payment-transactions/export-pdf?${queryParams}` : `${this.baseURL}/staff/payments/payment-transactions/export-pdf`
 
         const config = {
             method: 'GET',
@@ -624,7 +647,7 @@ class StaffApiService {
 
             const contentDisposition = response.headers.get('content-disposition') || ''
             const fileNameMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i)
-            const fileName = decodeURIComponent(fileNameMatch?.[1] || fileNameMatch?.[2] || 'student-payments.pdf')
+            const fileName = decodeURIComponent(fileNameMatch?.[1] || fileNameMatch?.[2] || 'payment-transactions.pdf')
 
             const downloadUrl = window.URL.createObjectURL(blob)
             const link = document.createElement('a')
@@ -640,7 +663,10 @@ class StaffApiService {
                 fileName,
             })
 
-            return { success: true, message: 'Student payments PDF exported successfully' }
+            return {
+                success: true,
+                message: 'Student payments PDF exported successfully',
+            }
         } catch (error) {
             logger.error('Student payments PDF export failed:', {
                 error: error.message,
@@ -649,46 +675,46 @@ class StaffApiService {
         }
     }
 
-    // Student Payments Statistics
-    async getStudentPaymentsStats(filters = {}) {
+    // Payment Transactions Statistics
+    async getPaymentTransactionsStats(filters = {}) {
         const queryParams = new URLSearchParams(filters).toString()
-        return this.makeRequest(`/staff/payments/student-payments/stats${queryParams ? `?${queryParams}` : ''}`)
+        return this.makeRequest(`/staff/payments/payment-transactions/stats${queryParams ? `?${queryParams}` : ''}`)
     }
 
-    async syncStudentPaymentRemittance(payload = {}) {
+    async syncPaymentTransactionRemittance(payload = {}) {
         return this.makeRequest('/staff/payments/remittance/sync', {
             method: 'POST',
             body: JSON.stringify(payload),
         })
     }
 
-    async getStudentPaymentRemittanceRecords(filters = {}) {
+    async getPaymentTransactionRemittanceRecords(filters = {}) {
         const queryParams = new URLSearchParams(filters).toString()
         return this.makeRequest(`/staff/payments/remittance-records${queryParams ? `?${queryParams}` : ''}`)
     }
 
     async verifyManualTransferPayment(id, data = {}) {
-        return this.makeRequest(`/staff/payments/student-payments/${id}/verify-manual`, {
+        return this.makeRequest(`/staff/payments/payment-transactions/${id}/verify-manual`, {
             method: 'PATCH',
             body: JSON.stringify(data),
         })
     }
 
     async rejectManualTransferPayment(id, data = {}) {
-        return this.makeRequest(`/staff/payments/student-payments/${id}/reject-manual`, {
+        return this.makeRequest(`/staff/payments/payment-transactions/${id}/reject-manual`, {
             method: 'PATCH',
             body: JSON.stringify(data),
         })
     }
 
-    async reconcileStudentPayment(id) {
-        return this.makeRequest(`/staff/payments/student-payments/${id}/reconcile`, {
+    async reconcilePaymentTransaction(id) {
+        return this.makeRequest(`/staff/payments/payment-transactions/${id}/reconcile`, {
             method: 'PATCH',
         })
     }
 
     async reconcilePendingPaystackPayments(payload = {}) {
-        return this.makeRequest('/staff/payments/student-payments/reconcile-pending', {
+        return this.makeRequest('/staff/payments/payment-transactions/reconcile-pending', {
             method: 'POST',
             body: JSON.stringify(payload),
         })
@@ -800,7 +826,7 @@ class StaffApiService {
                     acc[key] = String(value)
                 }
                 return acc
-            }, {})
+            }, {}),
         ).toString()
         return this.makeRequest(`/staff/course-registrations${queryString ? `?${queryString}` : ''}`)
     }
@@ -995,6 +1021,12 @@ class StaffApiService {
         })
     }
 
+    async scheduleExam(examId) {
+        return this.makeRequest(`/exams/${examId}/schedule`, {
+            method: 'POST',
+        })
+    }
+
     async deleteExam(examId) {
         return this.makeRequest(`/exams/${examId}`, {
             method: 'DELETE',
@@ -1086,7 +1118,7 @@ class StaffApiService {
     async regradeUserExam(examId, userId) {
         return this.makeRequest(`/exams/${examId}/regrade-user`, {
             method: 'POST',
-            body: JSON.stringify({ userId })
+            body: JSON.stringify({ userId }),
         })
     }
 
@@ -1097,7 +1129,7 @@ class StaffApiService {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-            }
+            },
         }
 
         if (this.token) {
@@ -1150,14 +1182,14 @@ class StaffApiService {
             logger.info('PDF download successful:', {
                 resultId,
                 fileSize: blob.size,
-                blobType: blob.type
+                blobType: blob.type,
             })
 
             return { success: true, message: 'PDF downloaded successfully' }
         } catch (error) {
             logger.error('PDF download failed:', {
                 resultId,
-                error: error.message
+                error: error.message,
             })
             throw error
         }
@@ -1165,15 +1197,13 @@ class StaffApiService {
 
     async exportExamResultsPDF(examId, params = {}) {
         const queryString = new URLSearchParams(params).toString()
-        const url = queryString ?
-            `${this.baseURL}/exams/${examId}/export-results-pdf?${queryString}` :
-            `${this.baseURL}/exams/${examId}/export-results-pdf`
+        const url = queryString ? `${this.baseURL}/exams/${examId}/export-results-pdf?${queryString}` : `${this.baseURL}/exams/${examId}/export-results-pdf`
 
         const config = {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-            }
+            },
         }
 
         if (this.token) {
@@ -1226,14 +1256,14 @@ class StaffApiService {
             logger.info('Export PDF download successful:', {
                 examId,
                 fileSize: blob.size,
-                blobType: blob.type
+                blobType: blob.type,
             })
 
             return { success: true, message: 'Export PDF downloaded successfully' }
         } catch (error) {
             logger.error('Export PDF download failed:', {
                 examId,
-                error: error.message
+                error: error.message,
             })
             throw error
         }
@@ -1281,7 +1311,7 @@ class StaffApiService {
             body: formData,
             headers: {
                 // Remove Content-Type to let browser set it with boundary for FormData
-            }
+            },
         })
     }
 
@@ -1295,7 +1325,7 @@ class StaffApiService {
             body: formData,
             headers: {
                 // Remove Content-Type to let browser set it with boundary for FormData
-            }
+            },
         })
     }
 
@@ -1304,11 +1334,59 @@ class StaffApiService {
             method: 'POST',
             body: JSON.stringify({
                 examId,
-                questions
+                questions,
             }),
             headers: {
-                'Content-Type': 'application/json'
-            }
+                'Content-Type': 'application/json',
+            },
+        })
+    }
+
+    async getQuestionBank(params = {}) {
+        const query = new URLSearchParams(
+            Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
+        ).toString()
+        return this.makeRequest(`/question-bank${query ? `?${query}` : ''}`)
+    }
+
+    async getQuestionBankSummary() {
+        return this.makeRequest('/question-bank/summary')
+    }
+
+    async getQuestionBankFacets() {
+        return this.makeRequest('/question-bank/facets')
+    }
+
+    async createQuestionBankItem(data) {
+        return this.makeRequest('/question-bank', { method: 'POST', body: JSON.stringify(data) })
+    }
+
+    async bulkCreateQuestionBankItems(questions) {
+        return this.makeRequest('/question-bank/bulk', {
+            method: 'POST',
+            body: JSON.stringify({ questions }),
+        })
+    }
+
+    async updateQuestionBankItem(id, data) {
+        return this.makeRequest(`/question-bank/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+    }
+
+    async setQuestionBankStatus(ids, status) {
+        return this.makeRequest('/question-bank/status', {
+            method: 'POST',
+            body: JSON.stringify({ ids, status }),
+        })
+    }
+
+    async getQuestionBankUsage(id) {
+        return this.makeRequest(`/question-bank/${id}/usage`)
+    }
+
+    async reuseQuestionBankItems(examId, questionBankItemIds) {
+        return this.makeRequest(`/question-bank/reuse/${examId}`, {
+            method: 'POST',
+            body: JSON.stringify({ questionBankItemIds }),
         })
     }
 
@@ -1365,7 +1443,7 @@ class StaffApiService {
         // Use unified endpoint - admin is just staff with admin role
         const unifiedData = {
             ...userData,
-            type: 'admin'
+            type: 'admin',
         }
         return this.post('/staff/users', unifiedData)
     }
@@ -1431,11 +1509,24 @@ class StaffApiService {
     }
 
     // Academic Results
-    async getAcademicResultGradeScales() { return this.makeRequest('/staff/academic-results/grade-scales') }
-    async createAcademicResultGradeScale(payload) { return this.post('/staff/academic-results/grade-scales', payload) }
-    async updateAcademicResultGradeScaleStatus(id, status) { return this.patch(`/staff/academic-results/grade-scales/${id}/status`, { status }) }
-    async getAcademicResultLecturerCourses(filters = {}) { const params = new URLSearchParams(filters); return this.makeRequest(`/staff/academic-results/lecturer-courses${params.toString() ? `?${params}` : ''}`) }
-    async getAcademicResultsQueue(queue) { return this.makeRequest(`/staff/academic-results/queues/${queue}`) }
+    async getAcademicResultGradeScales() {
+        return this.makeRequest('/staff/academic-results/grade-scales')
+    }
+    async createAcademicResultGradeScale(payload) {
+        return this.post('/staff/academic-results/grade-scales', payload)
+    }
+    async updateAcademicResultGradeScaleStatus(id, status) {
+        return this.patch(`/staff/academic-results/grade-scales/${id}/status`, {
+            status,
+        })
+    }
+    async getAcademicResultLecturerCourses(filters = {}) {
+        const params = new URLSearchParams(filters)
+        return this.makeRequest(`/staff/academic-results/lecturer-courses${params.toString() ? `?${params}` : ''}`)
+    }
+    async getAcademicResultsQueue(queue) {
+        return this.makeRequest(`/staff/academic-results/queues/${queue}`)
+    }
     academicResultContext(context) {
         return {
             programCourseId: context.programCourseId,
@@ -1444,17 +1535,45 @@ class StaffApiService {
             ...(context.departmentId ? { departmentId: context.departmentId?._id || context.departmentId } : {}),
         }
     }
-    async getAcademicResultContextReport(context) { return this.post('/staff/academic-results/context/report', this.academicResultContext(context)) }
-    async getAcademicResultsReadiness() { return this.makeRequest('/staff/academic-results/readiness') }
-    async getAcademicResultScoreSheet(programCourseId, attemptType = 'initial') { return this.makeRequest(`/staff/academic-results/program-courses/${programCourseId}/score-sheet?attemptType=${encodeURIComponent(attemptType)}`) }
-    async saveAcademicResultScores(programCourseId, payload) { return this.post(`/staff/academic-results/program-courses/${programCourseId}/scores`, payload) }
-    async submitAcademicResultsToHod(programCourseId, attemptType = 'initial') { return this.post(`/staff/academic-results/program-courses/${programCourseId}/submit-hod?attemptType=${encodeURIComponent(attemptType)}`) }
-    async reviewAcademicResultsAsHod(context, payload) { return this.post('/staff/academic-results/context/hod-review', { context: this.academicResultContext(context), ...payload }) }
-    async submitAcademicResultsToProvost(context) { return this.post('/staff/academic-results/context/submit-provost', this.academicResultContext(context)) }
-    async reviewAcademicResultsAsProvost(context, payload) { return this.post('/staff/academic-results/context/provost-review', { context: this.academicResultContext(context), ...payload }) }
-    async publishAcademicResults(context) { return this.post('/staff/academic-results/context/publish', this.academicResultContext(context)) }
-    async createAcademicResultAttempt(payload) { return this.post('/staff/academic-results/attempts', payload) }
-    async amendPublishedAcademicResult(resultId, payload) { return this.post(`/staff/academic-results/results/${resultId}/amend`, payload) }
+    async getAcademicResultContextReport(context) {
+        return this.post('/staff/academic-results/context/report', this.academicResultContext(context))
+    }
+    async getAcademicResultsReadiness() {
+        return this.makeRequest('/staff/academic-results/readiness')
+    }
+    async getAcademicResultScoreSheet(programCourseId, attemptType = 'initial') {
+        return this.makeRequest(`/staff/academic-results/program-courses/${programCourseId}/score-sheet?attemptType=${encodeURIComponent(attemptType)}`)
+    }
+    async saveAcademicResultScores(programCourseId, payload) {
+        return this.post(`/staff/academic-results/program-courses/${programCourseId}/scores`, payload)
+    }
+    async submitAcademicResultsToHod(programCourseId, attemptType = 'initial') {
+        return this.post(`/staff/academic-results/program-courses/${programCourseId}/submit-hod?attemptType=${encodeURIComponent(attemptType)}`)
+    }
+    async reviewAcademicResultsAsHod(context, payload) {
+        return this.post('/staff/academic-results/context/hod-review', {
+            context: this.academicResultContext(context),
+            ...payload,
+        })
+    }
+    async submitAcademicResultsToProvost(context) {
+        return this.post('/staff/academic-results/context/submit-provost', this.academicResultContext(context))
+    }
+    async reviewAcademicResultsAsProvost(context, payload) {
+        return this.post('/staff/academic-results/context/provost-review', {
+            context: this.academicResultContext(context),
+            ...payload,
+        })
+    }
+    async publishAcademicResults(context) {
+        return this.post('/staff/academic-results/context/publish', this.academicResultContext(context))
+    }
+    async createAcademicResultAttempt(payload) {
+        return this.post('/staff/academic-results/attempts', payload)
+    }
+    async amendPublishedAcademicResult(resultId, payload) {
+        return this.post(`/staff/academic-results/results/${resultId}/amend`, payload)
+    }
 
     async getStaffStudent(id) {
         return this.makeRequest(`/staff/students/${id}`)
@@ -1538,35 +1657,73 @@ class StaffApiService {
         const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
         return this.makeRequest(`/staff/notifications${query ? `?${query}` : ''}`)
     }
-    async getNotificationStats() { return this.makeRequest('/staff/notifications/stats') }
-    async getNotification(id) { return this.makeRequest(`/staff/notifications/${id}`) }
-    async createNotification(payload) { return this.post('/staff/notifications', payload) }
-    async updateNotification(id, payload) { return this.patch(`/staff/notifications/${id}`, payload) }
-    async deleteNotification(id) { return this.delete(`/staff/notifications/${id}`) }
-    async previewNotificationAudience(audience) { return this.post('/staff/notifications/audience-preview', { audience }) }
+    async getNotificationStats() {
+        return this.makeRequest('/staff/notifications/stats')
+    }
+    async getNotification(id) {
+        return this.makeRequest(`/staff/notifications/${id}`)
+    }
+    async createNotification(payload) {
+        return this.post('/staff/notifications', payload)
+    }
+    async updateNotification(id, payload) {
+        return this.patch(`/staff/notifications/${id}`, payload)
+    }
+    async deleteNotification(id) {
+        return this.delete(`/staff/notifications/${id}`)
+    }
+    async previewNotificationAudience(audience) {
+        return this.post('/staff/notifications/audience-preview', { audience })
+    }
     async searchNotificationRecipients(params = {}) {
         const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
         return this.makeRequest(`/staff/notifications/recipient-search${query ? `?${query}` : ''}`)
     }
-    async publishNotification(id) { return this.post(`/staff/notifications/${id}/publish`) }
-    async duplicateNotification(id) { return this.post(`/staff/notifications/${id}/duplicate`) }
-    async scheduleNotification(id, scheduledAt) { return this.post(`/staff/notifications/${id}/schedule`, { scheduledAt }) }
-    async cancelNotification(id, comment = '') { return this.post(`/staff/notifications/${id}/cancel`, { comment }) }
-    async archiveNotification(id, comment = '') { return this.patch(`/staff/notifications/${id}/archive`, { comment }) }
+    async publishNotification(id) {
+        return this.post(`/staff/notifications/${id}/publish`)
+    }
+    async duplicateNotification(id) {
+        return this.post(`/staff/notifications/${id}/duplicate`)
+    }
+    async scheduleNotification(id, scheduledAt) {
+        return this.post(`/staff/notifications/${id}/schedule`, { scheduledAt })
+    }
+    async cancelNotification(id, comment = '') {
+        return this.post(`/staff/notifications/${id}/cancel`, { comment })
+    }
+    async archiveNotification(id, comment = '') {
+        return this.patch(`/staff/notifications/${id}/archive`, { comment })
+    }
 
     // Contact Enquiries
     async getContactEnquiries(params = {}) {
         const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
         return this.makeRequest(`/staff/enquiries${query ? `?${query}` : ''}`)
     }
-    async getContactEnquiryStats() { return this.makeRequest('/staff/enquiries/stats') }
-    async getContactEnquiry(id) { return this.makeRequest(`/staff/enquiries/${id}`) }
-    async getContactEnquiryAssignees(search = '') { return this.makeRequest(`/staff/enquiries/assignees${search ? `?search=${encodeURIComponent(search)}` : ''}`) }
-    async assignContactEnquiry(id, assignedToUserId) { return this.post(`/staff/enquiries/${id}/assign`, { assignedToUserId }) }
-    async updateContactEnquiry(id, payload) { return this.patch(`/staff/enquiries/${id}`, payload) }
-    async addContactEnquiryNote(id, body) { return this.post(`/staff/enquiries/${id}/notes`, { body }) }
-    async respondToContactEnquiry(id, body) { return this.post(`/staff/enquiries/${id}/responses`, { body }) }
-    async retryContactEnquiryResponse(id, messageId) { return this.post(`/staff/enquiries/${id}/responses/${messageId}/retry`) }
+    async getContactEnquiryStats() {
+        return this.makeRequest('/staff/enquiries/stats')
+    }
+    async getContactEnquiry(id) {
+        return this.makeRequest(`/staff/enquiries/${id}`)
+    }
+    async getContactEnquiryAssignees(search = '') {
+        return this.makeRequest(`/staff/enquiries/assignees${search ? `?search=${encodeURIComponent(search)}` : ''}`)
+    }
+    async assignContactEnquiry(id, assignedToUserId) {
+        return this.post(`/staff/enquiries/${id}/assign`, { assignedToUserId })
+    }
+    async updateContactEnquiry(id, payload) {
+        return this.patch(`/staff/enquiries/${id}`, payload)
+    }
+    async addContactEnquiryNote(id, body) {
+        return this.post(`/staff/enquiries/${id}/notes`, { body })
+    }
+    async respondToContactEnquiry(id, body) {
+        return this.post(`/staff/enquiries/${id}/responses`, { body })
+    }
+    async retryContactEnquiryResponse(id, messageId) {
+        return this.post(`/staff/enquiries/${id}/responses/${messageId}/retry`)
+    }
     async exportContactEnquiries(params = {}) {
         const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
         const response = await fetch(`${this.baseURL}/staff/enquiries/export${query ? `?${query}` : ''}`, {
@@ -1585,14 +1742,81 @@ class StaffApiService {
         URL.revokeObjectURL(url)
     }
 
+    // Accommodation Management
+    async getAccommodationApplications(params = {}) {
+        const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
+        return this.makeRequest(`/staff/accommodation/applications${query ? `?${query}` : ''}`)
+    }
+    async getAccommodationInventory(sessionId = '') {
+        return this.makeRequest(`/staff/accommodation/inventory${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''}`)
+    }
+    async createHostel(payload) {
+        return this.post('/staff/accommodation/hostels', payload)
+    }
+    async createHostelBlock(payload) {
+        return this.post('/staff/accommodation/blocks', payload)
+    }
+    async createHostelRoom(payload) {
+        return this.post('/staff/accommodation/rooms', payload)
+    }
+    async updateHostel(id, payload) {
+        return this.patch(`/staff/accommodation/hostels/${id}`, payload)
+    }
+    async updateHostelBlock(id, payload) {
+        return this.patch(`/staff/accommodation/blocks/${id}`, payload)
+    }
+    async updateHostelRoom(id, payload) {
+        return this.patch(`/staff/accommodation/rooms/${id}`, payload)
+    }
+    async updateAccommodationInventoryStatus(type, id, active) {
+        return this.post(`/staff/accommodation/${type}s/${id}/status`, { active })
+    }
+    async allocateAccommodation(applicationId, payload) {
+        return this.post(`/staff/accommodation/applications/${applicationId}/allocate`, payload)
+    }
+    async retryAccommodationAllocations() {
+        return this.post('/staff/accommodation/allocations/retry')
+    }
+    async getAccommodationAudit(applicationId) {
+        return this.makeRequest(`/staff/accommodation/applications/${applicationId}/audit`)
+    }
+
+    async getUserProfileImageBlob(userId) {
+        const response = await fetch(`${this.baseURL}/staff/users/${userId}/profile-image`, {
+            headers: { Authorization: `Bearer ${this.token}` },
+        })
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}))
+            throw new Error(error.message || 'Could not load profile image')
+        }
+        return response.blob()
+    }
+
+    async getPaymentReceiptBlob(paymentTransactionId) {
+        const response = await fetch(`${this.baseURL}/staff/payments/payment-transactions/${paymentTransactionId}/receipt`, {
+            headers: { Authorization: `Bearer ${this.token}` },
+        })
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}))
+            throw new Error(error.message || 'Could not load payment receipt')
+        }
+        return response.blob()
+    }
+
     // Current user's notification inbox
     async getNotificationInbox(params = {}) {
         const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
         return this.makeRequest(`/notifications${query ? `?${query}` : ''}`)
     }
-    async getNotificationUnreadCount() { return this.makeRequest('/notifications/unread-count') }
-    async markNotificationRead(id) { return this.patch(`/notifications/${id}/read`, {}) }
-    async markAllNotificationsRead() { return this.patch('/notifications/read-all', {}) }
+    async getNotificationUnreadCount() {
+        return this.makeRequest('/notifications/unread-count')
+    }
+    async markNotificationRead(id) {
+        return this.patch(`/notifications/${id}/read`, {})
+    }
+    async markAllNotificationsRead() {
+        return this.patch('/notifications/read-all', {})
+    }
 }
 
 export const apiService = new StaffApiService()

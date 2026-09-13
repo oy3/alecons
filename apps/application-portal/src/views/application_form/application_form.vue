@@ -152,7 +152,6 @@ export default {
       secondarySchool: "",
       secondarySchoolStart: "",
       secondarySchoolEnd: "",
-      isJambExempt: false,
       jambRegistrationNumber: "",
       jambScore: "",
 
@@ -841,49 +840,44 @@ export default {
           isValid = false;
         }
 
-        if (!this.isJambExempt) {
-          if (
-            !this.jambRegistrationNumber ||
-            this.jambRegistrationNumber.trim() === ""
-          ) {
+        if (
+          !this.jambRegistrationNumber ||
+          this.jambRegistrationNumber.trim() === ""
+        ) {
+          this.validationErrors.jambRegistrationNumber =
+            "JAMB registration number is required";
+          isValid = false;
+        }
+
+        if (this.jambRegistrationNumber?.trim()) {
+          const normalizedJambRegistrationNumber =
+            this.jambRegistrationNumber.trim();
+
+          if (normalizedJambRegistrationNumber.length < 8) {
             this.validationErrors.jambRegistrationNumber =
-              "JAMB registration number is required";
+              "Please enter a valid JAMB registration number";
             isValid = false;
           }
+        }
+
+        if (
+          this.jambScore === "" ||
+          this.jambScore === null ||
+          this.jambScore === undefined
+        ) {
+          this.validationErrors.jambScore = "JAMB score is required";
+          isValid = false;
+        } else {
+          const normalizedJambScore = Number(this.jambScore);
 
           if (
-            this.jambRegistrationNumber &&
-            this.jambRegistrationNumber.trim()
+            Number.isNaN(normalizedJambScore) ||
+            normalizedJambScore < 0 ||
+            normalizedJambScore > 400
           ) {
-            const normalizedJambRegistrationNumber =
-              this.jambRegistrationNumber.trim();
-
-            if (normalizedJambRegistrationNumber.length < 8) {
-              this.validationErrors.jambRegistrationNumber =
-                "Please enter a valid JAMB registration number";
-              isValid = false;
-            }
-          }
-
-          if (
-            this.jambScore === "" ||
-            this.jambScore === null ||
-            this.jambScore === undefined
-          ) {
-            this.validationErrors.jambScore = "JAMB score is required";
+            this.validationErrors.jambScore =
+              "JAMB score must be between 0 and 400";
             isValid = false;
-          } else {
-            const normalizedJambScore = Number(this.jambScore);
-
-            if (
-              Number.isNaN(normalizedJambScore) ||
-              normalizedJambScore < 0 ||
-              normalizedJambScore > 400
-            ) {
-              this.validationErrors.jambScore =
-                "JAMB score must be between 0 and 400";
-              isValid = false;
-            }
           }
         }
       }
@@ -1011,12 +1005,9 @@ export default {
         }
 
         const shouldPrefillJambDetails =
-          this.isJambExempt !== true &&
-          this.jambRegistrationNumber === "" &&
-          this.jambScore === "";
+          this.jambRegistrationNumber === "" && this.jambScore === "";
 
         if (shouldPrefillJambDetails) {
-          this.isJambExempt = this.application.isJambExempt === true;
           this.jambRegistrationNumber =
             this.application.jambRegistrationNumber || "";
           this.jambScore =
@@ -1127,15 +1118,6 @@ export default {
 
     onExamTypeChange(index) {
       this.normalizeSittingExamTypeRules(index);
-    },
-
-    onJambExemptChange() {
-      if (this.isJambExempt) {
-        this.jambRegistrationNumber = "";
-        this.jambScore = "";
-        delete this.validationErrors.jambRegistrationNumber;
-        delete this.validationErrors.jambScore;
-      }
     },
 
     normalizeSittingExamTypeRules(changedIndex = 0) {
@@ -1774,11 +1756,9 @@ export default {
                 email: this.referee2Email,
               },
             ],
-            isJambExempt: this.isJambExempt,
-            jambRegistrationNumber: this.isJambExempt
-              ? undefined
-              : this.jambRegistrationNumber.trim(),
-            jambScore: this.isJambExempt ? undefined : Number(this.jambScore),
+            isJambExempt: false,
+            jambRegistrationNumber: this.jambRegistrationNumber.trim(),
+            jambScore: Number(this.jambScore),
           },
           uploadedFiles: uploadedFiles,
         };
@@ -2864,40 +2844,21 @@ export default {
         </div>
 
         <div class="d-flex justify-content-between mt-5 mb-1">
-          <h6 class="fw-semibold">
-            JAMB Details
-            <span class="fw-light small">
-              (Check if JAMB details do not apply to your admission route.)
-            </span>
-          </h6>
+          <h6 class="fw-semibold">JAMB Details</h6>
         </div>
 
         <div class="card border-0 acon-bg-light p-3">
-          <div class="form-check mb-3">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              id="isJambExempt"
-              v-model="isJambExempt"
-              @change="onJambExemptChange"
-            />
-            <label class="form-check-label small" for="isJambExempt">
-              I am not a direct JAMB applicant (for example, eligible community
-              nursing applicants).
-            </label>
-          </div>
           <div class="row g-3 mb-3">
             <div class="col-md-6">
               <label for="jambRegNum" class="form-label small">
                 Jamb Registration Number
-                <span v-if="!isJambExempt" class="text-danger">*</span>
+                <span class="text-danger">*</span>
               </label>
               <input
                 type="text"
                 class="form-control"
                 id="jambRegNum"
                 v-model="jambRegistrationNumber"
-                :disabled="isJambExempt"
                 :class="{
                   'is-invalid': validationErrors.jambRegistrationNumber,
                 }"
@@ -2912,7 +2873,7 @@ export default {
             <div class="col-md-6">
               <label for="jambScore" class="form-label small">
                 Jamb Score
-                <span v-if="!isJambExempt" class="text-danger">*</span>
+                <span class="text-danger">*</span>
               </label>
               <input
                 type="number"
@@ -2921,7 +2882,6 @@ export default {
                 v-model="jambScore"
                 min="0"
                 max="400"
-                :disabled="isJambExempt"
                 :class="{ 'is-invalid': validationErrors.jambScore }"
               />
               <div v-if="validationErrors.jambScore" class="invalid-feedback">
@@ -3285,30 +3245,12 @@ export default {
                 </p>
               </div>
               <div class="col-md-6">
-                <p class="small text-muted mb-1">JAMB Requirement</p>
-                <p class="mb-0">
-                  {{
-                    isJambExempt
-                      ? "Not a direct JAMB applicant"
-                      : "Direct JAMB applicant"
-                  }}
-                </p>
-              </div>
-              <div class="col-md-6">
                 <p class="small text-muted mb-1">JAMB Registration Number</p>
-                <p class="mb-0">
-                  {{
-                    isJambExempt
-                      ? "Not applicable"
-                      : jambRegistrationNumber || "N/A"
-                  }}
-                </p>
+                <p class="mb-0">{{ jambRegistrationNumber || "N/A" }}</p>
               </div>
               <div class="col-md-6">
                 <p class="small text-muted mb-1">JAMB Score</p>
-                <p class="mb-0">
-                  {{ isJambExempt ? "Not applicable" : jambScore || "N/A" }}
-                </p>
+                <p class="mb-0">{{ jambScore || "N/A" }}</p>
               </div>
             </div>
           </div>

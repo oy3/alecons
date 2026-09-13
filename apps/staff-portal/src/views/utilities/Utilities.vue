@@ -19,6 +19,7 @@ export default {
       isBackfillingVerificationTokens: false,
       isRepairingAcademicSessions: false,
       isMigratingDemographics: false,
+      isMigratingQuestionBank: false,
       isBackfillingStudentSessionHistory: false,
       isCheckingAcademicResultsReadiness: false,
       isMigratingAcademicResults: false,
@@ -70,6 +71,14 @@ export default {
           actionLabel: 'Inspect & Migrate'
         },
         {
+          id: 'migrate-question-bank',
+          title: 'Migrate Exam Question Bank',
+          icon: 'bi-bank',
+          variant: 'warning',
+          description: 'Copy legacy exam questions into immutable exam snapshots and a reusable question bank, merging only exact content-and-answer duplicates.',
+          actionLabel: 'Inspect & Migrate'
+        },
+        {
           id: 'backfill-student-session-history',
           title: 'Backfill Student Session History',
           icon: 'bi-clock-history',
@@ -82,7 +91,7 @@ export default {
           title: 'Backfill Student Fee Obligations',
           icon: 'bi-database-check',
           variant: 'success',
-          description: 'Create missing fee obligations from each academic session’s student payment controls and reconcile them against successful student payments.',
+          description: 'Create missing fee obligations from each academic session’s student payment controls and reconcile them against successful payment transactions.',
           actionLabel: 'Run Backfill'
         },
         {
@@ -218,7 +227,7 @@ export default {
     async runBackfillFeeObligations() {
       const confirmation = await Swal.fire({
         title: 'Backfill Student Fee Obligations?',
-        html: '<div class="text-start utility-confirmation"><p class="small mb-2">This scans every academic session, creates missing obligations from its retained payment controls, and marks matches from successful student payments as paid.</p><ul class="small mb-0"><li>It does not charge students or create payment transactions.</li><li>Existing obligation amounts are not overwritten.</li><li>The operation is safe to run again.</li></ul></div>',
+        html: '<div class="text-start utility-confirmation"><p class="small mb-2">This scans every academic session, creates missing obligations from its retained payment controls, and marks matches from successful payment transactions as paid.</p><ul class="small mb-0"><li>It does not charge students or create payment transactions.</li><li>Existing obligation amounts are not overwritten.</li><li>The operation is safe to run again.</li></ul></div>',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Run Backfill',
@@ -638,6 +647,68 @@ export default {
       }
     },
 
+    async runMigrateQuestionBank() {
+      const previewConfirmation = await Swal.fire({
+        title: 'Inspect Question Bank Migration?',
+        html: '<div class="text-start utility-confirmation"><p class="small mb-2">Take a current database backup before applying this migration.</p><ul class="small mb-0"><li>The dry run does not change data.</li><li>Exact duplicate questions are merged into one reusable bank item.</li><li>Every legacy question keeps its original ID in the exam snapshot collection.</li></ul></div>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Run Dry Run',
+        confirmButtonColor: '#b58105'
+      })
+      if (!previewConfirmation.isConfirmed) return
+
+      try {
+        this.isMigratingQuestionBank = true
+        const dryRun = await apiService.migrateQuestionBank({ apply: false })
+        if (!dryRun.success) throw new Error(dryRun.error || 'Question bank migration dry run failed')
+
+        const preview = dryRun.data || {}
+        const legacyQuestions = preview.legacyQuestions || 0
+        const applyConfirmation = await Swal.fire({
+          title: legacyQuestions ? `${legacyQuestions} legacy question(s) found` : 'No legacy questions found',
+          html: `<ul class="text-start small mb-0"><li>Unique bank items: <strong>${preview.uniqueFingerprints || 0}</strong></li><li>Duplicate groups: <strong>${preview.duplicateGroups || 0}</strong></li><li>Duplicate questions merged: <strong>${preview.duplicateQuestions || 0}</strong></li><li>Existing exam snapshots: <strong>${preview.examQuestions || 0}</strong></li><li>Existing bank items: <strong>${preview.questionBankItems || 0}</strong></li></ul>`,
+          icon: legacyQuestions ? 'warning' : 'info',
+          showCancelButton: legacyQuestions > 0,
+          confirmButtonText: legacyQuestions ? 'Apply Migration' : 'Close',
+          confirmButtonColor: '#b58105'
+        })
+        if (!applyConfirmation.isConfirmed || !legacyQuestions) return
+
+        const appliedResponse = await apiService.migrateQuestionBank({ apply: true })
+        if (!appliedResponse.success) throw new Error(appliedResponse.error || 'Question bank migration failed')
+        const applied = appliedResponse.data || {}
+        const verified = Boolean(applied.verified)
+
+        const finalizeConfirmation = await Swal.fire({
+          title: verified ? 'Migration Verified' : 'Migration Needs Review',
+          html: `<ul class="text-start small mb-3"><li>Bank items created or matched: <strong>${applied.questionBankItems || 0}</strong></li><li>Exam snapshots migrated: <strong>${applied.examQuestions || 0}</strong></li><li>Missing legacy IDs: <strong>${applied.missingExamQuestionIds || 0}</strong></li><li>Unresolved attempt references: <strong>${applied.missingAttemptQuestionRefs || 0}</strong></li><li>Unresolved result references: <strong>${applied.missingResultQuestionRefs || 0}</strong></li></ul><p class="text-start small mb-0">${verified ? 'You may now remove the legacy questions collection. Keeping it temporarily provides a rollback checkpoint.' : 'The legacy collection cannot be removed until verification succeeds.'}</p>`,
+          icon: verified ? 'success' : 'error',
+          showCancelButton: verified,
+          confirmButtonText: verified ? 'Finalize & Remove Legacy' : 'Close',
+          cancelButtonText: 'Keep Legacy Collection',
+          confirmButtonColor: '#dc3545'
+        })
+
+        if (!verified || !finalizeConfirmation.isConfirmed) return
+        const finalResponse = await apiService.migrateQuestionBank({ apply: true, finalize: true })
+        if (!finalResponse.success) throw new Error(finalResponse.error || 'Question bank migration finalization failed')
+        await Swal.fire({
+          icon: 'success',
+          title: 'Migration Finalized',
+          text: finalResponse.data?.legacyCollectionDropped
+            ? 'The reusable question bank is ready and the legacy questions collection was removed.'
+            : 'The reusable question bank is ready. The legacy collection was already absent.',
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Question bank migration failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Migration Failed', text: error.message || 'Unable to migrate the question bank.' })
+      } finally {
+        this.isMigratingQuestionBank = false
+      }
+    },
+
     async runBackfillStudentSessionHistory() {
       const preview = await Swal.fire({
         title: 'Inspect Student Session History Backfill?',
@@ -1053,6 +1124,17 @@ export default {
                 <span v-if="isMigratingDemographics" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-person-lines-fill me-2"></i>
                 {{ isMigratingDemographics ? 'Migrating...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'migrate-question-bank'"
+                class="btn btn-warning"
+                :disabled="isLoading || isMigratingQuestionBank"
+                @click="runMigrateQuestionBank"
+              >
+                <span v-if="isMigratingQuestionBank" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-bank me-2"></i>
+                {{ isMigratingQuestionBank ? 'Migrating...' : utility.actionLabel }}
               </button>
 
               <button

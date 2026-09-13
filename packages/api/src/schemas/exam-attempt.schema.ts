@@ -19,7 +19,7 @@ export class ExamAttempt {
 
     @Prop({
         type: [{
-            questionId: { type: Types.ObjectId, ref: 'Question' },
+            questionId: { type: Types.ObjectId, ref: 'ExamQuestion' },
             selected: { type: MongooseSchema.Types.Mixed }, // String for MCQ, Array for multi, String for essay
             answeredAt: { type: Date, default: Date.now }
         }],

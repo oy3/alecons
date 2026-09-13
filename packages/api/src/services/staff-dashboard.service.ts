@@ -12,7 +12,7 @@ import {
     ApplicationStatus,
     AdmissionDecision,
 } from '../schemas/application.schema';
-import { StudentPayment, StudentPaymentDocument, PaymentStatus } from '../schemas/student-payment.schema';
+import { PaymentTransaction, PaymentTransactionDocument, PaymentStatus } from '../schemas/payment-transaction.schema';
 import { User, UserDocument } from '../schemas/user.schema';
 
 @Injectable()
@@ -24,8 +24,8 @@ export class StaffDashboardService {
         private readonly userModel: Model<UserDocument>,
         @InjectModel(AcademicSession.name)
         private readonly academicSessionModel: Model<AcademicSessionDocument>,
-        @InjectModel(StudentPayment.name)
-        private readonly studentPaymentModel: Model<StudentPaymentDocument>,
+        @InjectModel(PaymentTransaction.name)
+        private readonly paymentTransactionModel: Model<PaymentTransactionDocument>,
     ) { }
 
     async getStats() {
@@ -62,7 +62,7 @@ export class StaffDashboardService {
                 ],
             }),
             this.userModel.countDocuments({ isActive: true }),
-            this.studentPaymentModel.aggregate([
+            this.paymentTransactionModel.aggregate([
                 { $match: revenueQuery },
                 { $group: { _id: null, total: { $sum: '$amount' } } },
             ]),

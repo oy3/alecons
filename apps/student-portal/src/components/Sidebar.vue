@@ -90,12 +90,12 @@ export default {
       </router-link>
       
       <router-link
-        to="/tenancy-agreement"
+        to="/accommodation"
         class="nav-link text-white py-3 acon-link rounded mb-1"
         active-class="active"
       >
-        <i class="bi bi-file-text h5 me-2 mb-0"></i> 
-        <span>Tenancy Agreement</span>
+        <i class="bi bi-building h5 me-2 mb-0"></i>
+        <span>Accommodation</span>
       </router-link>
       
       <router-link

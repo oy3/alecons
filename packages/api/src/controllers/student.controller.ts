@@ -1,9 +1,14 @@
-import { Controller, Get, Put, Post, Body, UseGuards, Request, Logger } from '@nestjs/common';
+import { Controller, Get, Put, Post, Body, UseGuards, Request, Logger, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { StudentService } from '../services/student.service';
 import { TenancyAgreementService } from '../services/tenancy-agreement.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from '../schemas/user.schema';
+import {
+    SaveInternalAccommodationAgreementDraftDto,
+    SubmitInternalAccommodationAgreementDto,
+} from '../dto/internal-accommodation.dto';
 
 @ApiTags('Student')
 @Controller('student')
@@ -111,20 +116,35 @@ export class StudentController {
         }
     }
 
-    // Tenancy Agreement Endpoints
+    @Get('accommodation/overview')
+    @ApiOperation({ summary: 'Get the current student accommodation workflow' })
+    async getAccommodationOverview(@Request() req) {
+        this.assertStudent(req);
+        return this.tenancyAgreementService.getInternalAccommodationOverview(req.user._id);
+    }
 
-    @Post('tenancy-agreement/submit')
-    @ApiOperation({ summary: 'Submit tenancy agreement' })
+    @Put('accommodation/agreement/draft')
+    @ApiOperation({ summary: 'Save an incomplete accommodation agreement draft' })
+    async saveAccommodationAgreementDraft(
+        @Request() req,
+        @Body() draft: SaveInternalAccommodationAgreementDraftDto,
+    ) {
+        this.assertStudent(req);
+        return this.tenancyAgreementService.saveInternalAgreementDraft(req.user._id, draft);
+    }
+
+    @Post('accommodation/agreement/submit')
+    @ApiOperation({ summary: 'Sign and submit an accommodation agreement' })
     @ApiResponse({ status: 201, description: 'Tenancy agreement submitted successfully' })
     @ApiResponse({ status: 400, description: 'Invalid data or already signed' })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
-    async submitTenancyAgreement(@Request() req, @Body() agreementData: any) {
+    async submitTenancyAgreement(
+        @Request() req,
+        @Body() agreementData: SubmitInternalAccommodationAgreementDto,
+    ) {
         this.logger.log('Tenancy agreement submission endpoint called for user:', req.user?._id);
 
-        // Verify user is a student
-        if (req.user?.role !== UserRole.STUDENT) {
-            throw new Error('Access denied. This endpoint is for students only.');
-        }
+        this.assertStudent(req);
 
         try {
             const result = await this.tenancyAgreementService.submitTenancyAgreement(
@@ -141,48 +161,32 @@ export class StudentController {
         }
     }
 
-    @Get('tenancy-agreement/status')
-    @ApiOperation({ summary: 'Get tenancy agreement status' })
-    @ApiResponse({ status: 200, description: 'Tenancy agreement status retrieved' })
-    @ApiResponse({ status: 401, description: 'Unauthorized' })
-    async getTenancyAgreementStatus(@Request() req) {
-        this.logger.log('Tenancy agreement status endpoint called for user:', req.user?._id);
-
-        // Verify user is a student
-        if (req.user?.role !== UserRole.STUDENT) {
-            throw new Error('Access denied. This endpoint is for students only.');
-        }
-
-        try {
-            const result = await this.tenancyAgreementService.getTenancyAgreementStatus(req.user._id);
-            return result;
-
-        } catch (error) {
-            this.logger.error('Tenancy agreement status error:', error.message);
-            throw error;
-        }
+    @Get('accommodation/documents/agreement')
+    @ApiOperation({ summary: 'Download the allocated student tenancy agreement' })
+    downloadAccommodationAgreement(@Request() req, @Res() response: Response) {
+        return this.streamAccommodationDocument(req, response, 'agreement');
     }
 
-    @Get('tenancy-agreement/document')
-    @ApiOperation({ summary: 'Get tenancy agreement document' })
-    @ApiResponse({ status: 200, description: 'Tenancy agreement document retrieved' })
-    @ApiResponse({ status: 404, description: 'Document not found' })
-    @ApiResponse({ status: 401, description: 'Unauthorized' })
-    async getTenancyAgreementDocument(@Request() req) {
-        this.logger.log('Tenancy agreement document endpoint called for user:', req.user?._id);
+    @Get('accommodation/documents/allocation-slip')
+    @ApiOperation({ summary: 'Download the student accommodation allocation slip' })
+    downloadAccommodationAllocationSlip(@Request() req, @Res() response: Response) {
+        return this.streamAccommodationDocument(req, response, 'allocation-slip');
+    }
 
-        // Verify user is a student
-        if (req.user?.role !== UserRole.STUDENT) {
-            throw new Error('Access denied. This endpoint is for students only.');
-        }
+    private assertStudent(req: any) {
+        if (req.user?.role !== UserRole.STUDENT) throw new Error('Access denied. This endpoint is for students only.');
+    }
 
-        try {
-            const result = await this.tenancyAgreementService.getTenancyAgreementDocument(req.user._id);
-            return result;
-
-        } catch (error) {
-            this.logger.error('Tenancy agreement document error:', error.message);
-            throw error;
-        }
+    private async streamAccommodationDocument(
+        req: any,
+        response: Response,
+        type: 'agreement' | 'allocation-slip',
+    ) {
+        this.assertStudent(req);
+        const document = await this.tenancyAgreementService.getInternalAccommodationDocument(req.user._id, type);
+        response.setHeader('Content-Type', document.contentType);
+        response.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`);
+        response.setHeader('Cache-Control', 'private, no-store');
+        response.send(document.buffer);
     }
 }

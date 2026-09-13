@@ -166,15 +166,24 @@ export default {
 </script>
 
 <template>
-  <div class="app-shell d-flex min-vh-100">
+  <div
+    class="app-shell d-flex"
+    :class="showLayout ? 'app-shell--contained' : 'min-vh-100'"
+  >
     <!-- Sidebar (Desktop) -->
     <Sidebar v-if="showLayout" />
 
     <!-- Main Content -->
-    <main class="app-main flex-grow-1 bg-white d-flex flex-column min-vh-100">
+    <main
+      class="app-main flex-grow-1 bg-white d-flex flex-column"
+      :class="showLayout ? 'app-main--contained' : 'min-vh-100'"
+    >
       <!-- Navbar -->
       <Navbar v-if="showLayout" />
-      <div class="app-content flex-grow-1 overflow-y-auto overflow-x-hidden">
+      <div
+        class="app-content flex-grow-1 overflow-x-hidden"
+        :class="{ 'overflow-y-auto': showLayout }"
+      >
         <RouterView v-slot="{ Component }">
           <component :is="Component" />
         </RouterView>
@@ -201,5 +210,16 @@ export default {
 
 .app-main {
   width: 0;
+}
+
+.app-shell--contained,
+.app-main--contained {
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-content {
+  min-height: 0;
 }
 </style>

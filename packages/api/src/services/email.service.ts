@@ -237,6 +237,77 @@ export class EmailService {
     });
   }
 
+  async sendAccommodationVerificationEmail(input: {
+    to: string;
+    firstName: string;
+    verificationUrl: string;
+    expiresInMinutes: number;
+  }): Promise<GmailDeliveryReceipt> {
+    return this.sendEmailWithRetry({
+      from: `ALECONS Accommodation <${process.env.SMTP_USER}>`,
+      to: input.to,
+      subject: 'Verify your ALECONS accommodation application',
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#242424;max-width:640px;margin:auto">
+          <h2 style="color:#9f2528">Verify your email address</h2>
+          <p>Hello ${this.escapeHtml(input.firstName)},</p>
+          <p>Use the button below to verify your email and continue your accommodation application.</p>
+          <p><a href="${this.escapeHtml(input.verificationUrl)}" style="display:inline-block;background:#9f2528;color:#fff;padding:12px 18px;text-decoration:none;border-radius:4px">Verify and continue</a></p>
+          <p>This link expires in ${input.expiresInMinutes} minutes. If you did not start this request, you can ignore this email.</p>
+        </div>`,
+    });
+  }
+
+  async sendExternalAccommodationAllocatedEmail(input: {
+    to: string;
+    firstName: string;
+    applicationNumber: string;
+    externalResidentNumber: string;
+    hostel: string;
+    block: string;
+    room: string;
+    slotNumber: number;
+    tenancyAgreement: Buffer;
+    allocationSlip: Buffer;
+  }): Promise<GmailDeliveryReceipt> {
+    const residentName = this.escapeHtml(input.firstName || 'Resident');
+    const applicationNumber = this.escapeHtml(input.applicationNumber);
+    const externalResidentNumber = this.escapeHtml(input.externalResidentNumber);
+    return this.sendEmailWithRetry({
+      from: `ALECONS Accommodation <${process.env.SMTP_USER}>`,
+      to: input.to,
+      subject: `Your ALECONS accommodation documents (${applicationNumber})`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#242424;max-width:640px;margin:auto">
+          <h2 style="color:#9f2528">Your accommodation has been allocated</h2>
+          <p>Hello ${residentName},</p>
+          <p>Your accommodation payment has been confirmed and your bed space has been allocated.</p>
+          <div style="background:#f8f9fa;border:1px solid #e9ecef;padding:16px;margin:20px 0">
+            <p><strong>External resident number:</strong> ${externalResidentNumber}</p>
+            <p><strong>Application number:</strong> ${applicationNumber}</p>
+            <p><strong>Hostel:</strong> ${this.escapeHtml(input.hostel)}</p>
+            <p><strong>Block:</strong> ${this.escapeHtml(input.block)}</p>
+            <p><strong>Room:</strong> ${this.escapeHtml(input.room)}</p>
+            <p><strong>Bed slot:</strong> ${this.escapeHtml(String(input.slotNumber))}</p>
+          </div>
+          <p>Your signed tenancy agreement and accommodation allocation slip are attached. Keep both documents for check-in and your records.</p>
+          <p>Regards,<br>ALECONS Accommodation Team</p>
+        </div>`,
+      attachments: [
+        {
+          filename: `tenancy-agreement-${applicationNumber}.pdf`,
+          content: input.tenancyAgreement,
+          contentType: 'application/pdf',
+        },
+        {
+          filename: `allocation-slip-${applicationNumber}.pdf`,
+          content: input.allocationSlip,
+          contentType: 'application/pdf',
+        },
+      ],
+    });
+  }
+
   async sendContactEnquiryResponse(input: {
     to: string;
     name: string;

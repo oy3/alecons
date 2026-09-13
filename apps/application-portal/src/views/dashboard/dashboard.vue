@@ -115,6 +115,19 @@ export default {
     },
 
     redirectToStudentPortal() {
+      const studentPortalUrl =
+        import.meta.env.VITE_APP_STUDENT_PORTAL_URL?.trim();
+
+      if (!studentPortalUrl) {
+        Swal.fire({
+          icon: "error",
+          title: "Student Portal Unavailable",
+          text: "The student portal URL is not configured. Please contact support.",
+          confirmButtonColor: "#8B2C2C",
+        });
+        return;
+      }
+
       Swal.fire({
         icon: "info",
         title: "Access Student Portal",
@@ -126,7 +139,7 @@ export default {
         cancelButtonColor: "#6c757d",
       }).then((result) => {
         if (result.isConfirmed) {
-          window.open(import.meta.env.VITE_APP_STUDENT_PORTAL_URL, "_blank");
+          window.location.assign(studentPortalUrl);
         }
       });
     },
@@ -439,10 +452,7 @@ export default {
           @redirectToStudentPortal="redirectToStudentPortal"
         />
 
-        <TodoList
-          :todos="todos"
-          :locked="isApplicationLocked"
-        />
+        <TodoList :todos="todos" :locked="isApplicationLocked" />
       </div>
 
       <div class="col-md-4">
@@ -458,7 +468,7 @@ export default {
           :phone="userPhone || 'N/A'"
           :gender="user?.gender || 'N/A'"
           :location="userLocation"
-          :dob ="new Date(user?.dob).toLocaleDateString() || 'N/A'"
+          :dob="new Date(user?.dob).toLocaleDateString() || 'N/A'"
         />
       </div>
     </div>

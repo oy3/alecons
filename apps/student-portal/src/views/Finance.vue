@@ -1,9 +1,10 @@
 <script>
-import { studentPaymentService } from "../services/payment.js";
-import { tenancyAgreementService } from "../services/tenancyAgreement.js";
+import { paymentTransactionService } from "../services/payment.js";
+import { accommodationService } from "../services/accommodation.js";
 import { logger } from "@shared/utils/logger";
 import { useAuthStore } from "../stores/auth.js";
 import Swal from "sweetalert2";
+import { Offcanvas } from "bootstrap";
 
 const ALLOWED_RECEIPT_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const MAX_RECEIPT_SIZE = 1024 * 1024;
@@ -52,12 +53,13 @@ export default {
       manualTransferReceipt: null,
       manualTransferReceiptName: "",
       manualTransferSubmitting: false,
+      selectedTransactionReceipt: null,
     };
   },
 
   computed: {
     paymentMethods() {
-      return studentPaymentService.getAvailablePaymentMethods();
+      return paymentTransactionService.getAvailablePaymentMethods();
     },
 
     accountBalance() {
@@ -112,6 +114,10 @@ export default {
 
   beforeUnmount() {
     document.removeEventListener("keydown", this.handleKeydown);
+    const receiptPanel = document.getElementById("transactionReceiptOffcanvas");
+    if (receiptPanel) {
+      Offcanvas.getInstance(receiptPanel)?.dispose();
+    }
   },
 
   methods: {
@@ -142,7 +148,7 @@ export default {
     async loadAcademicSessions() {
       try {
         logger.info("Loading academic sessions");
-        const response = await studentPaymentService.getAcademicSessions();
+        const response = await paymentTransactionService.getAcademicSessions();
 
         if (response.success) {
           this.academicSessions = (response.data.sessions || []).map((session) => ({
@@ -164,7 +170,7 @@ export default {
     },
 
     async loadHistorySessions() {
-      const response = await studentPaymentService.getPaymentHistorySessions();
+      const response = await paymentTransactionService.getPaymentHistorySessions();
       if (response.success) {
         this.historySessions = (response.data.sessions || []).map((session) => ({
           id: session.id,
@@ -183,7 +189,7 @@ export default {
           this.selectedSessionId,
         );
 
-        const summaryResponse = await studentPaymentService.getPaymentSummary(
+        const summaryResponse = await paymentTransactionService.getPaymentSummary(
           this.selectedSessionId,
         );
         if (summaryResponse.success) {
@@ -203,7 +209,7 @@ export default {
       try {
         this.isHistoryLoading = true;
 
-        const response = await studentPaymentService.getPaymentHistory(
+        const response = await paymentTransactionService.getPaymentHistory(
           this.selectedHistorySessionId || null,
           this.currentPage,
           this.perPage,
@@ -223,7 +229,7 @@ export default {
 
     async loadAvailablePayments() {
       try {
-        const response = await studentPaymentService.getAvailablePayments(
+        const response = await paymentTransactionService.getAvailablePayments(
           this.selectedSessionId,
         );
 
@@ -244,7 +250,7 @@ export default {
       this.currentPage = 1;
       const summarySessionId =
         this.selectedHistorySessionId || this.selectedSessionId;
-      const summaryResponse = await studentPaymentService.getPaymentSummary(
+      const summaryResponse = await paymentTransactionService.getPaymentSummary(
         summarySessionId,
       );
       if (summaryResponse.success) {
@@ -282,7 +288,7 @@ export default {
         this.isPaymentLoading = true;
         logger.info("Initiating payment:", paymentId);
 
-        const response = await studentPaymentService.initializePayment(
+        const response = await paymentTransactionService.initializePayment(
           paymentId,
           this.user.email,
           this.selectedSessionId,
@@ -291,7 +297,7 @@ export default {
         if (response.success) {
           try {
             const paymentResult =
-              await studentPaymentService.launchPaystackPayment(response.data);
+              await paymentTransactionService.launchPaystackPayment(response.data);
 
             if (paymentResult.success) {
               this.closePaymentModal();
@@ -336,7 +342,7 @@ export default {
     },
 
     async ensureAccommodationPaymentAllowed(paymentCode) {
-      if (!tenancyAgreementService.isAccommodationPayment(paymentCode)) {
+      if (!accommodationService.isAccommodationPayment(paymentCode)) {
         return true;
       }
 
@@ -345,7 +351,7 @@ export default {
       );
 
       const eligibilityCheck =
-        await tenancyAgreementService.canMakeAccommodationPayment();
+        await accommodationService.canMakeAccommodationPayment();
 
       if (eligibilityCheck.canPay) {
         return true;
@@ -363,7 +369,7 @@ export default {
       });
 
       if (result.isConfirmed) {
-        this.$router.push("/tenancy-agreement");
+        this.$router.push("/accommodation/agreement");
       }
 
       return false;
@@ -494,7 +500,7 @@ export default {
         this.manualTransferSubmitting = true;
         this.isPaymentLoading = true;
 
-        const result = await studentPaymentService.submitManualTransferReceipt(
+        const result = await paymentTransactionService.submitManualTransferReceipt(
           this.selectedFee.id,
           this.manualTransferReceipt,
           this.selectedSessionId,
@@ -528,22 +534,31 @@ export default {
       }
     },
 
-    async downloadReceipt(payment) {
-      try {
-        if (!payment?.receiptUrl) {
-          Swal.fire({
-            icon: "info",
-            title: "Receipt unavailable",
-            text: "No uploaded receipt is available for this payment.",
-            confirmButtonText: "OK",
-          });
-          return;
+    viewTransactionReceipt(payment) {
+      if (payment?.status !== "successful") return;
+      this.selectedTransactionReceipt = payment;
+      this.$nextTick(() => {
+        const receiptPanel = document.getElementById(
+          "transactionReceiptOffcanvas",
+        );
+        if (receiptPanel) {
+          Offcanvas.getOrCreateInstance(receiptPanel).show();
         }
+      });
+    },
 
-        logger.info("Opening receipt for payment:", payment.reference);
-        studentPaymentService.openReceipt(payment.receiptUrl);
+    async downloadTransactionReceipt(payment) {
+      try {
+        if (payment?.status !== "successful") return;
+        await paymentTransactionService.downloadTransactionReceipt(payment.id);
       } catch (error) {
-        logger.error("Error downloading receipt:", error);
+        logger.error("Error downloading transaction receipt:", error);
+        await Swal.fire({
+          icon: "error",
+          title: "Receipt Unavailable",
+          text: error.message || "The transaction receipt could not be downloaded.",
+          confirmButtonText: "OK",
+        });
       }
     },
 
@@ -563,19 +578,19 @@ export default {
     },
 
     formatCurrency(amount) {
-      return studentPaymentService.formatCurrency(amount);
+      return paymentTransactionService.formatCurrency(amount);
     },
 
     formatDate(date) {
-      return studentPaymentService.formatDate(date);
+      return paymentTransactionService.formatDate(date);
     },
 
     getStatusBadgeClass(status) {
-      return studentPaymentService.getStatusBadgeClass(status);
+      return paymentTransactionService.getStatusBadgeClass(status);
     },
 
     getStatusText(status) {
-      return studentPaymentService.getStatusText(status);
+      return paymentTransactionService.getStatusText(status);
     },
 
     getPaymentReference(payment) {
@@ -926,20 +941,18 @@ export default {
                       <div class="btn-group btn-group-sm">
                         <button
                           class="btn btn-outline-primary"
-                          :title="
-                            payment.receiptUrl
-                              ? 'View Receipt'
-                              : 'Receipt unavailable'
-                          "
-                          @click="downloadReceipt(payment)"
+                          title="View transaction receipt"
+                          :disabled="payment.status !== 'successful'"
+                          aria-controls="transactionReceiptOffcanvas"
+                          @click="viewTransactionReceipt(payment)"
                         >
                           <i class="bi bi-receipt"></i>
                         </button>
                         <button
-                          v-if="payment.receiptUrl"
                           class="btn btn-outline-secondary"
-                          title="Download"
-                          @click="downloadReceipt(payment)"
+                          title="Download transaction receipt"
+                          :disabled="payment.status !== 'successful'"
+                          @click="downloadTransactionReceipt(payment)"
                         >
                           <i class="bi bi-download"></i>
                         </button>
@@ -1196,6 +1209,85 @@ export default {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="offcanvas offcanvas-end"
+      tabindex="-1"
+      id="transactionReceiptOffcanvas"
+      aria-labelledby="transactionReceiptOffcanvasLabel"
+    >
+      <div class="offcanvas-header border-bottom">
+        <div>
+          <small class="text-uppercase text-muted fw-semibold">Transaction</small>
+          <h5 class="offcanvas-title fw-bold mb-0" id="transactionReceiptOffcanvasLabel">
+            Payment Receipt
+          </h5>
+        </div>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="offcanvas"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div v-if="selectedTransactionReceipt" class="offcanvas-body">
+        <div class="text-center py-3 mb-4 border-bottom">
+          <div class="text-success mb-2"><i class="bi bi-check-circle-fill fs-2"></i></div>
+          <h4 class="fw-bold mb-1">
+            {{ formatCurrency(selectedTransactionReceipt.amount) }}
+          </h4>
+          <p class="text-muted mb-2">
+            {{ selectedTransactionReceipt.paymentId?.name || "Payment" }}
+          </p>
+          <span class="badge bg-success">Paid</span>
+        </div>
+
+        <ul class="list-group list-group-flush mb-4">
+          <li class="list-group-item px-0 py-3">
+            <small class="text-muted d-block">Description</small>
+            <span class="fw-semibold">
+              {{ selectedTransactionReceipt.paymentId?.description || selectedTransactionReceipt.paymentId?.name }}
+            </span>
+          </li>
+          <li class="list-group-item px-0 py-3">
+            <small class="text-muted d-block">Reference</small>
+            <code class="text-dark text-break">{{ selectedTransactionReceipt.reference }}</code>
+          </li>
+          <li class="list-group-item px-0 py-3 d-flex justify-content-between gap-3">
+            <div>
+              <small class="text-muted d-block">Payment method</small>
+              <span class="fw-semibold text-capitalize">
+                {{ getMethodLabel(selectedTransactionReceipt) }}
+              </span>
+            </div>
+            <div class="text-end">
+              <small class="text-muted d-block">Transaction fee</small>
+              <span class="fw-semibold">
+                {{ formatCurrency(selectedTransactionReceipt.fee || 0) }}
+              </span>
+            </div>
+          </li>
+          <li class="list-group-item px-0 py-3">
+            <small class="text-muted d-block">Payment date</small>
+            <span class="fw-semibold">{{ formatDate(selectedTransactionReceipt.paidAt) }}</span>
+          </li>
+          <li v-if="selectedTransactionReceipt.remarks" class="list-group-item px-0 py-3">
+            <small class="text-muted d-block">Remarks</small>
+            <span class="fw-semibold">{{ selectedTransactionReceipt.remarks }}</span>
+          </li>
+        </ul>
+
+        <div class="d-grid">
+          <button
+            type="button"
+            class="btn btn-primary"
+            @click="downloadTransactionReceipt(selectedTransactionReceipt)"
+          >
+            <i class="bi bi-download me-2"></i>Download Receipt
+          </button>
         </div>
       </div>
     </div>

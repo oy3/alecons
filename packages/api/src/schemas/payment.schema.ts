@@ -8,6 +8,7 @@ export enum PaymentAudience {
     STUDENT = 'student',
     ACADEMIC_STAFF = 'academic_staff',
     ADMIN_STAFF = 'admin_staff',
+    EXTERNAL_RESIDENT = 'external_resident',
 }
 
 @Schema({ timestamps: true })

@@ -573,6 +573,10 @@ export class AuthService {
             throw new UnauthorizedException('Your account has been deactivated. Please contact support');
         }
 
+        if (user.role === UserRole.EXTERNAL) {
+            throw new UnauthorizedException('External accommodation accounts use the secure link sent by email');
+        }
+
         // Check password
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {

@@ -17,7 +17,10 @@
     "clean": "rm -rf node_modules yarn.lock package-lock.json dist* tsconfig.build.tsbuildinfo",
     "seed:staff": "ts-node -r tsconfig-paths/register src/scripts/seed-staff.ts",
     "util:repair-program-drift": "ts-node -r tsconfig-paths/register src/scripts/repair-program-drift.ts",
-    "util:repair-academic-sessions": "ts-node -r tsconfig-paths/register src/scripts/repair-academic-sessions.ts"
+    "util:repair-academic-sessions": "ts-node -r tsconfig-paths/register src/scripts/repair-academic-sessions.ts",
+    "util:migrate-payment-transactions": "ts-node -r tsconfig-paths/register src/scripts/migrate-payment-transactions.ts",
+    "util:rollback-payment-transactions": "ts-node -r tsconfig-paths/register src/scripts/migrate-payment-transactions.ts --rollback",
+    "util:migrate-accommodation-foundation": "ts-node -r tsconfig-paths/register src/scripts/migrate-accommodation-foundation.ts"
   },
   "keywords": [],
   "author": "",

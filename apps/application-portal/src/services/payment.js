@@ -1,14 +1,14 @@
 import { apiService } from "./api.js";
 import { logger } from "@shared/utils/logger";
 import PaystackPop from "@paystack/inline-js";
+import { reactive } from "vue";
 
 class PaymentService {
     constructor() {
-        this.paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-        this.serverPaymentMethods = {
+        this.serverPaymentMethods = reactive({
             paystackEnabled: true,
             manualTransferEnabled: true,
-        };
+        });
         this.manualTransferDetails = {
             accountName: "",
             accountNumber: "",
@@ -19,8 +19,7 @@ class PaymentService {
 
     getAvailablePaymentMethods() {
         return {
-            paystackEnabled:
-                !!this.paystackPublicKey && this.serverPaymentMethods.paystackEnabled,
+            paystackEnabled: this.serverPaymentMethods.paystackEnabled,
             manualTransferEnabled: this.serverPaymentMethods.manualTransferEnabled,
             manualTransferDetails: this.manualTransferDetails,
         };
@@ -38,12 +37,10 @@ class PaymentService {
 
             if (response.success) {
                 logger.info("Successfully fetched payments summary");
-                this.serverPaymentMethods = {
-                    paystackEnabled:
-                        response.data?.availableMethods?.paystackEnabled !== false,
-                    manualTransferEnabled:
-                        response.data?.availableMethods?.manualTransferEnabled !== false,
-                };
+                this.serverPaymentMethods.paystackEnabled =
+                    response.data?.availableMethods?.paystackEnabled !== false;
+                this.serverPaymentMethods.manualTransferEnabled =
+                    response.data?.availableMethods?.manualTransferEnabled !== false;
                 return {
                     success: true,
                     data: response.data,

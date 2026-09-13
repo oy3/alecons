@@ -25,6 +25,7 @@ import { CoursesModule } from './courses/courses.module';
 import { NotificationsModule } from './modules/notifications.module';
 import { ReportsModule } from './modules/reports.module';
 import { ContactEnquiriesModule } from './modules/contact-enquiries.module';
+import { AccommodationModule } from './modules/accommodation.module';
 import { StaffApplicationsController } from './controllers/staff-applications.controller';
 import { ExamResultsController } from './controllers/exam-results.controller';
 import { MaintenanceController } from './controllers/maintenance.controller';
@@ -35,7 +36,7 @@ import { AcademicSession, AcademicSessionSchema } from './schemas/academic-sessi
 import { User, UserSchema } from './schemas/user.schema';
 import { Student, StudentSchema } from './schemas/student.schema';
 import { Payment, PaymentSchema } from './schemas/payment.schema';
-import { StudentPayment, StudentPaymentSchema } from './schemas/student-payment.schema';
+import { PaymentTransaction, PaymentTransactionSchema } from './schemas/payment-transaction.schema';
 import { StudentAcademicSession, StudentAcademicSessionSchema } from './schemas/student-academic-session.schema';
 import { ExamAttempt, ExamAttemptSchema } from './schemas/exam-attempt.schema';
 import { ExamResult, ExamResultSchema } from './schemas/exam-result.schema';
@@ -83,7 +84,7 @@ const hasExternalApiEnvFile = Boolean(process.env.API_ENV_FILE);
             { name: User.name, schema: UserSchema },
             { name: Student.name, schema: StudentSchema },
             { name: Payment.name, schema: PaymentSchema },
-            { name: StudentPayment.name, schema: StudentPaymentSchema },
+            { name: PaymentTransaction.name, schema: PaymentTransactionSchema },
             { name: StudentAcademicSession.name, schema: StudentAcademicSessionSchema },
             { name: ExamAttempt.name, schema: ExamAttemptSchema },
             { name: ExamResult.name, schema: ExamResultSchema },
@@ -130,6 +131,7 @@ const hasExternalApiEnvFile = Boolean(process.env.API_ENV_FILE);
         NotificationsModule,
         ReportsModule,
         ContactEnquiriesModule,
+        AccommodationModule,
     ],
     controllers: [AppController, StaffApplicationsController, ExamResultsController, MaintenanceController],
     providers: [AppService, EmailService, MatriculationService, ContentSanitizationService, AdmissionLetterPdfService],

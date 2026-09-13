@@ -4,7 +4,7 @@ import { StaffDashboardController } from '../controllers/staff-dashboard.control
 import { StaffDashboardService } from '../services/staff-dashboard.service';
 import { AcademicSession, AcademicSessionSchema } from '../schemas/academic-session.schema';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
-import { StudentPayment, StudentPaymentSchema } from '../schemas/student-payment.schema';
+import { PaymentTransaction, PaymentTransactionSchema } from '../schemas/payment-transaction.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 
 @Module({
@@ -13,7 +13,7 @@ import { User, UserSchema } from '../schemas/user.schema';
             { name: Application.name, schema: ApplicationSchema },
             { name: User.name, schema: UserSchema },
             { name: AcademicSession.name, schema: AcademicSessionSchema },
-            { name: StudentPayment.name, schema: StudentPaymentSchema },
+            { name: PaymentTransaction.name, schema: PaymentTransactionSchema },
         ]),
     ],
     controllers: [StaffDashboardController],

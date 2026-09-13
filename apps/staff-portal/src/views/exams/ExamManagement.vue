@@ -5,6 +5,7 @@ import { apiService } from '../../services/api.js'
 import Swal from 'sweetalert2'
 import ExamsList from './components/ExamsList.vue'
 import QuestionBank from './components/QuestionBank.vue'
+import QuestionBankLibrary from './components/QuestionBankLibrary.vue'
 import ExamResults from './components/ExamResults.vue'
 import ExamAnalytics from './components/ExamAnalytics.vue'
 import ExamFormModal from './components/ExamFormModal.vue'
@@ -15,6 +16,7 @@ export default {
   components: {
     ExamsList,
     QuestionBank,
+    QuestionBankLibrary,
     ExamResults,
     ExamAnalytics,
     ExamFormModal,
@@ -115,15 +117,7 @@ export default {
         <p class="text-muted">Create, manage, and analyze examinations</p>
       </div>
       <div class="d-flex gap-2">
-        <button 
-          class="btn btn-outline-acon-primary"
-          @click="activeTab = 'questionBank'"
-          :class="{ active: activeTab === 'questionBank' }"
-        >
-          <i class="bi bi-bank me-1"></i>
-          Question Bank
-        </button>
-        <button 
+        <button
           class="btn btn-acon-primary"
           @click="showCreateExamModal = true"
           v-if="authStore.hasPermission('exams', 'create')"
@@ -147,7 +141,7 @@ export default {
         </button>
       </li>
       <li class="nav-item">
-        <button 
+        <button
           class="nav-link"
           :class="{ active: activeTab === 'questionBank' }"
           @click="setActiveTab('questionBank')"
@@ -157,7 +151,17 @@ export default {
         </button>
       </li>
       <li class="nav-item">
-        <button 
+        <button
+          class="nav-link"
+          :class="{ active: activeTab === 'examQuestions' }"
+          @click="setActiveTab('examQuestions')"
+        >
+          <i class="bi bi-file-earmark-check me-1"></i>
+          Exam Questions
+        </button>
+      </li>
+      <li class="nav-item">
+        <button
           class="nav-link"
           :class="{ active: activeTab === 'results' }"
           @click="setActiveTab('results')"
@@ -179,7 +183,7 @@ export default {
     </ul>
 
     <!-- Tab Content -->
-    <div class="tab-content">
+    <div class="tab-content" :class="{ 'library-tab': activeTab === 'questionBank' }">
       <!-- Exams List Tab -->
             <!-- Exams Tab -->
       <div v-if="activeTab === 'exams'" class="tab-pane active">
@@ -193,6 +197,10 @@ export default {
 
       <!-- Question Bank Tab -->
       <div v-if="activeTab === 'questionBank'" class="tab-pane active">
+        <QuestionBankLibrary />
+      </div>
+
+      <div v-if="activeTab === 'examQuestions'" class="tab-pane active">
         <QuestionBank />
       </div>
 
@@ -262,5 +270,11 @@ export default {
   border-radius: 0.375rem 0.375rem 0.375rem 0.375rem;
   padding: 1.5rem;
   box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.tab-content.library-tab {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 </style>

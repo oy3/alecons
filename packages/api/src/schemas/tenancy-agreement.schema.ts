@@ -3,10 +3,29 @@ import { Document, Types } from 'mongoose';
 
 export type TenancyAgreementDocument = TenancyAgreement & Document;
 
+export enum TenancyAgreementStatus {
+    SIGNED_AWAITING_PAYMENT = 'signed_awaiting_payment',
+    PAYMENT_CONFIRMED_AWAITING_ALLOCATION = 'payment_confirmed_awaiting_allocation',
+    EXECUTED = 'executed',
+    CANCELLED = 'cancelled',
+}
+
 @Schema({ timestamps: true })
 export class TenancyAgreement {
-    @Prop({ type: Types.ObjectId, ref: 'Student', required: true })
-    studentId: Types.ObjectId;
+    @Prop({ type: Types.ObjectId, ref: 'Student' })
+    studentId?: Types.ObjectId;
+
+    @Prop({ type: Types.ObjectId, ref: 'ExternalResident' })
+    externalResidentId?: Types.ObjectId;
+
+    @Prop({ type: Types.ObjectId, ref: 'User', index: true })
+    userId?: Types.ObjectId;
+
+    @Prop({ type: Types.ObjectId, ref: 'AccommodationApplication' })
+    accommodationApplicationId?: Types.ObjectId;
+
+    @Prop({ type: Types.ObjectId, ref: 'AcademicSession', required: true, index: true })
+    academicSessionId: Types.ObjectId;
 
     @Prop({ required: true })
     agreementReference: string; // ALECONS-TA-YYYY-StudentId-Timestamp
@@ -84,11 +103,17 @@ export class TenancyAgreement {
         signedAt: Date;
     };
 
-    @Prop({ default: 'pending' })
-    status: string; // signed, pending, approved, rejected
+    @Prop({ enum: TenancyAgreementStatus, default: TenancyAgreementStatus.SIGNED_AWAITING_PAYMENT })
+    status: TenancyAgreementStatus;
 
     @Prop()
     documentUrl?: string; // URL to generated PDF in Digital Ocean Spaces
+
+    @Prop({ select: false })
+    documentKey?: string; // Private object key for allocation-gated downloads
+
+    @Prop({ select: false })
+    documentVersion?: number;
 
     @Prop()
     notes?: string; // Any additional notes
@@ -97,5 +122,19 @@ export class TenancyAgreement {
 export const TenancyAgreementSchema = SchemaFactory.createForClass(TenancyAgreement);
 
 // Create indexes for better performance
+TenancyAgreementSchema.pre('validate', function (next) {
+    if (!this.studentId && !this.externalResidentId) {
+        return next(new Error('A student or external resident is required'));
+    }
+    next();
+});
 TenancyAgreementSchema.index({ studentId: 1 });
+TenancyAgreementSchema.index(
+    { studentId: 1, academicSessionId: 1 },
+    { unique: true, partialFilterExpression: { studentId: { $type: 'objectId' } }, name: 'uniq_tenancy_student_session' },
+);
+TenancyAgreementSchema.index(
+    { externalResidentId: 1, academicSessionId: 1 },
+    { unique: true, partialFilterExpression: { externalResidentId: { $type: 'objectId' } }, name: 'uniq_tenancy_external_session' },
+);
 TenancyAgreementSchema.index({ agreementReference: 1 }, { unique: true });

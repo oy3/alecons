@@ -119,7 +119,7 @@ ExamSchema.index({ createdBy: 1, status: 1 });
 
 // Virtual populate for questions count
 ExamSchema.virtual('questionCount', {
-    ref: 'Question',
+    ref: 'ExamQuestion',
     localField: '_id',
     foreignField: 'examId',
     count: true

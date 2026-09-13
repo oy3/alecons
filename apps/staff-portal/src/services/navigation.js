@@ -60,6 +60,12 @@ export const staffNavigationItems = [
     module: "payments",
   },
   {
+    title: "Accommodation",
+    icon: "bi-building",
+    route: "/accommodation",
+    module: "accommodation",
+  },
+  {
     title: "Notifications",
     icon: "bi-bell",
     route: "/notifications",

@@ -30,7 +30,6 @@ require_var VITE_APP_APPLICATION_PORTAL_URL
 require_var VITE_APP_STUDENT_PORTAL_URL
 require_var VITE_APP_STAFF_PORTAL_URL
 require_var VITE_APP_API_URL
-require_var VITE_PAYSTACK_PUBLIC_KEY
 
 export VITE_API_URL="${VITE_API_URL:-$VITE_APP_API_URL}"
 export VITE_API_BASE_URL="${VITE_API_BASE_URL:-$VITE_APP_API_URL}"
@@ -39,7 +38,6 @@ export VITE_APP_ENV="${VITE_APP_ENV:-production}"
 export VITE_APP_DEBUG="${VITE_APP_DEBUG:-false}"
 export VITE_APP_CBT_URL="${VITE_APP_CBT_URL:-https://cbt.alecons.edu.ng}"
 export VITE_APP_SCHOOL_ADDRESS="${VITE_APP_SCHOOL_ADDRESS:-Alebiosu College of Nursing Sciences, Iyamoye-Abuja Road, Omuoke, Ekiti State, Nigeria}"
-export VITE_APP_TENANCY_START_DATE="${VITE_APP_TENANCY_START_DATE:-2026-05-15}"
 export VITE_CBT_APP_NAME="${VITE_CBT_APP_NAME:-ALECONS CBT}"
 export VITE_APP_VERSION="${VITE_APP_VERSION:-1.0.0}"
 export VITE_LOG_LEVEL="${VITE_LOG_LEVEL:-info}"
@@ -66,14 +64,10 @@ write_env_file "$ROOT_DIR/apps/website/.env.production" \
 
 write_env_file "$ROOT_DIR/apps/application-portal/.env.production" \
     VITE_APP_API_URL \
-    VITE_APP_STUDENT_PORTAL_URL \
-    VITE_PAYSTACK_PUBLIC_KEY
+    VITE_APP_STUDENT_PORTAL_URL
 
 write_env_file "$ROOT_DIR/apps/student-portal/.env.production" \
-    VITE_APP_API_URL \
-    VITE_APP_SCHOOL_ADDRESS \
-    VITE_APP_TENANCY_START_DATE \
-    VITE_PAYSTACK_PUBLIC_KEY
+    VITE_APP_API_URL
 
 write_env_file "$ROOT_DIR/apps/staff-portal/.env.production" \
     VITE_API_URL \

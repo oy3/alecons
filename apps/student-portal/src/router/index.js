@@ -9,7 +9,8 @@ import Academics from '../views/Academics.vue'
 import Resources from '../views/Resources.vue'
 import Finance from '../views/Finance.vue'
 import Settings from '../views/Settings.vue'
-import TenancyAgreement from '../views/TenancyAgreement.vue'
+import Accommodation from '../views/Accommodation.vue'
+import AccommodationAgreement from '../views/AccommodationAgreement.vue'
 import PaymentVerification from '../views/PaymentVerification.vue'
 
 const routes = [
@@ -64,12 +65,21 @@ const routes = [
         }
     },
     {
-        path: '/tenancy-agreement',
-        name: 'TenancyAgreement',
-        component: TenancyAgreement,
+        path: '/accommodation',
+        name: 'Accommodation',
+        component: Accommodation,
         meta: {
             requiresAuth: true,
-            title: 'Tenancy Agreement - Student Portal'
+            title: 'Accommodation - Student Portal'
+        }
+    },
+    {
+        path: '/accommodation/agreement',
+        name: 'AccommodationAgreement',
+        component: AccommodationAgreement,
+        meta: {
+            requiresAuth: true,
+            title: 'Accommodation Agreement - Student Portal'
         }
     },
     {

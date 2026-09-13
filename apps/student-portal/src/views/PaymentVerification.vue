@@ -1,6 +1,6 @@
 <script>
 import Swal from "sweetalert2";
-import { studentPaymentService } from "../services/payment.js";
+import { paymentTransactionService } from "../services/payment.js";
 import { logger } from "@shared/utils/logger";
 
 export default {
@@ -21,7 +21,7 @@ export default {
     }
 
     try {
-      const result = await studentPaymentService.verifyPayment(reference);
+      const result = await paymentTransactionService.verifyPayment(reference);
 
       if (!result.success) {
         throw new Error(result.message || "Payment verification failed");

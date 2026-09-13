@@ -37,7 +37,7 @@ import {
     StudentAcademicSessionDocument,
     StudentAcademicSessionStatus,
 } from '../schemas/student-academic-session.schema';
-import { StudentPayment, StudentPaymentDocument } from '../schemas/student-payment.schema';
+import { PaymentTransaction, PaymentTransactionDocument } from '../schemas/payment-transaction.schema';
 import { ExamAttempt, ExamAttemptDocument } from '../schemas/exam-attempt.schema';
 import { ExamResult, ExamResultDocument } from '../schemas/exam-result.schema';
 import { ExamPassword, ExamPasswordDocument } from '../schemas/exam-password.schema';
@@ -50,6 +50,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { RolesService } from '../services/roles.service';
 import { ExpireApplicationDto } from '../dto/expire-application.dto';
 import { RevokeAdmissionDecisionDto } from '../dto/revoke-admission-decision.dto';
+import { CompleteScreeningDto } from '../dto/complete-screening.dto';
 import { resolveProgramSelection } from '../utils/program-relation.util';
 import {
     canRevokeAdmissionDecision,
@@ -143,7 +144,7 @@ export class StaffApplicationsController {
         @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
         @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
         @InjectModel(StudentAcademicSession.name) private studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
-        @InjectModel(StudentPayment.name) private studentPaymentModel: Model<StudentPaymentDocument>,
+        @InjectModel(PaymentTransaction.name) private paymentTransactionModel: Model<PaymentTransactionDocument>,
         @InjectModel(ExamAttempt.name) private examAttemptModel: Model<ExamAttemptDocument>,
         @InjectModel(ExamResult.name) private examResultModel: Model<ExamResultDocument>,
         @InjectModel(ExamPassword.name) private examPasswordModel: Model<ExamPasswordDocument>,
@@ -1349,7 +1350,7 @@ export class StaffApplicationsController {
             const user = application.userId as any;
             await this.assertPreStudentLifecycle(application, user);
 
-            const paymentRecords = await this.studentPaymentModel
+            const paymentRecords = await this.paymentTransactionModel
                 .find({
                     $or: [
                         { applicationId: application._id },
@@ -1369,7 +1370,7 @@ export class StaffApplicationsController {
                 { usedBy: user._id },
                 { $pull: { usedBy: user._id } },
             );
-            await this.studentPaymentModel.deleteMany({
+            await this.paymentTransactionModel.deleteMany({
                 $or: [
                     { applicationId: application._id },
                     { userId: user._id },
@@ -2867,7 +2868,11 @@ export class StaffApplicationsController {
     @Patch(':id/complete-screening')
     @ApiOperation({ summary: 'Mark screening as completed' })
     @ApiResponse({ status: 200, description: 'Screening marked as completed' })
-    async completeScreening(@Param('id') id: string, @Request() req) {
+    async completeScreening(
+        @Param('id') id: string,
+        @Body() body: CompleteScreeningDto,
+        @Request() req,
+    ) {
         try {
             this.logger.log('Marking screening as completed for application:', id);
 
@@ -2922,7 +2927,8 @@ export class StaffApplicationsController {
                     'The scheduled screening date or time is invalid',
                 );
             }
-            if (scheduledAt.getTime() > Date.now()) {
+            const completedBeforeScheduledTime = scheduledAt.getTime() > Date.now();
+            if (completedBeforeScheduledTime && !body?.bypassSchedule) {
                 throw new ConflictException(
                     'Screening cannot be completed before its scheduled date and time',
                 );
@@ -2935,7 +2941,9 @@ export class StaffApplicationsController {
             application.currentStage = 7; // Move to acceptance fee stage
             this.appendAuditEntry(application, {
                 action: 'screening_completed',
-                description: 'Screening was marked as completed.',
+                description: completedBeforeScheduledTime
+                    ? 'Screening was marked as completed before its scheduled date and time using a staff override.'
+                    : 'Screening was marked as completed.',
                 actor: req.user,
                 metadata: {
                     scheduledAt,
@@ -2943,6 +2951,8 @@ export class StaffApplicationsController {
                     resultingStatus: application.status,
                     previousStage,
                     resultingStage: application.currentStage,
+                    completedBeforeScheduledTime,
+                    scheduleOverrideUsed: completedBeforeScheduledTime && body?.bypassSchedule === true,
                 },
             });
             await application.save();

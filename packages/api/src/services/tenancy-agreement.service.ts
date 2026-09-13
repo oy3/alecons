@@ -9,6 +9,7 @@ import { Model, Types } from "mongoose";
 import {
   TenancyAgreement,
   TenancyAgreementDocument,
+  TenancyAgreementStatus,
 } from "../schemas/tenancy-agreement.schema";
 import { Student, StudentDocument } from "../schemas/student.schema";
 import {
@@ -16,8 +17,44 @@ import {
   ApplicationDocument,
 } from "../schemas/application.schema";
 import { UploadService } from "./upload.service";
+import { EmailService } from "./email.service";
+import { AccommodationApplication, AccommodationApplicationDocument, AccommodationApplicantType, AccommodationApplicationStatus } from '../schemas/accommodation-application.schema';
+import { SessionControl, SessionControlDocument } from '../schemas/session-control.schema';
+import { AccommodationAssignment, AccommodationAssignmentDocument } from '../schemas/accommodation-assignment.schema';
+import { AcademicSessionDocument } from '../schemas/academic-session.schema';
+import { PaymentContext, PaymentTransaction, PaymentTransactionDocument } from '../schemas/payment-transaction.schema';
 import * as path from "path";
 import * as fs from "fs";
+
+type ExternalAgreementInput = {
+  userId: Types.ObjectId;
+  externalResidentId: Types.ObjectId;
+  accommodationApplicationId: Types.ObjectId;
+  academicSessionId: Types.ObjectId;
+  applicationNumber: string;
+  tenantName: string;
+  courseOfStudy: string;
+  residentialAddress: string;
+  phoneNumber: string;
+  parentInfo: { name: string; phoneNumber: string };
+  guarantorInfo: { name: string; phoneNumber: string; address: string; occupation: string; relationship: string };
+  hostelInfo: { address: string; tenancyStartDate: string; tenancyEndDate: string };
+};
+
+const EXTERNAL_TENANCY_DOCUMENT_VERSION = 2;
+const INTERNAL_TENANCY_DOCUMENT_VERSION = 1;
+
+const GUARANTOR_RELATIONSHIP_LABELS: Record<string, string> = {
+  father: 'Father',
+  mother: 'Mother',
+  uncle: 'Uncle',
+  aunt: 'Aunt',
+  brother: 'Brother',
+  sister: 'Sister',
+  grandfather: 'Grandfather',
+  grandmother: 'Grandmother',
+  other_blood_relative: 'Other blood relative',
+};
 
 @Injectable()
 export class TenancyAgreementService {
@@ -38,8 +75,273 @@ export class TenancyAgreementService {
     @InjectModel(Student.name) private studentModel: Model<StudentDocument>,
     @InjectModel(Application.name)
     private applicationModel: Model<ApplicationDocument>,
-    private uploadService: UploadService
+    @InjectModel(AccommodationApplication.name)
+    private accommodationApplicationModel: Model<AccommodationApplicationDocument>,
+    @InjectModel(SessionControl.name)
+    private sessionControlModel: Model<SessionControlDocument>,
+    @InjectModel(AccommodationAssignment.name)
+    private accommodationAssignmentModel: Model<AccommodationAssignmentDocument>,
+    @InjectModel(PaymentTransaction.name)
+    private paymentTransactionModel: Model<PaymentTransactionDocument>,
+    private uploadService: UploadService,
+    private emailService: EmailService,
   ) { }
+
+  private async emailExternalAllocationDocuments(
+    accommodationApplicationId: Types.ObjectId,
+    applicationNumber: string,
+    externalResidentNumber: string,
+    agreement: TenancyAgreementDocument,
+    assignment: AccommodationAssignmentDocument,
+  ) {
+    const transactions = this.paymentTransactionModel.db.collection('paymenttransactions');
+    const transaction = await transactions.findOne(
+      {
+        accommodationApplicationId,
+        payerType: 'external_resident',
+        paymentContext: 'accommodation_application',
+        status: 'successful',
+      },
+      { sort: { paidAt: -1, createdAt: -1 } },
+    );
+    if (!transaction || !agreement.documentKey || !assignment.allocationSlipKey) return;
+
+    const staleClaim = new Date(Date.now() - (10 * 60 * 1000));
+    const claimed = await transactions.updateOne(
+      {
+        _id: transaction._id,
+        $or: [
+          { allocationDocumentsEmailStatus: { $exists: false } },
+          { allocationDocumentsEmailStatus: 'failed' },
+          {
+            allocationDocumentsEmailStatus: 'sending',
+            allocationDocumentsEmailAttemptedAt: { $lt: staleClaim },
+          },
+        ],
+      },
+      {
+        $set: {
+          allocationDocumentsEmailStatus: 'sending',
+          allocationDocumentsEmailAttemptedAt: new Date(),
+        },
+        $inc: { allocationDocumentsEmailAttempts: 1 },
+        $unset: { allocationDocumentsEmailError: '' },
+      },
+    );
+    if (!claimed.modifiedCount) return;
+
+    try {
+      const [user, tenancyAgreement, allocationSlip] = await Promise.all([
+        this.paymentTransactionModel.db.collection('users').findOne({ _id: transaction.userId }),
+        this.uploadService.getFileBufferByKey(agreement.documentKey),
+        this.uploadService.getFileBufferByKey(assignment.allocationSlipKey),
+      ]);
+      if (!user?.email) throw new Error('External resident email address was not found');
+
+      await this.emailService.sendExternalAccommodationAllocatedEmail({
+        to: user.email,
+        firstName: user.firstName || 'Resident',
+        applicationNumber,
+        externalResidentNumber,
+        hostel: (assignment.hostelId as any)?.name || 'Assigned hostel',
+        block: (assignment.blockId as any)?.name || 'Assigned block',
+        room: (assignment.roomId as any)?.name || 'Assigned room',
+        slotNumber: assignment.slotNumber,
+        tenancyAgreement,
+        allocationSlip,
+      });
+
+      const deliveredAt = new Date();
+      await transactions.updateOne(
+        { _id: transaction._id, allocationDocumentsEmailStatus: 'sending' },
+        {
+          $set: {
+            allocationDocumentsEmailStatus: 'sent',
+            allocationDocumentsEmailedAt: deliveredAt,
+          },
+        },
+      );
+      await this.paymentTransactionModel.db.collection('accommodationaudits').updateOne(
+        { accommodationApplicationId, action: 'allocation_documents_emailed' },
+        {
+          $setOnInsert: {
+            accommodationApplicationId,
+            action: 'allocation_documents_emailed',
+            actorType: 'system',
+            metadata: { transactionId: transaction._id, deliveredAt },
+            createdAt: deliveredAt,
+            updatedAt: deliveredAt,
+          },
+        },
+        { upsert: true },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await transactions.updateOne(
+        { _id: transaction._id, allocationDocumentsEmailStatus: 'sending' },
+        {
+          $set: {
+            allocationDocumentsEmailStatus: 'failed',
+            allocationDocumentsEmailError: message.slice(0, 500),
+          },
+        },
+      );
+      this.logger.error(`Could not email external accommodation documents for ${applicationNumber}: ${message}`);
+    }
+  }
+
+  private tenancyConfiguration(session: AcademicSessionDocument | any) {
+    const address = (process.env.ACCOMMODATION_HOSTEL_ADDRESS || '').trim();
+    if (!address) {
+      throw new BadRequestException('Accommodation hostel address is not configured');
+    }
+    if (!session?.startDate || !session?.endDate) {
+      throw new BadRequestException('Academic session tenancy dates are not configured');
+    }
+    return {
+      address,
+      tenancyStartDate: new Date(session.startDate).toISOString().slice(0, 10),
+      tenancyEndDate: new Date(session.endDate).toISOString().slice(0, 10),
+    };
+  }
+
+  private async internalStudentContext(userId: string, requireOpen = false) {
+    if (!Types.ObjectId.isValid(userId)) throw new NotFoundException('Student record not found');
+    const student = await this.studentModel
+      .findOne({ userId: new Types.ObjectId(userId) })
+      .populate('userId', 'firstName otherName lastName phone email gender profileImageUrl')
+      .populate('applicationId', 'applicationNumber gender address profileImageUrl')
+      .populate({
+        path: 'programId',
+        select: 'name programTypeId programModeId',
+        populate: [
+          { path: 'programTypeId', select: 'type' },
+          { path: 'programModeId', select: 'mode description' },
+        ],
+      })
+      .populate('academicSession', 'sessionYear title startDate endDate status active');
+    if (!student) throw new NotFoundException('Student record not found');
+
+    const session = student.academicSession as any;
+    const control = await this.sessionControlModel.findOne({ academicSessionId: session._id }).lean();
+    if (requireOpen && !control?.accommodation?.internalApplicationsOpen) {
+      throw new BadRequestException('Internal accommodation applications are currently closed for this academic session');
+    }
+    if (requireOpen && !control?.accommodation?.internalPaymentId) {
+      throw new BadRequestException('Internal accommodation payment is not configured for this academic session');
+    }
+    return { student, session, control, hostelInfo: this.tenancyConfiguration(session) };
+  }
+
+  private async ensureInternalAccommodationApplication(userId: string) {
+    const context = await this.internalStudentContext(userId, true);
+    const { student } = context;
+    let application = await this.accommodationApplicationModel
+      .findOne({ userId: new Types.ObjectId(userId), academicSessionId: (student.academicSession as any)._id || student.academicSession })
+      .select('+agreementDraft');
+    if (!application) {
+      const admissionApplication = student.applicationId as any;
+      const account = student.userId as any;
+      const gender = String(admissionApplication?.gender || account?.gender || '').toLowerCase();
+      if (!['male', 'female'].includes(gender)) {
+        throw new BadRequestException('Student gender must be recorded before an accommodation application can be created');
+      }
+      application = await this.accommodationApplicationModel.create({
+        applicationNumber: `ACC-${new Date().getFullYear()}-${student._id.toString().slice(-8).toUpperCase()}`,
+        userId: new Types.ObjectId(userId),
+        studentId: student._id,
+        academicSessionId: (student.academicSession as any)._id || student.academicSession,
+        applicantType: AccommodationApplicantType.INTERNAL,
+        status: AccommodationApplicationStatus.AWAITING_AGREEMENT,
+        category: 'student',
+        gender,
+      });
+    }
+    if (application.applicantType !== AccommodationApplicantType.INTERNAL) {
+      throw new BadRequestException('This academic session already has a non-student accommodation application');
+    }
+    return { ...context, application };
+  }
+
+  async getInternalAccommodationOverview(userId: string) {
+    const { student, session, control, hostelInfo } = await this.internalStudentContext(userId);
+    const sessionId = (student.academicSession as any)._id || student.academicSession;
+    const application = await this.accommodationApplicationModel
+      .findOne({ userId: new Types.ObjectId(userId), academicSessionId: sessionId })
+      .select('+agreementDraft')
+      .lean();
+    const agreement = application
+      ? await this.tenancyAgreementModel.findOne({ accommodationApplicationId: application._id }).lean()
+      : null;
+    const assignment = application
+      ? await this.accommodationAssignmentModel
+        .findOne({ accommodationApplicationId: application._id, status: 'active' })
+        .populate('hostelId', 'name').populate('blockId', 'name').populate('roomId', 'name capacity').lean()
+      : null;
+    const payment = application
+      ? await this.paymentTransactionModel.findOne({
+        accommodationApplicationId: application._id,
+        paymentContext: PaymentContext.ACCOMMODATION_APPLICATION,
+      }).sort({ createdAt: -1 }).lean()
+      : null;
+    const account = student.userId as any;
+    const admissionApplication = student.applicationId as any;
+    const isAllocated = application?.status === AccommodationApplicationStatus.ALLOCATED && !!assignment;
+    const program = student.programId as any;
+    const programLabel = [
+      program?.programTypeId?.type,
+      program?.programModeId?.mode || program?.programModeId?.description,
+      program?.name,
+    ].filter(Boolean).join(' ');
+
+    return { success: true, data: {
+      student: {
+        fullName: [account?.firstName, account?.otherName, account?.lastName].filter(Boolean).join(' '),
+        matriculationNumber: student.matriculationNumber,
+        program: programLabel,
+        session: session.sessionYear || session.title,
+        profileImageUrl: account?.profileImageUrl || admissionApplication?.profileImageUrl || null,
+        phoneNumber: account?.phone || '',
+        residentialAddress: admissionApplication?.address || '',
+      },
+      configuration: {
+        internalApplicationsOpen: !!control?.accommodation?.internalApplicationsOpen,
+        paymentConfigured: !!control?.accommodation?.internalPaymentId,
+        hostelAddress: hostelInfo.address,
+        tenancyStartDate: hostelInfo.tenancyStartDate,
+        tenancyEndDate: hostelInfo.tenancyEndDate,
+        emergencyContacts: ['+234 916 000 8679', '+234 708 460 1610'],
+      },
+      application: application ? {
+        id: application._id, applicationNumber: application.applicationNumber,
+        status: application.status, paidAt: application.paidAt || null, allocatedAt: application.allocatedAt || null,
+      } : null,
+      agreement: agreement ? {
+        reference: agreement.agreementReference, status: agreement.status,
+        signedAt: agreement.agreementTerms?.signedAt || null, hasDraft: false, draftSavedAt: null,
+      } : { status: 'not_started', hasDraft: !!application?.agreementDraft, draftSavedAt: application?.agreementDraftSavedAt || null },
+      draft: application?.agreementDraft || null,
+      payment: payment ? {
+        transactionId: payment._id, reference: payment.reference,
+        status: payment.status, paidAt: payment.paidAt || null,
+      } : null,
+      assignment: assignment ? {
+        hostel: (assignment.hostelId as any)?.name || '', block: (assignment.blockId as any)?.name || '',
+        room: (assignment.roomId as any)?.name || '', slotNumber: assignment.slotNumber,
+      } : null,
+      documents: { agreementAvailable: isAllocated, allocationSlipAvailable: isAllocated },
+    } };
+  }
+
+  async saveInternalAgreementDraft(userId: string, draft: object) {
+    const { student, application } = await this.ensureInternalAccommodationApplication(userId);
+    const existingAgreement = await this.tenancyAgreementModel.exists({ studentId: student._id, accommodationApplicationId: application._id });
+    if (existingAgreement) throw new BadRequestException('A signed agreement can no longer be edited');
+    application.agreementDraft = draft as Record<string, unknown>;
+    application.agreementDraftSavedAt = new Date();
+    await application.save();
+    return { success: true, data: { savedAt: application.agreementDraftSavedAt } };
+  }
 
   /**
    * Get base64 encoded image from file system
@@ -92,20 +394,18 @@ export class TenancyAgreementService {
         userId
       );
 
-      // Find student record
-      const student = await this.studentModel
-        .findOne({
-          userId: new Types.ObjectId(userId),
-        })
-        .populate("applicationId");
+      const { student, application: accommodationApplication, hostelInfo } =
+        await this.ensureInternalAccommodationApplication(userId);
 
-      if (!student) {
-        throw new NotFoundException("Student record not found");
+      if (agreementData?.agreementTerms?.agreedToTerms !== true) {
+        throw new BadRequestException('You must accept the tenancy agreement before submitting');
       }
 
       // Check if student has already signed agreement
       const existingAgreement = await this.tenancyAgreementModel.findOne({
         studentId: student._id,
+        accommodationApplicationId: accommodationApplication._id,
+        academicSessionId: (student.academicSession as any)._id || student.academicSession,
       });
 
       if (existingAgreement) {
@@ -123,6 +423,9 @@ export class TenancyAgreementService {
       // Create tenancy agreement record
       const tenancyAgreement = new this.tenancyAgreementModel({
         studentId: student._id,
+        userId: new Types.ObjectId(userId),
+        accommodationApplicationId: accommodationApplication._id,
+        academicSessionId: (student.academicSession as any)._id || student.academicSession,
         agreementReference,
         tenantName: agreementData.personalInfo.tenantName,
         courseOfStudy: agreementData.personalInfo.courseOfStudy,
@@ -130,27 +433,23 @@ export class TenancyAgreementService {
         phoneNumber: agreementData.personalInfo.phoneNumber,
         parentInfo: agreementData.parentInfo,
         guarantorInfo: agreementData.guarantorInfo,
-        hostelInfo: agreementData.hostelInfo,
+        hostelInfo,
         agreementTerms: {
-          agreedToTerms: agreementData.agreementTerms.agreedToTerms,
-          signedAt: new Date(agreementData.agreementTerms.signedAt),
+          agreedToTerms: agreementData.agreementTerms.agreedToTerms === true,
+          signedAt: new Date(),
         },
-        status: "signed",
+        status: TenancyAgreementStatus.SIGNED_AWAITING_PAYMENT,
       });
 
       // Save agreement
       const savedAgreement = await tenancyAgreement.save();
+      accommodationApplication.status = AccommodationApplicationStatus.AWAITING_PAYMENT;
+      accommodationApplication.submittedAt = new Date();
+      accommodationApplication.agreementDraft = undefined;
+      accommodationApplication.agreementDraftSavedAt = undefined;
+      await accommodationApplication.save();
       this.logger.log("Tenancy agreement saved with ID:", savedAgreement._id);
 
-      // Generate PDF document
-      const documentUrl = await this.generateAgreementPDF(
-        savedAgreement,
-        student
-      );
-
-      // Update agreement with document URL
-      savedAgreement.documentUrl = documentUrl;
-      await savedAgreement.save();
       this.logger.log(
         "Tenancy agreement process completed for:",
         agreementReference
@@ -161,8 +460,8 @@ export class TenancyAgreementService {
         data: {
           agreementId: savedAgreement._id,
           agreementReference,
-          documentUrl,
-          status: "signed",
+          documentAvailable: false,
+          status: TenancyAgreementStatus.SIGNED_AWAITING_PAYMENT,
           message: "Tenancy agreement signed and processed successfully",
         },
       };
@@ -172,99 +471,189 @@ export class TenancyAgreementService {
     }
   }
 
-  /**
-   * Get tenancy agreement status for a student
-   */
-  async getTenancyAgreementStatus(userId: string) {
-    try {
-      const student = await this.studentModel.findOne({
-        userId: new Types.ObjectId(userId),
-      });
-
-      if (!student) {
-        throw new NotFoundException("Student record not found");
-      }
-
-      const agreement = await this.tenancyAgreementModel
-        .findOne({
-          studentId: student._id,
-        })
-        .sort({ createdAt: -1 }); // Get latest agreement
-
-      const hasSigned = !!agreement;
-
-      return {
-        success: true,
-        data: {
-          status: hasSigned ? "signed" : "not_started",
-          hasSigned,
-          documentUrl: agreement?.documentUrl || null,
-          agreement: agreement
-            ? {
-              id: agreement._id,
-              reference: agreement.agreementReference,
-              signedAt: agreement.agreementTerms.signedAt,
-              status: agreement.status,
-            }
-            : null,
-        },
-      };
-    } catch (error) {
-      this.logger.error(
-        "Error getting tenancy agreement status:",
-        error.message
-      );
-      throw error;
+  private async ensureInternalAccommodationDocuments(userId: string) {
+    const { student } = await this.internalStudentContext(userId);
+    const sessionId = (student.academicSession as any)._id || student.academicSession;
+    const application = await this.accommodationApplicationModel.findOne({
+      userId: new Types.ObjectId(userId), academicSessionId: sessionId,
+      applicantType: AccommodationApplicantType.INTERNAL,
+    });
+    if (!application || application.status !== AccommodationApplicationStatus.ALLOCATED) {
+      throw new BadRequestException('Accommodation documents become available after allocation');
     }
+    const agreement = await this.tenancyAgreementModel
+      .findOne({ accommodationApplicationId: application._id })
+      .select('+documentKey +documentVersion');
+    const assignment = await this.accommodationAssignmentModel
+      .findOne({ accommodationApplicationId: application._id, status: 'active' })
+      .select('+allocationSlipKey')
+      .populate('hostelId', 'name').populate('blockId', 'name').populate('roomId', 'name').exec();
+    if (!agreement || !assignment) throw new NotFoundException('The agreement or room allocation could not be found');
+
+    if (!agreement.documentKey || agreement.documentVersion !== INTERNAL_TENANCY_DOCUMENT_VERSION) {
+      const previousKey = agreement.documentKey;
+      const previousUrl = agreement.documentUrl;
+      agreement.documentKey = await this.generateInternalAgreementPDF(
+        agreement, student.matriculationNumber, application.applicationNumber,
+      );
+      agreement.documentVersion = INTERNAL_TENANCY_DOCUMENT_VERSION;
+      agreement.documentUrl = undefined;
+      agreement.status = TenancyAgreementStatus.EXECUTED;
+      await agreement.save();
+      if (previousKey) await this.uploadService.deleteFromSpaces(previousKey).catch(() => undefined);
+      if (previousUrl) await this.uploadService.deleteByUrl(previousUrl).catch(() => undefined);
+    }
+
+    if (!assignment.allocationSlipKey) {
+      const pdfBuffer = await this.generateAllocationSlipPDFBuffer(agreement, assignment);
+      const fileName = `allocation-slip-${application.applicationNumber}.pdf`;
+      const upload = await this.uploadService.uploadPrivateStudentAccommodationDocument(
+        { buffer: pdfBuffer, originalname: fileName, mimetype: 'application/pdf', size: pdfBuffer.length } as Express.Multer.File,
+        student.matriculationNumber, application.applicationNumber, 'allocation_slip',
+      );
+      assignment.allocationSlipKey = upload.key;
+      assignment.allocationSlipUrl = undefined;
+      await assignment.save();
+    }
+    return { application, agreement, assignment };
   }
 
-  /**
-   * Get tenancy agreement document details
-   */
-  async getTenancyAgreementDocument(userId: string) {
-    try {
-      const student = await this.studentModel.findOne({
-        userId: new Types.ObjectId(userId),
-      });
+  async getInternalAccommodationDocument(userId: string, type: 'agreement' | 'allocation-slip') {
+    const { application, agreement, assignment } = await this.ensureInternalAccommodationDocuments(userId);
+    const key = type === 'agreement' ? agreement.documentKey : assignment.allocationSlipKey;
+    if (!key) throw new NotFoundException('Accommodation document not found');
+    return {
+      buffer: await this.uploadService.getFileBufferByKey(key),
+      contentType: 'application/pdf',
+      filename: type === 'agreement'
+        ? `tenancy-agreement-${agreement.agreementReference}.pdf`
+        : `allocation-slip-${application.applicationNumber}.pdf`,
+    };
+  }
 
-      if (!student) {
-        throw new NotFoundException("Student record not found");
-      }
-
-      // Check if student has signed agreement
-      const agreement = await this.tenancyAgreementModel
-        .findOne({
-          studentId: student._id,
-        })
-        .sort({ createdAt: -1 });
-
-      if (!agreement) {
-        throw new NotFoundException(
-          "No tenancy agreement found for this student"
-        );
-      }
-
-      return {
-        success: true,
-        data: {
-          agreement: {
-            id: agreement._id,
-            reference: agreement.agreementReference,
-            documentUrl: agreement.documentUrl,
-            status: agreement.status,
-            signedAt: agreement.agreementTerms.signedAt,
-            tenantName: agreement.tenantName,
-            courseOfStudy: agreement.courseOfStudy,
-          },
-        },
-      };
-    } catch (error) {
-      this.logger.error(
-        "Error getting tenancy agreement document:",
-        error.message
-      );
-      throw error;
+  async submitExternalTenancyAgreement(input: ExternalAgreementInput) {
+    const existingAgreement = await this.tenancyAgreementModel.findOne({
+      externalResidentId: input.externalResidentId,
+      academicSessionId: input.academicSessionId,
+    }).lean();
+    if (existingAgreement) {
+      throw new BadRequestException('Tenancy agreement has already been signed');
     }
+
+    const agreementReference = this.generateAgreementReference(
+      input.externalResidentId.toString(),
+      new Date().getFullYear(),
+    );
+    return this.tenancyAgreementModel.create({
+      userId: input.userId,
+      externalResidentId: input.externalResidentId,
+      accommodationApplicationId: input.accommodationApplicationId,
+      academicSessionId: input.academicSessionId,
+      agreementReference,
+      tenantName: input.tenantName,
+      courseOfStudy: input.courseOfStudy,
+      residentialAddress: input.residentialAddress,
+      phoneNumber: input.phoneNumber,
+      parentInfo: input.parentInfo,
+      guarantorInfo: input.guarantorInfo,
+      hostelInfo: input.hostelInfo,
+      agreementTerms: { agreedToTerms: true, signedAt: new Date() },
+      status: TenancyAgreementStatus.SIGNED_AWAITING_PAYMENT,
+    });
+  }
+
+  async getAgreementForAccommodationApplication(accommodationApplicationId: Types.ObjectId) {
+    return this.tenancyAgreementModel.findOne({ accommodationApplicationId })
+      .select('agreementReference documentUrl status agreementTerms.signedAt')
+      .lean();
+  }
+
+  async finalizeExternalAccommodationDocuments(
+    accommodationApplicationId: Types.ObjectId,
+    applicationNumber: string,
+    externalResidentNumber: string,
+  ) {
+    const agreement = await this.tenancyAgreementModel
+      .findOne({ accommodationApplicationId })
+      .select('+documentKey +documentVersion');
+    const assignment = await this.accommodationAssignmentModel
+      .findOne({ accommodationApplicationId, status: 'active' })
+      .select('+allocationSlipKey')
+      .populate('hostelId', 'name')
+      .populate('blockId', 'name')
+      .populate('roomId', 'name')
+      .exec();
+    if (!agreement || !assignment) throw new NotFoundException('The agreement or bed allocation could not be found');
+    const documentPrefix = `external-residents/${externalResidentNumber}/documents/`;
+
+    if (
+      !agreement.documentKey?.startsWith(documentPrefix)
+      || agreement.documentVersion !== EXTERNAL_TENANCY_DOCUMENT_VERSION
+    ) {
+      const previousPrivateKey = agreement.documentKey;
+      const previousPublicUrl = agreement.documentUrl;
+      const fileName = `tenancy-agreement-${agreement.agreementReference}.pdf`;
+      const pdfBuffer = await this.generateTenancyAgreementPDFBuffer(agreement);
+      const fileObject = { buffer: pdfBuffer, originalname: fileName, mimetype: 'application/pdf', size: pdfBuffer.length } as Express.Multer.File;
+      const upload = await this.uploadService.uploadPrivateAccommodationDocument(
+        fileObject,
+        externalResidentNumber,
+        applicationNumber,
+        'tenancy_agreement',
+      );
+      agreement.documentKey = upload.key;
+      agreement.documentVersion = EXTERNAL_TENANCY_DOCUMENT_VERSION;
+      agreement.documentUrl = undefined;
+      await agreement.save();
+      if (previousPublicUrl) {
+        await this.uploadService.deleteByUrl(previousPublicUrl).catch((error) => {
+          this.logger.warn(`Could not remove superseded public tenancy agreement: ${error.message}`);
+        });
+      }
+      if (previousPrivateKey) {
+        await this.uploadService.deleteFromSpaces(previousPrivateKey).catch((error) => {
+          this.logger.warn(`Could not remove superseded private tenancy agreement: ${error.message}`);
+        });
+      }
+    }
+    if (!assignment.allocationSlipKey?.startsWith(documentPrefix)) {
+      const previousPrivateKey = assignment.allocationSlipKey;
+      const previousPublicUrl = assignment.allocationSlipUrl;
+      const fileName = `allocation-slip-${applicationNumber}.pdf`;
+      const pdfBuffer = await this.generateAllocationSlipPDFBuffer(agreement, assignment);
+      const fileObject = { buffer: pdfBuffer, originalname: fileName, mimetype: 'application/pdf', size: pdfBuffer.length } as Express.Multer.File;
+      const upload = await this.uploadService.uploadPrivateAccommodationDocument(
+        fileObject,
+        externalResidentNumber,
+        applicationNumber,
+        'allocation_slip',
+      );
+      assignment.allocationSlipKey = upload.key;
+      assignment.allocationSlipUrl = undefined;
+      await assignment.save();
+      if (previousPublicUrl) {
+        await this.uploadService.deleteByUrl(previousPublicUrl).catch((error) => {
+          this.logger.warn(`Could not remove superseded public allocation slip: ${error.message}`);
+        });
+      }
+      if (previousPrivateKey) {
+        await this.uploadService.deleteFromSpaces(previousPrivateKey).catch((error) => {
+          this.logger.warn(`Could not remove superseded private allocation slip: ${error.message}`);
+        });
+      }
+    }
+    if (agreement.status !== TenancyAgreementStatus.EXECUTED) {
+      agreement.status = TenancyAgreementStatus.EXECUTED;
+      await agreement.save();
+    }
+    await this.emailExternalAllocationDocuments(
+      accommodationApplicationId,
+      applicationNumber,
+      externalResidentNumber,
+      agreement,
+      assignment,
+    );
+    return { agreement, assignment };
   }
 
   /**
@@ -282,21 +671,16 @@ export class TenancyAgreementService {
   /**
    * Generate PDF document for the tenancy agreement and upload to DigitalOcean Spaces
    */
-  private async generateAgreementPDF(
+  private async generateInternalAgreementPDF(
     agreement: TenancyAgreementDocument,
-    student: StudentDocument
+    matriculationNumber: string,
+    applicationNumber: string,
   ): Promise<string> {
     try {
       this.logger.log(
         "Generating PDF for agreement:",
         agreement.agreementReference
       );
-
-      // Get application details for proper file organization
-      const application = await this.applicationModel.findById(
-        student.applicationId
-      );
-      const applicationNumber = application?.applicationNumber || "unknown";
 
       // Generate PDF filename with proper naming convention
       const fileName = `tenancy-agreement-${agreement.agreementReference}.pdf`;
@@ -313,19 +697,18 @@ export class TenancyAgreementService {
         size: pdfBuffer.length,
       } as Express.Multer.File;
 
-      // Upload to DigitalOcean Spaces using existing upload service
-      const uploadResult = await this.uploadService.uploadToSpaces(
+      const uploadResult = await this.uploadService.uploadPrivateStudentAccommodationDocument(
         fileObject,
+        matriculationNumber,
         applicationNumber,
-        "tenancy_agreement",
-        false // Not temp file
+        'tenancy_agreement',
       );
 
       this.logger.log(
         "PDF generated and uploaded successfully:",
-        uploadResult.url
+        uploadResult.key
       );
-      return uploadResult.url;
+      return uploadResult.key;
     } catch (error) {
       this.logger.error("Error generating agreement PDF:", error.message);
       throw error;
@@ -369,6 +752,31 @@ export class TenancyAgreementService {
     }
   }
 
+  private async generateAllocationSlipPDFBuffer(
+    agreement: TenancyAgreementDocument,
+    assignment: AccommodationAssignmentDocument,
+  ): Promise<Buffer> {
+    let browser = null;
+    try {
+      const { launchPuppeteerBrowser } = await import('../utils/puppeteer-launch.util');
+      browser = await launchPuppeteerBrowser();
+      const page = await browser.newPage();
+      const hostel = assignment.hostelId as any;
+      const block = assignment.blockId as any;
+      const room = assignment.roomId as any;
+      const allocatedAt = new Date(assignment.allocatedAt).toLocaleDateString('en-GB', {
+        day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Africa/Lagos',
+      });
+      await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>
+        @page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#202428;margin:0}.header{text-align:center;border-bottom:3px solid #c62828;padding-bottom:18px;margin-bottom:30px}.header h1{font-size:20px;color:#c62828;margin:0 0 6px}.title{text-align:center;font-size:24px;margin:34px 0}.reference{text-align:center;color:#62676d;margin-bottom:30px}.grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #d8dcdf}.item{padding:16px;border-bottom:1px solid #d8dcdf}.item:nth-child(odd){border-right:1px solid #d8dcdf}.label{display:block;color:#687078;font-size:11px;text-transform:uppercase;margin-bottom:6px}.value{font-size:16px;font-weight:700}.notice{margin-top:30px;padding:16px;background:#f5f7f7}.footer{margin-top:50px;text-align:center;color:#687078;font-size:11px}
+      </style></head><body><div class="header"><h1>ALEBIOSU COLLEGE OF NURSING SCIENCES</h1><div>Omuoke, Ekiti State, Nigeria</div></div><h2 class="title">HOSTEL ALLOCATION SLIP</h2><div class="reference">Agreement reference: ${agreement.agreementReference}</div><div class="grid"><div class="item"><span class="label">Resident</span><span class="value">${agreement.tenantName}</span></div><div class="item"><span class="label">Allocated on</span><span class="value">${allocatedAt}</span></div><div class="item"><span class="label">Hostel</span><span class="value">${hostel?.name || ''}</span></div><div class="item"><span class="label">Block</span><span class="value">${block?.name || ''}</span></div><div class="item"><span class="label">Room</span><span class="value">${room?.name || ''}</span></div><div class="item"><span class="label">Bed slot</span><span class="value">${assignment.slotNumber}</span></div><div class="item"><span class="label">Tenancy starts</span><span class="value">${agreement.hostelInfo.tenancyStartDate}</span></div><div class="item"><span class="label">Tenancy ends</span><span class="value">${agreement.hostelInfo.tenancyEndDate}</span></div></div><div class="notice">Present this allocation slip and your signed tenancy agreement during hostel check-in.</div><div class="footer">Generated electronically by ALECONS Institutional Management Platform</div></body></html>`, { waitUntil: 'networkidle0' });
+      const pdfData = await page.pdf({ format: 'A4', printBackground: true });
+      return Buffer.from(pdfData);
+    } finally {
+      if (browser) await browser.close();
+    }
+  }
+
   /**
    * Create the HTML template for tenancy agreement matching the official format
    */
@@ -379,6 +787,8 @@ export class TenancyAgreementService {
     const day = signedDate.getDate();
     const month = signedDate.toLocaleDateString("en-GB", { month: "long" });
     const year = signedDate.getFullYear();
+    const guarantorRelationship = GUARANTOR_RELATIONSHIP_LABELS[agreement.guarantorInfo.relationship]
+      || agreement.guarantorInfo.relationship.replace(/_/g, ' ').replace(/^./, (character) => character.toUpperCase());
 
     // Get logo and signature sources using the same method as admission letter
     const logoSrc = this.getLogoSrc();
@@ -583,7 +993,7 @@ export class TenancyAgreementService {
                 </div>
 
                 <div class="whereas-item">
-                    <strong>C.</strong> The rent for a bed space per year is N100, 000, 00k (only) including utilities and N5,000 for general fix around space (total= N105,000). Same having been paid prior to the execution of the agreement, the receipt the Landlord acknowledged. The tenancy of the Tenant takes effect as from <strong> ${agreement.hostelInfo.tenancyStartDate
+                    <strong>C.</strong> The applicable accommodation fee is payable in full before a bed space can be allocated. Signing this agreement does not constitute proof of payment or allocation. The tenancy period, once payment is verified and allocation is completed, runs from <strong> ${agreement.hostelInfo.tenancyStartDate
       }</strong> to <strong>${agreement.hostelInfo.tenancyEndDate
       }</strong></div>
 
@@ -764,8 +1174,7 @@ export class TenancyAgreementService {
       }</strong></p>
                     <p>OCCUPATION: <strong>${agreement.guarantorInfo.occupation
       }</strong></p>
-                    <p>RELATIONSHIP: <strong>${agreement.guarantorInfo.relationship
-      }</strong></p>
+                    <p>RELATIONSHIP: <strong>${guarantorRelationship}</strong></p>
                 </div>
             </div>
         </div>
@@ -774,31 +1183,4 @@ export class TenancyAgreementService {
 </html>`;
   }
 
-  /**
-   * Check if student can make accommodation payments
-   */
-  async canMakeAccommodationPayment(userId: string): Promise<boolean> {
-    try {
-      const student = await this.studentModel.findOne({
-        userId: new Types.ObjectId(userId),
-      });
-
-      if (!student) {
-        return false;
-      }
-
-      // Check if tenancy agreement exists
-      const agreement = await this.tenancyAgreementModel.findOne({
-        studentId: student._id,
-      });
-
-      return !!agreement;
-    } catch (error) {
-      this.logger.error(
-        "Error checking accommodation payment eligibility:",
-        error.message
-      );
-      return false;
-    }
-  }
 }

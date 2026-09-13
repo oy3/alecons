@@ -93,6 +93,12 @@ const routes = [
         meta: { requiresAuth: true, module: 'payments' }
     },
     {
+        path: '/accommodation',
+        name: 'Accommodation',
+        component: () => import('../views/accommodation/Accommodation.vue'),
+        meta: { requiresAuth: true, module: 'accommodation' }
+    },
+    {
         path: '/notifications',
         name: 'Notifications',
         component: () => import('../views/notifications/Notifications.vue'),

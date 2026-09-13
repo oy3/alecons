@@ -763,28 +763,83 @@ export default {
     },
 
     async completeScreening(application) {
+      const confirmation = await this.$swal.fire({
+        icon: "warning",
+        title: "Complete Screening?",
+        text: "This will record the screening as completed and move the application to the next admission stage.",
+        showCancelButton: true,
+        confirmButtonText: "Complete Screening",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#1a5f5f",
+      });
+
+      if (!confirmation.isConfirmed) return;
+
       try {
-        const response = await apiService.completeScreening(application.id);
-
-        if (response.success) {
-          this.$swal.fire({
-            icon: "success",
-            title: "Screening Completed",
-            text: "Screening has been marked as completed.",
-            confirmButtonColor: "#1a5f5f",
-          });
-
-          await this.loadApplications();
-        }
+        await this.submitScreeningCompletion(application, false);
       } catch (error) {
         logger.error("Failed to complete screening:", error);
-        this.$swal.fire({
-          icon: "error",
-          title: "Failed",
-          text: "Failed to complete screening. Please try again.",
+
+        if (
+          error.message?.includes(
+            "Screening cannot be completed before its scheduled date and time",
+          )
+        ) {
+          const override = await this.$swal.fire({
+            icon: "warning",
+            title: "Screening Is Not Due Yet",
+            text: "Screening cannot be completed before its scheduled date and time. Only bypass this warning if the screening has actually taken place.",
+            input: "checkbox",
+            inputPlaceholder: "Bypass the schedule warning and complete screening",
+            inputValidator: (checked) =>
+              checked ? undefined : "Tick the checkbox to confirm the override.",
+            showCancelButton: true,
+            confirmButtonText: "Bypass and Complete",
+            cancelButtonText: "Cancel",
+            confirmButtonColor: "#dc3545",
+          });
+
+          if (override.isConfirmed && override.value) {
+            try {
+              await this.submitScreeningCompletion(application, true);
+            } catch (overrideError) {
+              logger.error("Failed to override screening schedule:", overrideError);
+              this.showScreeningCompletionError(overrideError);
+            }
+          }
+          return;
+        }
+
+        this.showScreeningCompletionError(error);
+      }
+    },
+
+    async submitScreeningCompletion(application, bypassSchedule) {
+      const response = await apiService.completeScreening(application.id, {
+        bypassSchedule,
+      });
+
+      if (response.success) {
+        await this.$swal.fire({
+          icon: "success",
+          title: "Screening Completed",
+          text: bypassSchedule
+            ? "Screening has been completed using the schedule override."
+            : "Screening has been marked as completed.",
           confirmButtonColor: "#1a5f5f",
         });
+        await this.loadApplications();
       }
+    },
+
+    showScreeningCompletionError(error) {
+        this.$swal.fire({
+          icon: "error",
+          title: "Screening Not Completed",
+          text:
+            error.message || "Failed to complete screening. Please try again.",
+          confirmButtonColor: "#1a5f5f",
+        });
     },
 
     makeAdmissionDecision(application) {
@@ -1157,8 +1212,8 @@ export default {
                               href="#"
                               @click.prevent="completeScreening(application)"
                             >
-                              <i class="bi bi-check-circle me-2"></i>Mark
-                              Screening Complete
+                              <i class="bi bi-check-circle me-2"></i>Complete
+                              Screening
                             </a>
                           </li>
                           <li v-if="canMakeAdmissionDecision(application)">

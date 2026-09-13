@@ -6,14 +6,14 @@
 import { apiService } from './api.js';
 import { logger } from '@shared/utils/logger';
 import PaystackPop from '@paystack/inline-js';
+import { reactive } from 'vue';
 
-class StudentPaymentService {
+class PaymentTransactionService {
     constructor() {
-        this.paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-        this.serverPaymentMethods = {
+        this.serverPaymentMethods = reactive({
             paystackEnabled: true,
             manualTransferEnabled: true,
-        };
+        });
         this.manualTransferDetails = {
             accountName: '',
             accountNumber: '',
@@ -24,7 +24,7 @@ class StudentPaymentService {
 
     getAvailablePaymentMethods() {
         return {
-            paystackEnabled: !!this.paystackPublicKey && this.serverPaymentMethods.paystackEnabled,
+            paystackEnabled: this.serverPaymentMethods.paystackEnabled,
             manualTransferEnabled: this.serverPaymentMethods.manualTransferEnabled,
             manualTransferDetails: this.manualTransferDetails,
         };
@@ -40,10 +40,10 @@ class StudentPaymentService {
 
             if (response.success) {
                 logger.info('Successfully fetched payment summary');
-                this.serverPaymentMethods = {
-                    paystackEnabled: response.data?.availableMethods?.paystackEnabled !== false,
-                    manualTransferEnabled: response.data?.availableMethods?.manualTransferEnabled !== false,
-                };
+                this.serverPaymentMethods.paystackEnabled =
+                    response.data?.availableMethods?.paystackEnabled !== false;
+                this.serverPaymentMethods.manualTransferEnabled =
+                    response.data?.availableMethods?.manualTransferEnabled !== false;
                 return {
                     success: true,
                     data: response.data
@@ -170,7 +170,7 @@ class StudentPaymentService {
                 formData.append('academicSessionId', academicSessionId);
             }
 
-            const response = await apiService.post('/student/payments/manual-transfer/submit', formData);
+            const response = await apiService.post('/student/payment-transactions/manual-transfer/submit', formData);
 
             if (response.success) {
                 return {
@@ -197,10 +197,6 @@ class StudentPaymentService {
     async launchPaystackPayment(paymentData) {
         return new Promise((resolve, reject) => {
             try {
-                if (!this.paystackPublicKey) {
-                    throw new Error('Paystack public key not configured');
-                }
-
                 logger.info('Launching Paystack payment popup');
 
                 // Extract access_code from the initialization response
@@ -382,10 +378,24 @@ class StudentPaymentService {
 
         window.open(url, '_blank', 'noopener,noreferrer');
     }
+
+    async downloadTransactionReceipt(paymentTransactionId) {
+        const file = await apiService.downloadFile(
+            `/student/payment-transactions/${paymentTransactionId}/receipt`,
+        );
+        const url = URL.createObjectURL(file.blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = file.filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }
 }
 
 // Create and export a singleton instance
-export const studentPaymentService = new StudentPaymentService();
+export const paymentTransactionService = new PaymentTransactionService();
 
 // Export the class for creating new instances if needed
-export default StudentPaymentService;
+export default PaymentTransactionService;

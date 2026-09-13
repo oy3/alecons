@@ -10,7 +10,9 @@ import { Student, StudentDocument } from "../schemas/student.schema";
 import { Application, ApplicationDocument } from "../schemas/application.schema";
 import { Program, ProgramDocument } from "../schemas/program.schema";
 import { Department, DepartmentDocument } from "../schemas/department.schema";
+import { ExternalResident, ExternalResidentDocument } from "../schemas/external-resident.schema";
 import { EmailService } from "./email.service";
+import { UploadService } from "./upload.service";
 import { CreateUserDto } from "../dto/create-user.dto";
 import { UpdateUserDto } from "../dto/update-user.dto";
 import { CreateStaffDto } from "../dto/create-staff.dto";
@@ -45,7 +47,9 @@ export class UserManagementService {
         @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
         @InjectModel(Program.name) private programModel: Model<ProgramDocument>,
         @InjectModel(Department.name) private departmentModel: Model<DepartmentDocument>,
-        private emailService: EmailService
+        @InjectModel(ExternalResident.name) private externalResidentModel: Model<ExternalResidentDocument>,
+        private emailService: EmailService,
+        private uploadService: UploadService,
     ) { }
 
     private buildStudentProgramLabel(application: any): string | undefined {
@@ -119,6 +123,23 @@ export class UserManagementService {
             return user;
         }
 
+        if (user.role === UserRole.EXTERNAL) {
+            const externalResident = await this.externalResidentModel
+                .findOne({ userId: user._id })
+                .select('externalResidentNumber profileImageUrl profileImageKey category')
+                .lean();
+
+            return externalResident
+                ? {
+                    ...user,
+                    externalResidentNumber: externalResident.externalResidentNumber,
+                    externalResidentCategory: externalResident.category,
+                    profileImageUrl: externalResident.profileImageUrl || user.profileImageUrl,
+                    hasPrivateProfileImage: !!externalResident.profileImageKey,
+                }
+                : user;
+        }
+
         const student = await this.studentModel
             .findOne({ userId: user._id })
             .populate("applicationId", "applicationNumber matriculationNumber phone")
@@ -158,6 +179,36 @@ export class UserManagementService {
         }
 
         return user;
+    }
+
+    async getExternalResidentProfileImage(userId: string) {
+        if (!Types.ObjectId.isValid(userId)) {
+            throw new NotFoundException("Profile image not found");
+        }
+        const resident = await this.externalResidentModel
+            .findOne({ userId: new Types.ObjectId(userId) })
+            .select('profileImageKey externalResidentNumber')
+            .lean();
+        if (!resident) {
+            this.logger.warn(`No external resident is linked to user ${userId}`);
+            throw new NotFoundException("External resident profile not found");
+        }
+        if (!resident.profileImageKey) {
+            this.logger.warn(`External resident ${resident.externalResidentNumber} has no profile image key`);
+            throw new NotFoundException("External resident profile image is not available");
+        }
+
+        const extension = resident.profileImageKey.split('.').pop()?.toLowerCase();
+        const contentTypes: Record<string, string> = {
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            png: 'image/png',
+            webp: 'image/webp',
+        };
+        return {
+            buffer: await this.uploadService.getFileBufferByKey(resident.profileImageKey),
+            contentType: contentTypes[extension || ''] || 'application/octet-stream',
+        };
     }
 
     private async generateStaffId(department: string): Promise<string> {

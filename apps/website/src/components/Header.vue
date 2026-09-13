@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
           <BrandLogo compact :inverse="overlayHeader" />
         </RouterLink>
         <nav class="desktop-nav" aria-label="Primary navigation">
-          <RouterLink v-for="item in navigation" :key="item.to" :to="item.to">
+          <RouterLink v-for="item in navigation.filter((link) => !link.footerOnly)" :key="item.to" :to="item.to">
             {{ item.label }}
           </RouterLink>
           <details class="portal-menu">
@@ -206,7 +206,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <nav aria-label="Mobile navigation">
-          <RouterLink v-for="item in navigation" :key="item.to" :to="item.to">
+          <RouterLink v-for="item in navigation.filter((link) => !link.footerOnly)" :key="item.to" :to="item.to">
             {{ item.label }}
             <i class="bi bi-chevron-right" aria-hidden="true"></i>
           </RouterLink>

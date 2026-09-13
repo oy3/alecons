@@ -45,7 +45,7 @@ export class PaymentsController {
     constructor(private readonly paymentsService: PaymentsService) { }
 
     @Get("summary")
-    async getStudentPaymentsSummary(
+    async getPaymentTransactionsSummary(
         @Request() req,
         @Query("context") context?: "application-portal" | "student-portal",
         @Query("applicationId") applicationId?: string,
@@ -56,7 +56,7 @@ export class PaymentsController {
             if (paymentContext === "application-portal" && !applicationId) {
                 throw new HttpException("Application ID is required", HttpStatus.BAD_REQUEST);
             }
-            const summary = await this.paymentsService.getStudentPaymentsSummary(
+            const summary = await this.paymentsService.getPaymentTransactionsSummary(
                 userId,
                 paymentContext,
                 applicationId,
@@ -618,21 +618,21 @@ export class StaffPaymentsController {
         }
     }
 
-    @Get("student-payments/stats")
-    @ApiOperation({ summary: "Get student payments statistics for dashboard" })
+    @Get("payment-transactions/stats")
+    @ApiOperation({ summary: "Get payment transactions statistics for dashboard" })
     @ApiResponse({
         status: 200,
-        description: "Student payments statistics retrieved successfully",
+        description: "Payment transaction statistics retrieved successfully",
     })
-    async getStudentPaymentsStats(
+    async getPaymentTransactionsStats(
         @Query("academicSessionId") academicSessionId?: string,
     ) {
         try {
-            this.logger.log("Getting student payments stats with filters:", {
+            this.logger.log("Getting payment transactions stats with filters:", {
                 academicSessionId,
             });
 
-            const result = await this.paymentsService.getStudentPaymentsStats({
+            const result = await this.paymentsService.getPaymentTransactionsStats({
                 academicSessionId,
             });
 
@@ -641,11 +641,11 @@ export class StaffPaymentsController {
                 data: result,
             };
         } catch (error) {
-            this.logger.error("Error getting student payments stats:", error);
+            this.logger.error("Error getting payment transactions stats:", error);
             throw new HttpException(
                 {
                     success: false,
-                    message: "Failed to fetch student payments statistics",
+                    message: "Failed to fetch payment transactions statistics",
                     error: error.message,
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR,
@@ -654,16 +654,16 @@ export class StaffPaymentsController {
     }
 
     @Post("remittance/sync")
-    @ApiOperation({ summary: "Sync Paystack remittance state for successful student payments" })
+    @ApiOperation({ summary: "Sync Paystack remittance state for successful payment transactions" })
     @ApiResponse({
         status: 200,
         description: "Remittance sync completed successfully",
     })
-    async syncStudentPaymentRemittance(
+    async syncPaymentTransactionRemittance(
         @Body() body: { academicSessionId?: string } = {},
     ) {
         try {
-            this.logger.log("Syncing student payment remittance records", body);
+            this.logger.log("Syncing payment transaction remittance records", body);
 
             const result = await this.paymentRemittanceService.syncPaystackRemittance({
                 academicSessionId: body.academicSessionId,
@@ -674,7 +674,7 @@ export class StaffPaymentsController {
                 data: result,
             };
         } catch (error) {
-            this.logger.error("Error syncing student payment remittance records:", error);
+            this.logger.error("Error syncing payment transaction remittance records:", error);
             throw new HttpException(
                 {
                     success: false,
@@ -687,12 +687,12 @@ export class StaffPaymentsController {
     }
 
     @Get("remittance-records")
-    @ApiOperation({ summary: "Get remittance records for successful Paystack student payments" })
+    @ApiOperation({ summary: "Get remittance records for successful Paystack payment transactions" })
     @ApiResponse({
         status: 200,
         description: "Remittance records retrieved successfully",
     })
-    async getStudentPaymentRemittanceRecords(
+    async getPaymentTransactionRemittanceRecords(
         @Query("tab") tab?: "unremitted" | "remitted",
         @Query("academicSessionId") academicSessionId?: string,
         @Query("search") search?: string,
@@ -721,7 +721,7 @@ export class StaffPaymentsController {
                 data: result,
             };
         } catch (error) {
-            this.logger.error("Error getting student payment remittance records:", error);
+            this.logger.error("Error getting payment transaction remittance records:", error);
             throw new HttpException(
                 {
                     success: false,
@@ -733,13 +733,13 @@ export class StaffPaymentsController {
         }
     }
 
-    @Get("student-payments")
-    @ApiOperation({ summary: "Get student payment records for staff management" })
+    @Get("payment-transactions")
+    @ApiOperation({ summary: "Get payment transactions for staff management" })
     @ApiResponse({
         status: 200,
-        description: "Student payment records retrieved successfully",
+        description: "Payment transactions retrieved successfully",
     })
-    async getStudentPayments(
+    async getPaymentTransactions(
         @Query("page") page: number = 1,
         @Query("limit") limit: number = 10,
         @Query("search") search?: string,
@@ -754,7 +754,7 @@ export class StaffPaymentsController {
         @Query("sortOrder") sortOrder: string = "desc",
     ) {
         try {
-            this.logger.log("Getting student payment records with filters:", {
+            this.logger.log("Getting payment transactions with filters:", {
                 page,
                 limit,
                 search,
@@ -769,7 +769,7 @@ export class StaffPaymentsController {
                 sortOrder,
             });
 
-            const result = await this.paymentsService.getStudentPaymentsForManagement(
+            const result = await this.paymentsService.getPaymentTransactionsForManagement(
                 {
                     page: Number(page),
                     limit: Number(limit),
@@ -791,11 +791,11 @@ export class StaffPaymentsController {
                 data: result,
             };
         } catch (error) {
-            this.logger.error("Error getting student payment records:", error);
+            this.logger.error("Error getting payment transactions:", error);
             throw new HttpException(
                 {
                     success: false,
-                    message: "Failed to fetch student payment records",
+                    message: "Failed to fetch payment transactions",
                     error: error.message,
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR,
@@ -803,7 +803,16 @@ export class StaffPaymentsController {
         }
     }
 
-    @Get("student-payments/export-pdf")
+    @Get("payment-transactions/:id/receipt")
+    async getPaymentReceipt(@Request() req, @Param("id") id: string, @Res() res: Response) {
+        const receipt = await this.paymentsService.getPaymentReceipt(id, req.user._id.toString(), req.user.role);
+        res.setHeader("Content-Type", receipt.contentType);
+        res.setHeader("Content-Disposition", `inline; filename="${receipt.filename.replace(/[\r\n"]/g, '')}"`);
+        res.setHeader("Cache-Control", "private, no-store");
+        return res.send(receipt.buffer);
+    }
+
+    @Get("payment-transactions/export-pdf")
     @ApiOperation({
         summary: "Export student payment records as PDF for staff management",
     })
@@ -811,7 +820,7 @@ export class StaffPaymentsController {
         status: 200,
         description: "Student payment records PDF generated successfully",
     })
-    async exportStudentPaymentsPdf(
+    async exportPaymentTransactionsPdf(
         @Res() res: Response,
         @Query("search") search?: string,
         @Query("dateFrom") dateFrom?: string,
@@ -846,7 +855,7 @@ export class StaffPaymentsController {
             );
 
             const previewResult =
-                await this.paymentsService.getStudentPaymentsForManagement({
+                await this.paymentsService.getPaymentTransactionsForManagement({
                     ...exportFilters,
                     page: 1,
                     limit: 1,
@@ -865,14 +874,14 @@ export class StaffPaymentsController {
             }
 
             const exportResult =
-                await this.paymentsService.getStudentPaymentsForManagement({
+                await this.paymentsService.getPaymentTransactionsForManagement({
                     ...exportFilters,
                     page: 1,
                     limit: totalItems,
                 });
 
             const payments = exportResult?.payments || [];
-            const htmlContent = this.generateStudentPaymentsExportHtml(
+            const htmlContent = this.generatePaymentTransactionsExportHtml(
                 payments,
                 exportFilters,
             );
@@ -881,7 +890,7 @@ export class StaffPaymentsController {
 
             try {
                 this.logger.log(
-                    "Launching Puppeteer browser for student payments PDF export...",
+                    "Launching Puppeteer browser for payment transactions PDF export...",
                 );
                 const { launchPuppeteerBrowser } =
                     await import("../utils/puppeteer-launch.util");
@@ -903,7 +912,7 @@ export class StaffPaymentsController {
                 });
 
                 const pdfBuffer = Buffer.from(pdfBytes);
-                const fileName = this.buildStudentPaymentsExportFileName();
+                const fileName = this.buildPaymentTransactionsExportFileName();
 
                 res.setHeader("Content-Type", "application/pdf");
                 res.setHeader(
@@ -983,7 +992,7 @@ export class StaffPaymentsController {
         }
     }
 
-    @Patch("student-payments/:id/verify-manual")
+    @Patch("payment-transactions/:id/verify-manual")
     @ApiOperation({ summary: "Verify pending manual transfer payment" })
     async verifyManualTransferPayment(
         @Param("id") id: string,
@@ -1014,7 +1023,7 @@ export class StaffPaymentsController {
         }
     }
 
-    @Patch("student-payments/:id/reject-manual")
+    @Patch("payment-transactions/:id/reject-manual")
     @ApiOperation({ summary: "Reject pending manual transfer payment" })
     async rejectManualTransferPayment(
         @Param("id") id: string,
@@ -1045,11 +1054,11 @@ export class StaffPaymentsController {
         }
     }
 
-    @Patch("student-payments/:id/reconcile")
+    @Patch("payment-transactions/:id/reconcile")
     @ApiOperation({ summary: "Reconcile a Paystack payment record against Paystack verify API" })
-    async reconcileStudentPayment(@Param("id") id: string) {
+    async reconcilePaymentTransaction(@Param("id") id: string) {
         try {
-            const result = await this.paymentsService.reconcileStudentPaymentById(id);
+            const result = await this.paymentsService.reconcilePaymentTransactionById(id);
 
             return {
                 success: true,
@@ -1068,7 +1077,7 @@ export class StaffPaymentsController {
         }
     }
 
-    @Post("student-payments/reconcile-pending")
+    @Post("payment-transactions/reconcile-pending")
     @ApiOperation({ summary: "Reconcile stale pending Paystack records" })
     async reconcilePendingPaystackPayments(
         @Body()
@@ -1102,12 +1111,12 @@ export class StaffPaymentsController {
         }
     }
 
-    private buildStudentPaymentsExportFileName() {
+    private buildPaymentTransactionsExportFileName() {
         const dateStamp = new Date().toISOString().slice(0, 10);
-        return `student-payments-${dateStamp}.pdf`;
+        return `payment-transactions-${dateStamp}.pdf`;
     }
 
-    private generateStudentPaymentsExportHtml(
+    private generatePaymentTransactionsExportHtml(
         payments: any[],
         filters: {
             search?: string;
@@ -1127,36 +1136,36 @@ export class StaffPaymentsController {
             {
                 label: "Status",
                 value: filters.status
-                    ? this.formatStudentPaymentsExportLabel(filters.status)
+                    ? this.formatPaymentTransactionsExportLabel(filters.status)
                     : "All Statuses",
             },
             {
                 label: "Method",
                 value: filters.method
-                    ? this.formatStudentPaymentsExportLabel(filters.method)
+                    ? this.formatPaymentTransactionsExportLabel(filters.method)
                     : "All Methods",
             },
             {
                 label: "Payment Type",
                 value: filters.paymentId
-                    ? this.safeStudentPaymentsExportDisplay(firstPayment.paymentName)
+                    ? this.safePaymentTransactionsExportDisplay(firstPayment.paymentName)
                     : "All Payments",
             },
             {
                 label: "Program",
                 value: filters.programId
-                    ? this.getStudentPaymentsExportProgramDisplay(firstPayment)
+                    ? this.getPaymentTransactionsExportProgramDisplay(firstPayment)
                     : "All Programs",
             },
             {
                 label: "Academic Session",
                 value: filters.academicSessionId
-                    ? this.safeStudentPaymentsExportDisplay(
+                    ? this.safePaymentTransactionsExportDisplay(
                         firstPayment.academicSessionLabel,
                     )
                     : "All Academic Sessions",
             },
-            { label: "Date Range", value: this.getStudentPaymentsExportDateRangeLabel(filters) },
+            { label: "Date Range", value: this.getPaymentTransactionsExportDateRangeLabel(filters) },
             { label: "Records", value: String(payments.length) },
         ];
 
@@ -1164,8 +1173,8 @@ export class StaffPaymentsController {
             .map(
                 (item) => `
                 <div class="filter-item">
-                    <span class="filter-label">${this.escapeStudentPaymentsExportHtml(item.label)}</span>
-                    <span class="filter-value">${this.escapeStudentPaymentsExportHtml(item.value)}</span>
+                    <span class="filter-label">${this.escapePaymentTransactionsExportHtml(item.label)}</span>
+                    <span class="filter-value">${this.escapePaymentTransactionsExportHtml(item.value)}</span>
                 </div>
             `,
             )
@@ -1174,32 +1183,32 @@ export class StaffPaymentsController {
         const tableRowsHtml = payments
             .map((payment, index) => {
                 const notes = [
-                    `Remarks: ${this.safeStudentPaymentsExportDisplay(payment.remarks)}`,
-                    `Verification: ${this.safeStudentPaymentsExportDisplay(payment.verificationRemarks)}`,
+                    `Remarks: ${this.safePaymentTransactionsExportDisplay(payment.remarks)}`,
+                    `Verification: ${this.safePaymentTransactionsExportDisplay(payment.verificationRemarks)}`,
                 ].join(" | ");
 
                 return `
                     <tr>
           <td class="index-cell nowrap">${index + 1}</td>
-                        <td>${this.escapeStudentPaymentsExportHtml(this.safeStudentPaymentsExportDisplay(payment.userName || "Unknown User"))}
+                        <td>${this.escapePaymentTransactionsExportHtml(this.safePaymentTransactionsExportDisplay(payment.userName || "Unknown User"))}
                         </td>
-            <td class="nowrap">${this.escapeStudentPaymentsExportHtml(this.getStudentPaymentsExportIdentifierValue(payment))}
+            <td class="nowrap">${this.escapePaymentTransactionsExportHtml(this.getPaymentTransactionsExportIdentifierValue(payment))}
                         </td>
-                        <td>          ${this.escapeStudentPaymentsExportHtml(this.safeStudentPaymentsExportDisplay(payment.email))}</td>
-                        <td>${this.escapeStudentPaymentsExportHtml(this.getStudentPaymentsExportProgramDisplay(payment))}</td>
-            <td class="nowrap">${this.escapeStudentPaymentsExportHtml(this.safeStudentPaymentsExportDisplay(payment.academicSessionLabel))}</td>
+                        <td>          ${this.escapePaymentTransactionsExportHtml(this.safePaymentTransactionsExportDisplay(payment.email))}</td>
+                        <td>${this.escapePaymentTransactionsExportHtml(this.getPaymentTransactionsExportProgramDisplay(payment))}</td>
+            <td class="nowrap">${this.escapePaymentTransactionsExportHtml(this.safePaymentTransactionsExportDisplay(payment.academicSessionLabel))}</td>
                         <td>
-                            <div class="primary">${this.escapeStudentPaymentsExportHtml(this.safeStudentPaymentsExportDisplay(payment.paymentName))}</div>
-                            <div class="secondary">${this.escapeStudentPaymentsExportHtml(this.getStudentPaymentsExportReferenceDisplay(payment.reference))}</div>
+                            <div class="primary">${this.escapePaymentTransactionsExportHtml(this.safePaymentTransactionsExportDisplay(payment.paymentName))}</div>
+                            <div class="secondary">${this.escapePaymentTransactionsExportHtml(this.getPaymentTransactionsExportReferenceDisplay(payment.reference))}</div>
                         </td>
-                        <td class="nowrap">${this.escapeStudentPaymentsExportHtml(this.formatStudentPaymentsExportCurrency(payment.amount))}</td>
+                        <td class="nowrap">${this.escapePaymentTransactionsExportHtml(this.formatPaymentTransactionsExportCurrency(payment.amount))}</td>
                             <td> 
-                            <div class="primary">${this.escapeStudentPaymentsExportHtml(this.formatStudentPaymentsExportLabel(payment.method))}</div>
-  <div class="secondary">Channel: ${this.safeStudentPaymentsExportDisplay(this.formatStudentPaymentsExportLabel(payment.channel))}</div>
+                            <div class="primary">${this.escapePaymentTransactionsExportHtml(this.formatPaymentTransactionsExportLabel(payment.method))}</div>
+  <div class="secondary">Channel: ${this.safePaymentTransactionsExportDisplay(this.formatPaymentTransactionsExportLabel(payment.channel))}</div>
                                           </td>
-                        <td class="nowrap">${this.escapeStudentPaymentsExportHtml(this.formatStudentPaymentsExportLabel(payment.status))}</td>
-                        <td>${this.escapeStudentPaymentsExportHtml(this.formatStudentPaymentsExportDateTime(payment.paidAt || payment.effectivePaidAt || payment.createdAt))}</td>
-                        <td> ${this.escapeStudentPaymentsExportHtml(this.safeStudentPaymentsExportDisplay(payment.remarks))}</td>
+                        <td class="nowrap">${this.escapePaymentTransactionsExportHtml(this.formatPaymentTransactionsExportLabel(payment.status))}</td>
+                        <td>${this.escapePaymentTransactionsExportHtml(this.formatPaymentTransactionsExportDateTime(payment.paidAt || payment.effectivePaidAt || payment.createdAt))}</td>
+                        <td> ${this.escapePaymentTransactionsExportHtml(this.safePaymentTransactionsExportDisplay(payment.remarks))}</td>
                     </tr>
                 `;
             })
@@ -1210,7 +1219,7 @@ export class StaffPaymentsController {
             <html lang="en">
                 <head>
                     <meta charset="UTF-8" />
-                    <title>Student Payments Export</title>
+                    <title>Payment Transactions Export</title>
                     <style>
                         @page {
                             size: A4 landscape;
@@ -1317,8 +1326,8 @@ export class StaffPaymentsController {
                     </style>
                 </head>
                 <body>
-                    <h1>Student Payments Export</h1>
-                    <div class="subtitle">Generated ${this.escapeStudentPaymentsExportHtml(generatedAt)} • ${this.escapeStudentPaymentsExportHtml(String(payments.length))} filtered payment record(s)</div>
+                    <h1>Payment Transactions Export</h1>
+                    <div class="subtitle">Generated ${this.escapePaymentTransactionsExportHtml(generatedAt)} • ${this.escapePaymentTransactionsExportHtml(String(payments.length))} filtered payment record(s)</div>
                     <div class="meta">${filterSummaryHtml}</div>
                     <table>
                         <colgroup>
@@ -1360,7 +1369,7 @@ export class StaffPaymentsController {
         `;
     }
 
-    private getStudentPaymentsExportProgramDisplay(payment: any) {
+    private getPaymentTransactionsExportProgramDisplay(payment: any) {
         const parts = [
             payment?.programTypeLabel,
             payment?.programModeLabel,
@@ -1370,15 +1379,15 @@ export class StaffPaymentsController {
         return parts.length ? parts.join(" ") : "N/A";
     }
 
-    private getStudentPaymentsExportIdentifierValue(payment: any) {
+    private getPaymentTransactionsExportIdentifierValue(payment: any) {
         return payment?.matriculationNumber || payment?.applicationNumber || "N/A";
     }
 
-    private getStudentPaymentsExportReferenceDisplay(reference: any) {
+    private getPaymentTransactionsExportReferenceDisplay(reference: any) {
         return reference || "N/A";
     }
 
-    private getStudentPaymentsExportDateRangeLabel(filters: {
+    private getPaymentTransactionsExportDateRangeLabel(filters: {
         dateFrom?: string;
         dateTo?: string;
     }) {
@@ -1397,7 +1406,7 @@ export class StaffPaymentsController {
         return "All Dates";
     }
 
-    private formatStudentPaymentsExportCurrency(amount: any) {
+    private formatPaymentTransactionsExportCurrency(amount: any) {
         return new Intl.NumberFormat("en-NG", {
             style: "currency",
             currency: "NGN",
@@ -1405,7 +1414,7 @@ export class StaffPaymentsController {
         }).format(Number(amount || 0));
     }
 
-    private formatStudentPaymentsExportDateTime(value: any) {
+    private formatPaymentTransactionsExportDateTime(value: any) {
         if (!value) {
             return "N/A";
         }
@@ -1414,7 +1423,7 @@ export class StaffPaymentsController {
         return Number.isNaN(date.getTime()) ? "N/A" : date.toLocaleString();
     }
 
-    private formatStudentPaymentsExportLabel(value: any) {
+    private formatPaymentTransactionsExportLabel(value: any) {
         if (!value) {
             return "N/A";
         }
@@ -1424,13 +1433,13 @@ export class StaffPaymentsController {
             .replace(/\b\w/g, (char) => char.toUpperCase());
     }
 
-    private safeStudentPaymentsExportDisplay(value: any) {
+    private safePaymentTransactionsExportDisplay(value: any) {
         const normalized =
             value === null || value === undefined ? "" : String(value).trim();
         return normalized || "N/A";
     }
 
-    private escapeStudentPaymentsExportHtml(value: any) {
+    private escapePaymentTransactionsExportHtml(value: any) {
         return String(value ?? "")
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")

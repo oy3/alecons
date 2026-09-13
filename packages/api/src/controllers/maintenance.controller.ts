@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Logger } from '@nestjs/common';
+import { BadRequestException, Controller, Post, Body, UseGuards, Logger, Request } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, Types } from 'mongoose';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -8,7 +8,7 @@ import { AcademicSessionsService } from '../services/academic-sessions.service';
 import { Application, ApplicationDocument } from '../schemas/application.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
-import { StudentPayment, StudentPaymentDocument } from '../schemas/student-payment.schema';
+import { PaymentTransaction, PaymentTransactionDocument } from '../schemas/payment-transaction.schema';
 import {
     StudentAcademicSession,
     StudentAcademicSessionDocument,
@@ -17,6 +17,7 @@ import {
 import { UploadService } from '../services/upload.service';
 import { AcademicResultsService } from '../services/academic-results.service';
 import { StudentProgressionService } from '../services/student-progression.service';
+import { createQuestionFingerprint } from '../utils/question-fingerprint';
 
 @Controller('admin/maintenance')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -32,10 +33,215 @@ export class MaintenanceController {
         @InjectModel(Application.name) private readonly applicationModel: Model<ApplicationDocument>,
         @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
         @InjectModel(Student.name) private readonly studentModel: Model<StudentDocument>,
-        @InjectModel(StudentPayment.name) private readonly studentPaymentModel: Model<StudentPaymentDocument>,
+        @InjectModel(PaymentTransaction.name) private readonly paymentTransactionModel: Model<PaymentTransactionDocument>,
         @InjectModel(StudentAcademicSession.name) private readonly studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
         private readonly uploadService: UploadService,
     ) { }
+
+    @Post('migrate-question-bank')
+    async migrateQuestionBank(
+        @Body() body: { apply?: boolean; finalize?: boolean },
+        @Request() req: any,
+    ) {
+        try {
+            const apply = Boolean(body?.apply);
+            const finalize = Boolean(body?.finalize);
+            const actorId = this.toObjectId(req.user?.userId || req.user?.id);
+            const legacyCollection = this.connection.collection('questions');
+            const bankCollection = this.connection.collection('questionBankItems');
+            const examQuestionsCollection = this.connection.collection('examQuestions');
+            const activityCollection = this.connection.collection('questionBankActivities');
+            const attemptsCollection = this.connection.collection('examAttempts');
+            const resultsCollection = this.connection.collection('examResults');
+
+            const legacyExists = (await this.connection.db.listCollections({ name: 'questions' }).toArray()).length > 0;
+            const legacyQuestions = legacyExists ? await legacyCollection.find({}).toArray() : [];
+            const groups = new Map<string, any[]>();
+            for (const question of legacyQuestions) {
+                const fingerprint = createQuestionFingerprint(question as any);
+                const group = groups.get(fingerprint) || [];
+                group.push(question);
+                groups.set(fingerprint, group);
+            }
+            const duplicateGroups = [...groups.values()].filter((group) => group.length > 1);
+            const duplicateQuestions = duplicateGroups.reduce((total, group) => total + group.length - 1, 0);
+            let bankItemsCreated = 0;
+            let examQuestionsCreated = 0;
+
+            if (apply && legacyQuestions.length) {
+                const examQuestionIndexes = await examQuestionsCollection.indexes();
+                const uniqueBankLinkIndex = examQuestionIndexes.find((index) =>
+                    index.unique &&
+                    index.key?.examId === 1 &&
+                    index.key?.questionBankItemId === 1,
+                );
+                if (uniqueBankLinkIndex?.name) {
+                    await examQuestionsCollection.dropIndex(uniqueBankLinkIndex.name);
+                    await examQuestionsCollection.createIndex(
+                        { examId: 1, questionBankItemId: 1 },
+                        {
+                            name: uniqueBankLinkIndex.name,
+                            partialFilterExpression: { questionBankItemId: { $type: 'objectId' } },
+                        },
+                    );
+                }
+
+                for (const [fingerprint, group] of groups) {
+                    const canonical = group.slice().sort((a, b) =>
+                        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
+                    )[0];
+                    const tags = [...new Set(group.flatMap((question) => question.tags || []).filter(Boolean))];
+                    const legacyQuestionIds = group.map((question) => question._id);
+                    const existingBankItem = await bankCollection.findOne({ fingerprint }, { projection: { _id: 1 } });
+                    const bankResult: any = await bankCollection.findOneAndUpdate(
+                        { fingerprint },
+                        {
+                            $setOnInsert: {
+                                questionText: canonical.questionText,
+                                type: canonical.type,
+                                options: canonical.options,
+                                answer: canonical.answer,
+                                defaultMark: canonical.mark || 1,
+                                mediaUrls: canonical.mediaUrls || [],
+                                metadata: canonical.metadata || { difficulty: 'medium' },
+                                fingerprint,
+                                version: 1,
+                                status: group.some((question) => question.status !== 'inactive') ? 'active' : 'archived',
+                                createdBy: canonical.createdBy || actorId,
+                                createdAt: canonical.createdAt || new Date(),
+                                usageCount: 0,
+                            },
+                            $addToSet: { legacyQuestionIds: { $each: legacyQuestionIds }, tags: { $each: tags } },
+                            $set: { updatedAt: new Date() },
+                        },
+                        { upsert: true, returnDocument: 'after' },
+                    );
+                    const bankItem = bankResult?.value || bankResult;
+                    if (!bankItem?._id) throw new Error('Could not create or locate migrated bank item');
+                    if (!existingBankItem) bankItemsCreated++;
+
+                    for (const question of group) {
+                        const {
+                            _id: legacyQuestionId,
+                            questionBankItemId: _questionBankItemId,
+                            bankVersion: _bankVersion,
+                            copiedBy: _copiedBy,
+                            copiedAt: _copiedAt,
+                            ...legacyQuestion
+                        } = question;
+                        const result = await examQuestionsCollection.updateOne(
+                            { _id: legacyQuestionId },
+                            {
+                                $setOnInsert: {
+                                    ...legacyQuestion,
+                                    copiedBy: question.createdBy || actorId,
+                                    copiedAt: question.createdAt || new Date(),
+                                },
+                                $set: { questionBankItemId: bankItem._id, bankVersion: 1 },
+                            },
+                            { upsert: true },
+                        );
+                        examQuestionsCreated += result.upsertedCount;
+                    }
+                }
+
+                const usages = await examQuestionsCollection.aggregate([
+                    { $match: { questionBankItemId: { $type: 'objectId' } } },
+                    { $group: { _id: '$questionBankItemId', usageCount: { $sum: 1 }, lastUsedAt: { $max: '$copiedAt' } } },
+                ]).toArray();
+                for (const usage of usages) {
+                    await bankCollection.updateOne(
+                        { _id: usage._id },
+                        { $set: { usageCount: usage.usageCount, lastUsedAt: usage.lastUsedAt || new Date() } },
+                    );
+                }
+                await activityCollection.insertOne({
+                    action: duplicateQuestions ? 'duplicates_merged' : 'migrated',
+                    actorUserId: actorId,
+                    affectedCount: Math.max(1, legacyQuestions.length),
+                    metadata: { legacyQuestions: legacyQuestions.length, uniqueBankItems: groups.size, duplicateQuestions },
+                    createdAt: new Date(), updatedAt: new Date(),
+                });
+            }
+
+            const [bankItemCount, targetQuestionCount] = await Promise.all([
+                bankCollection.countDocuments(),
+                examQuestionsCollection.countDocuments(),
+            ]);
+            const missingTargetIds = legacyQuestions.length
+                ? await legacyCollection.aggregate([
+                    { $lookup: { from: 'examQuestions', localField: '_id', foreignField: '_id', as: 'target' } },
+                    { $match: { target: { $size: 0 } } },
+                    { $count: 'count' },
+                ]).toArray()
+                : [];
+            const missingExamQuestions = missingTargetIds[0]?.count || 0;
+            const [missingAttemptRefsResult, missingResultRefsResult] = await Promise.all([
+                attemptsCollection.aggregate([
+                    { $unwind: '$answers' },
+                    { $match: { 'answers.questionId': { $type: 'objectId' } } },
+                    { $lookup: { from: 'examQuestions', localField: 'answers.questionId', foreignField: '_id', as: 'question' } },
+                    { $match: { question: { $size: 0 } } },
+                    { $count: 'count' },
+                ]).toArray(),
+                resultsCollection.aggregate([
+                    { $unwind: '$questionResults' },
+                    { $match: { 'questionResults.questionId': { $type: 'objectId' } } },
+                    { $lookup: { from: 'examQuestions', localField: 'questionResults.questionId', foreignField: '_id', as: 'question' } },
+                    { $match: { question: { $size: 0 } } },
+                    { $count: 'count' },
+                ]).toArray(),
+            ]);
+            const missingAttemptQuestionRefs = missingAttemptRefsResult[0]?.count || 0;
+            const missingResultQuestionRefs = missingResultRefsResult[0]?.count || 0;
+
+            if (finalize) {
+                if (!apply) throw new BadRequestException('Finalization requires apply=true');
+                if (legacyExists && (
+                    missingExamQuestions ||
+                    missingAttemptQuestionRefs ||
+                    missingResultQuestionRefs ||
+                    targetQuestionCount < legacyQuestions.length
+                )) {
+                    throw new BadRequestException('Migration verification failed; the legacy collection was not removed');
+                }
+                if (legacyExists) await legacyCollection.drop();
+            }
+
+            return {
+                success: true,
+                data: {
+                    applied: apply,
+                    finalized: finalize,
+                    legacyCollectionExists: legacyExists && !finalize,
+                    legacyQuestions: legacyQuestions.length,
+                    uniqueFingerprints: groups.size,
+                    duplicateGroups: duplicateGroups.length,
+                    duplicateQuestions,
+                    bankItemsCreated,
+                    examQuestionsCreated,
+                    bankItemCount,
+                    targetQuestionCount,
+                    questionBankItems: bankItemCount,
+                    examQuestions: targetQuestionCount,
+                    missingExamQuestionIds: missingExamQuestions,
+                    missingAttemptQuestionRefs,
+                    missingResultQuestionRefs,
+                    legacyCollectionDropped: finalize && legacyExists,
+                    verified: !legacyExists || (
+                        missingExamQuestions === 0 &&
+                        missingAttemptQuestionRefs === 0 &&
+                        missingResultQuestionRefs === 0 &&
+                        targetQuestionCount >= legacyQuestions.length
+                    ),
+                },
+            };
+        } catch (error) {
+            this.logger.error('migrateQuestionBank failed:', error?.message || error);
+            if (error instanceof BadRequestException) throw error;
+            return { success: false, error: error?.message || 'Question bank migration failed' };
+        }
+    }
 
     @Post('migrate-academic-progression')
     async migrateAcademicProgression(@Body('apply') apply?: boolean) {
@@ -497,7 +703,7 @@ export class MaintenanceController {
 
             for (const student of students) {
                 scanned++;
-                const paymentSessionIds = await this.studentPaymentModel.distinct('academicSessionId', {
+                const paymentSessionIds = await this.paymentTransactionModel.distinct('academicSessionId', {
                     userId: student.userId,
                     academicSessionId: { $exists: true, $ne: null },
                 });

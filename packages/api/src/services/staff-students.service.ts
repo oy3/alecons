@@ -5,7 +5,7 @@ import { Student, StudentDocument } from '../schemas/student.schema';
 import { User, UserDocument } from '../schemas/user.schema';
 import { Program, ProgramDocument } from '../schemas/program.schema';
 import { StudentAcademicSession, StudentAcademicSessionDocument } from '../schemas/student-academic-session.schema';
-import { StudentPayment, StudentPaymentDocument } from '../schemas/student-payment.schema';
+import { PaymentTransaction, PaymentTransactionDocument } from '../schemas/payment-transaction.schema';
 import { CourseRegistration, CourseRegistrationDocument } from '../schemas/course-registration.schema';
 
 type StudentFilters = {
@@ -29,7 +29,7 @@ export class StaffStudentsService {
         @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
         @InjectModel(Program.name) private readonly programModel: Model<ProgramDocument>,
         @InjectModel(StudentAcademicSession.name) private readonly studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
-        @InjectModel(StudentPayment.name) private readonly studentPaymentModel: Model<StudentPaymentDocument>,
+        @InjectModel(PaymentTransaction.name) private readonly paymentTransactionModel: Model<PaymentTransactionDocument>,
         @InjectModel(CourseRegistration.name) private readonly courseRegistrationModel: Model<CourseRegistrationDocument>,
     ) {}
 
@@ -138,7 +138,7 @@ export class StaffStudentsService {
         if (!student) throw new NotFoundException('Student record not found');
         const [sessionHistory, payments, courseRegistrations] = await Promise.all([
             this.studentAcademicSessionModel.find({ studentId }).populate('academicSessionId', 'title sessionYear status').sort({ startedAt: -1 }).lean(),
-            this.studentPaymentModel.find({ userId: (student as any).userId?._id || (student as any).userId }).populate('paymentId', 'name').populate('academicSessionId', 'title sessionYear').sort({ paidAt: -1, createdAt: -1 }).limit(100).lean(),
+            this.paymentTransactionModel.find({ userId: (student as any).userId?._id || (student as any).userId }).populate('paymentId', 'name').populate('academicSessionId', 'title sessionYear').sort({ paidAt: -1, createdAt: -1 }).limit(100).lean(),
             this.courseRegistrationModel.find({ studentId }).populate('academicSessionId', 'title sessionYear').sort({ createdAt: -1 }).lean(),
         ]);
         return { student, sessionHistory, payments, courseRegistrations };

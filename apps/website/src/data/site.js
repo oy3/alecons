@@ -48,6 +48,7 @@ export const navigation = [
   { label: "Admissions", to: "/admissions" },
   { label: "Faculty", to: "/faculty" },
   { label: "Contact", to: "/contact" },
+  { label: "External Accommodation", to: "/accommodation/external", footerOnly: true },
 ];
 
 export const announcement = {

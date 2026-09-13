@@ -268,8 +268,15 @@ class StaffApiService {
     }
 
     // Admission management methods
-    async scheduleExam(id, examData) {
+    async scheduleApplicationExam(id, examData) {
         return this.makeRequest(`/staff/applications/${id}/schedule-exam`, {
+            method: 'PATCH',
+            body: JSON.stringify(examData),
+        })
+    }
+
+    async rescheduleApplicationExam(id, examData) {
+        return this.makeRequest(`/staff/applications/${id}/reschedule-exam`, {
             method: 'PATCH',
             body: JSON.stringify(examData),
         })
@@ -284,6 +291,13 @@ class StaffApiService {
 
     async scheduleScreening(id, screeningData) {
         return this.makeRequest(`/staff/applications/${id}/schedule-screening`, {
+            method: 'PATCH',
+            body: JSON.stringify(screeningData),
+        })
+    }
+
+    async rescheduleScreening(id, screeningData) {
+        return this.makeRequest(`/staff/applications/${id}/reschedule-screening`, {
             method: 'PATCH',
             body: JSON.stringify(screeningData),
         })
@@ -1021,7 +1035,7 @@ class StaffApiService {
         })
     }
 
-    async scheduleExam(examId) {
+    async scheduleManagedExam(examId) {
         return this.makeRequest(`/exams/${examId}/schedule`, {
             method: 'POST',
         })

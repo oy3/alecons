@@ -211,7 +211,7 @@ export default {
       if (!result.isConfirmed) return;
 
       try {
-        const response = await apiService.scheduleExam(exam._id);
+        const response = await apiService.scheduleManagedExam(exam._id);
         await Swal.fire({
           icon: "success",
           title: "Exam Scheduled",

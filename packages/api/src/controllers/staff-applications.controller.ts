@@ -2173,6 +2173,155 @@ export class StaffApplicationsController {
         }
     }
 
+    @Patch(':id/reschedule-exam')
+    @ApiOperation({ summary: 'Reschedule a future entrance exam for an application' })
+    @ApiResponse({ status: 200, description: 'Entrance exam rescheduled successfully' })
+    async rescheduleExam(
+        @Param('id') id: string,
+        @Body() examData: {
+            examDate: string;
+            examTime: string;
+            examLink: string;
+        },
+        @Request() req,
+    ) {
+        try {
+            const application = await this.applicationModel.findById(id)
+                .populate('userId', 'firstName lastName email')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            await this.assertAdmissionMutationAllowed(application, req);
+            this.assertApplicationWasSubmitted(application);
+            await this.assertApplicationHasNotBecomeStudent(application);
+
+            if (
+                application.status !== ApplicationStatus.PENDING ||
+                application.admissionDecision !== AdmissionDecision.AWAITING_DECISION
+            ) {
+                throw new ConflictException(
+                    'An entrance examination cannot be rescheduled after an admission decision has been recorded',
+                );
+            }
+
+            const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
+                application.entryAcademicSession,
+                application,
+            );
+            if (!admissionFlow.entranceExamEnabled) {
+                throw new HttpException(
+                    { success: false, message: 'Entrance exam is disabled for this academic session' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            if (!application.entranceExam) {
+                throw new ConflictException(
+                    'The entrance examination must be scheduled before it can be rescheduled',
+                );
+            }
+            if (
+                application.entranceExam.score !== undefined &&
+                application.entranceExam.score !== null
+            ) {
+                throw new ConflictException(
+                    'A scored entrance examination cannot be rescheduled',
+                );
+            }
+
+            const currentScheduledAt = getScheduledLagosDateTime(
+                application.entranceExam.date,
+                application.entranceExam.time,
+            );
+            if (!currentScheduledAt || currentScheduledAt.getTime() <= Date.now()) {
+                throw new ConflictException(
+                    'A past entrance examination cannot be rescheduled',
+                );
+            }
+
+            const normalizedLink = examData.examLink?.trim();
+            const replacementDate = new Date(examData.examDate);
+            const replacementScheduledAt = getScheduledLagosDateTime(
+                replacementDate,
+                examData.examTime,
+            );
+            if (!normalizedLink) {
+                throw new HttpException(
+                    { success: false, message: 'Exam link is required' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+            if (!replacementScheduledAt || replacementScheduledAt.getTime() <= Date.now()) {
+                throw new HttpException(
+                    { success: false, message: 'The replacement exam date and time must be in the future' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const previousSchedule = {
+                date: application.entranceExam.date,
+                time: application.entranceExam.time,
+                link: application.entranceExam.link,
+            };
+            if (
+                currentScheduledAt.getTime() === replacementScheduledAt.getTime() &&
+                previousSchedule.link === normalizedLink
+            ) {
+                throw new ConflictException('Change the exam schedule before saving');
+            }
+
+            application.entranceExam.date = replacementDate;
+            application.entranceExam.time = examData.examTime;
+            application.entranceExam.link = normalizedLink;
+            this.appendAuditEntry(application, {
+                action: 'entrance_exam_rescheduled',
+                description: 'Entrance exam was rescheduled for the application.',
+                actor: req.user,
+                metadata: {
+                    previousDate: previousSchedule.date,
+                    previousTime: previousSchedule.time,
+                    previousLink: previousSchedule.link,
+                    newDate: examData.examDate,
+                    newTime: examData.examTime,
+                    newLink: normalizedLink,
+                },
+            });
+            await application.save();
+
+            await this.emailService.sendEntranceExamScheduledEmail(
+                (application.userId as any).email,
+                (application.userId as any).firstName,
+                application.entranceExam.date,
+                application.entranceExam.time,
+                application.entranceExam.link,
+                true,
+            );
+
+            return {
+                success: true,
+                message: 'Entrance exam rescheduled successfully',
+                data: { application },
+            };
+        } catch (error) {
+            this.logger.error('Error rescheduling exam:', error.message);
+            if (error instanceof HttpException) throw error;
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to reschedule exam',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
     @Patch(':id/schedule-screening')
     @ApiOperation({ summary: 'Schedule screening & interview for an application' })
     @ApiResponse({ status: 200, description: 'Screening scheduled successfully' })
@@ -2306,6 +2455,142 @@ export class StaffApplicationsController {
                     error: errorMessage
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    @Patch(':id/reschedule-screening')
+    @ApiOperation({ summary: 'Reschedule a future screening for an application' })
+    @ApiResponse({ status: 200, description: 'Screening rescheduled successfully' })
+    async rescheduleScreening(
+        @Param('id') id: string,
+        @Body() screeningData: {
+            screeningDate: string;
+            screeningTime: string;
+            venue: string;
+        },
+        @Request() req,
+    ) {
+        try {
+            const application = await this.applicationModel.findById(id)
+                .populate('userId', 'firstName lastName email')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            await this.assertAdmissionMutationAllowed(application, req);
+            await this.assertApplicationHasNotBecomeStudent(application);
+            const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
+                application.entryAcademicSession,
+                application,
+            );
+            if (!admissionFlow.screeningEnabled) {
+                throw new HttpException(
+                    { success: false, message: 'Screening is disabled for this academic session' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+            if (application.admissionDecision !== AdmissionDecision.GRANTED) {
+                throw new ConflictException(
+                    'Admission must be granted before screening can be rescheduled',
+                );
+            }
+            if (!application.screening) {
+                throw new ConflictException(
+                    'Screening must be scheduled before it can be rescheduled',
+                );
+            }
+            if (application.screening.completed) {
+                throw new ConflictException('A completed screening cannot be rescheduled');
+            }
+
+            const currentScheduledAt = getScheduledLagosDateTime(
+                application.screening.date,
+                application.screening.time,
+            );
+            if (!currentScheduledAt || currentScheduledAt.getTime() <= Date.now()) {
+                throw new ConflictException('A past screening cannot be rescheduled');
+            }
+
+            const normalizedVenue = screeningData.venue?.trim();
+            const replacementDate = new Date(screeningData.screeningDate);
+            const replacementScheduledAt = getScheduledLagosDateTime(
+                replacementDate,
+                screeningData.screeningTime,
+            );
+            if (!normalizedVenue) {
+                throw new HttpException(
+                    { success: false, message: 'Screening venue is required' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+            if (!replacementScheduledAt || replacementScheduledAt.getTime() <= Date.now()) {
+                throw new HttpException(
+                    { success: false, message: 'The replacement screening date and time must be in the future' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const previousSchedule = {
+                date: application.screening.date,
+                time: application.screening.time,
+                venue: application.screening.venue,
+            };
+            if (
+                currentScheduledAt.getTime() === replacementScheduledAt.getTime() &&
+                previousSchedule.venue === normalizedVenue
+            ) {
+                throw new ConflictException('Change the screening schedule before saving');
+            }
+
+            application.screening.date = replacementDate;
+            application.screening.time = screeningData.screeningTime;
+            application.screening.venue = normalizedVenue;
+            this.appendAuditEntry(application, {
+                action: 'screening_rescheduled',
+                description: 'Screening and interview was rescheduled for the application.',
+                actor: req.user,
+                metadata: {
+                    previousDate: previousSchedule.date,
+                    previousTime: previousSchedule.time,
+                    previousVenue: previousSchedule.venue,
+                    newDate: screeningData.screeningDate,
+                    newTime: screeningData.screeningTime,
+                    newVenue: normalizedVenue,
+                },
+            });
+            await application.save();
+
+            await this.emailService.sendScreeningScheduledEmail(
+                (application.userId as any).email,
+                (application.userId as any).firstName,
+                application.screening.date,
+                application.screening.time,
+                application.screening.venue,
+                true,
+            );
+
+            return {
+                success: true,
+                message: 'Screening & interview rescheduled successfully',
+                data: { application },
+            };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to reschedule screening';
+            this.logger.error('Error rescheduling screening:', errorMessage);
+            if (error instanceof HttpException) throw error;
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to reschedule screening',
+                    error: errorMessage,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
     }

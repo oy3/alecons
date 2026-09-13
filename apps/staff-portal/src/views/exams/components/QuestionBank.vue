@@ -35,7 +35,19 @@ export default {
       showCreateQuestionModal: false,
       showEditQuestionModal: false,
       showViewQuestionModal: false,
+      showReuseModal: false,
       selectedQuestion: null,
+      reusableQuestions: [],
+      reuseSelectedIds: [],
+      reuseSelectedItems: {},
+      reuseLoading: false,
+      reuseSaving: false,
+      reusePage: 1,
+      reuseLimit: 10,
+      reuseTotal: 0,
+      reuseTotalPages: 1,
+      reuseFilters: { search: "", type: "all", subject: "all", topic: "all" },
+      reuseFacets: { subjects: [], topics: [] },
 
       // Import
       importFormat: "excel",
@@ -79,6 +91,37 @@ export default {
         this.selectedExam.status === "draft" ||
         this.selectedExam.status === "scheduled"
       );
+    },
+
+    existingBankItemIds() {
+      return new Set(this.questions.map(question => String(question.questionBankItemId || '')).filter(Boolean));
+    },
+
+    remainingQuestionSlots() {
+      const activeQuestionCount = this.questions.filter(question => question.status !== "inactive").length;
+      return Math.max(0, Number(this.selectedExam?.totalQuestions || 0) - activeQuestionCount);
+    },
+
+    reusePageEligibleIds() {
+      return this.reusableQuestions.filter(item => !this.existingBankItemIds.has(String(item._id))).map(item => item._id);
+    },
+
+    allReusePageSelected() {
+      return this.reusePageEligibleIds.length > 0 && this.reusePageEligibleIds.every(id => this.reuseSelectedIds.includes(id));
+    },
+
+    someReusePageSelected() {
+      return this.reusePageEligibleIds.some(id => this.reuseSelectedIds.includes(id)) && !this.allReusePageSelected;
+    },
+
+    currentExamMarks() {
+      return this.questions
+        .filter(question => question.status !== "inactive")
+        .reduce((total, question) => total + Number(question.mark || 0), 0);
+    },
+
+    selectedReuseMarks() {
+      return this.reuseSelectedIds.reduce((total, id) => total + Number(this.reuseSelectedItems[id]?.defaultMark || 0), 0);
     },
 
     filteredQuestions() {
@@ -183,7 +226,9 @@ export default {
             this.$swal.fire({
               icon: "info",
               title: "No Questions",
-              text: "No questions found for this exam. Add questions using the button above.",
+              text: this.canEditQuestions
+                ? "No questions found for this exam. Add questions using the actions above."
+                : "No questions were recorded for this exam.",
               confirmButtonColor: "#1a5f5f",
             });
           }
@@ -201,6 +246,125 @@ export default {
       } finally {
         this.isLoading = false;
       }
+    },
+
+    async openReuseModal() {
+      if (!this.selectedExamId || !this.canEditQuestions || !this.remainingQuestionSlots) return;
+      this.showReuseModal = true;
+      this.reuseSelectedIds = [];
+      this.reuseSelectedItems = {};
+      this.reusePage = 1;
+      try {
+        const facets = await apiService.getQuestionBankFacets();
+        this.reuseFacets = facets.data || this.reuseFacets;
+      } catch (error) {
+        logger.warn("Could not load reusable question filters", error);
+      }
+      await this.loadReusableQuestions();
+    },
+
+    async loadReusableQuestions() {
+      this.reuseLoading = true;
+      try {
+        const response = await apiService.getQuestionBank({
+          ...this.reuseFilters,
+          status: "active",
+          page: this.reusePage,
+          limit: this.reuseLimit,
+        });
+        const data = response.data || {};
+        this.reusableQuestions = data.items || [];
+        this.reuseTotal = data.total || 0;
+        this.reuseTotalPages = data.totalPages || 1;
+      } catch (error) {
+        this.$swal.fire("Could not load question bank", error.message, "error");
+      } finally {
+        this.reuseLoading = false;
+      }
+    },
+
+    applyReuseFilters() {
+      this.reusePage = 1;
+      this.loadReusableQuestions();
+    },
+
+    changeReusePage(page) {
+      if (page < 1 || page > this.reuseTotalPages) return;
+      this.reusePage = page;
+      this.loadReusableQuestions();
+    },
+
+    toggleReuseQuestion(item) {
+      if (this.existingBankItemIds.has(String(item._id))) return;
+      if (this.reuseSelectedIds.includes(item._id)) {
+        this.reuseSelectedIds = this.reuseSelectedIds.filter(id => id !== item._id);
+        delete this.reuseSelectedItems[item._id];
+        return;
+      }
+      if (this.reuseSelectedIds.length >= this.remainingQuestionSlots) {
+        this.$swal.fire("Question limit reached", `Only ${this.remainingQuestionSlots} question slots are available.`, "info");
+        return;
+      }
+      this.reuseSelectedItems[item._id] = item;
+      this.reuseSelectedIds.push(item._id);
+    },
+
+    toggleReusePage(event) {
+      if (!event.target.checked) {
+        this.reusePageEligibleIds.forEach(id => delete this.reuseSelectedItems[id]);
+        this.reuseSelectedIds = this.reuseSelectedIds.filter(id => !this.reusePageEligibleIds.includes(id));
+        return;
+      }
+      const available = this.remainingQuestionSlots - this.reuseSelectedIds.length;
+      const additions = this.reusePageEligibleIds.filter(id => !this.reuseSelectedIds.includes(id)).slice(0, available);
+      this.reusableQuestions.filter(item => additions.includes(item._id)).forEach(item => { this.reuseSelectedItems[item._id] = item; });
+      this.reuseSelectedIds = [...new Set([...this.reuseSelectedIds, ...additions])];
+    },
+
+    async selectAllMatchingReuse() {
+      this.reuseLoading = true;
+      try {
+        const ids = [];
+        const selectedItems = {};
+        let page = 1;
+        let pages = 1;
+        do {
+          const response = await apiService.getQuestionBank({ ...this.reuseFilters, status: "active", page, limit: 100 });
+          const data = response.data || {};
+          pages = data.totalPages || 1;
+          for (const item of data.items || []) {
+            if (!this.existingBankItemIds.has(String(item._id))) { ids.push(item._id); selectedItems[item._id] = item; }
+            if (ids.length >= this.remainingQuestionSlots) break;
+          }
+          page++;
+        } while (page <= pages && ids.length < this.remainingQuestionSlots);
+        this.reuseSelectedIds = [...new Set(ids)];
+        this.reuseSelectedItems = selectedItems;
+      } catch (error) {
+        this.$swal.fire("Selection failed", error.message, "error");
+      } finally {
+        this.reuseLoading = false;
+      }
+    },
+
+    async reuseSelectedQuestions() {
+      if (!this.reuseSelectedIds.length) return;
+      this.reuseSaving = true;
+      try {
+        const response = await apiService.reuseQuestionBankItems(this.selectedExamId, this.reuseSelectedIds);
+        await this.loadQuestions();
+        this.showReuseModal = false;
+        this.$swal.fire({ icon: "success", title: `${response.data?.added || 0} questions added`, timer: 1600, showConfirmButton: false });
+      } catch (error) {
+        this.$swal.fire("Could not reuse questions", error.message, "error");
+      } finally {
+        this.reuseSaving = false;
+      }
+    },
+
+    clearReuseSelection() {
+      this.reuseSelectedIds = [];
+      this.reuseSelectedItems = {};
     },
 
     changePage(page) {
@@ -531,7 +695,7 @@ export default {
           this.$swal.fire({
             icon: "error",
             title: "Delete Failed",
-            text: "Failed to delete question.",
+            text: error.message || "Failed to delete question.",
             confirmButtonColor: "#dc3545",
           });
         }
@@ -634,15 +798,23 @@ export default {
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
       <div>
-        <h4 class="mb-1">Question Bank</h4>
+        <h4 class="mb-1">Exam Questions</h4>
         <p class="text-muted mb-0">
-          Manage questions and bulk import from files
+          Build the selected exam from new, imported, or reusable questions
         </p>
       </div>
       <div class="d-flex gap-2">
         <button class="btn btn-outline-info" @click="showFormatGuide = true">
           <i class="bi bi-info-circle me-1"></i>
           Import Format Guide
+        </button>
+        <button
+          v-if="canEditQuestions && remainingQuestionSlots > 0"
+          class="btn btn-outline-success"
+          @click="openReuseModal"
+        >
+          <i class="bi bi-bank me-1"></i>
+          Reuse from Bank
         </button>
         <button
           v-if="canEditQuestions"
@@ -771,7 +943,7 @@ export default {
                           </span>
                         </span>
                       </div>
-                      <div v-if="question.tags.length > 0" class="tags mt-1">
+                      <div v-if="question.tags?.length > 0" class="tags mt-1">
                         <span
                           v-for="tag in question.tags.slice(0, 3)"
                           :key="tag"
@@ -883,8 +1055,12 @@ export default {
       <div v-else class="text-center py-5">
         <i class="bi bi-question-circle text-muted" style="font-size: 4rem"></i>
         <h4 class="text-muted mt-3">No Questions Found</h4>
-        <p class="text-muted">Add questions manually or import from a file.</p>
-        <div class="d-flex gap-2 justify-content-center">
+        <p class="text-muted">
+          {{ canEditQuestions
+            ? "Add questions manually or import from a file."
+            : "No questions were recorded for this exam." }}
+        </p>
+        <div v-if="canEditQuestions" class="d-flex gap-2 justify-content-center">
           <button
             class="btn btn-primary"
             @click="handleAddQuestion"
@@ -1036,6 +1212,52 @@ export default {
       @close="showViewQuestionModal = false"
       @edit="editQuestion"
     />
+
+    <div v-if="showReuseModal" class="modal fade show reuse-modal" style="display: block" tabindex="-1" role="dialog" aria-modal="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div><h5 class="modal-title">Reuse Questions from Bank</h5><p class="text-muted small mb-0">Choose independent snapshots for {{ selectedExam?.title }}.</p></div>
+            <button type="button" class="btn-close" aria-label="Close" @click="showReuseModal = false"></button>
+          </div>
+          <div class="modal-body p-0">
+            <form class="reuse-filters p-3 border-bottom" @submit.prevent="applyReuseFilters">
+              <div class="row g-2">
+                <div class="col-12 col-lg"><div class="input-group"><span class="input-group-text"><i class="bi bi-search"></i></span><input v-model="reuseFilters.search" class="form-control" placeholder="Search reusable questions..." /></div></div>
+                <div class="col-6 col-lg-2"><select v-model="reuseFilters.type" class="form-select"><option value="all">All Types</option><option value="mcq">Multiple Choice</option><option value="multi">Multi-Select</option><option value="essay">Essay</option></select></div>
+                <div class="col-6 col-lg-2"><select v-model="reuseFilters.subject" class="form-select"><option value="all">All Subjects</option><option v-for="subject in reuseFacets.subjects" :key="subject" :value="subject">{{ subject }}</option></select></div>
+                <div class="col-6 col-lg-2"><select v-model="reuseFilters.topic" class="form-select"><option value="all">All Topics</option><option v-for="topic in reuseFacets.topics" :key="topic" :value="topic">{{ topic }}</option></select></div>
+                <div class="col-auto"><button class="btn btn-staff-primary"><i class="bi bi-search"></i><span class="visually-hidden">Search</span></button></div>
+              </div>
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+                <span class="small text-muted">{{ reuseTotal }} matching · {{ remainingQuestionSlots }} slots available</span>
+                <div class="d-flex gap-2"><button type="button" class="btn btn-sm btn-outline-staff-primary" @click="selectAllMatchingReuse">Select all eligible matching</button><button type="button" class="btn btn-sm btn-outline-secondary" :disabled="!reuseSelectedIds.length" @click="clearReuseSelection">Clear selection</button></div>
+              </div>
+            </form>
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0">
+                <thead class="table-light sticky-top"><tr><th><input class="form-check-input" type="checkbox" :checked="allReusePageSelected" :indeterminate.prop="someReusePageSelected" @change="toggleReusePage" /></th><th>Question</th><th>Type</th><th>Subject</th><th>Topic</th><th>Difficulty</th><th>Mark</th><th>Usage</th></tr></thead>
+                <tbody>
+                  <tr v-if="reuseLoading"><td colspan="8" class="text-center py-5"><span class="spinner-border text-staff-primary"></span></td></tr>
+                  <tr v-else-if="!reusableQuestions.length"><td colspan="8" class="text-center text-muted py-5">No reusable questions match these filters.</td></tr>
+                  <tr v-for="item in reusableQuestions" v-else :key="item._id" :class="{ 'table-light text-muted': existingBankItemIds.has(String(item._id)) }">
+                    <td><input class="form-check-input" type="checkbox" :checked="reuseSelectedIds.includes(item._id)" :disabled="existingBankItemIds.has(String(item._id))" @change="toggleReuseQuestion(item)" /></td>
+                    <td class="reuse-question"><RichContentDisplay :content="item.questionText" /><span v-if="existingBankItemIds.has(String(item._id))" class="badge text-bg-secondary">Already added</span></td>
+                    <td>{{ formatQuestionType(item.type) }}</td><td>{{ item.metadata?.subject || '—' }}</td><td>{{ item.metadata?.topic || '—' }}</td><td class="text-capitalize">{{ item.metadata?.difficulty || '—' }}</td><td>{{ item.defaultMark }}</td><td>{{ item.usageCount || 0 }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="d-flex justify-content-end align-items-center gap-2 p-3 border-top"><button class="btn btn-sm btn-outline-secondary" :disabled="reusePage === 1" @click="changeReusePage(reusePage - 1)"><i class="bi bi-chevron-left"></i></button><span class="small">Page {{ reusePage }} of {{ reuseTotalPages }}</span><button class="btn btn-sm btn-outline-secondary" :disabled="reusePage === reuseTotalPages" @click="changeReusePage(reusePage + 1)"><i class="bi bi-chevron-right"></i></button></div>
+          </div>
+          <div class="modal-footer justify-content-between">
+            <div><strong>{{ reuseSelectedIds.length }} selected</strong><span class="text-muted ms-2">{{ (selectedExam?.totalQuestions || 0) - remainingQuestionSlots + reuseSelectedIds.length }}/{{ selectedExam?.totalQuestions }} questions · {{ currentExamMarks + selectedReuseMarks }}/{{ selectedExam?.totalMark }} marks</span></div>
+            <div class="d-flex gap-2"><button class="btn btn-secondary" @click="showReuseModal = false">Cancel</button><button class="btn btn-staff-primary" :disabled="!reuseSelectedIds.length || reuseSaving" @click="reuseSelectedQuestions"><span v-if="reuseSaving" class="spinner-border spinner-border-sm me-1"></span>Add {{ reuseSelectedIds.length }} Questions</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-if="showReuseModal" class="modal-backdrop fade show"></div>
   </div>
 </template>
 
@@ -1043,6 +1265,12 @@ export default {
 .question-bank {
   min-height: 500px;
 }
+
+.reuse-modal { z-index: 1060; }
+.reuse-modal + .modal-backdrop { z-index: 1055; }
+.reuse-filters { background: #fbfcfc; }
+.reuse-question { min-width: 300px; max-width: 460px; }
+.reuse-question :deep(.rich-content-display) { max-height: 58px; overflow: hidden; font-size: .875rem; }
 
 .question-preview {
   max-width: 400px;

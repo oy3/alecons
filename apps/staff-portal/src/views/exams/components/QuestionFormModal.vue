@@ -29,7 +29,10 @@ export default {
         options: [],
         answer: null,
         mark: 1,
-        difficulty: ''
+        difficulty: '',
+        subject: '',
+        topic: '',
+        tags: ''
       }
     }
   },
@@ -71,7 +74,10 @@ export default {
             options: options,
             answer: answer ?? this.getDefaultAnswer(newQuestion.type),
             mark: newQuestion.mark || 1,
-            difficulty: newQuestion.metadata?.difficulty?.toLowerCase() || ''
+            difficulty: newQuestion.metadata?.difficulty?.toLowerCase() || '',
+            subject: newQuestion.metadata?.subject || '',
+            topic: newQuestion.metadata?.topic || '',
+            tags: (newQuestion.tags || []).join(', ')
           }
         } else {
           // When question becomes null (e.g., modal closing or creating new), reset form
@@ -106,7 +112,10 @@ export default {
         options: [],
         answer: this.getDefaultAnswer(''),
         mark: 1,
-        difficulty: ''
+        difficulty: '',
+        subject: '',
+        topic: '',
+        tags: ''
       }
       this.errors = {}
     },
@@ -213,7 +222,10 @@ export default {
       
       try {
         this.isLoading = true
-        await this.$emit('save', { ...this.form })
+        await this.$emit('save', {
+          ...this.form,
+          tags: this.form.tags.split(',').map(tag => tag.trim()).filter(Boolean)
+        })
         // Reset form after successful save
         this.resetForm()
         this.close()
@@ -388,6 +400,25 @@ export default {
               <div class="invalid-feedback">
                 {{ errors.difficulty || 'Difficulty level is required' }}
               </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="questionSubject" class="form-label">Subject</label>
+                <input id="questionSubject" v-model.trim="form.subject" class="form-control" maxlength="120"
+                  placeholder="e.g. Biology" />
+              </div>
+              <div class="col-md-6 mb-3">
+                <label for="questionTopic" class="form-label">Topic</label>
+                <input id="questionTopic" v-model.trim="form.topic" class="form-control" maxlength="120"
+                  placeholder="e.g. Cell structure" />
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="questionTags" class="form-label">Tags</label>
+              <input id="questionTags" v-model="form.tags" class="form-control"
+                placeholder="Separate tags with commas" />
             </div>
           </div>
           

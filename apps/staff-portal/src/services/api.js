@@ -493,6 +493,13 @@ class StaffApiService {
         })
     }
 
+    async migrateQuestionBank({ apply = false, finalize = false } = {}) {
+        return this.makeRequest('/admin/maintenance/migrate-question-bank', {
+            method: 'POST',
+            body: JSON.stringify({ apply, finalize }),
+        })
+    }
+
     async backfillStudentSessionHistory({ apply = false } = {}) {
         return this.makeRequest('/admin/maintenance/backfill-student-session-history', {
             method: 'POST',
@@ -1014,6 +1021,12 @@ class StaffApiService {
         })
     }
 
+    async scheduleExam(examId) {
+        return this.makeRequest(`/exams/${examId}/schedule`, {
+            method: 'POST',
+        })
+    }
+
     async deleteExam(examId) {
         return this.makeRequest(`/exams/${examId}`, {
             method: 'DELETE',
@@ -1326,6 +1339,54 @@ class StaffApiService {
             headers: {
                 'Content-Type': 'application/json',
             },
+        })
+    }
+
+    async getQuestionBank(params = {}) {
+        const query = new URLSearchParams(
+            Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
+        ).toString()
+        return this.makeRequest(`/question-bank${query ? `?${query}` : ''}`)
+    }
+
+    async getQuestionBankSummary() {
+        return this.makeRequest('/question-bank/summary')
+    }
+
+    async getQuestionBankFacets() {
+        return this.makeRequest('/question-bank/facets')
+    }
+
+    async createQuestionBankItem(data) {
+        return this.makeRequest('/question-bank', { method: 'POST', body: JSON.stringify(data) })
+    }
+
+    async bulkCreateQuestionBankItems(questions) {
+        return this.makeRequest('/question-bank/bulk', {
+            method: 'POST',
+            body: JSON.stringify({ questions }),
+        })
+    }
+
+    async updateQuestionBankItem(id, data) {
+        return this.makeRequest(`/question-bank/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+    }
+
+    async setQuestionBankStatus(ids, status) {
+        return this.makeRequest('/question-bank/status', {
+            method: 'POST',
+            body: JSON.stringify({ ids, status }),
+        })
+    }
+
+    async getQuestionBankUsage(id) {
+        return this.makeRequest(`/question-bank/${id}/usage`)
+    }
+
+    async reuseQuestionBankItems(examId, questionBankItemIds) {
+        return this.makeRequest(`/question-bank/reuse/${examId}`, {
+            method: 'POST',
+            body: JSON.stringify({ questionBankItemIds }),
         })
     }
 

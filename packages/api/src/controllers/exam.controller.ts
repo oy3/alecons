@@ -848,6 +848,30 @@ export class ExamController {
         }
     }
 
+    @Post(":examId/schedule")
+    @Roles("staff", "admin")
+    @ApiOperation({ summary: "Validate and schedule a draft exam" })
+    @ApiResponse({ status: 200, description: "Exam scheduled successfully" })
+    async scheduleExam(
+        @Param("examId") examId: string,
+        @Request() req,
+    ): Promise<any> {
+        try {
+            const exam = await this.examService.scheduleExam(examId, req.user.userId);
+            return {
+                success: true,
+                message: "Exam scheduled successfully",
+                exam,
+            };
+        } catch (error) {
+            this.logger.error(`Error scheduling exam ${examId}:`, error.message);
+            throw new HttpException(
+                error.message || "Failed to schedule exam",
+                error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
     @Put(":examId")
     @Roles("staff", "admin")
     @ApiOperation({ summary: "Update existing exam (Admin only)" })

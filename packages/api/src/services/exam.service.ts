@@ -10,7 +10,10 @@ import {
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import { Exam, ExamDocument } from "../schemas/exam.schema";
-import { Question, QuestionDocument } from "../schemas/question.schema";
+import { ExamQuestion, ExamQuestionDocument } from "../schemas/exam-question.schema";
+import { QuestionBankItem, QuestionBankItemDocument } from "../schemas/question-bank-item.schema";
+import { QuestionBankActivity, QuestionBankActivityDocument } from "../schemas/question-bank-activity.schema";
+import { createQuestionFingerprint } from "../utils/question-fingerprint";
 import {
     ExamPassword,
     ExamPasswordDocument,
@@ -43,7 +46,9 @@ export class ExamService {
 
     constructor(
         @InjectModel(Exam.name) private examModel: Model<ExamDocument>,
-        @InjectModel(Question.name) private questionModel: Model<QuestionDocument>,
+        @InjectModel(ExamQuestion.name) private questionModel: Model<ExamQuestionDocument>,
+        @InjectModel(QuestionBankItem.name) private bankQuestionModel: Model<QuestionBankItemDocument>,
+        @InjectModel(QuestionBankActivity.name) private bankActivityModel: Model<QuestionBankActivityDocument>,
         @InjectModel(ExamPassword.name)
         private passwordModel: Model<ExamPasswordDocument>,
         @InjectModel(ExamAttempt.name)
@@ -70,7 +75,7 @@ export class ExamService {
 
     async getExamQuestionsForManagement(
         examId: string
-    ): Promise<QuestionDocument[]> {
+    ): Promise<ExamQuestionDocument[]> {
         try {
             const exam = await this.examModel.findById(examId);
             if (!exam) {
@@ -79,7 +84,7 @@ export class ExamService {
 
             const questions = await this.questionModel
                 .find({ examId: new Types.ObjectId(examId) })
-                .sort({ createdAt: "asc" });
+                .sort({ order: "asc", createdAt: "asc" });
 
             return questions;
         } catch (error) {
@@ -95,7 +100,7 @@ export class ExamService {
         examId: string,
         questionData: any,
         userId: string
-    ): Promise<QuestionDocument> {
+    ): Promise<ExamQuestionDocument> {
         try {
             const exam = await this.examModel.findById(examId);
             if (!exam) {
@@ -105,6 +110,7 @@ export class ExamService {
             // Check if the exam has reached its totalQuestions limit
             const currentQuestionCount = await this.questionModel.countDocuments({
                 examId: new Types.ObjectId(examId),
+                status: "active",
             });
             if (currentQuestionCount >= exam.totalQuestions) {
                 throw new BadRequestException(
@@ -150,8 +156,13 @@ export class ExamService {
                 status: "active",
                 metadata: {
                     difficulty: questionData.difficulty || "medium",
+                    subject: questionData.subject || questionData.metadata?.subject,
+                    topic: questionData.topic || questionData.metadata?.topic,
+                    learningObjective: questionData.learningObjective || questionData.metadata?.learningObjective,
                     contentMetadata: contentValidation.metadata, // Store content metadata
                 },
+                tags: Array.isArray(questionData.tags) ? questionData.tags : [],
+                mediaUrls: Array.isArray(questionData.mediaUrls) ? questionData.mediaUrls : [],
                 createdBy: new Types.ObjectId(userId),
             };
 
@@ -199,12 +210,53 @@ export class ExamService {
                 JSON.stringify(questionDoc, null, 2)
             );
 
+            if (questionData.saveToBank !== false) {
+                const fingerprint = createQuestionFingerprint(questionDoc);
+                let bankItem = await this.bankQuestionModel.findOne({ fingerprint });
+                if (!bankItem) {
+                    bankItem = await this.bankQuestionModel.create({
+                        questionText: questionDoc.questionText,
+                        type: questionDoc.type,
+                        options: questionDoc["options"],
+                        answer: questionDoc["answer"],
+                        defaultMark: questionDoc.mark,
+                        mediaUrls: questionDoc.mediaUrls,
+                        tags: questionDoc.tags,
+                        metadata: questionDoc.metadata,
+                        fingerprint,
+                        createdBy: new Types.ObjectId(userId),
+                    });
+                    await this.bankActivityModel.create({
+                        questionBankItemId: bankItem._id,
+                        action: 'created',
+                        actorUserId: new Types.ObjectId(userId),
+                    });
+                }
+                questionDoc["questionBankItemId"] = bankItem._id;
+                questionDoc["bankVersion"] = bankItem.version;
+                questionDoc["copiedBy"] = new Types.ObjectId(userId);
+                questionDoc["copiedAt"] = new Date();
+                const alreadyAdded = await this.questionModel.exists({
+                    examId: exam._id,
+                    questionBankItemId: bankItem._id,
+                });
+                if (alreadyAdded) {
+                    throw new BadRequestException("An identical question is already included in this exam");
+                }
+            }
+
             const question = await this.questionModel.create(questionDoc);
+            if (question.questionBankItemId) {
+                await this.bankQuestionModel.updateOne(
+                    { _id: question.questionBankItemId },
+                    { $inc: { usageCount: 1 }, $set: { lastUsedAt: new Date() } },
+                );
+            }
             this.logger.log(
                 `Successfully created question ${question._id} for exam ${examId}`
             );
 
-            // Check if we should update exam status to 'scheduled'
+            // Reconcile an already scheduled exam without publishing drafts.
             await this.checkAndUpdateExamStatus(examId);
 
             return question;
@@ -223,7 +275,7 @@ export class ExamService {
         questionData: any,
         userId: string,
         userRole?: string
-    ): Promise<QuestionDocument> {
+    ): Promise<ExamQuestionDocument> {
         try {
             const existingQuestion = await this.questionModel.findById(questionId);
             if (!existingQuestion) {
@@ -233,7 +285,7 @@ export class ExamService {
             // Check permissions - allow update if user is admin, staff, or creator
             const isCreator =
                 existingQuestion.createdBy &&
-                existingQuestion.createdBy.equals(new Types.ObjectId(userId));
+                String(existingQuestion.createdBy) === String(userId);
             const isPrivileged = userRole === "admin" || userRole === "staff";
 
             if (!isCreator && !isPrivileged) {
@@ -249,9 +301,10 @@ export class ExamService {
             }
 
             // Check if exam is in a state that allows question editing
-            if (!["draft", "scheduled"].includes(exam.status)) {
+            const attempts = await this.attemptModel.countDocuments({ examId: exam._id });
+            if (attempts || !["draft", "scheduled"].includes(exam.status) || new Date() >= new Date(exam.examTimestamp)) {
                 throw new BadRequestException(
-                    `Cannot update questions in exam with status "${exam.status}". Only draft or scheduled exams can be modified.`
+                    "Questions cannot be changed after an exam starts or receives an attempt"
                 );
             }
 
@@ -260,7 +313,15 @@ export class ExamService {
                 questionText: questionData.questionText,
                 type: questionData.type,
                 mark: questionData.mark || 1,
-                difficulty: questionData.difficulty,
+                tags: Array.isArray(questionData.tags) ? questionData.tags : existingQuestion.tags,
+                mediaUrls: Array.isArray(questionData.mediaUrls) ? questionData.mediaUrls : existingQuestion.mediaUrls,
+                metadata: {
+                    ...existingQuestion.metadata,
+                    difficulty: questionData.difficulty || questionData.metadata?.difficulty || existingQuestion.metadata?.difficulty,
+                    subject: questionData.subject ?? questionData.metadata?.subject ?? existingQuestion.metadata?.subject,
+                    topic: questionData.topic ?? questionData.metadata?.topic ?? existingQuestion.metadata?.topic,
+                    learningObjective: questionData.learningObjective ?? questionData.metadata?.learningObjective ?? existingQuestion.metadata?.learningObjective,
+                },
                 updatedBy: new Types.ObjectId(userId),
                 updatedAt: new Date(),
             };
@@ -344,7 +405,7 @@ export class ExamService {
             // Allow deletion if user is admin or staff, or if they created the question
             const isCreator =
                 question.createdBy &&
-                question.createdBy.equals(new Types.ObjectId(userId));
+                String(question.createdBy) === String(userId);
             const isPrivileged = userRole === "admin" || userRole === "staff";
 
             if (!isCreator && !isPrivileged) {
@@ -353,7 +414,17 @@ export class ExamService {
                 );
             }
 
+            const exam = await this.examModel.findById(question.examId);
+            const attempts = await this.attemptModel.countDocuments({ examId: question.examId });
+            if (!exam || attempts || !["draft", "scheduled"].includes(exam.status) || new Date() >= new Date(exam.examTimestamp)) {
+                throw new BadRequestException("Questions cannot be removed after an exam starts or receives an attempt");
+            }
+
             await this.questionModel.findByIdAndDelete(questionId);
+            if (question.questionBankItemId) {
+                const usageCount = await this.questionModel.countDocuments({ questionBankItemId: question.questionBankItemId });
+                await this.bankQuestionModel.updateOne({ _id: question.questionBankItemId }, { $set: { usageCount } });
+            }
             this.logger.log(`Deleted question ${questionId}`);
 
             // Check if exam status should be updated after question deletion
@@ -578,7 +649,7 @@ export class ExamService {
 
         this.logger.log(`Bulk import completed:`, importResults);
 
-        // Check if exam status should be updated after bulk import
+        // Reconcile an already scheduled exam without publishing drafts.
         if (importResults.successCount > 0) {
             await this.checkAndUpdateExamStatus(examId);
         }
@@ -2218,7 +2289,7 @@ export class ExamService {
             const [exams, total] = await Promise.all([
                 this.examModel
                     .find(filter)
-                    .populate("academicSession", "sessionYear startDate endDate status")
+                    .populate("academicSession", "title sessionYear startDate endDate status")
                     .populate("createdBy", "firstName lastName email")
                     .sort(sort)
                     .skip(skip)
@@ -2227,10 +2298,29 @@ export class ExamService {
                 this.examModel.countDocuments(filter),
             ]);
 
+            const questionCounts = exams.length
+                ? await this.questionModel.aggregate([
+                    {
+                        $match: {
+                            examId: { $in: exams.map((exam: any) => exam._id) },
+                            status: "active",
+                        },
+                    },
+                    { $group: { _id: "$examId", count: { $sum: 1 } } },
+                ])
+                : [];
+            const questionCountByExam = new Map(
+                questionCounts.map((item) => [String(item._id), item.count]),
+            );
+            const examsWithQuestionCounts = exams.map((exam: any) => ({
+                ...exam,
+                questionCount: questionCountByExam.get(String(exam._id)) || 0,
+            }));
+
             const totalPages = Math.ceil(total / limit);
 
             return {
-                exams: exams as unknown as ExamDocument[],
+                exams: examsWithQuestionCounts as unknown as ExamDocument[],
                 total,
                 page,
                 limit,
@@ -2489,6 +2579,87 @@ export class ExamService {
         }
     }
 
+    async scheduleExam(examId: string, scheduledBy: string): Promise<ExamDocument> {
+        if (!Types.ObjectId.isValid(examId)) {
+            throw new NotFoundException("Exam not found");
+        }
+
+        const exam = await this.examModel.findById(examId);
+        if (!exam || exam.isActive === false) {
+            throw new NotFoundException("Exam not found");
+        }
+        if (exam.status !== "draft") {
+            throw new BadRequestException("Only draft exams can be scheduled");
+        }
+
+        const [questionSummary, attemptCount] = await Promise.all([
+            this.questionModel.aggregate([
+                {
+                    $match: {
+                        examId: exam._id,
+                        status: "active",
+                    },
+                },
+                {
+                    $group: {
+                        _id: null,
+                        questionCount: { $sum: 1 },
+                        totalMarks: { $sum: "$mark" },
+                    },
+                },
+            ]),
+            this.attemptModel.countDocuments({ examId: exam._id }),
+        ]);
+        const questionCount = questionSummary[0]?.questionCount || 0;
+        const totalMarks = questionSummary[0]?.totalMarks || 0;
+
+        if (attemptCount > 0) {
+            throw new BadRequestException("This exam cannot be scheduled because it already has an attempt");
+        }
+        if (questionCount !== exam.totalQuestions) {
+            throw new BadRequestException(
+                `Add exactly ${exam.totalQuestions} active questions before scheduling. Current count: ${questionCount}`,
+            );
+        }
+        if (totalMarks !== exam.totalMark) {
+            throw new BadRequestException(
+                `Question marks must total ${exam.totalMark} before scheduling. Current total: ${totalMarks}`,
+            );
+        }
+        if (new Date(exam.examTimestamp).getTime() <= Date.now()) {
+            throw new BadRequestException("Set the exam date and time in the future before scheduling");
+        }
+
+        const generatedPassword = await this.generateExamPassword(examId, scheduledBy);
+        const scheduledExam = await this.updateExam(
+            examId,
+            { status: "scheduled" },
+            scheduledBy,
+        );
+
+        if (generatedPassword !== "Password already exists") {
+            this.getTargetAudienceUsers(examId)
+                .then((users) => Promise.allSettled(users.map((user) =>
+                    this.emailService.sendExamPasswordEmail(
+                        user.email,
+                        user.firstName,
+                        exam.title,
+                        generatedPassword,
+                        exam.examTimestamp,
+                        false,
+                    ),
+                )))
+                .catch((error) => {
+                    this.logger.error(
+                        `Failed to send exam password emails for ${examId}:`,
+                        error.message,
+                    );
+                });
+        }
+
+        return scheduledExam;
+    }
+
     async deleteExam(examId: string, deletedBy: string): Promise<void> {
         try {
             const exam = await this.examModel.findByIdAndUpdate(examId, {
@@ -2505,10 +2676,7 @@ export class ExamService {
         }
     }
 
-    /**
-     * Check if the exam has enough questions and update status to 'scheduled' if needed
-     * Uses consistent status transition logic
-     */
+    /** Keep scheduled exams valid and advance their time-based status. */
     async checkAndUpdateExamStatus(examId: string): Promise<void> {
         try {
             const exam = await this.examModel.findById(examId);
@@ -2533,13 +2701,7 @@ export class ExamService {
 
             let newStatus = exam.status;
 
-            // Draft <-> Scheduled transitions based on question count
-            if (exam.status === "draft" && questionCount >= exam.totalQuestions) {
-                newStatus = "scheduled";
-                this.logger.log(
-                    `Exam ${examId} moving from draft to scheduled - has ${questionCount}/${exam.totalQuestions} questions`
-                );
-            } else if (
+            if (
                 exam.status === "scheduled" &&
                 questionCount < exam.totalQuestions
             ) {
@@ -2580,52 +2742,6 @@ export class ExamService {
                 this.logger.log(
                     `Exam ${examId} status updated from ${exam.status} to ${newStatus}`
                 );
-
-                // Generate password when exam becomes scheduled
-                if (newStatus === "scheduled") {
-                    const generatedPassword = await this.generateExamPassword(
-                        examId,
-                        exam.createdBy.toString()
-                    );
-
-                    // Send scheduled exam email with password to target audience
-                    if (
-                        generatedPassword &&
-                        generatedPassword !== "Password already exists"
-                    ) {
-                        try {
-                            const targetUsers = await this.getTargetAudienceUsers(examId);
-                            if (targetUsers.length > 0) {
-                                // Send password email to each user
-                                const emailPromises = targetUsers.map((user) =>
-                                    this.emailService.sendExamPasswordEmail(
-                                        user.email,
-                                        user.firstName,
-                                        exam.title,
-                                        generatedPassword,
-                                        exam.examTimestamp,
-                                        false // isRegenerated = false for auto-generated
-                                    )
-                                );
-
-                                await Promise.allSettled(emailPromises);
-                                this.logger.log(
-                                    `Exam password emails sent to ${targetUsers.length} users for exam ${examId}`
-                                );
-                            } else {
-                                this.logger.warn(
-                                    `No target audience found for exam ${examId}, skipping email notification`
-                                );
-                            }
-                        } catch (emailError) {
-                            this.logger.error(
-                                `Failed to send exam password emails for ${examId}:`,
-                                emailError.message
-                            );
-                            // Don't fail the exam scheduling because of email error
-                        }
-                    }
-                }
             }
         } catch (error) {
             this.logger.error(

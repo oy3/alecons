@@ -482,7 +482,7 @@ export default {
                       @change="clearFieldError('academicSession')" required>
                       <option value="">Select Academic Session</option>
                       <option v-for="session in academicSessions" :key="session._id" :value="session._id">
-                      {{ session.sessionYear }}
+                      {{ session.title || 'Untitled academic session' }}
                       </option>
                     </select>
                     <div v-if="errors.academicSession" class="invalid-feedback">{{ errors.academicSession }}</div>

@@ -4,10 +4,14 @@ import { BullModule } from '@nestjs/bull';
 import { ExamController } from '../controllers/exam.controller';
 import { QuestionController } from '../controllers/question.controller';
 import { ExamService } from '../services/exam.service';
+import { QuestionBankService } from '../services/question-bank.service';
 import { GradingService } from '../services/grading.service';
 import { QueueService } from '../services/queue.service';
 import { Exam, ExamSchema } from '../schemas/exam.schema';
-import { Question, QuestionSchema } from '../schemas/question.schema';
+import { ExamQuestion, ExamQuestionSchema } from '../schemas/exam-question.schema';
+import { QuestionBankItem, QuestionBankItemSchema } from '../schemas/question-bank-item.schema';
+import { QuestionBankActivity, QuestionBankActivitySchema } from '../schemas/question-bank-activity.schema';
+import { QuestionBankController } from '../controllers/question-bank.controller';
 import { ExamPassword, ExamPasswordSchema } from '../schemas/exam-password.schema';
 import { ExamAttempt, ExamAttemptSchema } from '../schemas/exam-attempt.schema';
 import { ExamResult, ExamResultSchema } from '../schemas/exam-result.schema';
@@ -23,7 +27,9 @@ import { AcademicSessionsModule } from './academic-sessions.module';
         AcademicSessionsModule,
         MongooseModule.forFeature([
             { name: Exam.name, schema: ExamSchema },
-            { name: Question.name, schema: QuestionSchema },
+            { name: ExamQuestion.name, schema: ExamQuestionSchema },
+            { name: QuestionBankItem.name, schema: QuestionBankItemSchema },
+            { name: QuestionBankActivity.name, schema: QuestionBankActivitySchema },
             { name: ExamPassword.name, schema: ExamPasswordSchema },
             { name: ExamAttempt.name, schema: ExamAttemptSchema },
             { name: ExamResult.name, schema: ExamResultSchema },
@@ -37,8 +43,8 @@ import { AcademicSessionsModule } from './academic-sessions.module';
             { name: 'exam-reminders' }
         ),
     ],
-    controllers: [ExamController, QuestionController],
-    providers: [ExamService, GradingService, QueueService, EmailService, SchedulerService, ContentSanitizationService],
-    exports: [ExamService, GradingService, QueueService, EmailService, SchedulerService, ContentSanitizationService],
+    controllers: [ExamController, QuestionController, QuestionBankController],
+    providers: [ExamService, QuestionBankService, GradingService, QueueService, EmailService, SchedulerService, ContentSanitizationService],
+    exports: [ExamService, QuestionBankService, GradingService, QueueService, EmailService, SchedulerService, ContentSanitizationService],
 })
 export class ExamModule { }

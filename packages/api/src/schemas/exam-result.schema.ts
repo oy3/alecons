@@ -49,7 +49,7 @@ export class ExamResult {
 
     @Prop({
         type: [{
-            questionId: { type: Types.ObjectId, ref: 'Question' },
+            questionId: { type: Types.ObjectId, ref: 'ExamQuestion' },
             userAnswer: MongooseSchema.Types.Mixed,
             correctAnswer: MongooseSchema.Types.Mixed,
             isCorrect: Boolean,

@@ -197,6 +197,38 @@ export default {
       this.$emit("view-statistics", exam);
     },
 
+    async scheduleExam(exam) {
+      const result = await Swal.fire({
+        title: "Schedule Exam",
+        text: `Schedule "${exam.title}"? The question count and total marks will be validated before candidates are notified.`,
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Schedule Exam",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#1a5f5f",
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        const response = await apiService.scheduleExam(exam._id);
+        await Swal.fire({
+          icon: "success",
+          title: "Exam Scheduled",
+          text: response.message || "The exam is now scheduled.",
+          confirmButtonColor: "#1a5f5f",
+        });
+        await this.loadExams();
+      } catch (error) {
+        Swal.fire({
+          icon: "error",
+          title: "Could Not Schedule Exam",
+          text: error.message || "The exam did not pass its readiness checks.",
+          confirmButtonColor: "#dc3545",
+        });
+      }
+    },
+
     async loadGradingStatus(examId) {
       try {
         // Ensure API service has the latest token
@@ -642,6 +674,13 @@ export default {
         this.authStore.hasPermission("exams", "manage")
       );
     },
+
+    canScheduleExam(exam) {
+      return (
+        exam.status === "draft" &&
+        this.authStore.hasPermission("exams", "manage")
+      );
+    },
   },
 };
 </script>
@@ -762,7 +801,7 @@ export default {
               </td>
               <td>
                 <div class="text-center">
-                  <strong>{{ exam.totalQuestions }}</strong>
+                  <strong>{{ exam.questionCount || 0 }}/{{ exam.totalQuestions }}</strong>
                   <br />
                   <small class="text-muted">{{ exam.totalMark }} marks</small>
                 </div>
@@ -795,10 +834,18 @@ export default {
                     <button
                       class="btn btn-sm btn-outline-secondary dropdown-toggle"
                       data-bs-toggle="dropdown"
+                      aria-label="Exam actions"
                     >
-                      <!-- <i class="bi bi-three-dots"></i> -->
+                      <i class="bi bi-three-dots-vertical"></i>
                     </button>
-                    <ul class="dropdown-menu">
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      <li v-if="canScheduleExam(exam)">
+                        <button class="dropdown-item text-success" @click="scheduleExam(exam)">
+                          <i class="bi bi-calendar-check me-2"></i>
+                          Schedule Exam
+                        </button>
+                      </li>
+                      <li v-if="canScheduleExam(exam)"><hr class="dropdown-divider" /></li>
                       <li>
                         <button
                           class="dropdown-item"

@@ -66,9 +66,10 @@ export class ExamService {
         private sessionControlsService: SessionControlsService,
     ) { }
 
-    private async getUserApplication(userId: string) {
+    private async getLatestUserApplication(userId: string) {
         return this.applicationModel
             .findOne({ userId: new Types.ObjectId(userId) })
+            .sort({ createdAt: -1, _id: -1 })
             .select('programId entryAcademicSession currentStage isJambExempt status')
             .exec();
     }
@@ -969,7 +970,7 @@ export class ExamService {
                 !userProgramId
             ) {
                 try {
-                    const application = await this.getUserApplication(userId);
+                    const application = await this.getLatestUserApplication(userId);
 
                     if (application && application.programId) {
                         userProgramId = application.programId.toString();
@@ -1279,7 +1280,7 @@ export class ExamService {
             this.logger.log(`Starting exam ${examId} for user ${userId}`);
 
             const now = new Date();
-            const application = await this.getUserApplication(userId);
+            const application = await this.getLatestUserApplication(userId);
 
             if (application) {
                 if (application.status === ApplicationStatus.EXPIRED) {

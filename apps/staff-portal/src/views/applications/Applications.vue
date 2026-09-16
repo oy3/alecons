@@ -120,6 +120,13 @@ export default {
       perPage: 10,
       totalApplications: 0,
       apiTotalPages: 0,
+      applicationStats: {
+        total: 0,
+        pending: 0,
+        admitted: 0,
+        completed: 0,
+      },
+      isLoadingStats: true,
       showEditModal: false,
       isPreparingEditApplication: false,
       isSavingApplication: false,
@@ -165,7 +172,7 @@ export default {
     await Promise.all([this.loadPrograms(), this.loadAcademicSessions()]);
     this.academicSessionFilter = this.academicSessions[0]?._id || "";
     this.isInitializingFilters = false;
-    await this.loadApplications();
+    await this.refreshApplicationsPage();
   },
   computed: {
     filteredApplications() {
@@ -195,26 +202,77 @@ export default {
           isProgramSelectable(program) || program.value === currentProgramId,
       );
     },
+
+    applicationStatCards() {
+      return [
+        {
+          key: "total",
+          label: "Total Applications",
+          description: "Across all statuses",
+          icon: "bi-files",
+          status: "all",
+          value: this.applicationStats.total,
+          tone: "primary",
+        },
+        {
+          key: "pending",
+          label: "In Progress",
+          description: "Pending applications",
+          icon: "bi-hourglass-split",
+          status: "pending",
+          value: this.applicationStats.pending,
+          tone: "warning",
+        },
+        {
+          key: "admitted",
+          label: "Admitted",
+          description: "Awaiting completion",
+          icon: "bi-person-check",
+          status: "admitted",
+          value: this.applicationStats.admitted,
+          tone: "success",
+        },
+        {
+          key: "completed",
+          label: "Completed",
+          description: "Matriculated students",
+          icon: "bi-mortarboard",
+          status: "completed",
+          value: this.applicationStats.completed,
+          tone: "info",
+        },
+      ];
+    },
   },
   watch: {
     statusFilter() {
+      if (this.isInitializingFilters) return;
+      const pageChanged = this.currentPage !== 1;
       this.currentPage = 1;
-      this.loadApplications();
+      if (!pageChanged) this.loadApplications();
     },
     programFilter() {
+      if (this.isInitializingFilters) return;
+      const pageChanged = this.currentPage !== 1;
       this.currentPage = 1;
-      this.loadApplications();
+      if (!pageChanged) this.loadApplications();
+      this.loadApplicationStats();
     },
     academicSessionFilter() {
       if (this.isInitializingFilters) return;
+      const pageChanged = this.currentPage !== 1;
       this.currentPage = 1;
-      this.loadApplications();
+      if (!pageChanged) this.loadApplications();
+      this.loadApplicationStats();
     },
     searchQuery() {
+      if (this.isInitializingFilters) return;
       clearTimeout(this.searchTimeout);
       this.searchTimeout = setTimeout(() => {
+        const pageChanged = this.currentPage !== 1;
         this.currentPage = 1;
-        this.loadApplications();
+        if (!pageChanged) this.loadApplications();
+        this.loadApplicationStats();
       }, 500);
     },
     currentPage() {
@@ -222,6 +280,77 @@ export default {
     },
   },
   methods: {
+    buildApplicationStatsParams() {
+      const params = {};
+
+      if (this.programFilter && this.programFilter !== "all") {
+        params.programId = this.programFilter;
+      }
+
+      if (this.academicSessionFilter) {
+        params.academicSessionId = this.academicSessionFilter;
+      }
+
+      if (this.searchQuery && this.searchQuery.trim()) {
+        params.search = this.searchQuery.trim();
+      }
+
+      return params;
+    },
+
+    async loadApplicationStats() {
+      try {
+        this.isLoadingStats = true;
+        const response = await apiService.getApplicationsStats(
+          this.buildApplicationStatsParams(),
+        );
+
+        if (!response.success) {
+          throw new Error(
+            response.message || "Failed to load application statistics",
+          );
+        }
+
+        this.applicationStats = {
+          total: response.data?.total || 0,
+          pending: response.data?.pending || 0,
+          admitted: response.data?.admitted || 0,
+          completed: response.data?.completed || 0,
+        };
+      } catch (error) {
+        logger.error("Failed to load application statistics:", error);
+        this.applicationStats = {
+          total: 0,
+          pending: 0,
+          admitted: 0,
+          completed: 0,
+        };
+      } finally {
+        this.isLoadingStats = false;
+      }
+    },
+
+    async refreshApplicationsPage() {
+      await Promise.all([this.loadApplications(), this.loadApplicationStats()]);
+    },
+
+    selectStatusCard(status) {
+      if (this.isLoadingStats) return;
+
+      if (this.statusFilter === status) {
+        const pageChanged = this.currentPage !== 1;
+        this.currentPage = 1;
+        if (!pageChanged) this.loadApplications();
+        return;
+      }
+
+      this.statusFilter = status;
+    },
+
+    isStatusCardActive(status) {
+      return this.statusFilter === status;
+    },
+
     async loadApplications() {
       try {
         this.isLoading = true;
@@ -630,10 +759,10 @@ export default {
     canExpireApplication(application) {
       return Boolean(
         application &&
-          !["completed", "rejected", "expired"].includes(application.status) &&
-          !application.matriculationNumber &&
-          application.userRole !== "student" &&
-          application?.userId?.role !== "student",
+        !["completed", "rejected", "expired"].includes(application.status) &&
+        !application.matriculationNumber &&
+        application.userRole !== "student" &&
+        application?.userId?.role !== "student",
       );
     },
 
@@ -700,7 +829,7 @@ export default {
           throw new Error(response.message || "Failed to expire application");
         }
 
-        await this.loadApplications();
+        await this.refreshApplicationsPage();
         if (this.selectedApplicationId === application.id) {
           await this.reloadSelectedApplicationDetails();
         }
@@ -723,13 +852,10 @@ export default {
     },
 
     async revokeAdmissionDecision(application) {
-      const isReopeningRejection =
-        application.admissionDecision === "rejected";
+      const isReopeningRejection = application.admissionDecision === "rejected";
       const result = await this.$swal.fire({
         icon: "warning",
-        title: isReopeningRejection
-          ? "Reopen Decision"
-          : "Revoke Decision",
+        title: isReopeningRejection ? "Reopen Decision" : "Revoke Decision",
         text: `Return ${application.applicationNumber} to admission review? Its application, examination, and payment records will be retained.`,
         input: "textarea",
         inputLabel: "Reason",
@@ -771,10 +897,12 @@ export default {
           result.value.trim(),
         );
         if (!response.success) {
-          throw new Error(response.message || "Failed to revoke admission decision");
+          throw new Error(
+            response.message || "Failed to revoke admission decision",
+          );
         }
 
-        await this.loadApplications();
+        await this.refreshApplicationsPage();
         if (this.selectedApplicationId === application.id) {
           await this.reloadSelectedApplicationDetails();
         }
@@ -1108,7 +1236,7 @@ export default {
           throw new Error(response.message || "Failed to update application");
         }
 
-        await this.loadApplications();
+        await this.refreshApplicationsPage();
 
         if (
           this.selectedApplicationId === this.editApplicationForm.applicationId
@@ -1196,7 +1324,7 @@ export default {
           this.closeEditModal();
         }
 
-        await this.loadApplications();
+        await this.refreshApplicationsPage();
 
         this.$swal.fire({
           icon: "success",
@@ -1581,16 +1709,18 @@ export default {
         const response = await apiService.getPrograms({ limit: 100 });
 
         if (response.success && response.data) {
-          this.programs = sortProgramsByAvailability(response.data.map((p) => ({
-            ...p,
-            label: appendProgramAvailability(
-              [p.programType, p.programModeDescription, p.name]
-                .filter(Boolean)
-                .join(" "),
-              p,
-            ),
-            value: p.id,
-          })));
+          this.programs = sortProgramsByAvailability(
+            response.data.map((p) => ({
+              ...p,
+              label: appendProgramAvailability(
+                [p.programType, p.programModeDescription, p.name]
+                  .filter(Boolean)
+                  .join(" "),
+                p,
+              ),
+              value: p.id,
+            })),
+          );
           logger.info("Programs loaded successfully", {
             count: response.data.length,
           });
@@ -1616,8 +1746,10 @@ export default {
       }
     },
 
-    resetFilters() {
+    async resetFilters() {
       logger.info("Resetting all filters");
+
+      this.isInitializingFilters = true;
 
       // Reset all filter values
       this.searchQuery = "";
@@ -1632,8 +1764,11 @@ export default {
         this.searchTimeout = null;
       }
 
-      // Reload applications with reset filters
-      this.loadApplications();
+      await this.$nextTick();
+      this.isInitializingFilters = false;
+
+      // Reload the table and its cohort summary with reset filters.
+      await this.refreshApplicationsPage();
 
       logger.info("Filters reset successfully");
     },
@@ -1682,7 +1817,7 @@ export default {
           confirmButtonColor: "#1a5f5f",
         });
 
-        await this.loadApplications();
+        await this.refreshApplicationsPage();
 
         if (this.selectedApplicationId === application.id) {
           await this.reloadSelectedApplicationDetails();
@@ -1824,7 +1959,7 @@ export default {
           });
 
           // Refresh the applications list to show updated data
-          await this.loadApplications();
+          await this.refreshApplicationsPage();
         } else {
           throw new Error(
             response.message || "Failed to generate matriculation number",
@@ -1870,7 +2005,7 @@ export default {
             </button>
             <button
               class="btn btn-staff-primary btn-sm"
-              @click="loadApplications"
+              @click="refreshApplicationsPage"
             >
               <i class="bi bi-arrow-clockwise me-2"></i>Refresh
             </button>
@@ -1894,6 +2029,58 @@ export default {
         </option>
       </select>
     </div>
+
+    <section class="row g-3 mb-4" aria-label="Application statistics">
+      <div
+        v-for="card in applicationStatCards"
+        :key="card.key"
+        class="col-12 col-sm-6 col-xl-3"
+      >
+        <button
+          type="button"
+          class="application-stat-card card w-100 h-100 text-start p-0"
+          :class="[
+            `application-stat-card--${card.tone}`,
+            {
+              'application-stat-card--active': isStatusCardActive(card.status),
+            },
+          ]"
+          :disabled="isLoadingStats"
+          :aria-pressed="isStatusCardActive(card.status)"
+          :aria-label="`Filter applications by ${card.label}`"
+          @click="selectStatusCard(card.status)"
+        >
+          <span class="card-body d-flex align-items-center gap-3 p-3">
+            <span
+              class="application-stat-icon flex-shrink-0"
+              aria-hidden="true"
+            >
+              <i class="bi" :class="card.icon"></i>
+            </span>
+            <span class="min-w-0">
+              <span class="d-block small text-muted mb-1">{{
+                card.label
+              }}</span>
+              <span
+                v-if="isLoadingStats"
+                class="placeholder-glow d-block"
+                aria-label="Loading statistic"
+              >
+                <span
+                  class="placeholder col-5 application-stat-placeholder"
+                ></span>
+              </span>
+              <strong v-else class="application-stat-value d-block">
+                {{ card.value.toLocaleString() }}
+              </strong>
+              <span class="application-stat-description d-block">
+                {{ card.description }}
+              </span>
+            </span>
+          </span>
+        </button>
+      </div>
+    </section>
 
     <!-- Filters -->
     <div class="row mb-4">
@@ -2052,7 +2239,9 @@ export default {
                           <i class="bi bi-person text-staff-primary fs-4"></i>
                         </div>
 
-                        <span class="fw-medium text-capitalize">{{ app.applicantName }}</span>
+                        <span class="fw-medium text-capitalize">{{
+                          app.applicantName
+                        }}</span>
                       </div>
                     </td>
                     <td>
@@ -2118,10 +2307,8 @@ export default {
                           </li>
                           <li
                             v-if="
-                              authStore.hasPermission(
-                                'admissions',
-                                'revoke',
-                              ) && canRevokeAdmissionDecision(app)
+                              authStore.hasPermission('admissions', 'revoke') &&
+                              canRevokeAdmissionDecision(app)
                             "
                           >
                             <a
@@ -2341,7 +2528,9 @@ export default {
                           <i class="bi bi-person text-staff-primary fs-4"></i>
                         </div>
                         <div>
-                          <div class="fw-semibold text-staff-primary text-capitalize">
+                          <div
+                            class="fw-semibold text-staff-primary text-capitalize"
+                          >
                             {{ app.applicantName }}
                           </div>
                           <div class="small text-muted text-break">
@@ -3085,7 +3274,9 @@ export default {
               </h6>
               <p v-if="selectedApplication" class="text-muted mb-0">
                 {{ selectedApplication.applicationNumber }} ·
-                <span class="text-capitalize">{{ getApplicantFullName(selectedApplication) }}</span>
+                <span class="text-capitalize">{{
+                  getApplicantFullName(selectedApplication)
+                }}</span>
               </p>
             </div>
             <button
@@ -3803,7 +3994,9 @@ export default {
                             formatDate(selectedApplication.admissionRevokedAt)
                           }}</span>
                         </div>
-                        <div v-if="selectedApplication.admissionRevocationReason">
+                        <div
+                          v-if="selectedApplication.admissionRevocationReason"
+                        >
                           <span class="details-label">Revocation Reason</span>
                           <p class="details-value mb-0">
                             {{ selectedApplication.admissionRevocationReason }}
@@ -4187,6 +4380,84 @@ export default {
 </template>
 
 <style scoped>
+.application-stat-card {
+  appearance: none;
+  border: 1px solid rgba(26, 95, 95, 0.12);
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.application-stat-card:not(:disabled):hover {
+  border-color: rgba(26, 95, 95, 0.4);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.application-stat-card:focus-visible {
+  outline: 3px solid rgba(13, 110, 253, 0.2);
+  outline-offset: 2px;
+}
+
+.application-stat-card--active {
+  border-color: var(--staff-primary);
+  box-shadow: 0 0 0 2px rgba(26, 95, 95, 0.12);
+}
+
+.application-stat-card:disabled {
+  cursor: wait;
+  opacity: 0.78;
+}
+
+.application-stat-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  background: rgba(26, 95, 95, 0.1);
+  color: var(--staff-primary);
+}
+
+.application-stat-card--warning .application-stat-icon {
+  background: rgba(255, 193, 7, 0.16);
+  color: #8a6500;
+}
+
+.application-stat-card--success .application-stat-icon {
+  background: rgba(25, 135, 84, 0.12);
+  color: #198754;
+}
+
+.application-stat-card--info .application-stat-icon {
+  background: rgba(13, 202, 240, 0.12);
+  color: #087990;
+}
+
+.application-stat-value {
+  color: #17202a;
+  font-size: 1.5rem;
+  line-height: 1.05;
+}
+
+.application-stat-description {
+  margin-top: 0.25rem;
+  color: #6c757d;
+  font-size: 0.78rem;
+}
+
+.application-stat-placeholder {
+  min-height: 1.55rem;
+  border-radius: 4px;
+}
+
 .staff-card {
   border: none;
   box-shadow: 0 2px 10px rgba(26, 95, 95, 0.1);

@@ -225,8 +225,9 @@ class StaffApiService {
         }
     }
 
-    async getApplicationsStats() {
-        return this.makeRequest('/staff/applications/stats/summary')
+    async getApplicationsStats(filters = {}) {
+        const queryParams = new URLSearchParams(filters).toString()
+        return this.makeRequest(`/staff/applications/stats/summary${queryParams ? `?${queryParams}` : ''}`)
     }
 
     async updateApplicationStatus(id, status, remarks = '') {

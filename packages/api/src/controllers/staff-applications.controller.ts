@@ -2030,43 +2030,109 @@ export class StaffApplicationsController {
     @Get('stats/summary')
     @ApiOperation({ summary: 'Get applications statistics summary' })
     @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
-    async getApplicationsStats() {
+    async getApplicationsStats(
+        @Query('programId') programId?: string,
+        @Query('academicSessionId') academicSessionId?: string,
+        @Query('search') search?: string,
+    ) {
         try {
-            this.logger.log('Getting applications statistics');
+            this.logger.log('Getting applications statistics', {
+                programId,
+                academicSessionId,
+                search,
+            });
 
-            const stats = await this.applicationModel.aggregate([
-                {
-                    $match: { isActive: true }
-                },
-                {
-                    $group: {
-                        _id: '$status',
-                        count: { $sum: 1 }
-                    }
+            const filter: Record<string, unknown> = { isActive: true };
+
+            if (programId && programId !== 'all') {
+                if (!Types.ObjectId.isValid(programId)) {
+                    throw new HttpException(
+                        { success: false, message: 'Invalid program ID format' },
+                        HttpStatus.BAD_REQUEST,
+                    );
                 }
-            ]);
+                filter.programId = new Types.ObjectId(programId);
+            }
 
-            const totalApplications = await this.applicationModel.countDocuments({ isActive: true });
-            const pendingApplications = await this.applicationModel.countDocuments({
-                isActive: true,
-                status: ApplicationStatus.PENDING,
-            });
-            const admittedStudents = await this.applicationModel.countDocuments({
-                isActive: true,
-                $or: [
-                    { admissionDecision: AdmissionDecision.GRANTED },
-                    { status: ApplicationStatus.ADMITTED },
-                    {
-                        status: ApplicationStatus.COMPLETED,
-                        admissionDecision: AdmissionDecision.GRANTED,
+            if (academicSessionId) {
+                if (!Types.ObjectId.isValid(academicSessionId)) {
+                    throw new HttpException(
+                        { success: false, message: 'Invalid academic session ID format' },
+                        HttpStatus.BAD_REQUEST,
+                    );
+                }
+                filter.entryAcademicSession = new Types.ObjectId(academicSessionId);
+            }
+
+            const normalizedSearch = this.normalizeString(search);
+            const pipeline: any[] = [
+                { $match: filter },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'userId',
+                        foreignField: '_id',
+                        as: 'user',
                     },
-                ],
+                },
+                { $unwind: '$user' },
+                {
+                    $lookup: {
+                        from: 'programs',
+                        localField: 'programId',
+                        foreignField: '_id',
+                        as: 'program',
+                    },
+                },
+                { $unwind: '$program' },
+                {
+                    $addFields: {
+                        applicantName: {
+                            $trim: {
+                                input: {
+                                    $concat: [
+                                        { $ifNull: ['$user.firstName', ''] },
+                                        ' ',
+                                        { $ifNull: ['$user.lastName', ''] },
+                                    ],
+                                },
+                            },
+                        },
+                        email: '$user.email',
+                    },
+                },
+            ];
+
+            if (normalizedSearch) {
+                const escapedSearch = normalizedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                pipeline.push({
+                    $match: {
+                        $or: [
+                            { applicantName: { $regex: escapedSearch, $options: 'i' } },
+                            { email: { $regex: escapedSearch, $options: 'i' } },
+                            { applicationNumber: { $regex: escapedSearch, $options: 'i' } },
+                        ],
+                    },
+                });
+            }
+
+            pipeline.push({
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 },
+                },
             });
 
-            const statsObject = stats.reduce((acc, stat) => {
+            const stats = await this.applicationModel.aggregate(pipeline);
+
+            const statsObject = stats.reduce((acc: Record<string, number>, stat) => {
                 acc[stat._id] = stat.count;
                 return acc;
-            }, {});
+            }, {} as Record<string, number>);
+            const totalApplications = Object.values(statsObject).reduce<number>(
+                (total, count) => total + Number(count),
+                0,
+            );
 
             this.logger.log('Applications statistics retrieved successfully:', statsObject);
 
@@ -2074,14 +2140,18 @@ export class StaffApplicationsController {
                 success: true,
                 data: {
                     total: totalApplications,
-                    pending: pendingApplications,
-                    admitted: admittedStudents,
-                    byStatus: statsObject
+                    pending: statsObject[ApplicationStatus.PENDING] || 0,
+                    admitted: statsObject[ApplicationStatus.ADMITTED] || 0,
+                    completed: statsObject[ApplicationStatus.COMPLETED] || 0,
+                    byStatus: statsObject,
                 }
             };
 
         } catch (error) {
             this.logger.error('Error getting applications statistics:', error.message);
+            if (error instanceof HttpException) {
+                throw error;
+            }
             throw new HttpException(
                 {
                     success: false,

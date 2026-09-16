@@ -185,7 +185,7 @@ export class GradingService {
                 status: nextAttemptStatus,
             });
 
-            await this.syncExamGradingStatus(exam._id.toString());
+            await this.reconcileExamGradingStatus(exam._id.toString());
 
             return result;
 
@@ -471,7 +471,7 @@ export class GradingService {
             status: nextAttemptStatus,
         });
 
-        await this.syncExamGradingStatus(examId);
+        await this.reconcileExamGradingStatus(examId);
 
         return updatedResult;
     }
@@ -537,22 +537,23 @@ export class GradingService {
         };
     }
 
-    private async syncExamGradingStatus(examId: string): Promise<void> {
+    async reconcileExamGradingStatus(
+        examId: string,
+    ): Promise<'completed' | 'graded' | null> {
         const exam = await this.examModel.findById(examId).lean();
 
         if (!exam || !['completed', 'graded'].includes(exam.status)) {
-            return;
+            return null;
         }
 
-        const completedAttempts = await this.attemptModel
+        const validAttempts = await this.attemptModel
             .find({
                 examId: new Types.ObjectId(examId),
-                status: { $in: ['submitted', 'auto-submitted', 'partially-graded', 'graded'] },
                 isValid: true,
             })
             .lean();
 
-        const nextExamStatus = completedAttempts.length > 0 && completedAttempts.every((attempt) => attempt.status === 'graded')
+        const nextExamStatus = validAttempts.length > 0 && validAttempts.every((attempt) => attempt.status === 'graded')
             ? 'graded'
             : 'completed';
 
@@ -560,6 +561,37 @@ export class GradingService {
             await this.examModel.findByIdAndUpdate(examId, { status: nextExamStatus });
             this.logger.log(`Updated exam ${examId} status from ${exam.status} to ${nextExamStatus} based on grading progress`);
         }
+
+        return nextExamStatus;
+    }
+
+    async reconcileCompletedExamGradingStatuses(): Promise<{
+        checked: number;
+        graded: number;
+        completed: number;
+    }> {
+        const exams = await this.examModel
+            .find({
+                status: 'completed',
+                isActive: true,
+            })
+            .select('_id')
+            .lean();
+
+        let graded = 0;
+        let completed = 0;
+
+        for (const exam of exams) {
+            const status = await this.reconcileExamGradingStatus(exam._id.toString());
+            if (status === 'graded') graded++;
+            if (status === 'completed') completed++;
+        }
+
+        return {
+            checked: exams.length,
+            graded,
+            completed,
+        };
     }
 
     private async getManualReviewContext(examId: string, resultId: string): Promise<any> {

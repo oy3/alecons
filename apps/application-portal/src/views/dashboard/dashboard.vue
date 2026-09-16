@@ -8,7 +8,7 @@ import BiodataCard from "./components/BiodataCard.vue";
 import ProgressCard from "./components/ProgressCard.vue";
 import EmailVerificationAlert from "./components/EmailVerificationAlert.vue";
 import Swal from "sweetalert2";
-import { isPendingApplicationIntakeClosed } from "../../utils/applicationIntake.js";
+import { isUnsubmittedApplicationIntakeClosed } from "../../utils/applicationIntake.js";
 
 export default {
   name: "Dashboard",
@@ -300,7 +300,7 @@ export default {
       return status === "expired" || status === "rejected";
     },
     isApplicationIntakeClosed() {
-      return isPendingApplicationIntakeClosed(this.application);
+      return isUnsubmittedApplicationIntakeClosed(this.application);
     },
     lockedBannerConfig() {
       const status = this.application?.status;
@@ -335,9 +335,9 @@ export default {
       }
       const id = this.route.params.id;
       const stage = this.currentStage;
-      if (this.isApplicationIntakeClosed && [2, 3].includes(stage)) {
+      if (this.isApplicationIntakeClosed) {
         return {
-          text: "Applications Closed",
+          text: "Application Intake Closed",
           route: null,
           disabled: true,
           variant: "btn-secondary",
@@ -445,11 +445,11 @@ export default {
         >
           <i class="bi bi-lock fs-5 mt-1 flex-shrink-0"></i>
           <div>
-            <strong>Applications Closed</strong>
+            <strong>Application Intake Closed</strong>
             <p class="mb-1 mt-1">
-              Applications for this academic session are currently closed. You
-              can review your existing record, but unfinished application-form
-              and form-fee actions are unavailable.
+              New applications for this academic session are currently closed.
+              Because this application has not been submitted, its remaining
+              form-fee or application-form actions are unavailable.
             </p>
             <router-link
               to="/my-applications"

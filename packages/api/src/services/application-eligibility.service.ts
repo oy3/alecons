@@ -41,11 +41,13 @@ export class ApplicationEligibilityService {
 
     private buildNotOpenReason(session: AcademicSessionDocument | null): string {
         if (!session) {
-            return 'Applications are temporarily disabled. Please check back later.';
+            return 'Applications are currently closed. Please check back later.';
         }
 
+        const sessionLabel = session.title?.trim() || 'this academic session';
+
         if (session.status === SessionStatus.CLOSED) {
-            return `Registration for ${session.sessionYear} academic session is currently closed.`;
+            return `Applications for ${sessionLabel} are currently closed.`;
         }
 
         if (session.status === SessionStatus.ONGOING) {
@@ -56,7 +58,7 @@ export class ApplicationEligibilityService {
             return 'Registration for new academic session is not open. Please check back later.';
         }
 
-        return 'Applications are temporarily disabled. Please check back later.';
+        return 'Applications are currently closed. Please check back later.';
     }
 
     /**
@@ -97,7 +99,7 @@ export class ApplicationEligibilityService {
                 this.logger.log('No session controls found for open registration session');
                 return {
                     eligible: false,
-                    reason: `Applications for ${openSession.sessionYear} are temporarily disabled. Please check back later.`,
+                    reason: `Applications for ${openSession.title?.trim() || 'this academic session'} are currently closed.`,
                     activeSession: openSession,
                 };
             }
@@ -111,7 +113,7 @@ export class ApplicationEligibilityService {
                 this.logger.log('Application control is not active');
                 return {
                     eligible: false,
-                    reason: `Applications for ${openSession.sessionYear} are temporarily disabled. Please check back later.`,
+                    reason: `Applications for ${openSession.title?.trim() || 'this academic session'} are currently closed.`,
                     activeSession: openSession,
                 };
             }

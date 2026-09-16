@@ -6,7 +6,7 @@ import { Country, State, City } from "country-state-city";
 import Swal from "sweetalert2";
 import vSelect from "vue-select";
 import "vue-select/dist/vue-select.css";
-import { isPendingApplicationIntakeClosed } from "../../utils/applicationIntake.js";
+import { isUnsubmittedApplicationIntakeClosed } from "../../utils/applicationIntake.js";
 
 export default {
   name: "ApplicationForm",
@@ -175,7 +175,7 @@ export default {
       return this.$route.params.id;
     },
     isApplicationIntakeClosed() {
-      return isPendingApplicationIntakeClosed(this.application);
+      return isUnsubmittedApplicationIntakeClosed(this.application);
     },
     selectedCountry() {
       return this.countries.find(
@@ -313,8 +313,8 @@ export default {
   methods: {
     async showApplicationClosedNotice() {
       await Swal.fire({
-        title: "Applications Closed",
-        text: "Applications for this academic session are currently closed. You can no longer update or submit this application form.",
+        title: "Application Intake Closed",
+        text: "New applications for this academic session are currently closed. Because this application form was not submitted before intake closed, it can no longer be updated or submitted.",
         icon: "warning",
         confirmButtonText: "Go to Dashboard",
         confirmButtonColor: "#1a5f5f",

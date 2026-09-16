@@ -728,8 +728,8 @@ export default {
       const result = await this.$swal.fire({
         icon: "warning",
         title: isReopeningRejection
-          ? "Reopen Admission Decision"
-          : "Revoke Admission Decision",
+          ? "Reopen Decision"
+          : "Revoke Decision",
         text: `Return ${application.applicationNumber} to admission review? Its application, examination, and payment records will be retained.`,
         input: "textarea",
         inputLabel: "Reason",
@@ -2132,8 +2132,8 @@ export default {
                               <i class="bi bi-arrow-counterclockwise me-2"></i
                               >{{
                                 app.admissionDecision === "rejected"
-                                  ? "Reopen Admission Decision"
-                                  : "Revoke Admission Decision"
+                                  ? "Reopen Decision"
+                                  : "Revoke Decision"
                               }}
                             </a>
                           </li>

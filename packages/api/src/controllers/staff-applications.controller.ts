@@ -51,6 +51,7 @@ import { RolesService } from '../services/roles.service';
 import { ExpireApplicationDto } from '../dto/expire-application.dto';
 import { RevokeAdmissionDecisionDto } from '../dto/revoke-admission-decision.dto';
 import { CompleteScreeningDto } from '../dto/complete-screening.dto';
+import { UpdateEntranceExamScoreDto } from '../dto/update-entrance-exam-score.dto';
 import { resolveProgramSelection } from '../utils/program-relation.util';
 import {
     canRevokeAdmissionDecision,
@@ -1874,7 +1875,7 @@ export class StaffApplicationsController {
     }
 
     @Patch(':id/revoke-admission')
-    @ApiOperation({ summary: 'Revoke an admission decision before student conversion' })
+    @ApiOperation({ summary: 'Return an admission decision for review before student conversion' })
     @ApiResponse({ status: 200, description: 'Admission decision revoked successfully' })
     async revokeAdmissionDecision(
         @Param('id') id: string,
@@ -1891,7 +1892,7 @@ export class StaffApplicationsController {
         const existing = await this.applicationModel
             .findById(applicationId)
             .select(
-                'status admissionDecision currentStage matriculationNumber userId entryAcademicSession admissionDate admissionLetter screening',
+                'status admissionDecision currentStage matriculationNumber userId entryAcademicSession admissionDate admissionLetter screening rejectionReason',
             )
             .lean();
 
@@ -1905,16 +1906,26 @@ export class StaffApplicationsController {
 
         if (!canRevokeAdmissionDecision(existing as any)) {
             throw new ConflictException(
-                'Only unfinished admitted applications can have their admission decision revoked',
+                'Only eligible admitted or rejected applications can have their admission decision returned for review',
             );
         }
         await this.assertApplicationHasNotBecomeStudent(existing);
 
         const actorId = new Types.ObjectId(this.requestUserId(req));
         const revokedAt = new Date();
+        const isReopeningRejection =
+            existing.admissionDecision === AdmissionDecision.DENIED;
+        const reviewStage = await this.sessionControlsService.getNextStageAfterExam(
+            existing.entryAcademicSession,
+            existing,
+        );
         const auditEntry = {
-            action: 'admission_decision_revoked',
-            description: 'Admission decision was revoked and returned for review.',
+            action: isReopeningRejection
+                ? 'admission_decision_reopened'
+                : 'admission_decision_revoked',
+            description: isReopeningRejection
+                ? 'Rejected admission decision was reopened and returned for review.'
+                : 'Admission decision was withdrawn and returned for review.',
             performedBy: actorId,
             actorRole: req.user?.role,
             metadata: {
@@ -1924,17 +1935,18 @@ export class StaffApplicationsController {
                 previousAdmissionDecision: existing.admissionDecision,
                 nextAdmissionDecision: AdmissionDecision.AWAITING_DECISION,
                 previousStage: existing.currentStage,
-                nextStage: 5,
+                nextStage: reviewStage,
                 previousAdmissionDate: existing.admissionDate,
                 previousAdmissionLetter: existing.admissionLetter,
                 previousScreening: existing.screening,
+                previousRejectionReason: existing.rejectionReason,
             },
             createdAt: revokedAt,
         };
         const setValues: Record<string, unknown> = {
             status: ApplicationStatus.PENDING,
             admissionDecision: AdmissionDecision.AWAITING_DECISION,
-            currentStage: 5,
+            currentStage: reviewStage,
             admissionRevokedAt: revokedAt,
             admissionRevokedBy: actorId,
             admissionRevocationReason: payload.reason,
@@ -1943,18 +1955,32 @@ export class StaffApplicationsController {
             .findOneAndUpdate(
                 {
                     _id: applicationId,
-                    admissionDecision: AdmissionDecision.GRANTED,
-                    status: {
-                        $nin: [
-                            ApplicationStatus.COMPLETED,
-                            ApplicationStatus.REJECTED,
-                            ApplicationStatus.EXPIRED,
-                        ],
-                    },
-                    $or: [
-                        { matriculationNumber: { $exists: false } },
-                        { matriculationNumber: null },
-                        { matriculationNumber: '' },
+                    $and: [
+                        {
+                            $or: [
+                                {
+                                    admissionDecision: AdmissionDecision.GRANTED,
+                                    status: {
+                                        $nin: [
+                                            ApplicationStatus.COMPLETED,
+                                            ApplicationStatus.REJECTED,
+                                            ApplicationStatus.EXPIRED,
+                                        ],
+                                    },
+                                },
+                                {
+                                    admissionDecision: AdmissionDecision.DENIED,
+                                    status: ApplicationStatus.REJECTED,
+                                },
+                            ],
+                        },
+                        {
+                            $or: [
+                                { matriculationNumber: { $exists: false } },
+                                { matriculationNumber: null },
+                                { matriculationNumber: '' },
+                            ],
+                        },
                     ],
                 },
                 {
@@ -1996,7 +2022,7 @@ export class StaffApplicationsController {
 
         return {
             success: true,
-            message: 'Admission decision revoked successfully',
+            message: 'Admission decision returned for review successfully',
             data: { application },
         };
     }
@@ -3045,10 +3071,7 @@ export class StaffApplicationsController {
     @ApiResponse({ status: 200, description: 'Exam score updated successfully' })
     async updateExamScore(
         @Param('id') id: string,
-        @Body() scoreData: {
-            score: number;
-            passed: boolean;
-        },
+        @Body() scoreData: UpdateEntranceExamScoreDto,
         @Request() req,
     ) {
         try {
@@ -3103,26 +3126,33 @@ export class StaffApplicationsController {
                 );
             }
 
+            const previousStatus = application.status;
+            const previousAdmissionDecision = application.admissionDecision;
+            const previousStage = application.currentStage;
             application.entranceExam.score = scoreData.score;
-
-            if (scoreData.passed) {
-                application.currentStage = await this.sessionControlsService.getNextStageAfterExam(
-                    application.entryAcademicSession,
-                    application,
-                );
-            } else {
-                application.status = ApplicationStatus.REJECTED;
-                application.admissionDecision = AdmissionDecision.DENIED;
-                application.rejectionReason = 'Failed entrance examination';
-            }
+            application.entranceExam.passed = scoreData.passed;
+            application.status = ApplicationStatus.PENDING;
+            application.admissionDecision = AdmissionDecision.AWAITING_DECISION;
+            application.rejectionReason = undefined;
+            application.currentStage = await this.sessionControlsService.getNextStageAfterExam(
+                application.entryAcademicSession,
+                application,
+            );
 
             this.appendAuditEntry(application, {
                 action: 'entrance_exam_scored',
-                description: `Entrance exam score was recorded as ${scoreData.score}.`,
+                description: `Entrance exam score was recorded as ${scoreData.score}. Outcome: ${scoreData.passed ? 'Passed' : 'Did not pass'}.`,
                 actor: req.user,
                 metadata: {
                     score: scoreData.score,
                     passed: scoreData.passed,
+                    outcome: scoreData.passed ? 'passed' : 'did_not_pass',
+                    previousStatus,
+                    nextStatus: application.status,
+                    previousAdmissionDecision,
+                    nextAdmissionDecision: application.admissionDecision,
+                    previousStage,
+                    nextStage: application.currentStage,
                 },
             });
 

@@ -88,6 +88,7 @@ export interface EntranceExam {
     time?: string;
     link?: string;
     score?: number;
+    passed?: boolean;
 }
 
 export interface Screening {
@@ -268,7 +269,8 @@ export class Application {
             date: Date,
             time: String,
             link: String,
-            score: Number
+            score: Number,
+            passed: Boolean,
         }
     })
     entranceExam?: EntranceExam;

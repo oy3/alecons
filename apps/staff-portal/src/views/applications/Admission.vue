@@ -46,6 +46,7 @@ export default {
       perPage: 10,
       totalApplications: 0,
       apiTotalPages: 0,
+      shouldScrollAfterPageChange: false,
 
       // Modal forms
       selectedApplication: null,
@@ -116,41 +117,31 @@ export default {
       );
     },
 
-    visiblePages() {
-      // Handle edge case where there are no pages or only 1 page
-      if (this.totalPages <= 1) {
-        return [1];
+    paginationItems() {
+      const total = this.totalPages;
+      const visiblePages = new Set([1, 2, total - 1, total]);
+
+      for (let page = this.currentPage - 1; page <= this.currentPage + 1; page += 1) {
+        if (page >= 1 && page <= total) visiblePages.add(page);
       }
 
-      const delta = 2;
-      const range = [];
-      const rangeWithDots = [];
+      const pages = [...visiblePages]
+        .filter((page) => page >= 1 && page <= total)
+        .sort((left, right) => left - right);
+      const items = [];
 
-      for (
-        let i = Math.max(2, this.currentPage - delta);
-        i <= Math.min(this.totalPages - 1, this.currentPage + delta);
-        i++
-      ) {
-        range.push(i);
-      }
+      pages.forEach((page, index) => {
+        const previousPage = pages[index - 1];
+        if (previousPage && page - previousPage > 1) {
+          items.push({
+            type: "ellipsis",
+            key: `ellipsis-${previousPage}-${page}`,
+          });
+        }
+        items.push({ type: "page", key: `page-${page}`, page });
+      });
 
-      if (this.currentPage - delta > 2) {
-        rangeWithDots.push(1, "...");
-      } else {
-        rangeWithDots.push(1);
-      }
-
-      rangeWithDots.push(...range);
-
-      if (this.currentPage + delta < this.totalPages - 1) {
-        rangeWithDots.push("...", this.totalPages);
-      } else if (this.totalPages > 1) {
-        rangeWithDots.push(this.totalPages);
-      }
-
-      return rangeWithDots.filter(
-        (item, index, array) => array.indexOf(item) === index,
-      );
+      return items;
     },
   },
 
@@ -164,8 +155,17 @@ export default {
       this.currentPage = 1;
       this.loadApplications();
     },
-    currentPage() {
-      this.loadApplications();
+    async currentPage() {
+      await this.loadApplications();
+
+      if (this.shouldScrollAfterPageChange) {
+        await this.$nextTick();
+        this.$refs.admissionTable?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        this.shouldScrollAfterPageChange = false;
+      }
     },
   },
   async mounted() {
@@ -197,6 +197,21 @@ export default {
     if (this.scheduleClockId) window.clearInterval(this.scheduleClockId);
   },
   methods: {
+    goToPage(page) {
+      const targetPage = Number(page);
+      if (
+        !Number.isInteger(targetPage) ||
+        targetPage < 1 ||
+        targetPage > this.totalPages ||
+        targetPage === this.currentPage
+      ) {
+        return;
+      }
+
+      this.shouldScrollAfterPageChange = true;
+      this.currentPage = targetPage;
+    },
+
     registerModalA11yHandlers() {
       this._modalLastFocusedElements = new WeakMap();
 
@@ -1145,7 +1160,7 @@ export default {
     </div>
 
     <!-- Applications Table -->
-    <div v-else class="row">
+    <div v-else ref="admissionTable" class="row admission-table-anchor">
       <div class="col-12">
         <div class="card rounded-3 border-0 p-0 shadow-sm">
           <div class="card-body p-0">
@@ -1614,37 +1629,76 @@ export default {
               </p>
             </div>
           </div>
-          <div class="card-footer bg-transparent">
+          <div v-if="totalPages > 1" class="card-footer bg-transparent border-top">
             <!-- Pagination -->
-            <nav>
-              <ul class="pagination pagination-sm mb-0 justify-content-center">
+            <nav
+              class="management-pagination-scroll"
+              aria-label="Admission applications pagination"
+            >
+              <ul class="pagination pagination-sm mb-0 justify-content-center flex-nowrap">
                 <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                  <a
+                  <button
+                    type="button"
                     class="page-link"
-                    href="#"
-                    @click.prevent="currentPage = 1"
+                    :disabled="currentPage === 1"
+                    aria-label="Go to first page"
+                    title="First page"
+                    @click="goToPage(1)"
                   >
-                    <i class="bi bi-chevron-double-left"></i>
-                  </a>
+                    <span aria-hidden="true">&laquo;</span>
+                  </button>
                 </li>
                 <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                  <a class="page-link" href="#" @click.prevent="currentPage--">
-                    <i class="bi bi-chevron-left"></i>
-                  </a>
+                  <button
+                    type="button"
+                    class="page-link"
+                    :disabled="currentPage === 1"
+                    aria-label="Go to previous page"
+                    @click="goToPage(currentPage - 1)"
+                  >
+                    Prev
+                  </button>
                 </li>
+                <template v-for="item in paginationItems" :key="item.key">
+                  <li
+                    v-if="item.type === 'page'"
+                    class="page-item"
+                    :class="{ active: currentPage === item.page }"
+                    :aria-current="currentPage === item.page ? 'page' : undefined"
+                  >
+                    <button
+                      type="button"
+                      class="page-link"
+                      :aria-label="`Go to page ${item.page}`"
+                      @click="goToPage(item.page)"
+                    >
+                      {{ item.page }}
+                    </button>
+                  </li>
+                  <li
+                    v-else
+                    class="page-item disabled pagination-ellipsis"
+                    aria-hidden="true"
+                  >
+                    <span class="page-link">&hellip;</span>
+                  </li>
+                </template>
                 <li
-                  v-for="page in visiblePages"
-                  :key="page"
                   class="page-item"
-                  :class="{ active: page === currentPage }"
+                  :class="{
+                    disabled:
+                      currentPage >= totalPages || applications.length === 0,
+                  }"
                 >
-                  <a
+                  <button
+                    type="button"
                     class="page-link"
-                    href="#"
-                    @click.prevent="currentPage = page"
+                    :disabled="currentPage >= totalPages || applications.length === 0"
+                    aria-label="Go to next page"
+                    @click="goToPage(currentPage + 1)"
                   >
-                    {{ page }}
-                  </a>
+                    Next
+                  </button>
                 </li>
                 <li
                   class="page-item"
@@ -1653,24 +1707,16 @@ export default {
                       currentPage >= totalPages || applications.length === 0,
                   }"
                 >
-                  <a class="page-link" href="#" @click.prevent="currentPage++">
-                    <i class="bi bi-chevron-right"></i>
-                  </a>
-                </li>
-                <li
-                  class="page-item"
-                  :class="{
-                    disabled:
-                      currentPage >= totalPages || applications.length === 0,
-                  }"
-                >
-                  <a
+                  <button
+                    type="button"
                     class="page-link"
-                    href="#"
-                    @click.prevent="currentPage = totalPages"
+                    :disabled="currentPage >= totalPages || applications.length === 0"
+                    aria-label="Go to last page"
+                    title="Last page"
+                    @click="goToPage(totalPages)"
                   >
-                    <i class="bi bi-chevron-double-right"></i>
-                  </a>
+                    <span aria-hidden="true">&raquo;</span>
+                  </button>
                 </li>
               </ul>
             </nav>
@@ -2997,12 +3043,36 @@ export default {
 .pagination .page-link {
   color: var(--staff-primary);
   border-color: var(--staff-light);
+  min-width: 2.25rem;
+  min-height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .pagination .page-item.active .page-link {
   background-color: var(--staff-primary);
   border-color: var(--staff-primary);
   color: white;
+}
+
+.admission-table-anchor {
+  scroll-margin-top: 1rem;
+}
+
+.management-pagination-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0.15rem 0;
+  scrollbar-width: thin;
+}
+
+.pagination-ellipsis .page-link {
+  min-width: 2rem;
+  color: #6c757d;
+  background: transparent;
+  cursor: default;
 }
 
 .modal-content {

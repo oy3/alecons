@@ -42,6 +42,7 @@ export default {
       perPage: 10,
       searchTimeout: null,
       isInitializing: true,
+      shouldScrollAfterPageChange: false,
     };
   },
   computed: {
@@ -86,6 +87,32 @@ export default {
     hasFilters() {
       return Object.values(this.filters).some(Boolean);
     },
+    paginationItems() {
+      const total = Math.max(1, this.totalPages);
+      const visiblePages = new Set([1, 2, total - 1, total]);
+
+      for (let page = this.currentPage - 1; page <= this.currentPage + 1; page += 1) {
+        if (page >= 1 && page <= total) visiblePages.add(page);
+      }
+
+      const pages = [...visiblePages]
+        .filter((page) => page >= 1 && page <= total)
+        .sort((left, right) => left - right);
+      const items = [];
+
+      pages.forEach((page, index) => {
+        const previousPage = pages[index - 1];
+        if (previousPage && page - previousPage > 1) {
+          items.push({
+            type: "ellipsis",
+            key: `ellipsis-${previousPage}-${page}`,
+          });
+        }
+        items.push({ type: "page", key: `page-${page}`, page });
+      });
+
+      return items;
+    },
   },
   watch: {
     "filters.search"() {
@@ -115,8 +142,18 @@ export default {
     "filters.portalAccess"() {
       this.resetAndLoad();
     },
-    currentPage() {
-      if (!this.isInitializing) this.loadStudents();
+    async currentPage() {
+      if (this.isInitializing) return;
+      await this.loadStudents();
+
+      if (this.shouldScrollAfterPageChange) {
+        await this.$nextTick();
+        this.$refs.studentsTable?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        this.shouldScrollAfterPageChange = false;
+      }
     },
   },
   async mounted() {
@@ -128,6 +165,21 @@ export default {
     await Promise.all([this.loadStudents(), this.loadStats()]);
   },
   methods: {
+    goToPage(page) {
+      const targetPage = Number(page);
+      if (
+        !Number.isInteger(targetPage) ||
+        targetPage < 1 ||
+        targetPage > this.totalPages ||
+        targetPage === this.currentPage
+      ) {
+        return;
+      }
+
+      this.shouldScrollAfterPageChange = true;
+      this.currentPage = targetPage;
+    },
+
     programTypeLabel(type) {
       return `${type.type}${type.active === false ? " (Inactive)" : ""}`;
     },
@@ -283,7 +335,10 @@ export default {
       </div>
     </div>
 
-    <section class="card border-0 shadow-sm p-0">
+    <section
+      ref="studentsTable"
+      class="card border-0 shadow-sm p-0 students-table-anchor"
+    >
       <div class="card-body border-bottom">
         <div class="row g-3 align-items-end">
           <div class="col-lg-11">
@@ -492,27 +547,134 @@ export default {
         </table>
       </div>
       <div
-        class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2 border-top"
+        v-if="totalItems > 0"
+        class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3 border-top"
       >
         <small class="text-muted">
           Page {{ currentPage }} of {{ totalPages }}
         </small>
-        <div class="btn-group">
-          <button
-            class="btn btn-outline-secondary btn-sm"
-            :disabled="currentPage <= 1"
-            @click="currentPage--"
-          >
-            Previous</button
-          ><button
-            class="btn btn-outline-secondary btn-sm"
-            :disabled="currentPage >= totalPages"
-            @click="currentPage++"
-          >
-            Next
-          </button>
-        </div>
+        <nav
+          v-if="totalPages > 1"
+          class="management-pagination-scroll"
+          aria-label="Students pagination"
+        >
+          <ul class="pagination pagination-sm mb-0 justify-content-center flex-nowrap">
+            <li class="page-item" :class="{ disabled: currentPage === 1 }">
+              <button
+                type="button"
+                class="page-link"
+                :disabled="currentPage === 1"
+                aria-label="Go to first page"
+                title="First page"
+                @click="goToPage(1)"
+              >
+                <span aria-hidden="true">&laquo;</span>
+              </button>
+            </li>
+            <li class="page-item" :class="{ disabled: currentPage === 1 }">
+              <button
+                type="button"
+                class="page-link"
+                :disabled="currentPage === 1"
+                aria-label="Go to previous page"
+                @click="goToPage(currentPage - 1)"
+              >
+                Prev
+              </button>
+            </li>
+            <template v-for="item in paginationItems" :key="item.key">
+              <li
+                v-if="item.type === 'page'"
+                class="page-item"
+                :class="{ active: currentPage === item.page }"
+                :aria-current="currentPage === item.page ? 'page' : undefined"
+              >
+                <button
+                  type="button"
+                  class="page-link"
+                  :aria-label="`Go to page ${item.page}`"
+                  @click="goToPage(item.page)"
+                >
+                  {{ item.page }}
+                </button>
+              </li>
+              <li
+                v-else
+                class="page-item disabled pagination-ellipsis"
+                aria-hidden="true"
+              >
+                <span class="page-link">&hellip;</span>
+              </li>
+            </template>
+            <li
+              class="page-item"
+              :class="{ disabled: currentPage >= totalPages }"
+            >
+              <button
+                type="button"
+                class="page-link"
+                :disabled="currentPage >= totalPages"
+                aria-label="Go to next page"
+                @click="goToPage(currentPage + 1)"
+              >
+                Next
+              </button>
+            </li>
+            <li
+              class="page-item"
+              :class="{ disabled: currentPage >= totalPages }"
+            >
+              <button
+                type="button"
+                class="page-link"
+                :disabled="currentPage >= totalPages"
+                aria-label="Go to last page"
+                title="Last page"
+                @click="goToPage(totalPages)"
+              >
+                <span aria-hidden="true">&raquo;</span>
+              </button>
+            </li>
+          </ul>
+        </nav>
       </div>
     </section>
   </main>
 </template>
+
+<style scoped>
+.students-table-anchor {
+  scroll-margin-top: 1rem;
+}
+
+.management-pagination-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0.15rem 0;
+  scrollbar-width: thin;
+}
+
+.pagination .page-link {
+  min-width: 2.25rem;
+  min-height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--staff-primary);
+  border-color: var(--staff-light);
+  white-space: nowrap;
+}
+
+.pagination .page-item.active .page-link {
+  color: #fff;
+  background-color: var(--staff-primary);
+  border-color: var(--staff-primary);
+}
+
+.pagination-ellipsis .page-link {
+  min-width: 2rem;
+  color: #6c757d;
+  background: transparent;
+  cursor: default;
+}
+</style>

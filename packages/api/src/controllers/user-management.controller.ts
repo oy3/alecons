@@ -95,6 +95,23 @@ export class UserManagementController {
         }
     }
 
+    @Get("stats/summary")
+    async getActiveUserStats(@Query("search") search?: string) {
+        try {
+            const stats = await this.userManagementService.getActiveUserStats(search);
+            return {
+                success: true,
+                data: stats,
+            };
+        } catch (error) {
+            this.logger.error("Get user statistics failed:", error);
+            throw new HttpException(
+                { message: "Failed to fetch user statistics", error: error.message },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
     @Get(":id/profile-image")
     async getExternalResidentProfileImage(
         @Param("id") id: string,

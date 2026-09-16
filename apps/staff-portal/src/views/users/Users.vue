@@ -28,6 +28,14 @@ export default {
       totalUsers: 0,
       totalPages: 0,
       shouldScrollAfterPageChange: false,
+      userStats: {
+        total: 0,
+        students: 0,
+        applicants: 0,
+        staff: 0,
+      },
+      isLoadingStats: true,
+      searchTimeout: null,
       showUserModal: false,
       selectedUser: null,
       isEditMode: false,
@@ -90,10 +98,14 @@ export default {
     };
   },
   async mounted() {
-    await this.loadUsers();
-    await this.loadRoles();
+    await Promise.all([
+      this.loadUsers(),
+      this.loadRoles(),
+      this.loadUserStats(),
+    ]);
   },
   beforeUnmount() {
+    clearTimeout(this.searchTimeout);
     this.releaseProfileImageObjectUrls();
   },
   computed: {
@@ -156,8 +168,96 @@ export default {
 
       return items;
     },
+
+    userStatCards() {
+      return [
+        {
+          key: "total",
+          label: "Total Users",
+          description: "All active accounts",
+          icon: "bi-people",
+          role: "all",
+          value: this.userStats.total,
+          tone: "primary",
+        },
+        {
+          key: "students",
+          label: "Students",
+          description: "Active student accounts",
+          icon: "bi-mortarboard",
+          role: "student",
+          value: this.userStats.students,
+          tone: "success",
+        },
+        {
+          key: "applicants",
+          label: "Applicants",
+          description: "Active applicant accounts",
+          icon: "bi-file-earmark-person",
+          role: "applicant",
+          value: this.userStats.applicants,
+          tone: "warning",
+        },
+        {
+          key: "staff",
+          label: "Staff",
+          description: "Active staff accounts",
+          icon: "bi-person-badge",
+          role: "staff",
+          value: this.userStats.staff,
+          tone: "info",
+        },
+      ];
+    },
   },
   methods: {
+    async loadUserStats() {
+      try {
+        this.isLoadingStats = true;
+        const response = await apiService.getUserStats({
+          search: this.searchQuery.trim() || undefined,
+        });
+
+        if (!response.success) {
+          throw new Error(response.message || "Failed to load user statistics");
+        }
+
+        this.userStats = {
+          total: response.data?.total || 0,
+          students: response.data?.students || 0,
+          applicants: response.data?.applicants || 0,
+          staff: response.data?.staff || 0,
+        };
+      } catch (error) {
+        logger.error("Failed to load user statistics:", error);
+        this.userStats = {
+          total: 0,
+          students: 0,
+          applicants: 0,
+          staff: 0,
+        };
+      } finally {
+        this.isLoadingStats = false;
+      }
+    },
+
+    async refreshUsersPage() {
+      await Promise.all([this.loadUsers(), this.loadUserStats()]);
+    },
+
+    isUserStatCardActive(role) {
+      return this.statusFilter === "active" && this.roleFilter === role;
+    },
+
+    async selectUserStatCard(role) {
+      if (this.isLoadingStats) return;
+
+      this.roleFilter = role;
+      this.statusFilter = "active";
+      this.currentPage = 1;
+      await this.loadUsers();
+    },
+
     async loadUsers() {
       try {
         this.isLoading = true;
@@ -234,8 +334,11 @@ export default {
     },
 
     async onSearch() {
-      this.currentPage = 1;
-      await this.loadUsers();
+      clearTimeout(this.searchTimeout);
+      this.searchTimeout = setTimeout(async () => {
+        this.currentPage = 1;
+        await Promise.all([this.loadUsers(), this.loadUserStats()]);
+      }, 350);
     },
 
     async onFilterChange() {
@@ -577,7 +680,7 @@ export default {
           this.selectedUser = null;
           this.isEditMode = false;
           this.resetUserForm();
-          await this.loadUsers();
+          await this.refreshUsersPage();
 
           this.$swal.fire({
             icon: "success",
@@ -654,7 +757,7 @@ export default {
           this.selectedUser = null;
           this.isEditMode = false;
           this.resetStaffForm();
-          await this.loadUsers();
+          await this.refreshUsersPage();
 
           this.$swal.fire({
             icon: "success",
@@ -721,7 +824,7 @@ export default {
         const response = await apiService.updateUserStatus(user._id, newStatus);
 
         if (response.success) {
-          await this.loadUsers();
+          await this.refreshUsersPage();
 
           // Show success modal
           await this.$swal.fire({
@@ -809,7 +912,7 @@ export default {
           const response = await apiService.deleteUser(user._id);
 
           if (response.success) {
-            await this.loadUsers();
+            await this.refreshUsersPage();
 
             this.$swal.fire({
               icon: "success",
@@ -1424,13 +1527,56 @@ export default {
               @click="showRolesManagement">
               <i class="bi bi-gear me-2"></i>Roles
             </button>
-            <button class="btn btn-outline-secondary btn-sm" @click="loadUsers">
+            <button class="btn btn-outline-secondary btn-sm" @click="refreshUsersPage">
               <i class="bi bi-arrow-clockwise me-2"></i>Refresh
             </button>
           </div>
         </div>
       </div>
     </div>
+
+    <section class="row g-3 mb-4" aria-label="Active user statistics">
+      <div
+        v-for="card in userStatCards"
+        :key="card.key"
+        class="col-12 col-sm-6 col-xl-3"
+      >
+        <button
+          type="button"
+          class="user-stat-card card p-0 w-100 h-100 text-start"
+          :class="[
+            `user-stat-card--${card.tone}`,
+            { 'user-stat-card--active': isUserStatCardActive(card.role) },
+          ]"
+          :disabled="isLoadingStats"
+          :aria-pressed="isUserStatCardActive(card.role)"
+          :aria-label="`Show ${card.label.toLowerCase()}`"
+          @click="selectUserStatCard(card.role)"
+        >
+          <span class="card-body d-flex align-items-center gap-3 p-3">
+            <span class="user-stat-icon flex-shrink-0" aria-hidden="true">
+              <i class="bi" :class="card.icon"></i>
+            </span>
+            <span class="min-w-0">
+              <span class="d-block small text-muted mb-1">{{ card.label }}</span>
+              <span
+                v-if="isLoadingStats"
+                class="placeholder-glow d-block"
+                aria-label="Loading statistic"
+              >
+                <span class="placeholder col-5 user-stat-placeholder"></span>
+              </span>
+              <strong v-else class="user-stat-value d-block">
+                {{ card.value.toLocaleString() }}
+              </strong>
+              <span class="user-stat-description d-block">
+                {{ card.description }}
+              </span>
+            </span>
+          </span>
+        </button>
+      </div>
+    </section>
 
     <!-- Filters -->
     <div class="row mb-4">
@@ -1889,6 +2035,84 @@ export default {
 </template>
 
 <style scoped>
+.user-stat-card {
+  appearance: none;
+  border: 1px solid rgba(26, 95, 95, 0.12);
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.user-stat-card:not(:disabled):hover {
+  border-color: rgba(26, 95, 95, 0.4);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.user-stat-card:focus-visible {
+  outline: 3px solid rgba(13, 110, 253, 0.2);
+  outline-offset: 2px;
+}
+
+.user-stat-card--active {
+  border-color: var(--staff-primary);
+  box-shadow: 0 0 0 2px rgba(26, 95, 95, 0.12);
+}
+
+.user-stat-card:disabled {
+  cursor: wait;
+  opacity: 0.78;
+}
+
+.user-stat-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  color: var(--staff-primary);
+  background: rgba(26, 95, 95, 0.1);
+}
+
+.user-stat-card--success .user-stat-icon {
+  color: #198754;
+  background: rgba(25, 135, 84, 0.12);
+}
+
+.user-stat-card--warning .user-stat-icon {
+  color: #8a6500;
+  background: rgba(255, 193, 7, 0.16);
+}
+
+.user-stat-card--info .user-stat-icon {
+  color: #087990;
+  background: rgba(13, 202, 240, 0.12);
+}
+
+.user-stat-value {
+  color: #17202a;
+  font-size: 1.5rem;
+  line-height: 1.05;
+}
+
+.user-stat-description {
+  margin-top: 0.25rem;
+  color: #6c757d;
+  font-size: 0.78rem;
+}
+
+.user-stat-placeholder {
+  min-height: 1.55rem;
+  border-radius: 4px;
+}
+
 .staff-card {
   border: none;
   box-shadow: 0 2px 10px rgba(26, 95, 95, 0.1);

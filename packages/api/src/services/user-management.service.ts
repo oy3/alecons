@@ -341,6 +341,41 @@ export class UserManagementService {
         };
     }
 
+    async getActiveUserStats(search?: string) {
+        const query: any = { isActive: true };
+        const normalizedSearch = typeof search === "string" ? search.trim() : "";
+
+        if (normalizedSearch) {
+            const escapedSearch = normalizedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            query.$or = [
+                { firstName: { $regex: escapedSearch, $options: "i" } },
+                { lastName: { $regex: escapedSearch, $options: "i" } },
+                { email: { $regex: escapedSearch, $options: "i" } },
+            ];
+        }
+
+        const groupedRoles = await this.userModel.aggregate([
+            { $match: query },
+            { $group: { _id: "$role", count: { $sum: 1 } } },
+        ]);
+        const byRole = groupedRoles.reduce((counts: Record<string, number>, item) => {
+            counts[item._id] = item.count;
+            return counts;
+        }, {});
+        const total = Object.values(byRole).reduce<number>(
+            (sum, count) => sum + Number(count),
+            0,
+        );
+
+        return {
+            total,
+            students: byRole[UserRole.STUDENT] || 0,
+            applicants: byRole[UserRole.APPLICANT] || 0,
+            staff: byRole[UserRole.STAFF] || 0,
+            byRole,
+        };
+    }
+
     async getUserById(id: string) {
         if (!Types.ObjectId.isValid(id)) {
             throw new NotFoundException("Invalid user ID");

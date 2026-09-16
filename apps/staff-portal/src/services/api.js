@@ -1418,6 +1418,12 @@ class StaffApiService {
         return this.makeRequest(`/staff/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`)
     }
 
+    async getUserStats(params = {}) {
+        const queryParams = new URLSearchParams()
+        if (params.search) queryParams.append('search', params.search)
+        return this.makeRequest(`/staff/users/stats/summary${queryParams.toString() ? `?${queryParams.toString()}` : ''}`)
+    }
+
     async getUser(id) {
         return this.makeRequest(`/staff/users/${id}`)
     }

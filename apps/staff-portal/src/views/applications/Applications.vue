@@ -120,6 +120,7 @@ export default {
       perPage: 10,
       totalApplications: 0,
       apiTotalPages: 0,
+      shouldScrollAfterPageChange: false,
       applicationStats: {
         total: 0,
         pending: 0,
@@ -189,6 +190,33 @@ export default {
     totalPages() {
       // Always use the server-returned total pages
       return Math.max(1, this.apiTotalPages);
+    },
+
+    paginationItems() {
+      const total = this.totalPages;
+      const visiblePages = new Set([1, 2, total - 1, total]);
+
+      for (let page = this.currentPage - 1; page <= this.currentPage + 1; page += 1) {
+        if (page >= 1 && page <= total) visiblePages.add(page);
+      }
+
+      const pages = [...visiblePages]
+        .filter((page) => page >= 1 && page <= total)
+        .sort((left, right) => left - right);
+      const items = [];
+
+      pages.forEach((page, index) => {
+        const previousPage = pages[index - 1];
+        if (previousPage && page - previousPage > 1) {
+          items.push({
+            type: "ellipsis",
+            key: `ellipsis-${previousPage}-${page}`,
+          });
+        }
+        items.push({ type: "page", key: `page-${page}`, page });
+      });
+
+      return items;
     },
 
     documentSections() {
@@ -275,8 +303,17 @@ export default {
         this.loadApplicationStats();
       }, 500);
     },
-    currentPage() {
-      this.loadApplications();
+    async currentPage() {
+      await this.loadApplications();
+
+      if (this.shouldScrollAfterPageChange) {
+        await this.$nextTick();
+        this.$refs.applicationsTable?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        this.shouldScrollAfterPageChange = false;
+      }
     },
   },
   methods: {
@@ -349,6 +386,21 @@ export default {
 
     isStatusCardActive(status) {
       return this.statusFilter === status;
+    },
+
+    goToPage(page) {
+      const targetPage = Number(page);
+      if (
+        !Number.isInteger(targetPage) ||
+        targetPage < 1 ||
+        targetPage > this.totalPages ||
+        targetPage === this.currentPage
+      ) {
+        return;
+      }
+
+      this.shouldScrollAfterPageChange = true;
+      this.currentPage = targetPage;
     },
 
     async loadApplications() {
@@ -2154,7 +2206,7 @@ export default {
     </div>
 
     <!-- Applications Table -->
-    <div v-else class="row">
+    <div v-else ref="applicationsTable" class="row applications-table-anchor">
       <div class="col-12">
         <div class="card border-0 p-0 shadow-sm">
           <!-- <div class="card-header bg-transparent border-bottom">
@@ -2680,26 +2732,81 @@ export default {
           </div>
 
           <!-- Pagination -->
-          <div class="card-footer border-top-0 bg-transparent">
-            <nav>
-              <ul class="pagination pagination-sm mb-0 justify-content-center">
+          <div
+            v-if="totalPages > 1"
+            class="card-footer border-top bg-transparent"
+          >
+            <nav
+              class="applications-pagination-scroll"
+              aria-label="Applications pagination"
+            >
+              <ul class="pagination pagination-sm mb-0 justify-content-center flex-nowrap">
                 <li class="page-item" :class="{ disabled: currentPage === 1 }">
                   <button
+                    type="button"
                     class="page-link"
-                    @click="currentPage = currentPage - 1"
+                    aria-label="Go to first page"
+                    title="First page"
                     :disabled="currentPage === 1"
+                    @click="goToPage(1)"
+                  >
+                    <span aria-hidden="true">&laquo;</span>
+                  </button>
+                </li>
+                <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                  <button
+                    type="button"
+                    class="page-link"
+                    :disabled="currentPage === 1"
+                    aria-label="Go to previous page"
+                    @click="goToPage(currentPage - 1)"
                   >
                     Prev
                   </button>
                 </li>
+                <template v-for="item in paginationItems" :key="item.key">
+                  <li
+                    v-if="item.type === 'page'"
+                    class="page-item"
+                    :class="{ active: currentPage === item.page }"
+                    :aria-current="currentPage === item.page ? 'page' : undefined"
+                  >
+                    <button
+                      type="button"
+                      class="page-link"
+                      :aria-label="`Go to page ${item.page}`"
+                      @click="goToPage(item.page)"
+                    >
+                      {{ item.page }}
+                    </button>
+                  </li>
+                  <li
+                    v-else
+                    class="page-item disabled pagination-ellipsis"
+                    aria-hidden="true"
+                  >
+                    <span class="page-link">&hellip;</span>
+                  </li>
+                </template>
                 <li
                   class="page-item"
-                  :class="{ active: currentPage === page }"
-                  v-for="page in totalPages"
-                  :key="page"
+                  :class="{
+                    disabled:
+                      currentPage >= totalPages ||
+                      filteredApplications.length === 0,
+                  }"
                 >
-                  <button class="page-link" @click="currentPage = page">
-                    {{ page }}
+                  <button
+                    type="button"
+                    class="page-link"
+                    :disabled="
+                      currentPage >= totalPages ||
+                      filteredApplications.length === 0
+                    "
+                    aria-label="Go to next page"
+                    @click="goToPage(currentPage + 1)"
+                  >
+                    Next
                   </button>
                 </li>
                 <li
@@ -2711,14 +2818,17 @@ export default {
                   }"
                 >
                   <button
+                    type="button"
                     class="page-link"
-                    @click="currentPage = currentPage + 1"
+                    aria-label="Go to last page"
+                    title="Last page"
                     :disabled="
                       currentPage >= totalPages ||
                       filteredApplications.length === 0
                     "
+                    @click="goToPage(totalPages)"
                   >
-                    Next
+                    <span aria-hidden="true">&raquo;</span>
                   </button>
                 </li>
               </ul>
@@ -4478,12 +4588,36 @@ export default {
 .pagination .page-link {
   color: var(--staff-primary);
   border-color: var(--staff-light);
+  min-width: 2.25rem;
+  min-height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .pagination .page-item.active .page-link {
   background-color: var(--staff-primary);
   border-color: var(--staff-primary);
   color: white;
+}
+
+.applications-table-anchor {
+  scroll-margin-top: 1rem;
+}
+
+.applications-pagination-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0.15rem 0;
+  scrollbar-width: thin;
+}
+
+.pagination-ellipsis .page-link {
+  min-width: 2rem;
+  color: #6c757d;
+  background: transparent;
+  cursor: default;
 }
 
 .dropdown-menu {

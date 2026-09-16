@@ -4,6 +4,7 @@ import { useAuthStore } from "../../stores/auth.js";
 import { apiService } from "../../services/api.js";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
+import { isPendingApplicationIntakeClosed } from "../../utils/applicationIntake.js";
 
 const ALLOWED_RECEIPT_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const MAX_RECEIPT_SIZE = 1024 * 1024;
@@ -31,6 +32,9 @@ export default {
       const status = this.application?.status;
       return status === 'expired' || status === 'rejected';
     },
+    isApplicationIntakeClosed() {
+      return isPendingApplicationIntakeClosed(this.application);
+    },
     paymentMethods() {
       return paymentService.getAvailablePaymentMethods();
     },
@@ -53,6 +57,7 @@ export default {
     },
     canSubmitManualTransfer() {
       return (
+        !this.isApplicationIntakeClosed &&
         this.selectedPaymentMethod === "manual_transfer" &&
         this.manualTransferConfirmed &&
         !!this.manualTransferReceipt &&
@@ -133,6 +138,11 @@ export default {
     },
 
     openPaymentMethodModal(fee) {
+      if (this.isApplicationIntakeClosed) {
+        this.showApplicationClosedNotice();
+        return;
+      }
+
       if (!this.hasAvailablePaymentMethodsForFee(fee)) {
         Swal.fire({
           icon: "info",
@@ -186,6 +196,11 @@ export default {
     },
 
     async proceedWithSelectedMethod() {
+      if (this.isApplicationIntakeClosed) {
+        await this.showApplicationClosedNotice();
+        return;
+      }
+
       if (!this.selectedFee) {
         return;
       }
@@ -198,6 +213,11 @@ export default {
     },
 
     async initiatePaystackPayment(fee) {
+      if (this.isApplicationIntakeClosed) {
+        await this.showApplicationClosedNotice();
+        return;
+      }
+
       try {
         this.paymentLoading[fee.id] = true;
         this.error = null;
@@ -284,6 +304,11 @@ export default {
     },
 
     async submitManualTransfer() {
+      if (this.isApplicationIntakeClosed) {
+        await this.showApplicationClosedNotice();
+        return;
+      }
+
       if (!this.selectedFee || !this.manualTransferReceipt) {
         return;
       }
@@ -330,6 +355,15 @@ export default {
 
     viewReceipt(fee) {
       this.selectedReceipt = fee;
+    },
+
+    async showApplicationClosedNotice() {
+      await Swal.fire({
+        icon: "warning",
+        title: "Applications Closed",
+        text: "Applications for this academic session are currently closed. New pre-admission payments cannot be started.",
+        confirmButtonColor: "#1a5f5f",
+      });
     },
 
     escapeHtml(value) {
@@ -548,6 +582,21 @@ export default {
 
     <div v-else class="row">
       <div class="col-md-9 mx-auto">
+        <div
+          v-if="isApplicationIntakeClosed"
+          class="alert alert-warning d-flex align-items-start gap-3 mb-4"
+          role="alert"
+        >
+          <i class="bi bi-lock fs-5 mt-1 flex-shrink-0"></i>
+          <div>
+            <strong>Applications Closed</strong>
+            <p class="mb-0 mt-1">
+              You can review your payment history, but new pre-admission
+              payments are unavailable for this academic session.
+            </p>
+          </div>
+        </div>
+
         <div class="mb-5">
           <div
             class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"
@@ -615,6 +664,7 @@ export default {
               <button
                 @click="openPaymentMethodModal(fee)"
                 :disabled="
+                  isApplicationIntakeClosed ||
                   isPaymentLoading(fee.id) ||
                   !isPaymentAvailable(fee) ||
                   !hasAvailablePaymentMethodsForFee(fee)

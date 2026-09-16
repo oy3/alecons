@@ -6,6 +6,7 @@ import { Country, State, City } from "country-state-city";
 import Swal from "sweetalert2";
 import vSelect from "vue-select";
 import "vue-select/dist/vue-select.css";
+import { isPendingApplicationIntakeClosed } from "../../utils/applicationIntake.js";
 
 export default {
   name: "ApplicationForm",
@@ -173,6 +174,9 @@ export default {
     applicationId() {
       return this.$route.params.id;
     },
+    isApplicationIntakeClosed() {
+      return isPendingApplicationIntakeClosed(this.application);
+    },
     selectedCountry() {
       return this.countries.find(
         (country) => country.name === this.nationality,
@@ -280,6 +284,12 @@ export default {
       return;
     }
 
+    if (this.isApplicationIntakeClosed) {
+      await this.showApplicationClosedNotice();
+      this.$router.push(`/applications/${this.applicationId}/dashboard`);
+      return;
+    }
+
     // Check if user has already completed the application form
     if (this.application && this.application.currentStage > 3) {
       logger.info(
@@ -301,6 +311,15 @@ export default {
     }
   },
   methods: {
+    async showApplicationClosedNotice() {
+      await Swal.fire({
+        title: "Applications Closed",
+        text: "Applications for this academic session are currently closed. You can no longer update or submit this application form.",
+        icon: "warning",
+        confirmButtonText: "Go to Dashboard",
+        confirmButtonColor: "#1a5f5f",
+      });
+    },
     async loadApplication() {
       const cached = this.authStore.getApplicationFromList(this.applicationId);
       if (cached) this.applicationData = cached;
@@ -1383,6 +1402,11 @@ export default {
     },
 
     async uploadFile(file, fileType, options = {}, inputEvent = null) {
+      if (this.isApplicationIntakeClosed) {
+        await this.showApplicationClosedNotice();
+        return;
+      }
+
       if (!file) {
         await Swal.fire({
           title: "No File Selected",
@@ -1554,6 +1578,11 @@ export default {
     },
 
     async removeDocument(documentType, documentUrl) {
+      if (this.isApplicationIntakeClosed) {
+        await this.showApplicationClosedNotice();
+        return;
+      }
+
       try {
         const response = await apiService.post(
           "/applications/remove-document",
@@ -1613,6 +1642,11 @@ export default {
     },
 
     async submitApplication() {
+      if (this.isApplicationIntakeClosed) {
+        await this.showApplicationClosedNotice();
+        return;
+      }
+
       // Check if declaration is checked before proceeding
       if (!this.declaration) {
         await Swal.fire({

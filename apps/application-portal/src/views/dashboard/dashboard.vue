@@ -8,6 +8,7 @@ import BiodataCard from "./components/BiodataCard.vue";
 import ProgressCard from "./components/ProgressCard.vue";
 import EmailVerificationAlert from "./components/EmailVerificationAlert.vue";
 import Swal from "sweetalert2";
+import { isPendingApplicationIntakeClosed } from "../../utils/applicationIntake.js";
 
 export default {
   name: "Dashboard",
@@ -298,6 +299,9 @@ export default {
       const status = this.application?.status;
       return status === "expired" || status === "rejected";
     },
+    isApplicationIntakeClosed() {
+      return isPendingApplicationIntakeClosed(this.application);
+    },
     lockedBannerConfig() {
       const status = this.application?.status;
       if (status === "expired") {
@@ -331,6 +335,14 @@ export default {
       }
       const id = this.route.params.id;
       const stage = this.currentStage;
+      if (this.isApplicationIntakeClosed && [2, 3].includes(stage)) {
+        return {
+          text: "Applications Closed",
+          route: null,
+          disabled: true,
+          variant: "btn-secondary",
+        };
+      }
       if ([2, 7, 8, 9].includes(stage)) {
         return {
           text: "Make Payment",
@@ -416,6 +428,29 @@ export default {
           <div>
             <strong>{{ lockedBannerConfig.title }}</strong>
             <p class="mb-1 mt-1">{{ lockedBannerConfig.message }}</p>
+            <router-link
+              to="/my-applications"
+              class="alert-link small d-flex align-items-center"
+            >
+              <i class="bi bi-arrow-left-circle fs-6 me-2"></i> Back to My
+              Applications
+            </router-link>
+          </div>
+        </div>
+
+        <div
+          v-else-if="isApplicationIntakeClosed"
+          class="alert alert-warning d-flex align-items-start gap-3 mb-4"
+          role="alert"
+        >
+          <i class="bi bi-lock fs-5 mt-1 flex-shrink-0"></i>
+          <div>
+            <strong>Applications Closed</strong>
+            <p class="mb-1 mt-1">
+              Applications for this academic session are currently closed. You
+              can review your existing record, but unfinished application-form
+              and form-fee actions are unavailable.
+            </p>
             <router-link
               to="/my-applications"
               class="alert-link small d-flex align-items-center"

@@ -46,6 +46,10 @@ export class AuthService {
 
     private async mapApplicationResponse(application: ApplicationDocument) {
         const { currentStage, admissionFlow } = await this.sessionControlsService.syncApplicationStageWithControls(application);
+        const applicationIntakeOpen = await this.sessionControlsService.isControlEnabled(
+            application.entryAcademicSession,
+            'application',
+        );
         const applicationTimestamps = application as ApplicationDocument & {
             createdAt?: Date;
             updatedAt?: Date;
@@ -83,6 +87,7 @@ export class AuthService {
             entranceExam: application.entranceExam,
             screening: application.screening,
             admissionFlow,
+            applicationIntakeOpen,
             academicSession: academicSession ? {
                 id: academicSession._id,
                 sessionYear: academicSession.sessionYear,

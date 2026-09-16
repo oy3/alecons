@@ -59,6 +59,12 @@ export default {
         { value: "staff", label: "Staff Member", enabled: true },
         { value: "student", label: "Student", enabled: false },
         { value: "applicant", label: "Applicant", enabled: false },
+        {
+          value: "external",
+          label: "External Student",
+          enabled: false,
+          unavailableLabel: "Managed through accommodation",
+        },
       ],
 
       departments: [
@@ -116,6 +122,7 @@ export default {
         { value: "staff", label: "Staff" },
         { value: "student", label: "Student" },
         { value: "applicant", label: "Applicant" },
+        { value: "external", label: "External Student" },
       ];
     },
 
@@ -1935,7 +1942,7 @@ export default {
                   <select class="form-select" id="userType" v-model="userForm.type" required>
                     <option v-for="type in userTypes" :key="type.value" :value="type.value" :disabled="!type.enabled">
                       {{ type.label }}
-                      {{ !type.enabled ? "(Coming Soon)" : "" }}
+                      {{ !type.enabled ? `(${type.unavailableLabel || "Coming Soon"})` : "" }}
                     </option>
                   </select>
                 </div>

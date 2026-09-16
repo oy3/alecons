@@ -20,7 +20,7 @@ test('expiry eligibility uses explicit terminal state and matriculation checks',
     );
 });
 
-test('admission revocation is limited to unfinished admitted applications', () => {
+test('admission decisions can be withdrawn or reopened before student conversion', () => {
     assert.equal(
         canRevokeAdmissionDecision({ status: 'admitted', admissionDecision: 'admitted' }),
         true,
@@ -35,6 +35,26 @@ test('admission revocation is limited to unfinished admitted applications', () =
     );
     assert.equal(
         canRevokeAdmissionDecision({ status: 'completed', admissionDecision: 'admitted' }),
+        false,
+    );
+    assert.equal(
+        canRevokeAdmissionDecision({ status: 'rejected', admissionDecision: 'rejected' }),
+        true,
+    );
+    assert.equal(
+        canRevokeAdmissionDecision({ status: 'expired', admissionDecision: 'rejected' }),
+        false,
+    );
+    assert.equal(
+        canRevokeAdmissionDecision({ status: 'completed', admissionDecision: 'rejected' }),
+        false,
+    );
+    assert.equal(
+        canRevokeAdmissionDecision({
+            status: 'rejected',
+            admissionDecision: 'rejected',
+            matriculationNumber: 'ALC/ND/26/000001',
+        }),
         false,
     );
 });

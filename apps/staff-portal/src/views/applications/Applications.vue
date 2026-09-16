@@ -638,9 +638,23 @@ export default {
     },
 
     canRevokeAdmissionDecision(application) {
-      return Boolean(
-        this.canExpireApplication(application) &&
-          application.admissionDecision === "admitted",
+      if (
+        !application ||
+        application.matriculationNumber ||
+        application.userRole === "student" ||
+        application?.userId?.role === "student" ||
+        ["completed", "expired"].includes(application.status)
+      ) {
+        return false;
+      }
+
+      if (application.admissionDecision === "admitted") {
+        return application.status !== "rejected";
+      }
+
+      return (
+        application.admissionDecision === "rejected" &&
+        application.status === "rejected"
       );
     },
 
@@ -709,18 +723,27 @@ export default {
     },
 
     async revokeAdmissionDecision(application) {
+      const isReopeningRejection =
+        application.admissionDecision === "rejected";
       const result = await this.$swal.fire({
         icon: "warning",
-        title: "Revoke Admission Decision",
-        text: `Return ${application.applicationNumber} to admission review? Its application and payment records will be retained.`,
+        title: isReopeningRejection
+          ? "Reopen Decision"
+          : "Revoke Decision",
+        text: `Return ${application.applicationNumber} to admission review? Its application, examination, and payment records will be retained.`,
         input: "textarea",
         inputLabel: "Reason",
-        inputValue:
-          "The admission decision was revoked for administrative review.",
-        inputPlaceholder: "Enter the reason for revoking this decision",
+        inputValue: isReopeningRejection
+          ? "The previous rejection decision is being reconsidered following an administrative review."
+          : "The admission decision was revoked for administrative review.",
+        inputPlaceholder: isReopeningRejection
+          ? "Enter the reason for reopening this decision"
+          : "Enter the reason for revoking this decision",
         inputAttributes: { maxlength: "1000" },
         showCancelButton: true,
-        confirmButtonText: "Revoke Decision",
+        confirmButtonText: isReopeningRejection
+          ? "Reopen Decision"
+          : "Revoke Decision",
         confirmButtonColor: "#dc3545",
         cancelButtonColor: "#6c757d",
         inputValidator: (value) => {
@@ -735,7 +758,9 @@ export default {
 
       try {
         this.$swal.fire({
-          title: "Revoking Admission Decision...",
+          title: isReopeningRejection
+            ? "Reopening Admission Decision..."
+            : "Revoking Admission Decision...",
           allowOutsideClick: false,
           showConfirmButton: false,
           didOpen: () => this.$swal.showLoading(),
@@ -756,7 +781,9 @@ export default {
 
         await this.$swal.fire({
           icon: "success",
-          title: "Admission Decision Revoked",
+          title: isReopeningRejection
+            ? "Admission Decision Reopened"
+            : "Admission Decision Revoked",
           text: `${application.applicationNumber} has been returned for admission review.`,
           confirmButtonColor: "#1a5f5f",
         });
@@ -764,7 +791,9 @@ export default {
         logger.error("Failed to revoke admission decision:", error);
         await this.$swal.fire({
           icon: "error",
-          title: "Could Not Revoke Decision",
+          title: isReopeningRejection
+            ? "Could Not Reopen Decision"
+            : "Could Not Revoke Decision",
           text: error.message || "Please try again.",
           confirmButtonColor: "#1a5f5f",
         });
@@ -2101,7 +2130,11 @@ export default {
                               @click.prevent="revokeAdmissionDecision(app)"
                             >
                               <i class="bi bi-arrow-counterclockwise me-2"></i
-                              >Revoke Admission Decision
+                              >{{
+                                app.admissionDecision === "rejected"
+                                  ? "Reopen Decision"
+                                  : "Revoke Decision"
+                              }}
                             </a>
                           </li>
                           <li
@@ -2404,8 +2437,12 @@ export default {
                         class="btn btn-sm btn-outline-danger"
                         @click="revokeAdmissionDecision(app)"
                       >
-                        <i class="bi bi-arrow-counterclockwise me-1"></i>Revoke
-                        Decision
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>
+                        {{
+                          app.admissionDecision === "rejected"
+                            ? "Reopen Decision"
+                            : "Revoke Decision"
+                        }}
                       </button>
                       <button
                         v-if="
@@ -3649,6 +3686,28 @@ export default {
                           <span class="details-value">{{
                             selectedApplication.entranceExam?.score ?? "N/A"
                           }}</span>
+                        </div>
+                        <div>
+                          <span class="details-label">Outcome</span>
+                          <span
+                            v-if="
+                              typeof selectedApplication.entranceExam
+                                ?.passed === 'boolean'
+                            "
+                            class="badge"
+                            :class="
+                              selectedApplication.entranceExam.passed
+                                ? 'bg-success'
+                                : 'bg-warning text-dark'
+                            "
+                          >
+                            {{
+                              selectedApplication.entranceExam.passed
+                                ? "Passed"
+                                : "Did not pass"
+                            }}
+                          </span>
+                          <span v-else class="details-value">Not recorded</span>
                         </div>
                         <div>
                           <span class="details-label">Link</span>

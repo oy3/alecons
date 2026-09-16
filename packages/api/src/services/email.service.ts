@@ -2379,11 +2379,12 @@ export class EmailService {
           <div style="max-width:600px;margin:0 auto;background:#fff;padding:24px;border-radius:8px">
             <h2 style="color:#2d7d7d">Admission Decision Update</h2>
             <p>Dear ${this.escapeHtml(firstName)},</p>
-            <p>The admission decision for application <strong>${this.escapeHtml(applicationNumber)}</strong>${sessionLabel} has been returned for administrative review.</p>
+            <p>The previous admission decision for application <strong>${this.escapeHtml(applicationNumber)}</strong>${sessionLabel} has been withdrawn following an administrative review.</p>
             <div style="background:#f8f9fa;border-left:4px solid #6c757d;padding:15px;margin:20px 0">
               <strong>Reason:</strong> ${this.escapeHtml(reason)}
             </div>
-            <p>Your application record and any payment records remain available. The Admissions Office will contact you when its review is complete.</p>
+            <p>Your application has been returned to the admission decision stage and is now awaiting a fresh decision from the College. Your application record and any payment records remain available.</p>
+            <p><strong>This notice does not constitute an offer of admission.</strong> The Admissions Office will contact you when the review is complete.</p>
             <p>Regards,<br><strong>ALECONS Admissions Office</strong></p>
           </div>
         </body>

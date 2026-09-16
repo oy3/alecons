@@ -945,10 +945,14 @@ export class ExamController {
             const attempts = await this.examService.getCompletedAttemptsForGrading(examId, false);
 
             if (!attempts || attempts.length === 0) {
+                const examStatus = await this.gradingService.reconcileExamGradingStatus(examId);
                 return {
                     success: true,
-                    message: "No completed attempts found to grade",
+                    message: examStatus === 'graded'
+                        ? "All valid attempts are already graded; the exam status has been reconciled"
+                        : "No pending completed attempts found to grade",
                     attemptsProcessed: 0,
+                    examStatus,
                 };
             }
 

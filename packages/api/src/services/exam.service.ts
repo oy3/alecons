@@ -3127,6 +3127,14 @@ export class ExamService {
             // Auto-submit expired exam attempts
             await this.autoSubmitExpiredAttempts();
 
+            // Reconcile exams whose attempts may have been graded before the
+            // examination window moved from in-progress to completed.
+            const gradingReconciliation =
+                await this.gradingService.reconcileCompletedExamGradingStatuses();
+            this.logger.log(
+                `Exam grading status reconciliation completed: ${gradingReconciliation.checked} checked, ${gradingReconciliation.graded} graded, ${gradingReconciliation.completed} completed`,
+            );
+
             this.logger.log(
                 `Exam status update completed: ${transitionsCount} transitions made`
             );

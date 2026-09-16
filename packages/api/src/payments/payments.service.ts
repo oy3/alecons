@@ -35,6 +35,7 @@ import { EmailService } from '../services/email.service';
 import { UploadService } from '../services/upload.service';
 import { TenancyAgreementService } from '../services/tenancy-agreement.service';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { hasSubmittedApplication } from '../utils/application-lifecycle.util';
 
 export interface PaymentSummary {
     id: string;
@@ -615,7 +616,7 @@ export class PaymentsService {
 
             const selectedApplication = await this.applicationModel
                 .findOne({ _id: new Types.ObjectId(applicationId), userId: userObjectId })
-                .select('_id applicationNumber entryAcademicSession currentStage status admissionDecision')
+                .select('_id applicationNumber entryAcademicSession status admissionDecision submittedAt auditTrail profileImageUrl documents examinations referees academicBackground')
                 .lean();
 
             if (!selectedApplication) {
@@ -628,12 +629,13 @@ export class PaymentsService {
                 academicSessionId: selectedApplication.entryAcademicSession as Types.ObjectId,
                 status: selectedApplication.status,
                 admissionDecision: selectedApplication.admissionDecision,
+                applicationFormSubmitted: hasSubmittedApplication(selectedApplication as any),
             };
         }
 
         const directApplication = await this.applicationModel
             .findOne({ userId: userObjectId })
-            .select('_id applicationNumber entryAcademicSession currentStage status admissionDecision')
+            .select('_id applicationNumber entryAcademicSession status admissionDecision submittedAt auditTrail profileImageUrl documents examinations referees academicBackground')
             .lean();
 
         if (directApplication) {
@@ -643,6 +645,7 @@ export class PaymentsService {
                 academicSessionId: directApplication.entryAcademicSession as Types.ObjectId,
                 status: directApplication.status,
                 admissionDecision: directApplication.admissionDecision,
+                applicationFormSubmitted: hasSubmittedApplication(directApplication as any),
             };
         }
 
@@ -671,6 +674,7 @@ export class PaymentsService {
         academicSessionId?: Types.ObjectId;
         status?: ApplicationStatus;
         admissionDecision?: AdmissionDecision;
+        applicationFormSubmitted?: boolean;
     }): Promise<void> {
         if (
             linkedApplication.status === ApplicationStatus.EXPIRED ||
@@ -680,6 +684,10 @@ export class PaymentsService {
         }
 
         if (linkedApplication.admissionDecision !== AdmissionDecision.AWAITING_DECISION) {
+            return;
+        }
+
+        if (linkedApplication.applicationFormSubmitted) {
             return;
         }
 

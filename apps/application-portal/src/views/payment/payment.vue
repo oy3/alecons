@@ -4,7 +4,7 @@ import { useAuthStore } from "../../stores/auth.js";
 import { apiService } from "../../services/api.js";
 import { logger } from "@shared/utils/logger";
 import Swal from "sweetalert2";
-import { isPendingApplicationIntakeClosed } from "../../utils/applicationIntake.js";
+import { isUnsubmittedApplicationIntakeClosed } from "../../utils/applicationIntake.js";
 
 const ALLOWED_RECEIPT_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const MAX_RECEIPT_SIZE = 1024 * 1024;
@@ -33,7 +33,7 @@ export default {
       return status === 'expired' || status === 'rejected';
     },
     isApplicationIntakeClosed() {
-      return isPendingApplicationIntakeClosed(this.application);
+      return isUnsubmittedApplicationIntakeClosed(this.application);
     },
     paymentMethods() {
       return paymentService.getAvailablePaymentMethods();
@@ -360,8 +360,8 @@ export default {
     async showApplicationClosedNotice() {
       await Swal.fire({
         icon: "warning",
-        title: "Applications Closed",
-        text: "Applications for this academic session are currently closed. New pre-admission payments cannot be started.",
+        title: "Application Intake Closed",
+        text: "New applications for this academic session are currently closed. Because this application has not been submitted, a new application form-fee payment cannot be started.",
         confirmButtonColor: "#1a5f5f",
       });
     },
@@ -589,10 +589,11 @@ export default {
         >
           <i class="bi bi-lock fs-5 mt-1 flex-shrink-0"></i>
           <div>
-            <strong>Applications Closed</strong>
+            <strong>Application Intake Closed</strong>
             <p class="mb-0 mt-1">
-              You can review your payment history, but new pre-admission
-              payments are unavailable for this academic session.
+              This application has not been submitted. You can review its
+              payment history, but a new application form-fee payment cannot
+              be started while intake is closed.
             </p>
           </div>
         </div>

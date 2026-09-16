@@ -6,7 +6,7 @@ import { apiService } from "../../services/api.js";
 import { useRouter } from "vue-router";
 import BrandLogo from "../../components/BrandLogo.vue";
 import AccountHeader from "../../components/AccountHeader.vue";
-import { isPendingApplicationIntakeClosed } from "../../utils/applicationIntake.js";
+import { isUnsubmittedApplicationIntakeClosed } from "../../utils/applicationIntake.js";
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -247,7 +247,7 @@ function getStatusBadgeClass(status) {
                           application.applicationNumber
                         }}</span>
                         <span
-                          v-if="isPendingApplicationIntakeClosed(application)"
+                          v-if="isUnsubmittedApplicationIntakeClosed(application)"
                           class="badge bg-warning text-dark"
                         >
                           Intake closed
@@ -292,7 +292,7 @@ function getStatusBadgeClass(status) {
                         "
                       >
                         {{
-                          isPendingApplicationIntakeClosed(application)
+                          isUnsubmittedApplicationIntakeClosed(application)
                             ? "View"
                             : "Continue"
                         }}

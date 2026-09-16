@@ -21,6 +21,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { StudentService } from '../services/student.service';
 import { SessionControlsService } from '../services/session-controls.service';
 import { getNestedProgramRelation, resolveProgramSelection } from '../utils/program-relation.util';
+import { hasSubmittedApplication } from '../utils/application-lifecycle.util';
 
 @Injectable()
 export class AuthService {
@@ -63,6 +64,7 @@ export class AuthService {
             currentStage,
             status: application.status,
             submittedAt: application.submittedAt,
+            applicationFormSubmitted: hasSubmittedApplication(application),
             admissionDecision: application.admissionDecision,
             program: getNestedProgramRelation(application).program,
             programType: getNestedProgramRelation(application).programType,
@@ -906,7 +908,11 @@ export class AuthService {
             const hasApplicationControl = controls?.controls?.some(
                 (c: any) => c.name === 'application' && c.active === true
             );
-            if (!hasApplicationControl) throw new BadRequestException('Applications for this intake are currently disabled.');
+            if (!hasApplicationControl) {
+                throw new BadRequestException(
+                    `Applications for ${session.title?.trim() || 'this academic session'} are currently closed.`,
+                );
+            }
 
             await this.assertProgramAvailableForApplication(programId);
 

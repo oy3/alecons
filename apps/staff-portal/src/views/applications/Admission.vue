@@ -70,7 +70,7 @@ export default {
 
       scoreForm: {
         score: "",
-        passed: false,
+        passed: null,
       },
       scoreFormProcessing: false,
 
@@ -103,6 +103,17 @@ export default {
 
     defaultScreeningVenue() {
       return SCHOOL_ADDRESS;
+    },
+
+    isExamScoreFormValid() {
+      const score = Number(this.scoreForm.score);
+      return (
+        this.scoreForm.score !== "" &&
+        Number.isFinite(score) &&
+        score >= 0 &&
+        score <= 100 &&
+        typeof this.scoreForm.passed === "boolean"
+      );
     },
 
     visiblePages() {
@@ -715,19 +726,29 @@ export default {
       this.selectedApplication = application;
       this.scoreForm = {
         score: "",
-        passed: false,
+        passed: null,
       };
       this.showModal("examScoreModal");
     },
 
     async submitExamScore() {
+      if (!this.isExamScoreFormValid) {
+        await this.$swal.fire({
+          icon: "warning",
+          title: "Complete Exam Result",
+          text: "Enter a score from 0 to 100 and select whether the applicant passed the exam.",
+          confirmButtonColor: "#1a5f5f",
+        });
+        return;
+      }
+
       try {
         this.scoreFormProcessing = true;
 
         const response = await apiService.updateExamScore(
           this.selectedApplication.id,
           {
-            score: parseInt(this.scoreForm.score),
+            score: Number(this.scoreForm.score),
             passed: this.scoreForm.passed,
           },
         );
@@ -1203,6 +1224,24 @@ export default {
                           class="small"
                         >
                           Score: {{ application.entranceExam.score }}
+                          <span
+                            v-if="
+                              typeof application.entranceExam.passed ===
+                              'boolean'
+                            "
+                            class="badge ms-1"
+                            :class="
+                              application.entranceExam.passed
+                                ? 'bg-success'
+                                : 'bg-warning text-dark'
+                            "
+                          >
+                            {{
+                              application.entranceExam.passed
+                                ? "Passed"
+                                : "Did not pass"
+                            }}
+                          </span>
                         </div>
                       </div>
                       <small
@@ -1878,15 +1917,37 @@ export default {
               />
             </div>
             <div class="mb-3">
-              <div class="form-check">
+              <label class="form-label d-block">
+                Did the applicant pass the exam?
+              </label>
+              <div
+                class="btn-group"
+                role="group"
+                aria-label="Entrance exam outcome"
+              >
                 <input
-                  id="examPassed"
+                  id="examPassedYes"
                   v-model="scoreForm.passed"
-                  class="form-check-input"
-                  type="checkbox"
+                  class="btn-check"
+                  type="radio"
+                  name="examPassed"
+                  :value="true"
+                  autocomplete="off"
                 />
-                <label class="form-check-label" for="examPassed">
-                  Student passed the exam
+                <label class="btn btn-outline-success" for="examPassedYes">
+                  Yes
+                </label>
+                <input
+                  id="examPassedNo"
+                  v-model="scoreForm.passed"
+                  class="btn-check"
+                  type="radio"
+                  name="examPassed"
+                  :value="false"
+                  autocomplete="off"
+                />
+                <label class="btn btn-outline-danger" for="examPassedNo">
+                  No
                 </label>
               </div>
             </div>
@@ -1903,7 +1964,7 @@ export default {
           <button
             type="button"
             class="btn btn-primary"
-            :disabled="scoreFormProcessing"
+            :disabled="scoreFormProcessing || !isExamScoreFormValid"
             @click="submitExamScore"
           >
             <span
@@ -1940,6 +2001,18 @@ export default {
         </div>
         <div class="modal-body">
           <form @submit.prevent="submitAdmissionDecision">
+            <div
+              v-if="selectedApplication?.entranceExam?.passed === false"
+              class="alert alert-warning d-flex gap-2 align-items-start"
+              role="alert"
+            >
+              <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+              <div>
+                This applicant was recorded as not passing the entrance
+                examination. The school may still admit the applicant following
+                reconsideration.
+              </div>
+            </div>
             <div class="mb-3">
               <label class="form-label">Decision</label>
               <div class="form-check">
@@ -2589,18 +2662,37 @@ export default {
                                 selectedApplicationDetails.entranceExam
                                   .score !== undefined
                               "
-                              :class="
-                                selectedApplicationDetails.entranceExam.score >=
-                                50
-                                  ? 'text-success fw-bold'
-                                  : 'text-danger fw-bold'
-                              "
+                              class="fw-bold"
                             >
                               {{
                                 selectedApplicationDetails.entranceExam.score
                               }}%
                             </span>
                             <span v-else class="text-muted">Not Available</span>
+                          </p>
+                        </div>
+                        <div class="col-12">
+                          <small class="text-muted">Outcome:</small>
+                          <p class="mb-1">
+                            <span
+                              v-if="
+                                typeof selectedApplicationDetails.entranceExam
+                                  .passed === 'boolean'
+                              "
+                              class="badge"
+                              :class="
+                                selectedApplicationDetails.entranceExam.passed
+                                  ? 'bg-success'
+                                  : 'bg-warning text-dark'
+                              "
+                            >
+                              {{
+                                selectedApplicationDetails.entranceExam.passed
+                                  ? "Passed"
+                                  : "Did not pass"
+                              }}
+                            </span>
+                            <span v-else class="text-muted">Not recorded</span>
                           </p>
                         </div>
                       </div>

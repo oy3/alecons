@@ -38,9 +38,15 @@ export function isUnfinishedApplication(application: ApplicationLifecycleRecord)
 }
 
 export function canRevokeAdmissionDecision(application: ApplicationLifecycleRecord): boolean {
+    if (!application || application.matriculationNumber) return false;
+
+    if (application.admissionDecision === AdmissionDecision.GRANTED) {
+        return !CLOSED_APPLICATION_STATUSES.has(String(application.status || ''));
+    }
+
     return Boolean(
-        isUnfinishedApplication(application) &&
-        application.admissionDecision === AdmissionDecision.GRANTED,
+        application.admissionDecision === AdmissionDecision.DENIED &&
+        application.status === ApplicationStatus.REJECTED,
     );
 }
 

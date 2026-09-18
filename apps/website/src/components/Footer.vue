@@ -79,22 +79,22 @@ import rootLabLogo from "../assets/img/rootlab.svg";
         reserved.</span>
 
       <div class="site-footer__credit">
-        <span>Powered by</span>
+        <span>Build by</span>
         <a
           class="site-footer__powered"
           href="https://rootlab.africa/"
           target="_blank"
           rel="noopener noreferrer"
         >
-          <img
+          <!-- <img
             :src="rootLabLogo"
             alt=""
             width="22"
             height="22"
             loading="lazy"
             aria-hidden="true"
-          />
-          <span>RootLab</span>
+          /> -->
+          <span>Rootlab</span>
         </a>
       </div>
 

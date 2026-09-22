@@ -50,7 +50,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { RolesService } from '../services/roles.service';
 import { ExpireApplicationDto } from '../dto/expire-application.dto';
 import { RevokeAdmissionDecisionDto } from '../dto/revoke-admission-decision.dto';
-import { CompleteScreeningDto } from '../dto/complete-screening.dto';
+import { AdmissionDecisionDto } from '../dto/admission-decision.dto';
 import { UpdateEntranceExamScoreDto } from '../dto/update-entrance-exam-score.dto';
 import { resolveProgramSelection } from '../utils/program-relation.util';
 import {
@@ -1689,7 +1689,7 @@ export class StaffApplicationsController {
                 // writeField('Screening Date', appObj.screening.date ? new Date(appObj.screening.date).toLocaleDateString() : 'N/A');
                 // writeField('Screening Time', appObj.screening.time || 'N/A');
                 // writeField('Screening Venue', appObj.screening.venue || 'N/A');
-                writeField('Screening Status', appObj.screening.completed ? 'Completed' : 'Pending');
+                writeField('Screening Status', appObj.screening.completed ? 'Completed (Legacy)' : 'Scheduled');
             } else {
                 writeField('Screening', 'Not scheduled');
             }
@@ -2465,6 +2465,12 @@ export class StaffApplicationsController {
                 );
             }
 
+            if (application.status !== ApplicationStatus.PENDING) {
+                throw new ConflictException(
+                    'Initial screening scheduling is only available for legacy admitted applications that are still pending',
+                );
+            }
+
             if (application.screening) {
                 throw new ConflictException(
                     application.screening.completed
@@ -2490,10 +2496,14 @@ export class StaffApplicationsController {
             }
 
             const screeningDate = new Date(screeningData.screeningDate);
+            const scheduledAt = getScheduledLagosDateTime(
+                screeningDate,
+                screeningData.screeningTime,
+            );
 
-            if (Number.isNaN(screeningDate.getTime())) {
+            if (!scheduledAt || scheduledAt.getTime() <= Date.now()) {
                 throw new HttpException(
-                    { success: false, message: 'Screening date is invalid' },
+                    { success: false, message: 'The screening date and time must be in the future' },
                     HttpStatus.BAD_REQUEST,
                 );
             }
@@ -2505,35 +2515,52 @@ export class StaffApplicationsController {
                 venue: normalizedVenue,
                 completed: false
             };
-            application.currentStage = 6; // Move to screening stage
+            const previousStatus = application.status;
+            const previousStage = application.currentStage;
+            application.status = ApplicationStatus.ADMITTED;
+            application.currentStage = 7;
             this.appendAuditEntry(application, {
                 action: 'screening_scheduled',
-                description: 'Screening was scheduled for the application.',
+                description: 'A legacy admitted application received its screening schedule and was advanced to post-admission payments.',
                 actor: req.user,
                 metadata: {
                     screeningDate: screeningData.screeningDate,
                     screeningTime: screeningData.screeningTime,
                     venue: screeningData.venue,
+                    legacyRecovery: true,
+                    previousStatus,
+                    nextStatus: application.status,
+                    previousStage,
+                    nextStage: application.currentStage,
                 },
             });
 
             await application.save();
 
             // Send screening scheduled email
-            await this.emailService.sendScreeningScheduledEmail(
-                (application.userId as any).email,
-                (application.userId as any).firstName,
-                application.screening.date,
-                application.screening.time,
-                application.screening.venue
-            );
+            let notificationSent = true;
+            try {
+                await this.emailService.sendScreeningScheduledEmail(
+                    (application.userId as any).email,
+                    (application.userId as any).firstName,
+                    application.screening.date,
+                    application.screening.time,
+                    application.screening.venue,
+                );
+            } catch (notificationError) {
+                notificationSent = false;
+                this.logger.error(
+                    `Legacy screening schedule saved for ${id}, but its email failed`,
+                    notificationError,
+                );
+            }
 
             this.logger.log('Screening scheduled successfully for application:', id);
 
             return {
                 success: true,
                 message: 'Screening & interview scheduled successfully',
-                data: { application }
+                data: { application, notificationSent }
             };
 
         } catch (error) {
@@ -2579,8 +2606,10 @@ export class StaffApplicationsController {
                 );
             }
 
-            await this.assertAdmissionMutationAllowed(application, req);
-            await this.assertApplicationHasNotBecomeStudent(application);
+            await this.assertModulePermission(req, 'admissions', 'approve');
+            await this.sessionControlsService.assertAdmissionProcessingEnabled(
+                application.entryAcademicSession,
+            );
             const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
                 application.entryAcademicSession,
                 application,
@@ -2662,19 +2691,28 @@ export class StaffApplicationsController {
             });
             await application.save();
 
-            await this.emailService.sendScreeningScheduledEmail(
-                (application.userId as any).email,
-                (application.userId as any).firstName,
-                application.screening.date,
-                application.screening.time,
-                application.screening.venue,
-                true,
-            );
+            let notificationSent = true;
+            try {
+                await this.emailService.sendScreeningScheduledEmail(
+                    (application.userId as any).email,
+                    (application.userId as any).firstName,
+                    application.screening.date,
+                    application.screening.time,
+                    application.screening.venue,
+                    true,
+                );
+            } catch (notificationError) {
+                notificationSent = false;
+                this.logger.error(
+                    `Screening rescheduled for ${id}, but its email failed`,
+                    notificationError,
+                );
+            }
 
             return {
                 success: true,
                 message: 'Screening & interview rescheduled successfully',
-                data: { application },
+                data: { application, notificationSent },
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to reschedule screening';
@@ -2696,11 +2734,7 @@ export class StaffApplicationsController {
     @ApiResponse({ status: 200, description: 'Admission decision made successfully' })
     async makeAdmissionDecision(
         @Param('id') id: string,
-        @Body() decisionData: {
-            decision: 'admitted' | 'rejected';
-            sendProvisionalOffer?: boolean;
-            reason?: string;
-        },
+        @Body() decisionData: AdmissionDecisionDto,
         @Request() req,
     ) {
         try {
@@ -2755,6 +2789,7 @@ export class StaffApplicationsController {
             const previousStatus = application.status;
             const previousAdmissionDecision = application.admissionDecision;
             const previousStage = application.currentStage;
+            const notificationTasks: Array<{ name: string; send: () => Promise<void> }> = [];
 
             // Update application with admission decision using correct enum
             const decisionMapping = {
@@ -2771,13 +2806,45 @@ export class StaffApplicationsController {
             }
 
             if (decisionData.decision === 'admitted') {
+                let screeningDate: Date | undefined;
+                if (admissionFlow.screeningEnabled) {
+                    const normalizedVenue = decisionData.venue?.trim();
+                    screeningDate = decisionData.screeningDate
+                        ? new Date(decisionData.screeningDate)
+                        : undefined;
+                    const scheduledAt = screeningDate
+                        ? getScheduledLagosDateTime(screeningDate, decisionData.screeningTime)
+                        : null;
+
+                    if (!scheduledAt || scheduledAt.getTime() <= Date.now()) {
+                        throw new HttpException(
+                            {
+                                success: false,
+                                message: 'A future screening date and time are required when admitting this applicant',
+                            },
+                            HttpStatus.BAD_REQUEST,
+                        );
+                    }
+                    if (!normalizedVenue) {
+                        throw new HttpException(
+                            { success: false, message: 'Screening venue is required when admitting this applicant' },
+                            HttpStatus.BAD_REQUEST,
+                        );
+                    }
+
+                    application.screening = {
+                        date: screeningDate,
+                        time: decisionData.screeningTime,
+                        venue: normalizedVenue,
+                        completed: false,
+                    };
+                }
+
                 application.admissionRevokedAt = undefined;
                 application.admissionRevokedBy = undefined;
                 application.admissionRevocationReason = undefined;
-                application.status = admissionFlow.screeningEnabled
-                    ? ApplicationStatus.PENDING
-                    : ApplicationStatus.ADMITTED;
-                application.currentStage = admissionFlow.screeningEnabled ? 6 : 7;
+                application.status = ApplicationStatus.ADMITTED;
+                application.currentStage = 7;
                 application.admissionDate = new Date();
                 const shouldSendProvisionalOffer = decisionData.sendProvisionalOffer === true;
 
@@ -2912,39 +2979,52 @@ export class StaffApplicationsController {
                         this.logger.error('Failed to upload provisional offer PDF to Spaces:', uploadError.message);
                     }
 
-                    await this.emailService.sendAdmissionLetterEmail(
-                        user.email,
-                        user.firstName,
-                        pdfBuffer,
-                        programName,
-                        academicSessionName
-                    );
-
-                    this.logger.log('Admission email with provisional offer sent successfully');
+                    notificationTasks.push({
+                        name: 'provisional admission offer',
+                        send: () => this.emailService.sendAdmissionLetterEmail(
+                            user.email,
+                            user.firstName,
+                            pdfBuffer,
+                            programName,
+                            academicSessionName,
+                        ),
+                    });
                 } else {
                     application.admissionLetter = undefined;
+                    notificationTasks.push({
+                        name: 'admission offer',
+                        send: () => this.emailService.sendAdmissionOfferEmail(
+                            user.email,
+                            user.firstName,
+                            programName,
+                            academicSessionName,
+                        ),
+                    });
+                }
 
-                    await this.emailService.sendAdmissionOfferEmail(
-                        user.email,
-                        user.firstName,
-                        programName,
-                        academicSessionName
-                    );
-
-                    this.logger.log('Admission email sent successfully without provisional offer');
+                if (admissionFlow.screeningEnabled && application.screening?.date) {
+                    notificationTasks.push({
+                        name: 'screening schedule',
+                        send: () => this.emailService.sendScreeningScheduledEmail(
+                            user.email,
+                            user.firstName,
+                            application.screening.date,
+                            application.screening.time,
+                            application.screening.venue,
+                        ),
+                    });
                 }
             } else {
                 application.status = ApplicationStatus.REJECTED;
                 application.currentStage = 5; // Stay at admission decision stage but mark as rejected
-
-                // Send rejection email
-                await this.emailService.sendRejectionEmail(
-                    (application.userId as any).email,
-                    (application.userId as any).firstName,
-                    decisionData.reason
-                );
-
-                this.logger.log('Rejection email sent successfully');
+                notificationTasks.push({
+                    name: 'admission rejection',
+                    send: () => this.emailService.sendRejectionEmail(
+                        (application.userId as any).email,
+                        (application.userId as any).firstName,
+                        decisionData.reason,
+                    ),
+                });
             }
 
             this.appendAuditEntry(application, {
@@ -2964,14 +3044,48 @@ export class StaffApplicationsController {
                 },
             });
 
+            if (decisionData.decision === 'admitted' && admissionFlow.screeningEnabled) {
+                this.appendAuditEntry(application, {
+                    action: 'screening_scheduled',
+                    description: 'Screening was scheduled as part of the admission decision.',
+                    actor: req.user,
+                    metadata: {
+                        screeningDate: decisionData.screeningDate,
+                        screeningTime: decisionData.screeningTime,
+                        venue: decisionData.venue,
+                        previousStatus,
+                        nextStatus: application.status,
+                        previousStage,
+                        nextStage: application.currentStage,
+                    },
+                });
+            }
+
             await application.save();
+
+            const notificationFailures: string[] = [];
+            for (const notification of notificationTasks) {
+                try {
+                    await notification.send();
+                } catch (notificationError) {
+                    notificationFailures.push(notification.name);
+                    this.logger.error(
+                        `Admission decision saved, but ${notification.name} notification failed`,
+                        notificationError,
+                    );
+                }
+            }
 
             this.logger.log('Admission decision made successfully for application:', id);
 
             return {
                 success: true,
                 message: `Application ${decisionData.decision} successfully`,
-                data: { application }
+                data: {
+                    application,
+                    notificationSent: notificationFailures.length === 0,
+                    notificationFailures,
+                }
             };
 
         } catch (error) {
@@ -3243,120 +3357,6 @@ export class StaffApplicationsController {
                 {
                     success: false,
                     message: 'Failed to update exam score',
-                    error: error.message
-                },
-                HttpStatus.INTERNAL_SERVER_ERROR
-            );
-        }
-    }
-
-    @Patch(':id/complete-screening')
-    @ApiOperation({ summary: 'Mark screening as completed' })
-    @ApiResponse({ status: 200, description: 'Screening marked as completed' })
-    async completeScreening(
-        @Param('id') id: string,
-        @Body() body: CompleteScreeningDto,
-        @Request() req,
-    ) {
-        try {
-            this.logger.log('Marking screening as completed for application:', id);
-
-            const application = await this.applicationModel.findById(id);
-
-            if (!application) {
-                throw new HttpException(
-                    { success: false, message: 'Application not found' },
-                    HttpStatus.NOT_FOUND
-                );
-            }
-
-            await this.assertAdmissionMutationAllowed(application, req);
-            await this.assertApplicationHasNotBecomeStudent(application);
-            const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
-                application.entryAcademicSession,
-                application,
-            );
-
-            if (!admissionFlow.screeningEnabled) {
-                throw new HttpException(
-                    { success: false, message: 'Screening is disabled for this academic session' },
-                    HttpStatus.BAD_REQUEST,
-                );
-            }
-
-            if (application.admissionDecision !== AdmissionDecision.GRANTED) {
-                throw new HttpException(
-                    { success: false, message: 'Admission must be granted before screening can be completed' },
-                    HttpStatus.BAD_REQUEST,
-                );
-            }
-
-            if (!application.screening) {
-                throw new ConflictException(
-                    'Screening must be scheduled before it can be completed',
-                );
-            }
-
-            if (application.screening.completed) {
-                throw new ConflictException(
-                    'Screening has already been completed for this application',
-                );
-            }
-
-            const scheduledAt = getScheduledLagosDateTime(
-                application.screening.date,
-                application.screening.time,
-            );
-            if (!scheduledAt) {
-                throw new ConflictException(
-                    'The scheduled screening date or time is invalid',
-                );
-            }
-            const completedBeforeScheduledTime = scheduledAt.getTime() > Date.now();
-            if (completedBeforeScheduledTime && !body?.bypassSchedule) {
-                throw new ConflictException(
-                    'Screening cannot be completed before its scheduled date and time',
-                );
-            }
-
-            const previousStatus = application.status;
-            const previousStage = application.currentStage;
-            application.screening.completed = true;
-            application.status = ApplicationStatus.ADMITTED;
-            application.currentStage = 7; // Move to acceptance fee stage
-            this.appendAuditEntry(application, {
-                action: 'screening_completed',
-                description: completedBeforeScheduledTime
-                    ? 'Screening was marked as completed before its scheduled date and time using a staff override.'
-                    : 'Screening was marked as completed.',
-                actor: req.user,
-                metadata: {
-                    scheduledAt,
-                    previousStatus,
-                    resultingStatus: application.status,
-                    previousStage,
-                    resultingStage: application.currentStage,
-                    completedBeforeScheduledTime,
-                    scheduleOverrideUsed: completedBeforeScheduledTime && body?.bypassSchedule === true,
-                },
-            });
-            await application.save();
-
-            this.logger.log('Screening marked as completed for application:', id);
-
-            return {
-                success: true,
-                message: 'Screening marked as completed',
-                data: { application }
-            };
-
-        } catch (error) {
-            this.logger.error('Error completing screening:', error.message);
-            if (error instanceof HttpException) throw error;
-            throw new HttpException(
-                {
-                    success: false,
-                    message: 'Failed to complete screening',
                     error: error.message
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR

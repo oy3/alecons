@@ -64,7 +64,6 @@ export default {
         screeningTime: "",
         venue: SCHOOL_ADDRESS,
       },
-      screeningScheduleMode: "schedule",
       screeningFormProcessing: false,
       scheduleNow: Date.now(),
       scheduleClockId: null,
@@ -77,8 +76,11 @@ export default {
 
       decisionForm: {
         decision: "",
-        admissionLetterUrl: "",
+        sendProvisionalOffer: false,
         reason: "",
+        screeningDate: "",
+        screeningTime: "",
+        venue: SCHOOL_ADDRESS,
       },
       decisionFormProcessing: false,
 
@@ -510,27 +512,9 @@ export default {
     canScheduleScreening(application) {
       return (
         this.isScreeningEnabled(application) &&
-        application.currentStage === 6 &&
+        application.status === "pending" &&
+        application.admissionDecision === "admitted" &&
         !application.screening
-      );
-    },
-
-    canRescheduleScreening(application) {
-      return (
-        this.isScreeningEnabled(application) &&
-        application.currentStage === 6 &&
-        application.screening &&
-        !application.screening.completed &&
-        this.isUpcomingSchedule(application.screening)
-      );
-    },
-
-    canCompleteScreening(application) {
-      return (
-        this.isScreeningEnabled(application) &&
-        application.currentStage === 6 &&
-        application.screening &&
-        !application.screening.completed
       );
     },
 
@@ -794,22 +778,10 @@ export default {
 
     scheduleScreening(application) {
       this.selectedApplication = application;
-      this.screeningScheduleMode = "schedule";
       this.screeningForm = {
         screeningDate: "",
         screeningTime: "",
         venue: this.defaultScreeningVenue,
-      };
-      this.showModal("scheduleScreeningModal");
-    },
-
-    rescheduleScreening(application) {
-      this.selectedApplication = application;
-      this.screeningScheduleMode = "reschedule";
-      this.screeningForm = {
-        screeningDate: this.toDateInputValue(application.screening?.date),
-        screeningTime: application.screening?.time || "",
-        venue: application.screening?.venue || this.defaultScreeningVenue,
       };
       this.showModal("scheduleScreeningModal");
     },
@@ -848,18 +820,19 @@ export default {
           screeningTime: this.screeningForm.screeningTime,
           venue,
         };
-        const rescheduling = this.screeningScheduleMode === "reschedule";
-        const response = rescheduling
-          ? await apiService.rescheduleScreening(this.selectedApplication.id, payload)
-          : await apiService.scheduleScreening(this.selectedApplication.id, payload);
+        const response = await apiService.scheduleScreening(
+          this.selectedApplication.id,
+          payload,
+        );
 
         if (response.success) {
           this.$swal.fire({
-            icon: "success",
-            title: rescheduling
-              ? "Screening Rescheduled"
-              : "Screening Scheduled",
-            text: `Screening has been ${rescheduling ? "rescheduled" : "scheduled"} successfully. The applicant will be notified via email.`,
+            icon: response.data?.notificationSent === false ? "warning" : "success",
+            title: "Screening Scheduled",
+            text:
+              response.data?.notificationSent === false
+                ? "The legacy admission was advanced to acceptance fee, but the notification email could not be sent."
+                : "The legacy admission has been advanced to acceptance fee and the applicant has been notified.",
             confirmButtonColor: "#1a5f5f",
           });
 
@@ -880,97 +853,34 @@ export default {
       }
     },
 
-    async completeScreening(application) {
-      const confirmation = await this.$swal.fire({
-        icon: "warning",
-        title: "Complete Screening?",
-        text: "This will record the screening as completed and move the application to the next admission stage.",
-        showCancelButton: true,
-        confirmButtonText: "Complete Screening",
-        cancelButtonText: "Cancel",
-        confirmButtonColor: "#1a5f5f",
-      });
-
-      if (!confirmation.isConfirmed) return;
-
-      try {
-        await this.submitScreeningCompletion(application, false);
-      } catch (error) {
-        logger.error("Failed to complete screening:", error);
-
-        if (
-          error.message?.includes(
-            "Screening cannot be completed before its scheduled date and time",
-          )
-        ) {
-          const override = await this.$swal.fire({
-            icon: "warning",
-            title: "Screening Is Not Due Yet",
-            text: "Screening cannot be completed before its scheduled date and time. Only bypass this warning if the screening has actually taken place.",
-            input: "checkbox",
-            inputPlaceholder: "Bypass the schedule warning and complete screening",
-            inputValidator: (checked) =>
-              checked ? undefined : "Tick the checkbox to confirm the override.",
-            showCancelButton: true,
-            confirmButtonText: "Bypass and Complete",
-            cancelButtonText: "Cancel",
-            confirmButtonColor: "#dc3545",
-          });
-
-          if (override.isConfirmed && override.value) {
-            try {
-              await this.submitScreeningCompletion(application, true);
-            } catch (overrideError) {
-              logger.error("Failed to override screening schedule:", overrideError);
-              this.showScreeningCompletionError(overrideError);
-            }
-          }
-          return;
-        }
-
-        this.showScreeningCompletionError(error);
-      }
-    },
-
-    async submitScreeningCompletion(application, bypassSchedule) {
-      const response = await apiService.completeScreening(application.id, {
-        bypassSchedule,
-      });
-
-      if (response.success) {
-        await this.$swal.fire({
-          icon: "success",
-          title: "Screening Completed",
-          text: bypassSchedule
-            ? "Screening has been completed using the schedule override."
-            : "Screening has been marked as completed.",
-          confirmButtonColor: "#1a5f5f",
-        });
-        await this.loadApplications();
-      }
-    },
-
-    showScreeningCompletionError(error) {
-        this.$swal.fire({
-          icon: "error",
-          title: "Screening Not Completed",
-          text:
-            error.message || "Failed to complete screening. Please try again.",
-          confirmButtonColor: "#1a5f5f",
-        });
-    },
-
     makeAdmissionDecision(application) {
       this.selectedApplication = application;
       this.decisionForm = {
         decision: "",
         sendProvisionalOffer: false,
         reason: "",
+        screeningDate: "",
+        screeningTime: "",
+        venue: this.defaultScreeningVenue,
       };
       this.showModal("admissionDecisionModal");
     },
 
     async submitAdmissionDecision() {
+      if (!this.decisionForm.decision) {
+        await this.$swal.fire({ icon: "warning", title: "Select Decision", text: "Choose whether to admit or reject this applicant." });
+        return;
+      }
+      if (
+        this.decisionForm.decision === "admitted" &&
+        this.isScreeningEnabled(this.selectedApplication) &&
+        (!this.decisionForm.screeningDate ||
+          !this.decisionForm.screeningTime ||
+          !this.decisionForm.venue.trim())
+      ) {
+        await this.$swal.fire({ icon: "warning", title: "Screening Details Required", text: "Enter the screening date, time, and venue before admitting this applicant." });
+        return;
+      }
       try {
         this.decisionFormProcessing = true;
 
@@ -980,18 +890,27 @@ export default {
             decision: this.decisionForm.decision,
             sendProvisionalOffer: this.decisionForm.sendProvisionalOffer,
             reason: this.decisionForm.reason,
+            screeningDate: this.decisionForm.screeningDate,
+            screeningTime: this.decisionForm.screeningTime,
+            venue: this.decisionForm.venue.trim(),
           },
         );
 
         if (response.success) {
           this.$swal.fire({
-            icon: "success",
+            icon: response.data?.notificationSent === false ? "warning" : "success",
             title: "Decision Made",
             text:
-              this.decisionForm.decision === "admitted"
+              response.data?.notificationSent === false
+                ? "The decision was saved, but one or more notification emails could not be sent."
+                : this.decisionForm.decision === "admitted"
                 ? this.decisionForm.sendProvisionalOffer
-                  ? "Student admitted. Admission email and provisional offer have been sent."
-                  : "Student admitted. Admission email has been sent without provisional offer attachment."
+                  ? this.isScreeningEnabled(this.selectedApplication)
+                    ? "Applicant admitted, screening scheduled, and the provisional offer sent."
+                    : "Applicant admitted and the provisional offer sent."
+                  : this.isScreeningEnabled(this.selectedApplication)
+                    ? "Applicant admitted and screening scheduled. Admission notifications have been sent."
+                    : "Applicant admitted. The admission notification has been sent."
                 : "Student rejected. Email notification has been sent.",
             confirmButtonColor: "#1a5f5f",
           });
@@ -1004,7 +923,7 @@ export default {
         this.$swal.fire({
           icon: "error",
           title: "Failed",
-          text: "Failed to make admission decision. Please try again.",
+          text: error.message || "Failed to make admission decision. Please try again.",
           confirmButtonColor: "#1a5f5f",
         });
       } finally {
@@ -1352,26 +1271,6 @@ export default {
                               Screening
                             </a>
                           </li>
-                          <li v-if="canRescheduleScreening(application)">
-                            <a
-                              class="dropdown-item"
-                              href="#"
-                              @click.prevent="rescheduleScreening(application)"
-                            >
-                              <i class="bi bi-calendar2-week me-2"></i
-                              >Reschedule Screening
-                            </a>
-                          </li>
-                          <li v-if="canCompleteScreening(application)">
-                            <a
-                              class="dropdown-item"
-                              href="#"
-                              @click.prevent="completeScreening(application)"
-                            >
-                              <i class="bi bi-check-circle me-2"></i>Complete
-                              Screening
-                            </a>
-                          </li>
                           <li v-if="canMakeAdmissionDecision(application)">
                             <a
                               class="dropdown-item"
@@ -1494,28 +1393,6 @@ export default {
                                 >
                                   <i class="bi bi-calendar-check me-1"></i
                                   >Screening
-                                </a>
-                              </li>
-                              <li v-if="canRescheduleScreening(application)">
-                                <a
-                                  class="dropdown-item"
-                                  href="#"
-                                  @click.prevent="rescheduleScreening(application)"
-                                >
-                                  <i class="bi bi-calendar2-week me-1"></i
-                                  >Reschedule Screening
-                                </a>
-                              </li>
-                              <li v-if="canCompleteScreening(application)">
-                                <a
-                                  class="dropdown-item"
-                                  href="#"
-                                  @click.prevent="
-                                    completeScreening(application)
-                                  "
-                                >
-                                  <i class="bi bi-check-circle me-1"></i
-                                  >Complete Screening
                                 </a>
                               </li>
                               <li v-if="canMakeAdmissionDecision(application)">
@@ -1848,11 +1725,7 @@ export default {
       <div class="modal-content">
         <div class="modal-header">
           <h5 id="scheduleScreeningModalLabel" class="modal-title">
-            {{
-              screeningScheduleMode === "reschedule"
-                ? "Reschedule Screening & Interview"
-                : "Schedule Screening & Interview"
-            }}
+            Complete Legacy Screening Schedule
           </h5>
           <button
             type="button"
@@ -1862,11 +1735,14 @@ export default {
           ></button>
         </div>
         <div class="modal-body">
+          <div class="alert alert-warning small" role="alert">
+            This fallback is only for an admission approved before screening was
+            combined with the admission decision. Saving will unlock acceptance
+            fee payment.
+          </div>
           <form @submit.prevent="submitScreeningSchedule">
             <div class="mb-3">
-              <label for="screeningDate" class="form-label">
-                {{ screeningScheduleMode === "reschedule" ? "New Screening Date" : "Screening Date" }}
-              </label>
+              <label for="screeningDate" class="form-label">Screening Date</label>
               <input
                 id="screeningDate"
                 v-model="screeningForm.screeningDate"
@@ -1876,9 +1752,7 @@ export default {
               />
             </div>
             <div class="mb-3">
-              <label for="screeningTime" class="form-label">
-                {{ screeningScheduleMode === "reschedule" ? "New Screening Time" : "Screening Time" }}
-              </label>
+              <label for="screeningTime" class="form-label">Screening Time</label>
               <input
                 id="screeningTime"
                 v-model="screeningForm.screeningTime"
@@ -1918,11 +1792,7 @@ export default {
               v-if="screeningFormProcessing"
               class="spinner-border spinner-border-sm me-2"
             ></span>
-            {{
-              screeningScheduleMode === "reschedule"
-                ? "Reschedule Screening"
-                : "Schedule Screening"
-            }}
+            Schedule & Unlock Payments
           </button>
         </div>
       </div>
@@ -1937,7 +1807,7 @@ export default {
     aria-labelledby="examScoreModalLabel"
     aria-hidden="true"
   >
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
           <h5 id="examScoreModalLabel" class="modal-title">Input Exam Score</h5>
@@ -2032,7 +1902,7 @@ export default {
     aria-labelledby="admissionDecisionModalLabel"
     aria-hidden="true"
   >
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
           <h5 id="admissionDecisionModalLabel" class="modal-title">
@@ -2105,6 +1975,53 @@ export default {
                 will send the official admission letter directly.
               </small>
             </div>
+            <fieldset
+              v-if="
+                decisionForm.decision === 'admitted' &&
+                isScreeningEnabled(selectedApplication)
+              "
+              class="border rounded p-3 mb-3"
+            >
+              <legend class="float-none w-auto px-2 fs-6 fw-semibold mb-0">
+                Screening & Interview Schedule
+              </legend>
+              <p class="small text-muted">
+                Scheduling is part of admission approval. The applicant can pay
+                the acceptance fee immediately and must still attend this appointment.
+              </p>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label for="decisionScreeningDate" class="form-label">Date</label>
+                  <input
+                    id="decisionScreeningDate"
+                    v-model="decisionForm.screeningDate"
+                    type="date"
+                    class="form-control"
+                    required
+                  />
+                </div>
+                <div class="col-md-6">
+                  <label for="decisionScreeningTime" class="form-label">Time</label>
+                  <input
+                    id="decisionScreeningTime"
+                    v-model="decisionForm.screeningTime"
+                    type="time"
+                    class="form-control"
+                    required
+                  />
+                </div>
+                <div class="col-12">
+                  <label for="decisionScreeningVenue" class="form-label">Venue</label>
+                  <textarea
+                    id="decisionScreeningVenue"
+                    v-model="decisionForm.venue"
+                    class="form-control"
+                    rows="2"
+                    required
+                  ></textarea>
+                </div>
+              </div>
+            </fieldset>
             <div v-if="decisionForm.decision === 'rejected'" class="mb-3">
               <label for="rejectionReason" class="form-label"
                 >Rejection Reason</label
@@ -2797,13 +2714,13 @@ export default {
                               :class="
                                 selectedApplicationDetails.screening.completed
                                   ? 'badge bg-success'
-                                  : 'badge bg-warning'
+                                  : 'badge bg-info text-dark'
                               "
                             >
                               {{
                                 selectedApplicationDetails.screening.completed
-                                  ? "Completed"
-                                  : "Pending"
+                                  ? "Completed (Legacy)"
+                                  : "Scheduled"
                               }}
                             </span>
                           </p>

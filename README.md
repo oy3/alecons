@@ -538,3 +538,14 @@ Additional documentation available in:
 ## 📄 License
 
 This project is licensed under the MIT License.
+## Screening Workflow Transition
+
+Admission approval and screening scheduling are now one operation when screening is enabled for an academic session. The separate **Schedule Screening** action in Admission Management is retained temporarily only for legacy applications where admission was already granted but no screening appointment exists.
+
+Before removing that legacy action and `PATCH /staff/applications/:id/schedule-screening`:
+
+1. Select the relevant academic session in Staff Portal **Utilities** and run **Advance Scheduled Screenings** in preview mode.
+2. Apply the migration for all reported scheduled applications.
+3. Manually schedule every application reported under **Manual scheduling required**.
+4. Rerun the preview and confirm both counts are zero.
+5. Remove the legacy Admission Management button, modal path, frontend API method, and standalone initial-scheduling endpoint. Keep screening rescheduling in Applications Management.

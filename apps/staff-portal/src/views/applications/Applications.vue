@@ -2,6 +2,7 @@
 import { useAuthStore } from "../../stores/auth.js";
 import { apiService } from "../../services/api.js";
 import { logger } from "@shared/utils/logger";
+import { Modal } from "bootstrap";
 import {
   appendProgramAvailability,
   isProgramSelectable,
@@ -38,6 +39,9 @@ const createEmptyProfileUploadState = () => ({
   uploadedAt: "",
   size: 0,
 });
+
+const DEFAULT_SCREENING_VENUE =
+  import.meta.env.VITE_APP_SCHOOL_ADDRESS || "";
 
 const createEmptyEditApplicationForm = () => ({
   applicationId: null,
@@ -142,6 +146,12 @@ export default {
       processingPaymentId: null,
       editApplicationForm: createEmptyEditApplicationForm(),
       pendingProfileUpload: createEmptyProfileUploadState(),
+      screeningFormProcessing: false,
+      screeningForm: {
+        screeningDate: "",
+        screeningTime: "",
+        venue: DEFAULT_SCREENING_VENUE,
+      },
 
       statusOptions: [
         { value: "all", label: "All Statuses" },
@@ -465,6 +475,7 @@ export default {
             status: app.status,
             admissionDecision: app.admissionDecision,
             admissionLetterUrl: app.admissionLetter || "",
+            screening: app.screening,
             currentStage: app.currentStage,
             profileImageUrl: app.profileImageUrl,
             submittedAt: app.submittedAt || app.createdAt,
@@ -1829,6 +1840,75 @@ export default {
       return application?.admissionDecision === "admitted";
     },
 
+    getScheduledTimestamp(schedule) {
+      if (!schedule?.date || !schedule?.time) return null;
+      const date = new Date(schedule.date);
+      if (Number.isNaN(date.getTime())) return null;
+      const datePart = date.toISOString().slice(0, 10);
+      const timestamp = new Date(`${datePart}T${schedule.time}:00+01:00`).getTime();
+      return Number.isNaN(timestamp) ? null : timestamp;
+    },
+
+    canRescheduleScreening(application) {
+      const timestamp = this.getScheduledTimestamp(application?.screening);
+      return Boolean(
+        application?.admissionDecision === "admitted" &&
+        application?.screening &&
+        application.screening.completed !== true &&
+        !["rejected", "expired"].includes(application.status) &&
+        timestamp &&
+        timestamp > Date.now(),
+      );
+    },
+
+    openScreeningReschedule(application) {
+      this.selectedApplication = application;
+      const date = new Date(application.screening.date);
+      this.screeningForm = {
+        screeningDate: Number.isNaN(date.getTime())
+          ? ""
+          : date.toISOString().slice(0, 10),
+        screeningTime: application.screening.time || "",
+        venue: application.screening.venue || DEFAULT_SCREENING_VENUE,
+      };
+      Modal.getOrCreateInstance(
+        document.getElementById("applicationScreeningRescheduleModal"),
+      ).show();
+    },
+
+    async submitScreeningReschedule() {
+      const venue = this.screeningForm.venue.trim();
+      if (!this.screeningForm.screeningDate || !this.screeningForm.screeningTime || !venue) {
+        await this.$swal.fire({ icon: "warning", title: "Complete Schedule", text: "Enter the new screening date, time, and venue." });
+        return;
+      }
+
+      this.screeningFormProcessing = true;
+      try {
+        const response = await apiService.rescheduleScreening(
+          this.selectedApplication.id,
+          { ...this.screeningForm, venue },
+        );
+        Modal.getOrCreateInstance(
+          document.getElementById("applicationScreeningRescheduleModal"),
+        ).hide();
+        await this.$swal.fire({
+          icon: response.data?.notificationSent === false ? "warning" : "success",
+          title: "Screening Rescheduled",
+          text: response.data?.notificationSent === false
+            ? "The new schedule was saved, but its notification email could not be sent."
+            : "The new screening schedule has been saved and emailed to the applicant.",
+          confirmButtonColor: "#1a5f5f",
+        });
+        await this.refreshApplicationsPage();
+      } catch (error) {
+        logger.error("Failed to reschedule screening:", error);
+        await this.$swal.fire({ icon: "error", title: "Reschedule Failed", text: error.message || "Unable to reschedule screening." });
+      } finally {
+        this.screeningFormProcessing = false;
+      }
+    },
+
     async sendAdmissionLetter(application) {
       try {
         const result = await this.$swal.fire({
@@ -2359,6 +2439,21 @@ export default {
                           </li>
                           <li
                             v-if="
+                              authStore.hasPermission('admissions', 'approve') &&
+                              canRescheduleScreening(app)
+                            "
+                          >
+                            <a
+                              class="dropdown-item"
+                              href=""
+                              @click.prevent="openScreeningReschedule(app)"
+                            >
+                              <i class="bi bi-calendar2-week me-2"></i>
+                              Reschedule Screening
+                            </a>
+                          </li>
+                          <li
+                            v-if="
                               authStore.hasPermission('admissions', 'revoke') &&
                               canRevokeAdmissionDecision(app)
                             "
@@ -2660,6 +2755,18 @@ export default {
                       </button>
                       <button
                         v-if="
+                          authStore.hasPermission('admissions', 'approve') &&
+                          canRescheduleScreening(app)
+                        "
+                        type="button"
+                        class="btn btn-sm btn-outline-staff-primary"
+                        @click="openScreeningReschedule(app)"
+                      >
+                        <i class="bi bi-calendar2-week me-1"></i>Reschedule
+                        Screening
+                      </button>
+                      <button
+                        v-if="
                           authStore.hasPermission('applications', 'delete') &&
                           canModifyApplication(app)
                         "
@@ -2833,6 +2940,50 @@ export default {
                 </li>
               </ul>
             </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="applicationScreeningRescheduleModal"
+      class="modal fade"
+      tabindex="-1"
+      aria-labelledby="applicationScreeningRescheduleModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 id="applicationScreeningRescheduleModalLabel" class="modal-title">
+              Reschedule Screening & Interview
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-info small" role="alert">
+              Rescheduling changes only the appointment. It does not move the
+              applicant back or interrupt post-admission payments.
+            </div>
+            <div class="mb-3">
+              <label for="applicationScreeningDate" class="form-label">New Date</label>
+              <input id="applicationScreeningDate" v-model="screeningForm.screeningDate" type="date" class="form-control" required />
+            </div>
+            <div class="mb-3">
+              <label for="applicationScreeningTime" class="form-label">New Time</label>
+              <input id="applicationScreeningTime" v-model="screeningForm.screeningTime" type="time" class="form-control" required />
+            </div>
+            <div>
+              <label for="applicationScreeningVenue" class="form-label">Venue</label>
+              <textarea id="applicationScreeningVenue" v-model="screeningForm.venue" class="form-control" rows="3" required></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-staff-primary" :disabled="screeningFormProcessing" @click="submitScreeningReschedule">
+              <span v-if="screeningFormProcessing" class="spinner-border spinner-border-sm me-2"></span>
+              Reschedule Screening
+            </button>
           </div>
         </div>
       </div>

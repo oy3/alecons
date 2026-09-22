@@ -20,6 +20,7 @@ export default {
       isRepairingAcademicSessions: false,
       isMigratingDemographics: false,
       isMigratingQuestionBank: false,
+      isMigratingScreeningWorkflow: false,
       isBackfillingStudentSessionHistory: false,
       isCheckingAcademicResultsReadiness: false,
       isMigratingAcademicResults: false,
@@ -68,6 +69,14 @@ export default {
           icon: 'bi-person-lines-fill',
           variant: 'primary',
           description: 'Copy missing dob and gender into User profiles, then migrate enrolled-student profile photos into matriculation-number student storage.',
+          actionLabel: 'Inspect & Migrate'
+        },
+        {
+          id: 'migrate-screening-workflow',
+          title: 'Advance Scheduled Screenings',
+          icon: 'bi-calendar2-check',
+          variant: 'warning',
+          description: 'Advance admitted applicants with an existing screening schedule into post-admission payments for the selected academic session, while reporting appointments that still require manual scheduling.',
           actionLabel: 'Inspect & Migrate'
         },
         {
@@ -224,6 +233,52 @@ export default {
     }
   },
   methods: {
+    async runMigrateScreeningWorkflow() {
+      if (!this.selectedAcademicSessionId) {
+        await Swal.fire({ icon: 'warning', title: 'Select Academic Session', text: 'Choose the academic session to inspect before running this utility.' })
+        return
+      }
+
+      this.isMigratingScreeningWorkflow = true
+      try {
+        const dryRun = await apiService.migrateScreeningWorkflow({
+          academicSessionId: this.selectedAcademicSessionId,
+          apply: false
+        })
+        if (!dryRun.success) throw new Error(dryRun.error || 'Screening workflow preview failed')
+
+        const preview = dryRun.data || {}
+        const scheduledList = (preview.scheduledApplicationNumbers || []).join(', ') || 'None'
+        const manualList = (preview.unscheduledApplicationNumbers || []).join(', ') || 'None'
+        const confirmation = await Swal.fire({
+          icon: preview.manualSchedulingRequired ? 'warning' : 'info',
+          title: 'Screening Workflow Preview',
+          html: `<div class="text-start small"><p><strong>Academic session:</strong> ${this.selectedSession?.title || this.selectedSessionYear}</p><ul><li>Scheduled applications ready to advance: <strong>${preview.eligibleScheduled || 0}</strong></li><li>Approved applications requiring manual scheduling: <strong>${preview.manualSchedulingRequired || 0}</strong></li></ul><p class="mb-1"><strong>Ready:</strong> ${scheduledList}</p><p class="mb-0"><strong>Manual scheduling required:</strong> ${manualList}</p></div>`,
+          showCancelButton: (preview.eligibleScheduled || 0) > 0,
+          confirmButtonText: (preview.eligibleScheduled || 0) > 0 ? 'Apply Migration' : 'Close',
+          confirmButtonColor: '#b58105'
+        })
+        if (!confirmation.isConfirmed || !(preview.eligibleScheduled || 0)) return
+
+        const appliedResponse = await apiService.migrateScreeningWorkflow({
+          academicSessionId: this.selectedAcademicSessionId,
+          apply: true
+        })
+        if (!appliedResponse.success) throw new Error(appliedResponse.error || 'Screening workflow migration failed')
+        const applied = appliedResponse.data || {}
+        await Swal.fire({
+          icon: applied.manualSchedulingRequired ? 'warning' : 'success',
+          title: 'Migration Complete',
+          html: `<ul class="text-start small mb-0"><li>Applications advanced: <strong>${applied.migrated || 0}</strong></li><li>Manual scheduling still required: <strong>${applied.manualSchedulingRequired || 0}</strong></li></ul>`,
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Screening workflow migration failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Migration Failed', text: error.message || 'Unable to migrate scheduled screenings.' })
+      } finally {
+        this.isMigratingScreeningWorkflow = false
+      }
+    },
     async runBackfillFeeObligations() {
       const confirmation = await Swal.fire({
         title: 'Backfill Student Fee Obligations?',
@@ -1124,6 +1179,17 @@ export default {
                 <span v-if="isMigratingDemographics" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-person-lines-fill me-2"></i>
                 {{ isMigratingDemographics ? 'Migrating...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'migrate-screening-workflow'"
+                class="btn btn-warning"
+                :disabled="isLoading || isMigratingScreeningWorkflow || !selectedAcademicSessionId"
+                @click="runMigrateScreeningWorkflow"
+              >
+                <span v-if="isMigratingScreeningWorkflow" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-calendar2-check me-2"></i>
+                {{ isMigratingScreeningWorkflow ? 'Migrating...' : utility.actionLabel }}
               </button>
 
               <button

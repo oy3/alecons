@@ -672,7 +672,7 @@ export class EmailService {
                         
                         <p>${rescheduled
                           ? "Your screening and interview schedule has changed. Please use the updated details below and disregard the previous schedule."
-                          : "Congratulations on passing your entrance examination! Your physical screening and interview has been scheduled."}</p>
+                          : "Your admission has been approved and your physical screening and interview has been scheduled."}</p>
                         
                         <div class="screening-details">
                             <h3>📅 Screening Details:</h3>
@@ -681,6 +681,8 @@ export class EmailService {
                             <p><strong>Venue:</strong> ${venue}</p>
                             <p><strong>Duration:</strong> Approximately 1-2 Hours</p>
                         </div>
+
+                        <p><strong>Your post-admission payment process is now available.</strong> You may continue with the required fees in the application portal before resumption. This appointment remains mandatory and scheduling it does not mean that screening attendance has been completed.</p>
                         
                         <div class="documents">
                             <h4>📄 Required Documents (Original & Photocopies):</h4>

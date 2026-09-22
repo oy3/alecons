@@ -304,13 +304,6 @@ class StaffApiService {
         })
     }
 
-    async completeScreening(id, completionData = {}) {
-        return this.makeRequest(`/staff/applications/${id}/complete-screening`, {
-            method: 'PATCH',
-            body: JSON.stringify(completionData),
-        })
-    }
-
     async makeAdmissionDecision(id, decisionData) {
         return this.makeRequest(`/staff/applications/${id}/admission-decision`, {
             method: 'PATCH',
@@ -512,6 +505,13 @@ class StaffApiService {
         return this.makeRequest('/admin/maintenance/migrate-question-bank', {
             method: 'POST',
             body: JSON.stringify({ apply, finalize }),
+        })
+    }
+
+    async migrateScreeningWorkflow({ academicSessionId, apply = false } = {}) {
+        return this.makeRequest('/admin/maintenance/migrate-screening-workflow', {
+            method: 'POST',
+            body: JSON.stringify({ academicSessionId, apply }),
         })
     }
 

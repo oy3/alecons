@@ -5,7 +5,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { AcademicSessionsService } from '../services/academic-sessions.service';
-import { Application, ApplicationDocument } from '../schemas/application.schema';
+import {
+    AdmissionDecision,
+    Application,
+    ApplicationDocument,
+    ApplicationStatus,
+} from '../schemas/application.schema';
 import { User, UserDocument, UserRole } from '../schemas/user.schema';
 import { Student, StudentDocument } from '../schemas/student.schema';
 import { PaymentTransaction, PaymentTransactionDocument } from '../schemas/payment-transaction.schema';
@@ -37,6 +42,113 @@ export class MaintenanceController {
         @InjectModel(StudentAcademicSession.name) private readonly studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
         private readonly uploadService: UploadService,
     ) { }
+
+    @Post('migrate-screening-workflow')
+    async migrateScreeningWorkflow(
+        @Body() body: { academicSessionId?: string; apply?: boolean },
+        @Request() req: any,
+    ) {
+        const academicSessionId = body?.academicSessionId;
+        if (!academicSessionId || !Types.ObjectId.isValid(academicSessionId)) {
+            throw new BadRequestException('Select a valid academic session');
+        }
+
+        const sessionObjectId = new Types.ObjectId(academicSessionId);
+        const baseFilter = {
+            entryAcademicSession: sessionObjectId,
+            admissionDecision: AdmissionDecision.GRANTED,
+            status: ApplicationStatus.PENDING,
+            isActive: true,
+        };
+        const scheduledFilter = {
+            ...baseFilter,
+            'screening.date': { $exists: true, $ne: null },
+            'screening.time': { $exists: true, $nin: [null, ''] },
+            'screening.venue': { $exists: true, $nin: [null, ''] },
+        };
+        const unscheduledFilter = {
+            ...baseFilter,
+            $or: [
+                { screening: { $exists: false } },
+                { screening: null },
+                { 'screening.date': { $exists: false } },
+                { 'screening.date': null },
+                { 'screening.time': { $exists: false } },
+                { 'screening.time': { $in: [null, ''] } },
+                { 'screening.venue': { $exists: false } },
+                { 'screening.venue': { $in: [null, ''] } },
+            ],
+        };
+
+        const [scheduledApplications, unscheduledApplications] = await Promise.all([
+            this.applicationModel
+                .find(scheduledFilter)
+                .select('_id applicationNumber currentStage')
+                .lean(),
+            this.applicationModel
+                .find(unscheduledFilter)
+                .select('_id applicationNumber currentStage')
+                .lean(),
+        ]);
+
+        let migrated = 0;
+        if (body?.apply) {
+            const actorId = this.toObjectId(req.user?.userId || req.user?.id);
+            const migratedAt = new Date();
+            for (const application of scheduledApplications) {
+                const previousStage = Number(application.currentStage || 0);
+                const result = await this.applicationModel.updateOne(
+                    {
+                        _id: application._id,
+                        ...scheduledFilter,
+                    },
+                    {
+                        $set: {
+                            status: ApplicationStatus.ADMITTED,
+                            currentStage: Math.max(previousStage, 7),
+                        },
+                        $push: {
+                            auditTrail: {
+                                action: 'screening_workflow_migrated',
+                                description: 'Scheduled screening was migrated to the non-blocking post-admission workflow.',
+                                performedBy: actorId,
+                                actorRole: req.user?.role,
+                                metadata: {
+                                    academicSessionId,
+                                    previousStatus: ApplicationStatus.PENDING,
+                                    nextStatus: ApplicationStatus.ADMITTED,
+                                    previousStage,
+                                    nextStage: Math.max(previousStage, 7),
+                                },
+                                createdAt: migratedAt,
+                            },
+                        },
+                    },
+                );
+                migrated += result.modifiedCount;
+            }
+        }
+
+        return {
+            success: true,
+            message: body?.apply
+                ? 'Screening workflow migration completed'
+                : 'Screening workflow migration preview completed',
+            data: {
+                apply: Boolean(body?.apply),
+                academicSessionId,
+                eligibleScheduled: scheduledApplications.length,
+                migrated,
+                manualSchedulingRequired: unscheduledApplications.length,
+                scheduledApplicationNumbers: scheduledApplications
+                    .slice(0, 50)
+                    .map((application) => application.applicationNumber),
+                unscheduledApplicationNumbers: unscheduledApplications
+                    .slice(0, 50)
+                    .map((application) => application.applicationNumber),
+            },
+        };
+    }
 
     @Post('migrate-question-bank')
     async migrateQuestionBank(

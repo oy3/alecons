@@ -158,9 +158,11 @@ export interface StaffLinkedPaymentsSummary {
 }
 
 export interface PaystackInitializeResponse {
-    authorization_url: string;
-    access_code: string;
+    authorization_url?: string;
+    access_code?: string;
     reference: string;
+    alreadyPaid?: boolean;
+    pending?: boolean;
 }
 
 interface PendingReconciliationSummary {
@@ -1022,7 +1024,10 @@ export class PaymentsService {
             });
 
             if (existingSuccessfulPayment) {
-                throw new Error('Payment has already been completed successfully for this charge');
+                return {
+                    reference: existingSuccessfulPayment.reference,
+                    alreadyPaid: true,
+                };
             }
 
             const paystackDestinationAccount = await this.resolveDestinationForPayment(
@@ -1035,7 +1040,7 @@ export class PaymentsService {
                 linkedApplication.academicSessionId,
             );
 
-            // Look for any existing payment attempt (pending or failed) - reuse it
+            // Verify the latest attempt before deciding whether a new attempt is safe.
             let existingAttempt = await this.paymentTransactionModel.findOne({
                 userId: new Types.ObjectId(userId),
                 paymentId: new Types.ObjectId(paymentId),
@@ -1057,62 +1062,23 @@ export class PaymentsService {
                     createdAt: existingAttempt.createdAt
                 });
 
-                reference = existingAttempt.reference;
+                const transaction = await this.verifyPaystackTransaction(existingAttempt.reference);
+                await this.applyPaystackTransactionState(existingAttempt, transaction);
 
-                // Check the actual status with Paystack first
-                try {
-                    const verifyResponse = await fetch(`${this.paystackBaseUrl}/transaction/verify/${reference}`, {
-                        headers: {
-                            'Authorization': `Bearer ${this.paystackSecretKey}`,
-                        }
-                    });
-                    const verifyData = await verifyResponse.json();
-
-                    if (verifyData.status) {
-                        if (verifyData.data.status === 'success') {
-                            // Payment was successful, update our record
-                            existingAttempt.status = PaymentStatus.SUCCESSFUL;
-                            existingAttempt.remarks = 'Payment successful and verified';
-                            existingAttempt.paidAt = new Date();
-                            existingAttempt.method = PaymentMethod.PAYSTACK;
-                            existingAttempt.channel = verifyData.data.channel;
-                            existingAttempt.gatewayId = verifyData.data.id;
-                            existingAttempt.authorizationCode = verifyData.data.authorization?.authorization_code;
-                            this.markSuccessfulPaystackPaymentAwaitingRemittance(existingAttempt, existingAttempt.amount);
-                            await existingAttempt.save();
-
-                            throw new Error('Payment has already been completed successfully');
-                        } else if (verifyData.data.status === 'abandoned' || verifyData.data.status === 'failed') {
-                            // Payment was abandoned/failed, mark as failed
-                            existingAttempt.status = PaymentStatus.FAILED;
-                            existingAttempt.remarks = `Payment ${verifyData.data.status}: ${verifyData.data.gateway_response || 'User abandoned payment'}`;
-                            await existingAttempt.save();
-                            this.logger.log('Payment was marked as failed based on Paystack status');
-                        }
-                        // For pending status, we'll continue to reuse
-                    }
-                } catch (verifyError) {
-                    this.logger.error('Error verifying existing payment:', verifyError.message);
-                    // Continue with the existing reference anyway
+                if (existingAttempt.status === PaymentStatus.SUCCESSFUL) {
+                    return {
+                        reference: existingAttempt.reference,
+                        alreadyPaid: true,
+                    };
                 }
 
-                // If it's a failed attempt, update status to pending for retry
-                if (existingAttempt.status === PaymentStatus.FAILED) {
-                    existingAttempt.status = PaymentStatus.PENDING;
-                    existingAttempt.retryCount = (existingAttempt.retryCount || 0) + 1;
-                    existingAttempt.remarks = `Payment retry attempt x${existingAttempt.retryCount} - awaiting user action`;
-                    await existingAttempt.save();
-                    this.logger.log(`Updated failed payment attempt to pending for retry #${existingAttempt.retryCount}`);
-                } else if (existingAttempt.status === PaymentStatus.PENDING) {
-                    // Update remarks to show it's being retried
-                    existingAttempt.retryCount = (existingAttempt.retryCount || 0) + 1;
-                    existingAttempt.remarks = `Payment re-initialized with new reference x${existingAttempt.retryCount} - awaiting user action`;
-                    await existingAttempt.save();
-                    this.logger.log(`Updated pending payment attempt remarks for retry #${existingAttempt.retryCount}`);
+                if (existingAttempt.status !== PaymentStatus.FAILED) {
+                    return {
+                        reference: existingAttempt.reference,
+                        pending: true,
+                    };
                 }
 
-                // For existing attempts, we need to create a NEW Paystack transaction with a NEW reference
-                // because Paystack references are unique and cannot be reused
                 const newReference = this.buildPaymentReference();
                 this.logger.log('Creating new Paystack transaction with new reference:', newReference);
 
@@ -1125,12 +1091,21 @@ export class PaymentsService {
                     paystackDestinationAccount,
                 );
 
-                // Update the existing record with the new reference
-                existingAttempt.reference = newReference;
-                existingAttempt.status = PaymentStatus.PENDING;
-                existingAttempt.remarks = `Payment re-initialized with new reference x${existingAttempt.retryCount || 1} - awaiting user action`;
-                Object.assign(existingAttempt, this.buildDestinationSnapshot(paystackDestinationAccount));
-                await existingAttempt.save();
+                await this.paymentTransactionModel.create({
+                    userId: new Types.ObjectId(userId),
+                    applicationId: linkedApplication.applicationId,
+                    payerType: PaymentPayerType.APPLICANT,
+                    paymentContext: PaymentContext.ADMISSION_APPLICATION,
+                    academicSessionId: linkedApplication.academicSessionId,
+                    paymentId: new Types.ObjectId(paymentId),
+                    amount: payment.amount,
+                    reference: newReference,
+                    status: PaymentStatus.PENDING,
+                    method: PaymentMethod.PAYSTACK,
+                    remarks: 'Payment retry initialized - awaiting user action',
+                    retryCount: (existingAttempt.retryCount || 0) + 1,
+                    ...this.buildDestinationSnapshot(paystackDestinationAccount),
+                });
 
                 return {
                     authorization_url: paystackData.data.authorization_url,

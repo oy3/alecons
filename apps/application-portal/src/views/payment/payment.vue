@@ -254,7 +254,9 @@ export default {
             toast: true,
             position: "top-end",
             icon: "success",
-            title: `Payment for ${fee.name} completed successfully!`,
+            title: result.data.alreadyPaid
+              ? `${fee.name} is already paid.`
+              : `Payment for ${fee.name} completed successfully!`,
             text: `Reference: ${result.data.reference}`,
             showConfirmButton: false,
             timer: 3000,

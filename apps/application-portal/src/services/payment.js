@@ -145,7 +145,21 @@ class PaymentService {
                 throw new Error(initResult.message);
             }
 
-            const { reference, access_code } = initResult.data;
+            const { reference, access_code, alreadyPaid, pending } = initResult.data;
+
+            if (alreadyPaid) {
+                return {
+                    success: true,
+                    data: { reference, alreadyPaid: true },
+                };
+            }
+
+            if (pending) {
+                return {
+                    success: false,
+                    message: "A previous payment is still awaiting confirmation. Please check its status before retrying.",
+                };
+            }
 
             return new Promise((resolve, reject) => {
                 const popup = new PaystackPop();

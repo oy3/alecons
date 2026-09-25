@@ -3843,8 +3843,8 @@ export class PaymentsService {
             paymentContext: accommodationApplication
                 ? PaymentContext.ACCOMMODATION_APPLICATION
                 : options.context === 'student-portal'
-                ? PaymentContext.STUDENT_ACCOUNT
-                : PaymentContext.ADMISSION_APPLICATION,
+                    ? PaymentContext.STUDENT_ACCOUNT
+                    : PaymentContext.ADMISSION_APPLICATION,
             academicSessionId: billableSessionId
                 ? new Types.ObjectId(billableSessionId)
                 : linkedApplication.academicSessionId,

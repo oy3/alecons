@@ -11,7 +11,7 @@ function createService(existingAttempt: any) {
     let findOneCallCount = 0;
     let paystackInitializationCount = 0;
 
-    service.logger = { log() {}, error() {} };
+    service.logger = { log() { }, error() { } };
     service.paymentModel = {
         findById: async () => ({ _id: new Types.ObjectId(), amount: 20000, name: 'Form Fee' }),
     };
@@ -34,9 +34,9 @@ function createService(existingAttempt: any) {
         applicationId: new Types.ObjectId(),
         academicSessionId: new Types.ObjectId(),
     });
-    service.assertApplicationPortalPaymentAllowed = async () => {};
+    service.assertApplicationPortalPaymentAllowed = async () => { };
     service.resolveDestinationForPayment = async () => null;
-    service.assertPaymentMethodEnabled = async () => {};
+    service.assertPaymentMethodEnabled = async () => { };
     service.buildDestinationSnapshot = () => ({});
     service.verifyPaystackTransaction = async () => ({ status: 'success' });
     service.applyPaystackTransactionState = async (attempt: any, transaction: any) => {
@@ -59,7 +59,7 @@ test('verified success stops applicant retry without replacing its reference', a
         reference: originalReference,
         status: PaymentStatus.PENDING,
         retryCount: 0,
-        save: async () => {},
+        save: async () => { },
     };
     const { service, createdTransactions, getPaystackInitializationCount } = createService(existingAttempt);
 
@@ -84,7 +84,7 @@ test('failed applicant attempt remains unchanged when a new retry is created', a
         reference: originalReference,
         status: PaymentStatus.FAILED,
         retryCount: 1,
-        save: async () => {},
+        save: async () => { },
     };
     const { service, createdTransactions } = createService(existingAttempt);
     service.verifyPaystackTransaction = async () => ({ status: 'failed' });

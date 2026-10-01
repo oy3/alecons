@@ -55,6 +55,7 @@ import { UpdateEntranceExamScoreDto } from '../dto/update-entrance-exam-score.dt
 import { resolveProgramSelection } from '../utils/program-relation.util';
 import {
     canRevokeAdmissionDecision,
+    canScheduleEntranceExamRetake,
     getScheduledLagosDateTime,
     hasSubmittedApplication,
     isUnfinishedApplication,
@@ -218,6 +219,39 @@ export class StaffApplicationsController {
         }
     }
 
+    private async sendEntranceExamScheduleNotification(
+        application: ApplicationDocument,
+        type: 'scheduled' | 'rescheduled' | 'retake',
+    ): Promise<boolean> {
+        try {
+            const user = application.userId as any;
+            if (type === 'retake') {
+                await this.emailService.sendEntranceExamRetakeScheduledEmail(
+                    user.email,
+                    user.firstName,
+                    application.entranceExam!.date!,
+                    application.entranceExam!.time!,
+                    application.entranceExam!.link!,
+                );
+            } else {
+                await this.emailService.sendEntranceExamScheduledEmail(
+                    user.email,
+                    user.firstName,
+                    application.entranceExam!.date!,
+                    application.entranceExam!.time!,
+                    application.entranceExam!.link!,
+                    type === 'rescheduled',
+                );
+            }
+            return true;
+        } catch (error) {
+            this.logger.error(
+                `Entrance exam ${type} notification failed after the schedule was saved: ${error.message}`,
+            );
+            return false;
+        }
+    }
+
     private assertApplicationWasSubmitted(application: ApplicationDocument): void {
         if (!hasSubmittedApplication(application as any)) {
             throw new ConflictException(
@@ -275,6 +309,98 @@ export class StaffApplicationsController {
 
         const normalizedValue = value.trim();
         return normalizedValue ? normalizedValue : undefined;
+    }
+
+    private getAdmissionQueueAggregationStages(): any[] {
+        return [
+            {
+                $addFields: {
+                    examScheduledAt: {
+                        $cond: [
+                            {
+                                $and: [
+                                    { $ne: [{ $ifNull: ['$entranceExam.date', null] }, null] },
+                                    {
+                                        $regexMatch: {
+                                            input: { $ifNull: ['$entranceExam.time', ''] },
+                                            regex: '^([01]\\d|2[0-3]):[0-5]\\d$',
+                                        },
+                                    },
+                                ],
+                            },
+                            {
+                                $dateFromString: {
+                                    dateString: {
+                                        $concat: [
+                                            {
+                                                $dateToString: {
+                                                    format: '%Y-%m-%d',
+                                                    date: '$entranceExam.date',
+                                                    timezone: 'Africa/Lagos',
+                                                },
+                                            },
+                                            'T',
+                                            '$entranceExam.time',
+                                            ':00',
+                                        ],
+                                    },
+                                    timezone: 'Africa/Lagos',
+                                    onError: null,
+                                    onNull: null,
+                                },
+                            },
+                            null,
+                        ],
+                    },
+                },
+            },
+            {
+                $addFields: {
+                    admissionQueueStatus: {
+                        $switch: {
+                            branches: [
+                                {
+                                    case: {
+                                        $and: [
+                                            { $gt: [{ $ifNull: ['$entranceExam.attemptNumber', 1] }, 1] },
+                                            { $eq: [{ $ifNull: ['$entranceExam.score', null] }, null] },
+                                        ],
+                                    },
+                                    then: 'retake_scheduled',
+                                },
+                                {
+                                    case: {
+                                        $and: [
+                                            { $ne: [{ $ifNull: ['$entranceExam.score', null] }, null] },
+                                            { $eq: ['$entranceExam.passed', false] },
+                                        ],
+                                    },
+                                    then: 'retake_eligible',
+                                },
+                                {
+                                    case: { $ne: [{ $ifNull: ['$entranceExam.score', null] }, null] },
+                                    then: 'decision_ready',
+                                },
+                                {
+                                    case: {
+                                        $and: [
+                                            { $ne: ['$examScheduledAt', null] },
+                                            { $lte: ['$examScheduledAt', '$$NOW'] },
+                                        ],
+                                    },
+                                    then: 'awaiting_exam_result',
+                                },
+                                {
+                                    case: { $ne: ['$examScheduledAt', null] },
+                                    then: 'exam_scheduled',
+                                },
+                            ],
+                            default: 'exam_not_scheduled',
+                        },
+                    },
+                },
+            },
+        ];
     }
 
     private normalizeUploadedFiles(uploadedFiles?: StaffUploadedFilePayload[]): StaffUploadedFilePayload[] {
@@ -706,7 +832,12 @@ export class StaffApplicationsController {
         @Query('academicSessionId') academicSessionId?: string,
         @Query('search') search?: string,
         @Query('sortBy') sortBy: string = 'createdAt',
-        @Query('sortOrder') sortOrder: string = 'desc'
+        @Query('sortOrder') sortOrder: string = 'desc',
+        @Query('admissionQueue') admissionQueue?: string,
+        @Query('admissionQueueStatus') admissionQueueStatus?: string,
+        @Query('examOutcome') examOutcome?: string,
+        @Query('examSchedule') examSchedule?: string,
+        @Query('applicantRoute') applicantRoute?: string,
     ) {
         try {
             this.logger.log('Getting applications with filters:', {
@@ -717,17 +848,36 @@ export class StaffApplicationsController {
                 academicSessionId,
                 search,
                 sortBy,
-                sortOrder
+                sortOrder,
+                admissionQueue,
+                admissionQueueStatus,
+                examOutcome,
+                examSchedule,
+                applicantRoute,
             });
 
             // Build filter object
             const filter: any = { isActive: true };
 
-            if (status && status !== 'all') {
+            if (admissionQueue === 'true') {
+                filter.status = ApplicationStatus.PENDING;
+                filter.admissionDecision = AdmissionDecision.AWAITING_DECISION;
+                filter.$or = [
+                    { matriculationNumber: { $exists: false } },
+                    { matriculationNumber: null },
+                    { matriculationNumber: '' },
+                ];
+            } else if (status && status !== 'all') {
                 filter.status = status;
             }
 
             if (programId && programId !== 'all') {
+                if (!Types.ObjectId.isValid(programId)) {
+                    throw new HttpException(
+                        { success: false, message: 'Invalid program ID format' },
+                        HttpStatus.BAD_REQUEST,
+                    );
+                }
                 filter.programId = new Types.ObjectId(programId);
             }
 
@@ -747,7 +897,7 @@ export class StaffApplicationsController {
 
             // Build aggregation pipeline
             // All program info flows through programId → programs → programtypes/programmodes
-            const pipeline = [
+            const pipeline: any[] = [
                 { $match: filter },
 
                 // 1. Resolve user info
@@ -809,17 +959,55 @@ export class StaffApplicationsController {
                 }
             ];
 
+            if (admissionQueue === 'true') {
+                pipeline.push(...this.getAdmissionQueueAggregationStages());
+
+                if (admissionQueueStatus === 'awaiting_result') {
+                    pipeline.push({
+                        $match: {
+                            'entranceExam.date': { $ne: null },
+                            'entranceExam.score': null,
+                        },
+                    });
+                } else if (admissionQueueStatus === 'decision_ready') {
+                    pipeline.push({ $match: { 'entranceExam.score': { $ne: null } } });
+                } else if (admissionQueueStatus && admissionQueueStatus !== 'all') {
+                    pipeline.push({ $match: { admissionQueueStatus } });
+                }
+
+                if (examOutcome === 'passed') {
+                    pipeline.push({ $match: { 'entranceExam.score': { $ne: null }, 'entranceExam.passed': true } });
+                } else if (examOutcome === 'did_not_pass') {
+                    pipeline.push({ $match: { 'entranceExam.score': { $ne: null }, 'entranceExam.passed': false } });
+                }
+
+                if (examSchedule === 'upcoming') {
+                    pipeline.push({ $match: { examScheduledAt: { $gt: new Date() } } });
+                } else if (examSchedule === 'past') {
+                    pipeline.push({ $match: { examScheduledAt: { $ne: null, $lte: new Date() } } });
+                }
+
+                if (applicantRoute === 'jamb') {
+                    pipeline.push({ $match: { isJambExempt: { $ne: true } } });
+                } else if (applicantRoute === 'jamb_exempt') {
+                    pipeline.push({ $match: { isJambExempt: true } });
+                }
+            }
+
             // Add search filter if provided
-            if (search) {
+            const normalizedSearch = this.normalizeString(search);
+            if (normalizedSearch) {
+                const escapedSearch = normalizedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 pipeline.push({
                     $match: {
                         $or: [
-                            { applicantName: { $regex: search, $options: 'i' } },
-                            { email: { $regex: search, $options: 'i' } },
-                            { applicationNumber: { $regex: search, $options: 'i' } }
+                            { applicantName: { $regex: escapedSearch, $options: 'i' } },
+                            { email: { $regex: escapedSearch, $options: 'i' } },
+                            { phone: { $regex: escapedSearch, $options: 'i' } },
+                            { applicationNumber: { $regex: escapedSearch, $options: 'i' } },
                         ]
                     }
-                } as any);
+                });
             }
 
             // Get total count
@@ -828,7 +1016,13 @@ export class StaffApplicationsController {
             const total = totalResult.length > 0 ? totalResult[0].total : 0;
 
             // Add sorting and pagination
-            const sortStage = sortBy === 'jambScore'
+            const allowedSortFields: Record<string, string> = {
+                createdAt: 'createdAt',
+                jambScore: 'jambScore',
+                examScore: 'entranceExam.score',
+            };
+            const normalizedSortBy = allowedSortFields[sortBy] || 'createdAt';
+            const sortStage = normalizedSortBy === 'jambScore'
                 ? {
                     $sort: {
                         hasJambScore: -1,
@@ -836,9 +1030,16 @@ export class StaffApplicationsController {
                         createdAt: -1,
                     }
                 }
+                : normalizedSortBy === 'createdAt'
+                    ? {
+                        $sort: {
+                            createdAt: normalizedSortOrder,
+                        },
+                    }
                 : {
                     $sort: {
-                        [sortBy]: normalizedSortOrder,
+                        [normalizedSortBy]: normalizedSortOrder,
+                        createdAt: -1,
                     }
                 };
 
@@ -874,6 +1075,8 @@ export class StaffApplicationsController {
                     submittedAt: 1,
                     admissionRevokedAt: 1,
                     admissionRevocationReason: 1,
+                    admissionQueueStatus: 1,
+                    examScheduledAt: 1,
                     createdAt: 1,
                     updatedAt: 1
                 }
@@ -925,6 +1128,9 @@ export class StaffApplicationsController {
 
         } catch (error) {
             this.logger.error('Error getting applications:', error.message);
+            if (error instanceof HttpException) {
+                throw error;
+            }
             throw new HttpException(
                 {
                     success: false,
@@ -2027,6 +2233,154 @@ export class StaffApplicationsController {
         };
     }
 
+    @Get('stats/admission-queue')
+    @ApiOperation({ summary: 'Get admission queue statistics' })
+    @ApiResponse({ status: 200, description: 'Admission queue statistics retrieved successfully' })
+    async getAdmissionQueueStats(
+        @Query('programId') programId?: string,
+        @Query('academicSessionId') academicSessionId?: string,
+        @Query('search') search?: string,
+    ) {
+        try {
+            const filter: any = {
+                isActive: true,
+                status: ApplicationStatus.PENDING,
+                admissionDecision: AdmissionDecision.AWAITING_DECISION,
+                $or: [
+                    { matriculationNumber: { $exists: false } },
+                    { matriculationNumber: null },
+                    { matriculationNumber: '' },
+                ],
+            };
+
+            if (programId && programId !== 'all') {
+                if (!Types.ObjectId.isValid(programId)) {
+                    throw new HttpException(
+                        { success: false, message: 'Invalid program ID format' },
+                        HttpStatus.BAD_REQUEST,
+                    );
+                }
+                filter.programId = new Types.ObjectId(programId);
+            }
+
+            if (academicSessionId) {
+                if (!Types.ObjectId.isValid(academicSessionId)) {
+                    throw new HttpException(
+                        { success: false, message: 'Invalid academic session ID format' },
+                        HttpStatus.BAD_REQUEST,
+                    );
+                }
+                filter.entryAcademicSession = new Types.ObjectId(academicSessionId);
+            }
+
+            const pipeline: any[] = [
+                { $match: filter },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'userId',
+                        foreignField: '_id',
+                        as: 'user',
+                    },
+                },
+                { $unwind: '$user' },
+                {
+                    $addFields: {
+                        applicantName: {
+                            $trim: {
+                                input: {
+                                    $concat: [
+                                        { $ifNull: ['$user.firstName', ''] },
+                                        ' ',
+                                        { $ifNull: ['$user.lastName', ''] },
+                                    ],
+                                },
+                            },
+                        },
+                        email: '$user.email',
+                        phone: '$user.phone',
+                    },
+                },
+            ];
+
+            const normalizedSearch = this.normalizeString(search);
+            if (normalizedSearch) {
+                const escapedSearch = normalizedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                pipeline.push({
+                    $match: {
+                        $or: [
+                            { applicantName: { $regex: escapedSearch, $options: 'i' } },
+                            { email: { $regex: escapedSearch, $options: 'i' } },
+                            { phone: { $regex: escapedSearch, $options: 'i' } },
+                            { applicationNumber: { $regex: escapedSearch, $options: 'i' } },
+                        ],
+                    },
+                });
+            }
+
+            pipeline.push(
+                ...this.getAdmissionQueueAggregationStages(),
+                {
+                    $group: {
+                        _id: null,
+                        activeQueue: { $sum: 1 },
+                        examNotScheduled: {
+                            $sum: { $cond: [{ $eq: ['$admissionQueueStatus', 'exam_not_scheduled'] }, 1, 0] },
+                        },
+                        awaitingExamResult: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $and: [
+                                            { $ne: [{ $ifNull: ['$entranceExam.date', null] }, null] },
+                                            { $eq: [{ $ifNull: ['$entranceExam.score', null] }, null] },
+                                        ],
+                                    },
+                                    1,
+                                    0,
+                                ],
+                            },
+                        },
+                        readyForDecision: {
+                            $sum: {
+                                $cond: [
+                                    { $ne: [{ $ifNull: ['$entranceExam.score', null] }, null] },
+                                    1,
+                                    0,
+                                ],
+                            },
+                        },
+                    },
+                },
+            );
+
+            const [stats] = await this.applicationModel.aggregate(pipeline);
+
+            return {
+                success: true,
+                data: {
+                    activeQueue: stats?.activeQueue || 0,
+                    examNotScheduled: stats?.examNotScheduled || 0,
+                    awaitingExamResult: stats?.awaitingExamResult || 0,
+                    readyForDecision: stats?.readyForDecision || 0,
+                },
+            };
+        } catch (error) {
+            this.logger.error('Error getting admission queue statistics:', error.message);
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to retrieve admission queue statistics',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
     @Get('stats/summary')
     @ApiOperation({ summary: 'Get applications statistics summary' })
     @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
@@ -2218,11 +2572,19 @@ export class StaffApplicationsController {
                 );
             }
 
+            const actorId = this.requestUserId(req);
+            const actorObjectId = Types.ObjectId.isValid(actorId)
+                ? new Types.ObjectId(actorId)
+                : undefined;
+
             // Update application with exam details using grouped structure
             application.entranceExam = {
                 date: new Date(examData.examDate),
                 time: examData.examTime,
-                link: examData.examLink
+                link: examData.examLink,
+                attemptNumber: 1,
+                scheduledAt: new Date(),
+                scheduledBy: actorObjectId,
             };
             application.currentStage = 4; // Move to exam stage
             this.appendAuditEntry(application, {
@@ -2238,13 +2600,9 @@ export class StaffApplicationsController {
 
             await application.save();
 
-            // Send exam scheduled email
-            await this.emailService.sendEntranceExamScheduledEmail(
-                (application.userId as any).email,
-                (application.userId as any).firstName,
-                application.entranceExam.date,
-                application.entranceExam.time,
-                application.entranceExam.link
+            const notificationSent = await this.sendEntranceExamScheduleNotification(
+                application,
+                'scheduled',
             );
 
             this.logger.log('Exam scheduled successfully for application:', id);
@@ -2252,7 +2610,7 @@ export class StaffApplicationsController {
             return {
                 success: true,
                 message: 'Entrance exam scheduled successfully',
-                data: { application }
+                data: { application, notificationSent }
             };
 
         } catch (error) {
@@ -2390,19 +2748,15 @@ export class StaffApplicationsController {
             });
             await application.save();
 
-            await this.emailService.sendEntranceExamScheduledEmail(
-                (application.userId as any).email,
-                (application.userId as any).firstName,
-                application.entranceExam.date,
-                application.entranceExam.time,
-                application.entranceExam.link,
-                true,
+            const notificationSent = await this.sendEntranceExamScheduleNotification(
+                application,
+                'rescheduled',
             );
 
             return {
                 success: true,
                 message: 'Entrance exam rescheduled successfully',
-                data: { application },
+                data: { application, notificationSent },
             };
         } catch (error) {
             this.logger.error('Error rescheduling exam:', error.message);
@@ -2411,6 +2765,165 @@ export class StaffApplicationsController {
                 {
                     success: false,
                     message: 'Failed to reschedule exam',
+                    error: error.message,
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Patch(':id/schedule-exam-retake')
+    @ApiOperation({ summary: 'Schedule a new entrance exam sitting after a failed scored attempt' })
+    @ApiResponse({ status: 200, description: 'Entrance exam retake scheduled successfully' })
+    async scheduleExamRetake(
+        @Param('id') id: string,
+        @Body() examData: {
+            examDate: string;
+            examTime: string;
+            examLink: string;
+            reason: string;
+        },
+        @Request() req,
+    ) {
+        try {
+            const application = await this.applicationModel.findById(id)
+                .populate('userId', 'firstName lastName email')
+                .exec();
+
+            if (!application) {
+                throw new HttpException(
+                    { success: false, message: 'Application not found' },
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            await this.assertAdmissionMutationAllowed(application, req);
+            this.assertApplicationWasSubmitted(application);
+            await this.assertApplicationHasNotBecomeStudent(application);
+
+            if (!canScheduleEntranceExamRetake(application as any)) {
+                throw new ConflictException(
+                    'Only a pending applicant with a scored entrance examination marked as not passed can be scheduled for a retake',
+                );
+            }
+
+            const admissionFlow = await this.sessionControlsService.getAdmissionFlowConfig(
+                application.entryAcademicSession,
+                application,
+            );
+            if (!admissionFlow.entranceExamEnabled) {
+                throw new HttpException(
+                    { success: false, message: 'Entrance exam is disabled for this academic session' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const reason = examData.reason?.trim();
+            const normalizedLink = examData.examLink?.trim();
+            const replacementDate = new Date(examData.examDate);
+            const replacementScheduledAt = getScheduledLagosDateTime(
+                replacementDate,
+                examData.examTime,
+            );
+
+            if (!reason) {
+                throw new HttpException(
+                    { success: false, message: 'A reason for the exam retake is required' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+            if (reason.length > 1000) {
+                throw new HttpException(
+                    { success: false, message: 'The exam retake reason cannot exceed 1000 characters' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+            if (!normalizedLink) {
+                throw new HttpException(
+                    { success: false, message: 'Exam link is required' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+            if (!replacementScheduledAt || replacementScheduledAt.getTime() <= Date.now()) {
+                throw new HttpException(
+                    { success: false, message: 'The retake exam date and time must be in the future' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const previousExam = application.entranceExam!;
+            const previousAttemptNumber = previousExam.attemptNumber
+                || (application.entranceExamHistory?.length || 0) + 1;
+            const actorId = this.requestUserId(req);
+            const actorObjectId = Types.ObjectId.isValid(actorId)
+                ? new Types.ObjectId(actorId)
+                : undefined;
+            const archivedAt = new Date();
+
+            application.entranceExamHistory = application.entranceExamHistory || [];
+            application.entranceExamHistory.push({
+                date: previousExam.date,
+                time: previousExam.time,
+                link: previousExam.link,
+                score: previousExam.score,
+                passed: previousExam.passed,
+                attemptNumber: previousAttemptNumber,
+                scheduledAt: previousExam.scheduledAt,
+                scheduledBy: previousExam.scheduledBy,
+                archivedAt,
+                archivedBy: actorObjectId,
+                retakeReason: reason,
+            });
+
+            application.entranceExam = {
+                date: replacementDate,
+                time: examData.examTime,
+                link: normalizedLink,
+                attemptNumber: previousAttemptNumber + 1,
+                scheduledAt: archivedAt,
+                scheduledBy: actorObjectId,
+            };
+            application.currentStage = 4;
+            this.appendAuditEntry(application, {
+                action: 'entrance_exam_retake_scheduled',
+                description: `Entrance exam retake attempt ${previousAttemptNumber + 1} was scheduled after the previous attempt was marked as not passed.`,
+                actor: req.user,
+                metadata: {
+                    reason,
+                    previousAttemptNumber,
+                    previousDate: previousExam.date,
+                    previousTime: previousExam.time,
+                    previousScore: previousExam.score,
+                    previousPassed: previousExam.passed,
+                    newAttemptNumber: previousAttemptNumber + 1,
+                    newDate: examData.examDate,
+                    newTime: examData.examTime,
+                    newLink: normalizedLink,
+                },
+            });
+
+            await application.save();
+
+            const notificationSent = await this.sendEntranceExamScheduleNotification(
+                application,
+                'retake',
+            );
+
+            return {
+                success: true,
+                message: 'Entrance exam retake scheduled successfully',
+                data: {
+                    application,
+                    notificationSent,
+                },
+            };
+        } catch (error) {
+            this.logger.error('Error scheduling entrance exam retake:', error.message);
+            if (error instanceof HttpException) throw error;
+            throw new HttpException(
+                {
+                    success: false,
+                    message: 'Failed to schedule entrance exam retake',
                     error: error.message,
                 },
                 HttpStatus.INTERNAL_SERVER_ERROR,

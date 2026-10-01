@@ -2,10 +2,40 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import {
     canRevokeAdmissionDecision,
+    canScheduleEntranceExamRetake,
     getScheduledLagosDateTime,
     hasSubmittedApplication,
     isUnfinishedApplication,
 } from '../src/utils/application-lifecycle.util';
+
+test('exam retakes require a pending failed scored application', () => {
+    assert.equal(canScheduleEntranceExamRetake({
+        status: 'pending',
+        admissionDecision: 'pending',
+        entranceExam: { score: 42, passed: false },
+    }), true);
+    assert.equal(canScheduleEntranceExamRetake({
+        status: 'pending',
+        admissionDecision: 'pending',
+        entranceExam: { score: 72, passed: true },
+    }), false);
+    assert.equal(canScheduleEntranceExamRetake({
+        status: 'pending',
+        admissionDecision: 'pending',
+        entranceExam: { passed: false },
+    }), false);
+    assert.equal(canScheduleEntranceExamRetake({
+        status: 'admitted',
+        admissionDecision: 'admitted',
+        entranceExam: { score: 42, passed: false },
+    }), false);
+    assert.equal(canScheduleEntranceExamRetake({
+        status: 'pending',
+        admissionDecision: 'pending',
+        matriculationNumber: 'ALC/ND/26/000001',
+        entranceExam: { score: 42, passed: false },
+    }), false);
+});
 
 test('expiry eligibility uses explicit terminal state and matriculation checks', () => {
     assert.equal(isUnfinishedApplication({ status: 'pending' }), true);

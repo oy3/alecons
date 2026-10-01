@@ -56,7 +56,6 @@ acons/
 ### Development
 ```bash
 # Start all applications (API + Frontend)
-npm run dev:all
 
 # Start only frontend applications
 npm run dev:frontend

@@ -230,6 +230,11 @@ class StaffApiService {
         return this.makeRequest(`/staff/applications/stats/summary${queryParams ? `?${queryParams}` : ''}`)
     }
 
+    async getAdmissionQueueStats(filters = {}) {
+        const queryParams = new URLSearchParams(filters).toString()
+        return this.makeRequest(`/staff/applications/stats/admission-queue${queryParams ? `?${queryParams}` : ''}`)
+    }
+
     async updateApplicationStatus(id, status, remarks = '') {
         return this.makeRequest(`/staff/applications/${id}/status`, {
             method: 'PATCH',
@@ -278,6 +283,13 @@ class StaffApiService {
 
     async rescheduleApplicationExam(id, examData) {
         return this.makeRequest(`/staff/applications/${id}/reschedule-exam`, {
+            method: 'PATCH',
+            body: JSON.stringify(examData),
+        })
+    }
+
+    async scheduleApplicationExamRetake(id, examData) {
+        return this.makeRequest(`/staff/applications/${id}/schedule-exam-retake`, {
             method: 'PATCH',
             body: JSON.stringify(examData),
         })

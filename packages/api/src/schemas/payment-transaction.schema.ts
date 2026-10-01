@@ -48,6 +48,19 @@ export enum PaymentContext {
     ACCOMMODATION_APPLICATION = 'accommodation_application',
 }
 
+export enum PaymentFulfilmentStatus {
+    UNAPPLIED = 'unapplied',
+    APPLIED = 'applied',
+    DUPLICATE = 'duplicate',
+    QUARANTINED = 'quarantined',
+}
+
+export enum ProviderInitializationStatus {
+    CREATED = 'created',
+    INITIALIZED = 'initialized',
+    FAILED = 'failed',
+}
+
 @Schema({ timestamps: true, collection: 'paymenttransactions' })
 export class PaymentTransaction {
     @Prop({ type: Types.ObjectId, ref: 'User', required: true })
@@ -97,6 +110,33 @@ export class PaymentTransaction {
 
     @Prop()
     gatewayId?: string;
+
+    @Prop({ enum: ProviderInitializationStatus })
+    providerInitializationStatus?: ProviderInitializationStatus;
+
+    @Prop()
+    providerInitializationError?: string;
+
+    @Prop()
+    activeAttemptKey?: string;
+
+    @Prop({ enum: PaymentFulfilmentStatus })
+    fulfilmentStatus?: PaymentFulfilmentStatus;
+
+    @Prop()
+    fulfilledObligationKey?: string;
+
+    @Prop({ type: Types.ObjectId, ref: 'PaymentTransaction' })
+    duplicateOfTransactionId?: Types.ObjectId;
+
+    @Prop({ type: Types.ObjectId, ref: 'PaymentReconciliationCase' })
+    reconciliationCaseId?: Types.ObjectId;
+
+    @Prop()
+    recoveredAt?: Date;
+
+    @Prop()
+    recoverySource?: string;
 
     @Prop({ required: true, enum: PaymentStatus, default: PaymentStatus.PENDING })
     status: PaymentStatus;
@@ -227,6 +267,11 @@ PaymentTransactionSchema.index({ academicSessionId: 1, status: 1, paymentId: 1, 
 PaymentTransactionSchema.index({ userId: 1, academicSessionId: 1, paymentId: 1, status: 1 });
 PaymentTransactionSchema.index({ payerType: 1, paymentContext: 1, createdAt: -1 });
 PaymentTransactionSchema.index({ accommodationApplicationId: 1, status: 1, createdAt: -1 });
+// Historical Paystack records may contain provider IDs that still need reconciliation.
+// Enforce ownership in the service until the recovery utility has cleaned production data.
+PaymentTransactionSchema.index({ gatewayId: 1 }, { sparse: true });
+PaymentTransactionSchema.index({ activeAttemptKey: 1 }, { unique: true, sparse: true });
+PaymentTransactionSchema.index({ fulfilledObligationKey: 1, fulfilmentStatus: 1 });
 
 PaymentTransactionSchema.index({
     method: 1,

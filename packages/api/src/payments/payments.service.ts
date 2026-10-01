@@ -12,6 +12,8 @@ import {
     RemittanceStatus,
     PaymentPayerType,
     PaymentContext,
+    PaymentFulfilmentStatus,
+    ProviderInitializationStatus,
 } from '../schemas/payment-transaction.schema';
 import {
     PaymentDestinationAccount,
@@ -36,6 +38,25 @@ import { UploadService } from '../services/upload.service';
 import { TenancyAgreementService } from '../services/tenancy-agreement.service';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { hasSubmittedApplication } from '../utils/application-lifecycle.util';
+import {
+    PaymentProviderEvent,
+    PaymentProviderEventDocument,
+    ProviderEventProcessingStatus,
+} from '../schemas/payment-provider-event.schema';
+import {
+    PaymentReconciliationCase,
+    PaymentReconciliationCaseDocument,
+    ReconciliationCaseStatus,
+    ReconciliationCaseType,
+} from '../schemas/payment-reconciliation-case.schema';
+import {
+    PaymentRefund,
+    PaymentRefundDocument,
+    PaymentRefundMethod,
+    PaymentRefundStatus,
+} from '../schemas/payment-refund.schema';
+import { PaymentRecoveryRun, PaymentRecoveryRunDocument } from '../schemas/payment-recovery-run.schema';
+import { PaymentAuditEvent, PaymentAuditEventDocument } from '../schemas/payment-audit-event.schema';
 
 export interface PaymentSummary {
     id: string;
@@ -192,6 +213,11 @@ export class PaymentsService {
         @InjectModel(AcademicSession.name) private academicSessionModel: Model<AcademicSessionDocument>,
         @InjectModel(StudentAcademicSession.name) private studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
         @InjectModel(TenancyAgreement.name) private tenancyAgreementModel: Model<TenancyAgreementDocument>,
+        @InjectModel(PaymentProviderEvent.name) private paymentProviderEventModel: Model<PaymentProviderEventDocument>,
+        @InjectModel(PaymentReconciliationCase.name) private paymentReconciliationCaseModel: Model<PaymentReconciliationCaseDocument>,
+        @InjectModel(PaymentRefund.name) private paymentRefundModel: Model<PaymentRefundDocument>,
+        @InjectModel(PaymentRecoveryRun.name) private paymentRecoveryRunModel: Model<PaymentRecoveryRunDocument>,
+        @InjectModel(PaymentAuditEvent.name) private paymentAuditEventModel: Model<PaymentAuditEventDocument>,
         private matriculationService: MatriculationService,
         private emailService: EmailService,
         private uploadService: UploadService,
@@ -227,6 +253,127 @@ export class PaymentsService {
     private isManualTransferRejected(payment: Partial<PaymentTransaction>): boolean {
         return payment.status === PaymentStatus.REJECTED
             && payment.method === PaymentMethod.MANUAL_TRANSFER;
+    }
+
+    private buildPaymentObligationKey(params: {
+        paymentContext: PaymentContext | string;
+        userId: Types.ObjectId | string;
+        paymentId: Types.ObjectId | string;
+        academicSessionId?: Types.ObjectId | string;
+        applicationId?: Types.ObjectId | string;
+        accommodationApplicationId?: Types.ObjectId | string;
+    }): string {
+        const owner = params.accommodationApplicationId
+            || params.applicationId
+            || params.userId;
+        return [
+            params.paymentContext,
+            owner?.toString(),
+            params.academicSessionId?.toString() || 'no-session',
+            params.paymentId?.toString(),
+        ].join(':');
+    }
+
+    private getTransactionObligationKey(paymentTransaction: any): string {
+        return this.buildPaymentObligationKey({
+            paymentContext: paymentTransaction.paymentContext,
+            userId: paymentTransaction.userId,
+            paymentId: paymentTransaction.paymentId,
+            academicSessionId: paymentTransaction.academicSessionId,
+            applicationId: paymentTransaction.applicationId,
+            accommodationApplicationId: paymentTransaction.accommodationApplicationId,
+        });
+    }
+
+    private buildTransactionObligationMatch(paymentTransaction: any): Record<string, unknown> {
+        const match: Record<string, unknown> = {
+            paymentContext: paymentTransaction.paymentContext,
+            userId: paymentTransaction.userId,
+            paymentId: paymentTransaction.paymentId,
+            academicSessionId: paymentTransaction.academicSessionId,
+        };
+
+        if (paymentTransaction.paymentContext === PaymentContext.ACCOMMODATION_APPLICATION) {
+            match.accommodationApplicationId = paymentTransaction.accommodationApplicationId;
+        } else if (paymentTransaction.paymentContext === PaymentContext.ADMISSION_APPLICATION) {
+            match.applicationId = paymentTransaction.applicationId;
+        } else if (paymentTransaction.studentId) {
+            match.studentId = paymentTransaction.studentId;
+        }
+
+        return match;
+    }
+
+    private async recordPaymentAudit(params: {
+        action: string;
+        description: string;
+        paymentTransactionId?: Types.ObjectId | string;
+        reconciliationCaseId?: Types.ObjectId | string;
+        refundId?: Types.ObjectId | string;
+        actorId?: Types.ObjectId | string;
+        actorType?: 'system' | 'staff' | 'provider';
+        metadata?: Record<string, unknown>;
+    }) {
+        await this.paymentAuditEventModel.create({
+            ...params,
+            paymentTransactionId: params.paymentTransactionId
+                ? new Types.ObjectId(params.paymentTransactionId.toString())
+                : undefined,
+            reconciliationCaseId: params.reconciliationCaseId
+                ? new Types.ObjectId(params.reconciliationCaseId.toString())
+                : undefined,
+            refundId: params.refundId ? new Types.ObjectId(params.refundId.toString()) : undefined,
+            actorId: params.actorId ? new Types.ObjectId(params.actorId.toString()) : undefined,
+            actorType: params.actorType || 'system',
+        });
+    }
+
+    private validatePaystackTransaction(paymentTransaction: any, transaction: any): string[] {
+        const mismatches: string[] = [];
+        if (String(transaction?.reference || '') !== String(paymentTransaction.reference || '')) {
+            mismatches.push('reference');
+        }
+        const providerAmount = Number(transaction?.amount || 0) / 100;
+        if (!Number.isFinite(providerAmount) || providerAmount !== Number(paymentTransaction.amount)) {
+            mismatches.push('amount');
+        }
+        if (String(transaction?.currency || '').toUpperCase() !== 'NGN') {
+            mismatches.push('currency');
+        }
+
+        const metadata = transaction?.metadata || {};
+        const strictMetadata = paymentTransaction.providerInitializationStatus === ProviderInitializationStatus.INITIALIZED;
+        if (strictMetadata) {
+            if (String(metadata.paymentTransactionId || '') !== paymentTransaction._id?.toString()) {
+                mismatches.push('metadata.paymentTransactionId');
+            }
+            if (String(metadata.userId || '') !== paymentTransaction.userId?.toString()) {
+                mismatches.push('metadata.userId');
+            }
+            if (String(metadata.paymentId || '') !== paymentTransaction.paymentId?.toString()) {
+                mismatches.push('metadata.paymentId');
+            }
+        }
+        return mismatches;
+    }
+
+    private sanitizePaystackPayload(data: any): Record<string, unknown> {
+        return {
+            id: data?.id?.toString(),
+            reference: data?.reference,
+            transactionReference: data?.transaction_reference || data?.transaction?.reference,
+            status: data?.status,
+            amount: data?.amount,
+            currency: data?.currency,
+            channel: data?.channel,
+            paidAt: data?.paid_at,
+            gatewayResponse: data?.gateway_response,
+            customer: data?.customer ? {
+                email: data.customer.email,
+                customerCode: data.customer.customer_code,
+            } : undefined,
+            metadata: data?.metadata,
+        };
     }
 
     private toRejectedManualTransferSummary(payment: Partial<PaymentTransaction> & { _id?: Types.ObjectId | string }): RejectedManualTransferSummary {
@@ -405,6 +552,7 @@ export class PaymentsService {
         paymentName: string;
         destinationAccount?: Partial<PaymentDestinationAccount> | null;
         callbackUrl?: string;
+        metadata?: Record<string, unknown>;
     }) {
         const payload: Record<string, unknown> = {
             email: params.email,
@@ -414,6 +562,7 @@ export class PaymentsService {
                 userId: params.userId,
                 paymentId: params.paymentId,
                 paymentName: params.paymentName,
+                ...params.metadata,
             },
         };
 
@@ -1052,9 +1201,6 @@ export class PaymentsService {
                 ],
             }).sort({ createdAt: -1 }); // Get the most recent attempt
 
-            let reference: string;
-            let paystackData: any;
-
             if (existingAttempt) {
                 this.logger.log('Found existing payment attempt:', {
                     status: existingAttempt.status,
@@ -1079,53 +1225,20 @@ export class PaymentsService {
                     };
                 }
 
-                const newReference = this.buildPaymentReference();
-                this.logger.log('Creating new Paystack transaction with new reference:', newReference);
+            }
 
-                paystackData = await this.createPaystackTransaction(
-                    payment,
-                    email,
-                    newReference,
-                    userId,
-                    paymentId,
-                    paystackDestinationAccount,
-                );
-
-                await this.paymentTransactionModel.create({
-                    userId: new Types.ObjectId(userId),
-                    applicationId: linkedApplication.applicationId,
-                    payerType: PaymentPayerType.APPLICANT,
-                    paymentContext: PaymentContext.ADMISSION_APPLICATION,
-                    academicSessionId: linkedApplication.academicSessionId,
-                    paymentId: new Types.ObjectId(paymentId),
-                    amount: payment.amount,
-                    reference: newReference,
-                    status: PaymentStatus.PENDING,
-                    method: PaymentMethod.PAYSTACK,
-                    remarks: 'Payment retry initialized - awaiting user action',
-                    retryCount: (existingAttempt.retryCount || 0) + 1,
-                    ...this.buildDestinationSnapshot(paystackDestinationAccount),
-                });
-
-                return {
-                    authorization_url: paystackData.data.authorization_url,
-                    access_code: paystackData.data.access_code,
-                    reference: newReference
-                };
-            } else {
-                // No existing attempt found, create new payment attempt
-                reference = this.buildPaymentReference();
-                paystackData = await this.createPaystackTransaction(
-                    payment,
-                    email,
-                    reference,
-                    userId,
-                    paymentId,
-                    paystackDestinationAccount,
-                );
-
-                // Create new payment attempt record
-                await this.paymentTransactionModel.create({
+            const reference = this.buildPaymentReference();
+            const obligationKey = this.buildPaymentObligationKey({
+                paymentContext: PaymentContext.ADMISSION_APPLICATION,
+                userId,
+                applicationId: linkedApplication.applicationId,
+                academicSessionId: linkedApplication.academicSessionId,
+                paymentId,
+            });
+            const activeAttemptKey = `active:${obligationKey}`;
+            let attempt: any;
+            try {
+                attempt = await this.paymentTransactionModel.create({
                     userId: new Types.ObjectId(userId),
                     applicationId: linkedApplication.applicationId,
                     payerType: PaymentPayerType.APPLICANT,
@@ -1136,16 +1249,58 @@ export class PaymentsService {
                     reference,
                     status: PaymentStatus.PENDING,
                     method: PaymentMethod.PAYSTACK,
-                    remarks: 'Payment initialized - awaiting user action',
-                    retryCount: 0,
+                    providerInitializationStatus: ProviderInitializationStatus.CREATED,
+                    activeAttemptKey,
+                    fulfilmentStatus: PaymentFulfilmentStatus.UNAPPLIED,
+                    remarks: existingAttempt
+                        ? 'Payment retry created - awaiting Paystack initialization'
+                        : 'Payment created - awaiting Paystack initialization',
+                    retryCount: existingAttempt ? (existingAttempt.retryCount || 0) + 1 : 0,
                     ...this.buildDestinationSnapshot(paystackDestinationAccount),
                 });
+            } catch (error: any) {
+                if (error?.code === 11000) {
+                    const active = await this.paymentTransactionModel.findOne({ activeAttemptKey });
+                    return { reference: active?.reference || reference, pending: true };
+                }
+                throw error;
+            }
 
+            try {
+                const paystackData = await this.createPaystackTransaction(
+                    payment,
+                    email,
+                    reference,
+                    userId,
+                    paymentId,
+                    paystackDestinationAccount,
+                    undefined,
+                    {
+                        paymentTransactionId: attempt._id?.toString(),
+                        applicationId: linkedApplication.applicationId?.toString(),
+                        academicSessionId: linkedApplication.academicSessionId?.toString(),
+                        paymentContext: PaymentContext.ADMISSION_APPLICATION,
+                    },
+                );
+                attempt.accessCode = paystackData.data.access_code;
+                attempt.providerInitializationStatus = ProviderInitializationStatus.INITIALIZED;
+                attempt.remarks = existingAttempt
+                    ? 'Payment retry initialized - awaiting user action'
+                    : 'Payment initialized - awaiting user action';
+                if (typeof attempt.save === 'function') await attempt.save();
                 return {
                     authorization_url: paystackData.data.authorization_url,
                     access_code: paystackData.data.access_code,
-                    reference
+                    reference,
                 };
+            } catch (error: any) {
+                attempt.status = PaymentStatus.FAILED;
+                attempt.providerInitializationStatus = ProviderInitializationStatus.FAILED;
+                attempt.providerInitializationError = error?.message || 'Paystack initialization failed';
+                attempt.remarks = `Paystack initialization failed: ${attempt.providerInitializationError}`;
+                attempt.activeAttemptKey = undefined;
+                if (typeof attempt.save === 'function') await attempt.save();
+                throw error;
             }
         } catch (error) {
             this.logger.error('Error in initializePayment:', error);
@@ -1161,6 +1316,7 @@ export class PaymentsService {
         paymentId: string,
         destinationAccount?: Partial<PaymentDestinationAccount> | null,
         callbackUrl?: string,
+        metadata?: Record<string, unknown>,
     ) {
         this.logger.log('Creating new Paystack transaction:', {
             paymentId,
@@ -1180,6 +1336,7 @@ export class PaymentsService {
                 paymentName: payment.name,
                 destinationAccount,
                 callbackUrl,
+                metadata,
             }),
             destinationAccount,
         );
@@ -1236,6 +1393,7 @@ export class PaymentsService {
     private async applyPaystackTransactionState(paymentTransaction: any, transaction: any): Promise<any> {
         const paystackStatus = this.getPaystackStatus(transaction);
         const now = new Date();
+        const wasSuccessful = paymentTransaction.status === PaymentStatus.SUCCESSFUL;
 
         paymentTransaction.lastVerifiedAt = now;
         paymentTransaction.verificationAttempts = (paymentTransaction.verificationAttempts || 0) + 1;
@@ -1243,6 +1401,50 @@ export class PaymentsService {
         paymentTransaction.gatewayResponse = transaction?.gateway_response || paymentTransaction.gatewayResponse;
 
         if (this.isPaystackSuccessStatus(paystackStatus)) {
+            const mismatches = this.validatePaystackTransaction(paymentTransaction, transaction);
+            const gatewayOwner = transaction?.id
+                ? await this.paymentTransactionModel.findOne({
+                    _id: { $ne: paymentTransaction._id },
+                    gatewayId: transaction.id.toString(),
+                }).select('_id')
+                : null;
+            if (gatewayOwner) mismatches.push('gatewayId');
+            if (mismatches.length) {
+                paymentTransaction.fulfilmentStatus = PaymentFulfilmentStatus.QUARANTINED;
+                paymentTransaction.activeAttemptKey = undefined;
+                paymentTransaction.remarks = `Paystack verification quarantined: ${mismatches.join(', ')} mismatch`;
+                await paymentTransaction.save();
+                let reconciliationCase = paymentTransaction.reconciliationCaseId
+                    ? await this.paymentReconciliationCaseModel.findById(paymentTransaction.reconciliationCaseId)
+                    : null;
+                if (!reconciliationCase) {
+                    reconciliationCase = await this.paymentReconciliationCaseModel.create({
+                        type: ReconciliationCaseType.PROVIDER_MISMATCH,
+                        status: ReconciliationCaseStatus.OPEN,
+                        provider: 'paystack',
+                        reference: transaction?.reference || paymentTransaction.reference,
+                        providerTransactionId: transaction?.id?.toString(),
+                        paymentTransactionId: paymentTransaction._id,
+                        userId: paymentTransaction.userId,
+                        paymentId: paymentTransaction.paymentId,
+                        academicSessionId: paymentTransaction.academicSessionId,
+                        amount: transaction?.amount ? Number(transaction.amount) / 100 : undefined,
+                        currency: transaction?.currency,
+                        reason: `Verification mismatch: ${mismatches.join(', ')}`,
+                        providerSnapshot: this.sanitizePaystackPayload(transaction),
+                    });
+                }
+                paymentTransaction.reconciliationCaseId = reconciliationCase._id;
+                await paymentTransaction.save();
+                return {
+                    status: paystackStatus,
+                    reference: transaction.reference,
+                    amount: transaction.amount,
+                    quarantined: true,
+                    mismatches,
+                };
+            }
+
             paymentTransaction.status = PaymentStatus.SUCCESSFUL;
             paymentTransaction.remarks = 'Payment successful and verified';
             paymentTransaction.paidAt = transaction?.paid_at ? new Date(transaction.paid_at) : (paymentTransaction.paidAt || now);
@@ -1251,13 +1453,71 @@ export class PaymentsService {
             paymentTransaction.fee = transaction.fees ? (transaction.fees / 100) : (paymentTransaction.fee || 0);
             paymentTransaction.gatewayId = transaction.id;
             paymentTransaction.authorizationCode = transaction.authorization?.authorization_code;
-            this.markSuccessfulPaystackPaymentAwaitingRemittance(
-                paymentTransaction,
-                transaction.amount ? (transaction.amount / 100) : paymentTransaction.amount,
-            );
+            paymentTransaction.activeAttemptKey = undefined;
+
+            if (
+                !paymentTransaction.fulfilmentStatus
+                || paymentTransaction.fulfilmentStatus === PaymentFulfilmentStatus.UNAPPLIED
+            ) {
+                const obligationKey = this.getTransactionObligationKey(paymentTransaction);
+                const appliedTransaction = await this.paymentTransactionModel.findOne({
+                    _id: { $ne: paymentTransaction._id },
+                    status: PaymentStatus.SUCCESSFUL,
+                    $and: [
+                        {
+                            $or: [
+                                { fulfilmentStatus: PaymentFulfilmentStatus.APPLIED },
+                                { fulfilmentStatus: { $exists: false } },
+                            ],
+                        },
+                        {
+                            $or: [
+                                { fulfilledObligationKey: obligationKey },
+                                {
+                                    fulfilledObligationKey: { $exists: false },
+                                    ...this.buildTransactionObligationMatch(paymentTransaction),
+                                },
+                            ],
+                        },
+                    ],
+                }).sort({ paidAt: 1, createdAt: 1 });
+
+                if (appliedTransaction) {
+                    paymentTransaction.fulfilmentStatus = PaymentFulfilmentStatus.DUPLICATE;
+                    paymentTransaction.duplicateOfTransactionId = appliedTransaction._id;
+                    const duplicateCase = await this.paymentReconciliationCaseModel.create({
+                        type: ReconciliationCaseType.REFUND_RECOMMENDED,
+                        status: ReconciliationCaseStatus.OPEN,
+                        provider: 'paystack',
+                        reference: paymentTransaction.reference,
+                        providerTransactionId: transaction?.id?.toString(),
+                        paymentTransactionId: paymentTransaction._id,
+                        appliedTransactionId: appliedTransaction._id,
+                        userId: paymentTransaction.userId,
+                        paymentId: paymentTransaction.paymentId,
+                        academicSessionId: paymentTransaction.academicSessionId,
+                        amount: paymentTransaction.amount,
+                        currency: transaction?.currency || 'NGN',
+                        reason: 'Another successful transaction already fulfilled this payment obligation',
+                        providerSnapshot: this.sanitizePaystackPayload(transaction),
+                    });
+                    paymentTransaction.reconciliationCaseId = duplicateCase._id;
+                } else {
+                    paymentTransaction.fulfilmentStatus = PaymentFulfilmentStatus.APPLIED;
+                    paymentTransaction.fulfilledObligationKey = obligationKey;
+                }
+            }
+
+            if (!wasSuccessful) {
+                this.markSuccessfulPaystackPaymentAwaitingRemittance(
+                    paymentTransaction,
+                    transaction.amount ? (transaction.amount / 100) : paymentTransaction.amount,
+                );
+            }
         } else if (this.isPaystackFailureStatus(paystackStatus)) {
             if (paymentTransaction.status !== PaymentStatus.SUCCESSFUL) {
                 paymentTransaction.status = PaymentStatus.FAILED;
+                paymentTransaction.activeAttemptKey = undefined;
             }
             paymentTransaction.remarks = `Payment ${paystackStatus || 'failed'}: ${transaction.gateway_response || 'Payment was not completed'}`;
         } else {
@@ -1269,7 +1529,11 @@ export class PaymentsService {
 
         await paymentTransaction.save();
 
-        if (paymentTransaction.status === PaymentStatus.SUCCESSFUL) {
+        if (
+            paymentTransaction.status === PaymentStatus.SUCCESSFUL
+            && paymentTransaction.fulfilmentStatus === PaymentFulfilmentStatus.APPLIED
+            && !wasSuccessful
+        ) {
             if (paymentTransaction.paymentContext === PaymentContext.ACCOMMODATION_APPLICATION) {
                 await this.finalizeAccommodationPayment(paymentTransaction);
             } else {
@@ -1438,17 +1702,20 @@ export class PaymentsService {
     } = {}): Promise<PendingReconciliationSummary> {
         const olderThanMinutes = Math.max(1, Number(options.olderThanMinutes || 10));
         const batchSize = Math.max(1, Number(options.batchSize || 100));
-        const hardTimeoutHours = Math.max(1, Number(options.hardTimeoutHours || 24));
-
         const olderThanDate = new Date(Date.now() - olderThanMinutes * 60 * 1000);
-        const hardTimeoutDate = new Date(Date.now() - hardTimeoutHours * 60 * 60 * 1000);
-
         const candidates = await this.paymentTransactionModel.find({
-            status: PaymentStatus.PENDING,
+            status: { $in: [PaymentStatus.PENDING, PaymentStatus.FAILED] },
             $or: [
                 { method: PaymentMethod.PAYSTACK },
                 { method: { $exists: false } },
             ],
+            $and: [{
+                $or: [
+                    { status: PaymentStatus.PENDING },
+                    { providerInitializationStatus: ProviderInitializationStatus.INITIALIZED },
+                    { remarks: /verification|timed out|timeout|network/i },
+                ],
+            }],
             createdAt: { $lt: olderThanDate },
         })
             .sort({ createdAt: 1 })
@@ -1479,46 +1746,26 @@ export class PaymentsService {
                     summary.stillPending += 1;
                 }
 
-                if (
-                    candidate.status === PaymentStatus.PENDING
-                    && candidate.createdAt
-                    && new Date(candidate.createdAt).getTime() < hardTimeoutDate.getTime()
-                ) {
-                    candidate.status = PaymentStatus.FAILED;
-                    candidate.remarks = `Payment timed out after ${hardTimeoutHours} hour(s) without completion`;
-                    await candidate.save();
-                    summary.markedFailed += 1;
-                    summary.stillPending = Math.max(0, summary.stillPending - 1);
-                    summary.timedOut += 1;
-                }
             } catch (error) {
                 summary.errors += 1;
                 this.logger.error(
                     `Failed to reconcile pending Paystack payment ${candidate.reference}: ${error instanceof Error ? error.message : error}`,
                 );
 
-                if (
-                    candidate.createdAt
-                    && new Date(candidate.createdAt).getTime() < hardTimeoutDate.getTime()
-                ) {
-                    candidate.status = PaymentStatus.FAILED;
-                    candidate.remarks = `Payment timed out after ${hardTimeoutHours} hour(s) without completion`;
-                    candidate.lastVerifiedAt = new Date();
-                    await candidate.save();
-                    summary.markedFailed += 1;
-                    summary.timedOut += 1;
-                }
+                candidate.lastVerifiedAt = new Date();
+                candidate.remarks = `Paystack verification unavailable; reconciliation will retry: ${error instanceof Error ? error.message : error}`;
+                await candidate.save();
             }
         }
 
         return summary;
     }
 
-    async processPaystackWebhook(
+    async acceptPaystackWebhook(
         signature: string | undefined,
         rawBody: Buffer | undefined,
         payload: any,
-    ): Promise<{ event: string; reference?: string; reconciled: boolean }> {
+    ): Promise<{ eventId: string; event: string; reference?: string; duplicate: boolean }> {
         if (!this.paystackSecretKey) {
             throw new Error('PAYSTACK_SECRET_KEY is not configured');
         }
@@ -1532,31 +1779,162 @@ export class PaymentsService {
             .update(rawBody)
             .digest('hex');
 
-        if (hash !== signature) {
+        const receivedSignature = Buffer.from(signature, 'utf8');
+        const expectedSignature = Buffer.from(hash, 'utf8');
+        if (
+            receivedSignature.length !== expectedSignature.length
+            || !crypto.timingSafeEqual(receivedSignature, expectedSignature)
+        ) {
             throw new Error('Invalid Paystack webhook signature');
         }
 
         const event = String(payload?.event || '').toLowerCase();
-        const reference = payload?.data?.reference;
-
-        if (!reference) {
-            return { event, reconciled: false };
+        const data = payload?.data || {};
+        const reference = data.reference || data.transaction_reference || data.transaction?.reference;
+        const payloadHash = crypto.createHash('sha256').update(rawBody).digest('hex');
+        const idempotencyKey = crypto.createHash('sha256')
+            .update([event, data.id || '', reference || '', payloadHash].join(':'))
+            .digest('hex');
+        const existing = await this.paymentProviderEventModel.findOne({ idempotencyKey });
+        if (existing) {
+            return { eventId: existing._id.toString(), event, reference, duplicate: true };
         }
 
-        const paymentTransaction = await this.paymentTransactionModel.findOne({ reference });
-        if (!paymentTransaction) {
-            this.logger.warn(`Paystack webhook received unknown reference: ${reference}`);
-            return { event, reference, reconciled: false };
+        let providerEvent: any;
+        try {
+            providerEvent = await this.paymentProviderEventModel.create({
+                provider: 'paystack',
+                eventType: event,
+                idempotencyKey,
+                reference,
+                providerTransactionId: data.id?.toString() || data.transaction?.id?.toString(),
+                amount: data.amount ? Number(data.amount) / 100 : undefined,
+                currency: data.currency,
+                customerEmail: data.customer?.email,
+                metadata: data.metadata,
+                payload: this.sanitizePaystackPayload(data),
+                payloadHash,
+                signatureVerified: true,
+                processingStatus: ProviderEventProcessingStatus.RECEIVED,
+            });
+        } catch (error: any) {
+            if (error?.code !== 11000) throw error;
+            providerEvent = await this.paymentProviderEventModel.findOne({ idempotencyKey });
+            if (!providerEvent) throw error;
+            return { eventId: providerEvent._id.toString(), event, reference, duplicate: true };
         }
 
-        if ((paymentTransaction.method || PaymentMethod.PAYSTACK) !== PaymentMethod.PAYSTACK) {
-            return { event, reference, reconciled: false };
+        return { eventId: providerEvent._id.toString(), event, reference, duplicate: false };
+    }
+
+    async processStoredPaystackEvent(eventId: string): Promise<void> {
+        const providerEvent = await this.paymentProviderEventModel.findById(eventId);
+        if (!providerEvent || providerEvent.processingStatus === ProviderEventProcessingStatus.PROCESSED) return;
+
+        providerEvent.processingStatus = ProviderEventProcessingStatus.PROCESSING;
+        providerEvent.processingAttempts = Number(providerEvent.processingAttempts || 0) + 1;
+        await providerEvent.save();
+
+        try {
+            if (providerEvent.eventType.startsWith('refund.')) {
+                await this.applyRefundProviderEvent(providerEvent);
+                providerEvent.processingStatus = ProviderEventProcessingStatus.PROCESSED;
+                providerEvent.processedAt = new Date();
+                providerEvent.processingError = undefined;
+                await providerEvent.save();
+                return;
+            }
+
+            if (providerEvent.eventType !== 'charge.success' || !providerEvent.reference) {
+                providerEvent.processingStatus = ProviderEventProcessingStatus.PROCESSED;
+                providerEvent.processedAt = new Date();
+                await providerEvent.save();
+                return;
+            }
+
+            const paymentTransaction = await this.paymentTransactionModel.findOne({
+                reference: providerEvent.reference,
+            });
+            if (!paymentTransaction) {
+                const reconciliationCase = await this.paymentReconciliationCaseModel.create({
+                    type: ReconciliationCaseType.UNMATCHED_SUCCESS,
+                    status: ReconciliationCaseStatus.OPEN,
+                    provider: 'paystack',
+                    reference: providerEvent.reference,
+                    providerTransactionId: providerEvent.providerTransactionId,
+                    amount: providerEvent.amount,
+                    currency: providerEvent.currency,
+                    reason: 'Paystack reported a successful charge with no local transaction',
+                    providerSnapshot: providerEvent.payload,
+                });
+                providerEvent.reconciliationCaseId = reconciliationCase._id;
+                providerEvent.processingStatus = ProviderEventProcessingStatus.UNMATCHED;
+                providerEvent.processedAt = new Date();
+                await providerEvent.save();
+                return;
+            }
+
+            const transaction = await this.verifyPaystackTransaction(providerEvent.reference);
+            await this.applyPaystackTransactionState(paymentTransaction, transaction);
+            providerEvent.paymentTransactionId = paymentTransaction._id;
+            providerEvent.reconciliationCaseId = paymentTransaction.reconciliationCaseId;
+            providerEvent.processingStatus = paymentTransaction.fulfilmentStatus === PaymentFulfilmentStatus.QUARANTINED
+                ? ProviderEventProcessingStatus.QUARANTINED
+                : ProviderEventProcessingStatus.PROCESSED;
+            providerEvent.processedAt = new Date();
+            providerEvent.processingError = undefined;
+            await providerEvent.save();
+        } catch (error: any) {
+            providerEvent.processingStatus = ProviderEventProcessingStatus.FAILED;
+            providerEvent.processingError = error?.message || String(error);
+            await providerEvent.save();
+            throw error;
         }
+    }
 
-        const transaction = await this.verifyPaystackTransaction(reference);
-        await this.applyPaystackTransactionState(paymentTransaction, transaction);
-
-        return { event, reference, reconciled: true };
+    private async applyRefundProviderEvent(providerEvent: any): Promise<void> {
+        const payload: any = providerEvent.payload || {};
+        const providerRefundId = payload.id?.toString() || providerEvent.providerTransactionId;
+        const transactionReference = payload.reference || payload.transactionReference || providerEvent.reference;
+        const statusMap: Record<string, PaymentRefundStatus> = {
+            'refund.pending': PaymentRefundStatus.PENDING,
+            'refund.processing': PaymentRefundStatus.PROCESSING,
+            'refund.needs-attention': PaymentRefundStatus.NEEDS_ATTENTION,
+            'refund.processed': PaymentRefundStatus.PROCESSED,
+            'refund.failed': PaymentRefundStatus.FAILED,
+        };
+        const refund = await this.paymentRefundModel.findOne({
+            $or: [
+                ...(providerRefundId ? [{ providerRefundId }] : []),
+                ...(transactionReference ? [{ providerReference: transactionReference }] : []),
+            ],
+        });
+        if (!refund) {
+            throw new Error('Refund webhook could not be matched to a local refund request');
+        }
+        refund.status = statusMap[providerEvent.eventType] || refund.status;
+        refund.providerSnapshot = payload;
+        if (refund.status === PaymentRefundStatus.PROCESSED) refund.processedAt = new Date();
+        if (refund.status === PaymentRefundStatus.FAILED) {
+            refund.failureReason = payload.gatewayResponse || 'Paystack refund failed';
+        }
+        await refund.save();
+        if (refund.status === PaymentRefundStatus.PROCESSED) {
+            const transaction = await this.paymentTransactionModel.findById(refund.paymentTransactionId)
+                .select('reconciliationCaseId');
+            if (transaction?.reconciliationCaseId) {
+                await this.paymentReconciliationCaseModel.updateOne(
+                    { _id: transaction.reconciliationCaseId },
+                    {
+                        $set: {
+                            status: ReconciliationCaseStatus.RESOLVED,
+                            resolvedAt: new Date(),
+                            resolution: 'Duplicate payment refund processed by Paystack',
+                        },
+                    },
+                );
+            }
+        }
     }
 
     private markSuccessfulPaystackPaymentAwaitingRemittance(paymentTransaction: any, amount?: number) {
@@ -1581,6 +1959,447 @@ export class PaymentsService {
         }
 
         return this.applyPaystackTransactionState(paymentTransaction, transaction);
+    }
+
+    private async fetchPaystackTransaction(identifier: string): Promise<any> {
+        if (!this.paystackSecretKey) throw new Error('PAYSTACK_SECRET_KEY is not configured');
+        const normalized = identifier.trim();
+        const path = /^\d+$/.test(normalized)
+            ? `transaction/${normalized}`
+            : `transaction/verify/${encodeURIComponent(normalized)}`;
+        const response = await fetch(`${this.paystackBaseUrl}/${path}`, {
+            headers: { Authorization: `Bearer ${this.paystackSecretKey}` },
+        });
+        const body = await response.json();
+        if (!response.ok || !body?.status || !body?.data) {
+            throw new Error(body?.message || `Paystack transaction ${normalized} could not be fetched`);
+        }
+        return body.data;
+    }
+
+    private async findRecoveryOwner(transaction: any, academicSessionId: string) {
+        const metadata = transaction?.metadata || {};
+        let user: any = null;
+        if (metadata.userId && Types.ObjectId.isValid(metadata.userId)) {
+            user = await this.userModel.findById(metadata.userId).lean();
+        }
+        if (!user && transaction?.customer?.email) {
+            user = await this.userModel.findOne({
+                email: String(transaction.customer.email).trim().toLowerCase(),
+            }).lean();
+        }
+
+        let payment: any = null;
+        if (metadata.paymentId && Types.ObjectId.isValid(metadata.paymentId)) {
+            payment = await this.paymentModel.findById(metadata.paymentId).lean();
+        }
+        if (!payment) {
+            const amount = Number(transaction?.amount || 0) / 100;
+            const matches = await this.paymentModel.find({ amount }).limit(3).lean();
+            if (matches.length === 1) payment = matches[0];
+        }
+
+        if (!user || !payment) return { user, payment, application: null, student: null, confidence: 'low' };
+        const sessionId = new Types.ObjectId(academicSessionId);
+        const application = await this.applicationModel.findOne({
+            userId: user._id,
+            entryAcademicSession: sessionId,
+        }).sort({ createdAt: -1 }).lean();
+        const student = await this.studentModel.findOne({ userId: user._id }).lean();
+        const metadataExact = metadata.userId?.toString() === user._id.toString()
+            && metadata.paymentId?.toString() === payment._id.toString();
+        return {
+            user,
+            payment,
+            application,
+            student,
+            confidence: metadataExact ? 'high' : 'medium',
+        };
+    }
+
+    async previewPaystackRecovery(params: {
+        academicSessionId: string;
+        identifiers: string[];
+        actorId: string;
+    }) {
+        if (!Types.ObjectId.isValid(params.academicSessionId)) throw new Error('Select a valid academic session');
+        const identifiers = [...new Set((params.identifiers || []).map((value) => String(value).trim()).filter(Boolean))];
+        if (!identifiers.length || identifiers.length > 500) {
+            throw new Error('Provide between 1 and 500 Paystack references or transaction IDs');
+        }
+
+        const results: any[] = [];
+        for (const identifier of identifiers) {
+            try {
+                const transaction = await this.fetchPaystackTransaction(identifier);
+                const existing = await this.paymentTransactionModel.findOne({
+                    $or: [
+                        { reference: transaction.reference },
+                        { gatewayId: transaction.id?.toString() },
+                    ],
+                }).lean();
+                const owner = await this.findRecoveryOwner(transaction, params.academicSessionId);
+                let classification = 'unmatched';
+                let appliedTransaction: any = null;
+                if (existing) {
+                    classification = existing.status === PaymentStatus.SUCCESSFUL
+                        ? 'already_reconciled'
+                        : 'recover_existing';
+                } else if (
+                    this.isPaystackSuccessStatus(this.getPaystackStatus(transaction))
+                    && owner.user
+                    && owner.payment
+                    && owner.confidence === 'high'
+                ) {
+                    const query: any = {
+                        userId: owner.user._id,
+                        paymentId: owner.payment._id,
+                        academicSessionId: new Types.ObjectId(params.academicSessionId),
+                        status: PaymentStatus.SUCCESSFUL,
+                    };
+                    appliedTransaction = await this.paymentTransactionModel.findOne(query).sort({ paidAt: 1 }).lean();
+                    classification = appliedTransaction ? 'duplicate_refund_recommended' : 'recover_and_apply';
+                } else if (!this.isPaystackSuccessStatus(this.getPaystackStatus(transaction))) {
+                    classification = 'not_successful';
+                } else if (owner.user && owner.payment) {
+                    classification = 'review_required';
+                }
+
+                results.push({
+                    identifier,
+                    classification,
+                    confidence: owner.confidence,
+                    provider: this.sanitizePaystackPayload(transaction),
+                    existingTransactionId: existing?._id?.toString(),
+                    appliedTransactionId: appliedTransaction?._id?.toString(),
+                    userId: owner.user?._id?.toString(),
+                    userEmail: owner.user?.email || transaction?.customer?.email,
+                    paymentId: owner.payment?._id?.toString(),
+                    paymentName: owner.payment?.name,
+                    applicationId: owner.application?._id?.toString(),
+                    studentId: owner.student?._id?.toString(),
+                });
+            } catch (error: any) {
+                results.push({ identifier, classification: 'error', error: error?.message || String(error) });
+            }
+        }
+
+        const runId = `paystack-recovery-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+        const inputHash = crypto.createHash('sha256')
+            .update(JSON.stringify({ academicSessionId: params.academicSessionId, identifiers }))
+            .digest('hex');
+        const run = await this.paymentRecoveryRunModel.create({
+            runId,
+            academicSessionId: new Types.ObjectId(params.academicSessionId),
+            identifiers,
+            inputHash,
+            results,
+            status: 'previewed',
+            createdBy: new Types.ObjectId(params.actorId),
+        });
+        return this.toRecoveryRunResponse(run);
+    }
+
+    async applyPaystackRecovery(params: { runId: string; actorId: string; reason: string }) {
+        if (!params.reason?.trim()) throw new Error('A recovery reason is required');
+        const run = await this.paymentRecoveryRunModel.findOneAndUpdate(
+            { runId: params.runId, status: 'previewed' },
+            { $set: { status: 'applying' } },
+            { new: true },
+        );
+        if (!run) {
+            const existingRun = await this.paymentRecoveryRunModel.findOne({ runId: params.runId }).lean();
+            if (!existingRun) throw new Error('Recovery preview not found');
+            throw new Error('This recovery preview is already being applied, has been applied, or has expired');
+        }
+
+        const appliedResults: any[] = [];
+        for (const preview of run.results as any[]) {
+            if (!['recover_existing', 'recover_and_apply', 'duplicate_refund_recommended'].includes(preview.classification)) {
+                appliedResults.push({ identifier: preview.identifier, action: 'skipped', classification: preview.classification });
+                continue;
+            }
+            try {
+                const transaction = await this.fetchPaystackTransaction(preview.identifier);
+                if (!this.isPaystackSuccessStatus(this.getPaystackStatus(transaction))) {
+                    appliedResults.push({ identifier: preview.identifier, action: 'skipped', classification: 'no_longer_successful' });
+                    continue;
+                }
+
+                let local = await this.paymentTransactionModel.findOne({
+                    $or: [{ reference: transaction.reference }, { gatewayId: transaction.id?.toString() }],
+                });
+                if (!local) {
+                    if (!preview.userId || !preview.paymentId || preview.confidence !== 'high') {
+                        appliedResults.push({ identifier: preview.identifier, action: 'quarantined' });
+                        continue;
+                    }
+                    const paymentContext = preview.applicationId
+                        ? PaymentContext.ADMISSION_APPLICATION
+                        : PaymentContext.STUDENT_ACCOUNT;
+                    local = await this.paymentTransactionModel.create({
+                        userId: new Types.ObjectId(preview.userId),
+                        applicationId: preview.applicationId ? new Types.ObjectId(preview.applicationId) : undefined,
+                        studentId: preview.studentId ? new Types.ObjectId(preview.studentId) : undefined,
+                        payerType: preview.applicationId ? PaymentPayerType.APPLICANT : PaymentPayerType.STUDENT,
+                        paymentContext,
+                        academicSessionId: run.academicSessionId,
+                        paymentId: new Types.ObjectId(preview.paymentId),
+                        amount: Number(transaction.amount) / 100,
+                        reference: transaction.reference,
+                        status: PaymentStatus.PENDING,
+                        method: PaymentMethod.PAYSTACK,
+                        fulfilmentStatus: PaymentFulfilmentStatus.UNAPPLIED,
+                        gatewayId: transaction.id?.toString(),
+                        recoveredAt: new Date(),
+                        recoverySource: run.runId,
+                        remarks: `Recovered from Paystack by historical recovery run ${run.runId}`,
+                    });
+                }
+                await this.applyPaystackTransactionState(local, transaction);
+                await this.recordPaymentAudit({
+                    action: 'paystack_transaction_recovered',
+                    description: `Paystack transaction recovered by ${run.runId}`,
+                    paymentTransactionId: local._id,
+                    reconciliationCaseId: local.reconciliationCaseId,
+                    actorId: params.actorId,
+                    actorType: 'staff',
+                    metadata: { runId: run.runId, reason: params.reason, classification: local.fulfilmentStatus },
+                });
+                await this.paymentReconciliationCaseModel.updateMany(
+                    {
+                        type: ReconciliationCaseType.UNMATCHED_SUCCESS,
+                        reference: transaction.reference,
+                        status: { $in: [
+                            ReconciliationCaseStatus.OPEN,
+                            ReconciliationCaseStatus.INVESTIGATING,
+                        ] },
+                    },
+                    {
+                        $set: {
+                            status: ReconciliationCaseStatus.RESOLVED,
+                            paymentTransactionId: local._id,
+                            resolvedBy: new Types.ObjectId(params.actorId),
+                            resolvedAt: new Date(),
+                            resolution: `Matched by historical recovery run ${run.runId}`,
+                        },
+                    },
+                );
+                appliedResults.push({
+                    identifier: preview.identifier,
+                    action: local.fulfilmentStatus === PaymentFulfilmentStatus.DUPLICATE ? 'recovered_duplicate' : 'recovered_applied',
+                    paymentTransactionId: local._id.toString(),
+                });
+            } catch (error: any) {
+                appliedResults.push({
+                    identifier: preview.identifier,
+                    action: 'error',
+                    error: error?.message || String(error),
+                });
+            }
+        }
+
+        run.status = 'applied';
+        run.appliedAt = new Date();
+        run.appliedBy = new Types.ObjectId(params.actorId);
+        run.reason = params.reason.trim();
+        run.results = appliedResults;
+        await run.save();
+        return this.toRecoveryRunResponse(run);
+    }
+
+    private toRecoveryRunResponse(run: any) {
+        return {
+            runId: run.runId,
+            academicSessionId: run.academicSessionId?.toString(),
+            status: run.status,
+            results: run.results,
+            createdAt: run.createdAt,
+            appliedAt: run.appliedAt,
+        };
+    }
+
+    async getReconciliationCases(filters: { status?: string; type?: string; page?: number; limit?: number }) {
+        const page = Math.max(1, Number(filters.page || 1));
+        const limit = Math.min(100, Math.max(1, Number(filters.limit || 20)));
+        const query: any = {};
+        if (filters.status) query.status = filters.status;
+        if (filters.type) query.type = filters.type;
+        const [cases, total] = await Promise.all([
+            this.paymentReconciliationCaseModel.find(query)
+                .populate('userId', 'firstName otherName lastName email phone')
+                .populate('paymentId', 'name paymentCode amount')
+                .populate('paymentTransactionId')
+                .populate('appliedTransactionId')
+                .sort({ createdAt: -1 })
+                .skip((page - 1) * limit)
+                .limit(limit)
+                .lean(),
+            this.paymentReconciliationCaseModel.countDocuments(query),
+        ]);
+        return { cases, pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } };
+    }
+
+    async resolveReconciliationCase(caseId: string, actorId: string, resolution: string) {
+        if (!Types.ObjectId.isValid(caseId)) throw new Error('Invalid reconciliation case');
+        if (!resolution?.trim()) throw new Error('A resolution reason is required');
+        const reconciliationCase = await this.paymentReconciliationCaseModel.findById(caseId);
+        if (!reconciliationCase) throw new Error('Reconciliation case not found');
+        reconciliationCase.status = ReconciliationCaseStatus.RESOLVED;
+        reconciliationCase.resolution = resolution.trim();
+        reconciliationCase.resolvedBy = new Types.ObjectId(actorId);
+        reconciliationCase.resolvedAt = new Date();
+        await reconciliationCase.save();
+        await this.recordPaymentAudit({
+            action: 'reconciliation_case_resolved',
+            description: resolution.trim(),
+            paymentTransactionId: reconciliationCase.paymentTransactionId,
+            reconciliationCaseId: reconciliationCase._id,
+            actorId,
+            actorType: 'staff',
+        });
+        return reconciliationCase;
+    }
+
+    async initiatePaystackRefund(paymentTransactionId: string, actorId: string, reason: string) {
+        if (process.env.PAYSTACK_REFUNDS_ENABLED !== 'true') {
+            throw new Error('Paystack refunds are disabled by configuration');
+        }
+        if (!reason?.trim()) throw new Error('A refund reason is required');
+        const transaction = await this.paymentTransactionModel.findById(paymentTransactionId);
+        if (!transaction) throw new Error('Payment transaction not found');
+        if (transaction.method !== PaymentMethod.PAYSTACK || transaction.status !== PaymentStatus.SUCCESSFUL) {
+            throw new Error('Only successful Paystack transactions can be refunded');
+        }
+        if (transaction.fulfilmentStatus !== PaymentFulfilmentStatus.DUPLICATE) {
+            throw new Error('Only confirmed duplicate payments can be refunded from this workflow');
+        }
+        const activeRefund = await this.paymentRefundModel.findOne({
+            paymentTransactionId: transaction._id,
+            status: { $in: [
+                PaymentRefundStatus.REQUESTED,
+                PaymentRefundStatus.PENDING,
+                PaymentRefundStatus.PROCESSING,
+                PaymentRefundStatus.NEEDS_ATTENTION,
+                PaymentRefundStatus.PROCESSED,
+            ] },
+        });
+        if (activeRefund) return activeRefund;
+
+        const refund = await this.paymentRefundModel.create({
+            paymentTransactionId: transaction._id,
+            amount: transaction.amount,
+            currency: 'NGN',
+            method: PaymentRefundMethod.PAYSTACK,
+            status: PaymentRefundStatus.REQUESTED,
+            reason: reason.trim(),
+            providerReference: transaction.reference,
+            requestedBy: new Types.ObjectId(actorId),
+            requestedAt: new Date(),
+        });
+
+        try {
+            const response = await fetch(`${this.paystackBaseUrl}/refund`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${this.paystackSecretKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    transaction: transaction.gatewayId || transaction.reference,
+                    merchant_note: reason.trim(),
+                    customer_note: 'Refund for a duplicate ALECONS payment',
+                }),
+            });
+            const body = await response.json();
+            if (!response.ok || !body?.status) throw new Error(body?.message || 'Paystack refund request failed');
+            refund.providerRefundId = body.data?.id?.toString();
+            refund.status = this.mapPaystackRefundStatus(body.data?.status);
+            refund.providerSnapshot = body.data;
+            await refund.save();
+            if (transaction.reconciliationCaseId) {
+                await this.paymentReconciliationCaseModel.updateOne(
+                    { _id: transaction.reconciliationCaseId },
+                    { $set: { status: ReconciliationCaseStatus.REFUND_PENDING } },
+                );
+            }
+            await this.recordPaymentAudit({
+                action: 'paystack_refund_initiated',
+                description: reason.trim(),
+                paymentTransactionId: transaction._id,
+                reconciliationCaseId: transaction.reconciliationCaseId,
+                refundId: refund._id,
+                actorId,
+                actorType: 'staff',
+            });
+            return refund;
+        } catch (error: any) {
+            refund.status = PaymentRefundStatus.FAILED;
+            refund.failureReason = error?.message || String(error);
+            await refund.save();
+            throw error;
+        }
+    }
+
+    private mapPaystackRefundStatus(status: string): PaymentRefundStatus {
+        const normalized = String(status || '').replace(/-/g, '_').toLowerCase();
+        return Object.values(PaymentRefundStatus).includes(normalized as PaymentRefundStatus)
+            ? normalized as PaymentRefundStatus
+            : PaymentRefundStatus.PENDING;
+    }
+
+    async recordManualRefund(params: {
+        paymentTransactionId: string;
+        actorId: string;
+        reason: string;
+        reference: string;
+        amount?: number;
+    }) {
+        const transaction = await this.paymentTransactionModel.findById(params.paymentTransactionId);
+        if (!transaction || transaction.status !== PaymentStatus.SUCCESSFUL) {
+            throw new Error('A successful payment transaction is required');
+        }
+        if (!params.reason?.trim() || !params.reference?.trim()) {
+            throw new Error('Refund reason and bank reference are required');
+        }
+        const amount = Number(params.amount || transaction.amount);
+        if (amount <= 0 || amount > Number(transaction.amount)) throw new Error('Invalid refund amount');
+        const refund = await this.paymentRefundModel.create({
+            paymentTransactionId: transaction._id,
+            amount,
+            currency: 'NGN',
+            method: PaymentRefundMethod.MANUAL,
+            status: PaymentRefundStatus.PROCESSED,
+            reason: params.reason.trim(),
+            manualReference: params.reference.trim(),
+            requestedBy: new Types.ObjectId(params.actorId),
+            requestedAt: new Date(),
+            processedAt: new Date(),
+        });
+        await this.recordPaymentAudit({
+            action: 'manual_refund_recorded',
+            description: params.reason.trim(),
+            paymentTransactionId: transaction._id,
+            reconciliationCaseId: transaction.reconciliationCaseId,
+            refundId: refund._id,
+            actorId: params.actorId,
+            actorType: 'staff',
+            metadata: { reference: params.reference, amount },
+        });
+        if (transaction.reconciliationCaseId) {
+            await this.paymentReconciliationCaseModel.updateOne(
+                { _id: transaction.reconciliationCaseId },
+                {
+                    $set: {
+                        status: ReconciliationCaseStatus.RESOLVED,
+                        resolvedBy: new Types.ObjectId(params.actorId),
+                        resolvedAt: new Date(),
+                        resolution: `Manual refund recorded: ${params.reference.trim()}`,
+                    },
+                },
+            );
+        }
+        return refund;
     }
 
     async initializeExternalAccommodationPayment(input: {
@@ -1614,6 +2433,42 @@ export class PaymentsService {
         if (existing) throw new Error('Accommodation payment has already been completed');
 
         const reference = this.buildPaymentReference();
+        const obligationKey = this.buildPaymentObligationKey({
+            paymentContext: PaymentContext.ACCOMMODATION_APPLICATION,
+            userId: input.userId,
+            accommodationApplicationId: input.accommodationApplicationId,
+            academicSessionId: input.academicSessionId,
+            paymentId: input.paymentId,
+        });
+        const activeAttemptKey = `active:${obligationKey}`;
+        let paymentTransaction: any;
+        try {
+            paymentTransaction = await this.paymentTransactionModel.create({
+                userId: new Types.ObjectId(input.userId),
+                externalResidentId: new Types.ObjectId(input.externalResidentId),
+                accommodationApplicationId: new Types.ObjectId(input.accommodationApplicationId),
+                academicSessionId: new Types.ObjectId(input.academicSessionId),
+                paymentId: payment._id,
+                payerType: PaymentPayerType.EXTERNAL_RESIDENT,
+                paymentContext: PaymentContext.ACCOMMODATION_APPLICATION,
+                amount: payment.amount,
+                reference,
+                status: PaymentStatus.PENDING,
+                method: PaymentMethod.PAYSTACK,
+                providerInitializationStatus: ProviderInitializationStatus.CREATED,
+                activeAttemptKey,
+                fulfilmentStatus: PaymentFulfilmentStatus.UNAPPLIED,
+                remarks: 'External accommodation payment created - awaiting Paystack initialization',
+                ...this.buildDestinationSnapshot(destination),
+            });
+        } catch (error: any) {
+            if (error?.code === 11000) {
+                const active = await this.paymentTransactionModel.findOne({ activeAttemptKey });
+                return { reference: active?.reference || reference, pending: true };
+            }
+            throw error;
+        }
+
         const payload = this.buildPaystackInitializePayload({
             email: input.email,
             amount: payment.amount,
@@ -1623,24 +2478,30 @@ export class PaymentsService {
             paymentName: payment.name,
             destinationAccount: destination,
             callbackUrl: `${process.env.WEBSITE_URL || 'https://alecons.edu.ng'}/accommodation/external?paymentReference=${encodeURIComponent(reference)}`,
+            metadata: {
+                paymentTransactionId: paymentTransaction._id.toString(),
+                externalResidentId: input.externalResidentId,
+                accommodationApplicationId: input.accommodationApplicationId,
+                academicSessionId: input.academicSessionId,
+                paymentContext: PaymentContext.ACCOMMODATION_APPLICATION,
+            },
         });
-        const response = await this.initializePaystackTransactionWithFallback(payload, destination, false);
-
-        await this.paymentTransactionModel.create({
-            userId: new Types.ObjectId(input.userId),
-            externalResidentId: new Types.ObjectId(input.externalResidentId),
-            accommodationApplicationId: new Types.ObjectId(input.accommodationApplicationId),
-            academicSessionId: new Types.ObjectId(input.academicSessionId),
-            paymentId: payment._id,
-            payerType: PaymentPayerType.EXTERNAL_RESIDENT,
-            paymentContext: PaymentContext.ACCOMMODATION_APPLICATION,
-            amount: payment.amount,
-            reference,
-            status: PaymentStatus.PENDING,
-            method: PaymentMethod.PAYSTACK,
-            remarks: 'External accommodation payment initialized - awaiting user action',
-            ...this.buildDestinationSnapshot(destination),
-        });
+        let response: any;
+        try {
+            response = await this.initializePaystackTransactionWithFallback(payload, destination, false);
+            paymentTransaction.accessCode = response.data.access_code;
+            paymentTransaction.providerInitializationStatus = ProviderInitializationStatus.INITIALIZED;
+            paymentTransaction.remarks = 'External accommodation payment initialized - awaiting user action';
+            await paymentTransaction.save();
+        } catch (error: any) {
+            paymentTransaction.status = PaymentStatus.FAILED;
+            paymentTransaction.providerInitializationStatus = ProviderInitializationStatus.FAILED;
+            paymentTransaction.providerInitializationError = error?.message || 'Paystack initialization failed';
+            paymentTransaction.activeAttemptKey = undefined;
+            paymentTransaction.remarks = `Paystack initialization failed: ${paymentTransaction.providerInitializationError}`;
+            await paymentTransaction.save();
+            throw error;
+        }
 
         return {
             authorization_url: response.data.authorization_url,
@@ -2593,9 +3454,40 @@ export class PaymentsService {
 
             const totals = summary?.totals?.[0] || {};
             const todaysRevenue = summary?.todaysRevenue?.[0] || {};
+            const [refundSummary] = await this.paymentRefundModel.aggregate([
+                { $match: { status: PaymentRefundStatus.PROCESSED } },
+                {
+                    $lookup: {
+                        from: 'paymenttransactions',
+                        localField: 'paymentTransactionId',
+                        foreignField: '_id',
+                        as: 'transaction',
+                    },
+                },
+                { $unwind: '$transaction' },
+                ...(match.academicSessionId ? [{ $match: { 'transaction.academicSessionId': match.academicSessionId } }] : []),
+                { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+            ]);
+            const [duplicateSummary] = await this.paymentTransactionModel.aggregate([
+                {
+                    $match: {
+                        ...match,
+                        status: PaymentStatus.SUCCESSFUL,
+                        fulfilmentStatus: PaymentFulfilmentStatus.DUPLICATE,
+                    },
+                },
+                { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+            ]);
+            const grossRevenue = Number(totals.totalRevenue || 0);
+            const refundedAmount = Number(refundSummary?.total || 0);
 
             return {
-                totalRevenue: Number(totals.totalRevenue || 0),
+                totalRevenue: grossRevenue,
+                grossRevenue,
+                refundedAmount,
+                netRevenue: grossRevenue - refundedAmount,
+                duplicateAmount: Number(duplicateSummary?.total || 0),
+                duplicateCount: Number(duplicateSummary?.count || 0),
                 awaitingVerification: Number(totals.awaitingVerification || 0),
                 todaysRevenue: Number(todaysRevenue.total || 0),
                 pendingRemittance: Number(totals.pendingRemittance || 0),
@@ -2818,6 +3710,14 @@ export class PaymentsService {
                 },
             },
             {
+                $lookup: {
+                    from: 'paymentrefunds',
+                    localField: '_id',
+                    foreignField: 'paymentTransactionId',
+                    as: 'refunds',
+                },
+            },
+            {
                 $unwind: {
                     path: '$program',
                     preserveNullAndEmptyArrays: true,
@@ -2874,6 +3774,7 @@ export class PaymentsService {
                         $ifNull: ['$programMode.mode', { $ifNull: ['$programMode.name', '$programMode.description'] }],
                     },
                     academicSessionLabel: '$academicSession.sessionYear',
+                    latestRefund: { $arrayElemAt: ['$refunds', -1] },
                 },
             },
         ];
@@ -3007,6 +3908,7 @@ export class PaymentsService {
                             verificationRemarks: 1,
                             remarks: 1,
                             gatewayStatus: 1,
+                            gatewayId: 1,
                             gatewayResponse: 1,
                             lastVerifiedAt: 1,
                             verificationAttempts: 1,
@@ -3015,6 +3917,14 @@ export class PaymentsService {
                                 lastName: '$rejectedByUser.lastName',
                             },
                             channel: 1,
+                            fulfilmentStatus: 1,
+                            duplicateOfTransactionId: 1,
+                            reconciliationCaseId: 1,
+                            recoveredAt: 1,
+                            recoverySource: 1,
+                            refundStatus: '$latestRefund.status',
+                            refundedAmount: '$latestRefund.amount',
+                            refundId: '$latestRefund._id',
                         },
                     },
                 ],
@@ -3681,22 +4591,74 @@ export class PaymentsService {
             reference: reference,
             status: PaymentStatus.PENDING,
             method: PaymentMethod.PAYSTACK,
-            remarks: 'Payment initialized - awaiting user action',
+            providerInitializationStatus: ProviderInitializationStatus.CREATED,
+            activeAttemptKey: `active:${this.buildPaymentObligationKey({
+                paymentContext: accommodationApplication
+                    ? PaymentContext.ACCOMMODATION_APPLICATION
+                    : PaymentContext.STUDENT_ACCOUNT,
+                userId,
+                applicationId: linkedApplication.applicationId,
+                accommodationApplicationId: accommodationApplication?._id,
+                academicSessionId: billableSessionId,
+                paymentId,
+            })}`,
+            fulfilmentStatus: PaymentFulfilmentStatus.UNAPPLIED,
+            remarks: 'Payment created - awaiting Paystack initialization',
             ...this.buildDestinationSnapshot(paystackDestinationAccount),
         });
 
-        await paymentTransaction.save();
+        try {
+            await paymentTransaction.save();
+        } catch (error: any) {
+            if (error?.code === 11000) {
+                const active = await this.paymentTransactionModel.findOne({
+                    activeAttemptKey: paymentTransaction.activeAttemptKey,
+                });
+                return {
+                    reference: active?.reference || reference,
+                    authorization_url: active?.accessCode
+                        ? `https://checkout.paystack.com/${active.accessCode}`
+                        : undefined,
+                    access_code: active?.accessCode,
+                    pending: true,
+                };
+            }
+            throw error;
+        }
 
         // Initialize with Paystack
-        const paystackResponse = await this.initializePaystackPayment(
-            reference,
-            email,
-            payment.amount,
-            userId,
-            paymentId,
-            payment.name,
-            paystackDestinationAccount,
-        );
+        let paystackResponse: any;
+        try {
+            paystackResponse = await this.initializePaystackPayment(
+                reference,
+                email,
+                payment.amount,
+                userId,
+                paymentId,
+                payment.name,
+                paystackDestinationAccount,
+                {
+                    paymentTransactionId: paymentTransaction._id.toString(),
+                    applicationId: linkedApplication.applicationId?.toString(),
+                    studentId: student._id?.toString(),
+                    accommodationApplicationId: accommodationApplication?._id?.toString(),
+                    academicSessionId: billableSessionId,
+                    paymentContext: paymentTransaction.paymentContext,
+                },
+            );
+            paymentTransaction.accessCode = paystackResponse.access_code;
+            paymentTransaction.providerInitializationStatus = ProviderInitializationStatus.INITIALIZED;
+            paymentTransaction.remarks = 'Payment initialized - awaiting user action';
+            await paymentTransaction.save();
+        } catch (error: any) {
+            paymentTransaction.status = PaymentStatus.FAILED;
+            paymentTransaction.providerInitializationStatus = ProviderInitializationStatus.FAILED;
+            paymentTransaction.providerInitializationError = error?.message || 'Paystack initialization failed';
+            paymentTransaction.activeAttemptKey = undefined;
+            paymentTransaction.remarks = `Paystack initialization failed: ${paymentTransaction.providerInitializationError}`;
+            await paymentTransaction.save();
+            throw error;
+        }
 
         return {
             authorization_url: paystackResponse.authorization_url,
@@ -3895,16 +4857,18 @@ export class PaymentsService {
             throw new Error('Only pending manual transfer payments can be verified');
         }
 
+        const obligationKey = this.getTransactionObligationKey(paymentTransaction);
         const duplicateSuccessQuery: any = {
             _id: { $ne: paymentTransaction._id },
-            userId: paymentTransaction.userId,
-            paymentId: paymentTransaction.paymentId,
             status: PaymentStatus.SUCCESSFUL,
+            $or: [
+                { fulfilledObligationKey: obligationKey },
+                {
+                    fulfilledObligationKey: { $exists: false },
+                    ...this.buildTransactionObligationMatch(paymentTransaction),
+                },
+            ],
         };
-
-        if (paymentTransaction.academicSessionId) {
-            duplicateSuccessQuery.academicSessionId = paymentTransaction.academicSessionId;
-        }
 
         const existingSuccessfulPayment = await this.paymentTransactionModel.findOne(duplicateSuccessQuery);
         if (existingSuccessfulPayment) {
@@ -3912,6 +4876,8 @@ export class PaymentsService {
         }
 
         paymentTransaction.status = PaymentStatus.SUCCESSFUL;
+        paymentTransaction.fulfilmentStatus = PaymentFulfilmentStatus.APPLIED;
+        paymentTransaction.fulfilledObligationKey = obligationKey;
         paymentTransaction.remarks = 'Payment successful and verified by staff';
         paymentTransaction.verificationRemarks = remarks || 'Manual transfer verified by staff';
         paymentTransaction.verifiedBy = new Types.ObjectId(staffId);
@@ -4148,6 +5114,7 @@ export class PaymentsService {
         paymentId: string,
         paymentName: string,
         destinationAccount?: Partial<PaymentDestinationAccount> | null,
+        metadata?: Record<string, unknown>,
     ) {
         try {
             const data = await this.initializePaystackTransactionWithFallback(
@@ -4159,6 +5126,7 @@ export class PaymentsService {
                     paymentId,
                     paymentName,
                     destinationAccount,
+                    metadata,
                     callbackUrl: `${process.env.STUDENT_PORTAL_URL}/payment/verify/${reference}`,
                 }),
                 destinationAccount,

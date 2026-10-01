@@ -82,6 +82,8 @@ export const MODULE_DEFINITIONS = {
         permissions: [
             { value: 'view', label: 'View' },
             { value: 'edit', label: 'Edit' },
+            { value: 'reconcile', label: 'Reconcile Provider Payments' },
+            { value: 'refund', label: 'Issue and Record Refunds' },
             { value: 'export', label: 'Export' },
             { value: 'manage', label: 'Manage All' },
         ],

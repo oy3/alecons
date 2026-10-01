@@ -16,6 +16,7 @@ import {
     Delete,
     Query,
     Patch,
+    ForbiddenException,
     UploadedFile,
     UseInterceptors,
     Res,
@@ -36,6 +37,11 @@ import {
 } from "../schemas/payment-destination-account.schema";
 import { PaymentAudience } from "../schemas/payment.schema";
 import { Response } from "express";
+import { PaystackWebhookQueueService } from "./paystack-webhook.processor";
+import { RolesGuard } from "../guards/roles.guard";
+import { Roles } from "../decorators/roles.decorator";
+import { UserRole } from "../schemas/user.schema";
+import { RolesService } from "../services/roles.service";
 
 @Controller("payments")
 @UseGuards(JwtAuthGuard)
@@ -233,7 +239,10 @@ export interface ManualPaymentReviewDto {
 export class PaystackWebhookController {
     private readonly logger = new Logger(PaystackWebhookController.name);
 
-    constructor(private readonly paymentsService: PaymentsService) { }
+    constructor(
+        private readonly paymentsService: PaymentsService,
+        private readonly webhookQueue: PaystackWebhookQueueService,
+    ) { }
 
     @Post("webhook/paystack")
     @HttpCode(200)
@@ -242,11 +251,12 @@ export class PaystackWebhookController {
         @Headers("x-paystack-signature") signature?: string,
     ) {
         try {
-            const result = await this.paymentsService.processPaystackWebhook(
+            const result = await this.paymentsService.acceptPaystackWebhook(
                 signature,
                 req?.rawBody,
                 req?.body,
             );
+            await this.webhookQueue.enqueue(result.eventId);
 
             return {
                 status: true,
@@ -269,7 +279,8 @@ export class PaystackWebhookController {
 // Staff Payment Management Controller
 @ApiTags("Staff Payment Management")
 @Controller("staff/payments")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.STAFF)
 @ApiBearerAuth()
 export class StaffPaymentsController {
     private readonly logger = new Logger(StaffPaymentsController.name);
@@ -277,7 +288,23 @@ export class StaffPaymentsController {
     constructor(
         private readonly paymentsService: PaymentsService,
         private readonly paymentRemittanceService: PaymentRemittanceService,
+        private readonly rolesService: RolesService,
     ) { }
+
+    private userId(req: any): string {
+        return String(req.user?.userId || req.user?._id || "");
+    }
+
+    private async authorize(req: any, permission: string): Promise<void> {
+        if (req.user?.role === UserRole.ADMIN) return;
+        const access = await this.rolesService.getUserModuleAccess(this.userId(req), "payments");
+        if (
+            !access
+            || (!access.permissions.includes(permission) && !access.permissions.includes("manage"))
+        ) {
+            throw new ForbiddenException("You do not have the required payments permission");
+        }
+    }
 
     @Get()
     @ApiOperation({ summary: "Get all payments with filters and pagination" })
@@ -949,6 +976,106 @@ export class StaffPaymentsController {
                 res.status(statusCode).json(responseBody);
             }
         }
+    }
+
+    @Post("recovery/preview")
+    @ApiOperation({ summary: "Preview historical Paystack transaction recovery" })
+    async previewPaystackRecovery(
+        @Request() req,
+        @Body() body: { academicSessionId: string; identifiers: string[] },
+    ) {
+        await this.authorize(req, "reconcile");
+        const data = await this.paymentsService.previewPaystackRecovery({
+            academicSessionId: body?.academicSessionId,
+            identifiers: body?.identifiers,
+            actorId: (req.user.userId || req.user._id).toString(),
+        });
+        return { success: true, data, message: "Paystack recovery preview completed" };
+    }
+
+    @Post("recovery/apply")
+    @ApiOperation({ summary: "Apply a previously previewed Paystack recovery run" })
+    async applyPaystackRecovery(
+        @Request() req,
+        @Body() body: { runId: string; reason: string },
+    ) {
+        await this.authorize(req, "reconcile");
+        const data = await this.paymentsService.applyPaystackRecovery({
+            runId: body?.runId,
+            reason: body?.reason,
+            actorId: (req.user.userId || req.user._id).toString(),
+        });
+        return { success: true, data, message: "Paystack recovery applied" };
+    }
+
+    @Get("reconciliation-cases")
+    async getReconciliationCases(
+        @Request() req,
+        @Query("status") status?: string,
+        @Query("type") type?: string,
+        @Query("page") page: number = 1,
+        @Query("limit") limit: number = 20,
+    ) {
+        await this.authorize(req, "reconcile");
+        return {
+            success: true,
+            data: await this.paymentsService.getReconciliationCases({ status, type, page, limit }),
+        };
+    }
+
+    @Patch("reconciliation-cases/:id/resolve")
+    async resolveReconciliationCase(
+        @Request() req,
+        @Param("id") id: string,
+        @Body() body: { resolution: string },
+    ) {
+        await this.authorize(req, "reconcile");
+        return {
+            success: true,
+            data: await this.paymentsService.resolveReconciliationCase(
+                id,
+                (req.user.userId || req.user._id).toString(),
+                body?.resolution,
+            ),
+        };
+    }
+
+    @Post("payment-transactions/:id/refunds/paystack")
+    async initiatePaystackRefund(
+        @Request() req,
+        @Param("id") id: string,
+        @Body() body: { reason: string },
+    ) {
+        await this.authorize(req, "refund");
+        return {
+            success: true,
+            data: await this.paymentsService.initiatePaystackRefund(
+                id,
+                (req.user.userId || req.user._id).toString(),
+                body?.reason,
+            ),
+            message: "Paystack refund request submitted",
+        };
+    }
+
+    @Post("payment-transactions/:id/refunds/manual")
+    async recordManualRefund(
+        @Request() req,
+        @Param("id") id: string,
+        @Body() body: { reason: string; reference: string; amount?: number },
+    ) {
+        await this.authorize(req, "refund");
+        return {
+            success: true,
+            data: await this.paymentsService.recordManualRefund({
+                paymentTransactionId: id,
+                actorId: (req.user.userId || req.user._id).toString(),
+                reason: body?.reason,
+                reference: body?.reference,
+                amount: body?.amount,
+            }),
+            message: "Manual refund recorded",
+        };
     }
 
     @Get(":id")

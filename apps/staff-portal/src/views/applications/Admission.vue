@@ -24,12 +24,24 @@ export default {
       applications: [],
       programs: [],
       isLoading: true,
+      statsLoading: true,
       searchQuery: "",
-      statusFilter: "pending",
       programFilter: "all",
       academicSessionFilter: "",
+      admissionQueueStatus: "all",
+      examOutcomeFilter: "all",
+      examScheduleFilter: "all",
+      applicantRouteFilter: "all",
+      sortOption: "jambScore_desc",
+      admissionStats: {
+        activeQueue: 0,
+        examNotScheduled: 0,
+        awaitingExamResult: 0,
+        readyForDecision: 0,
+      },
       academicSessions: [],
       isInitializingFilters: true,
+      isResettingFilters: false,
       stageNames: {
         1: "Email Verification",
         2: "Form Fee Payment",
@@ -55,6 +67,7 @@ export default {
         examTime: "",
         examLinkType: "cbt",
         examLink: "",
+        reason: "",
       },
       examScheduleMode: "schedule",
       examFormProcessing: false,
@@ -108,6 +121,39 @@ export default {
       return SCHOOL_ADDRESS;
     },
 
+    minimumRetakeSchedule() {
+      const minimumTimestamp = this.scheduleNow + 60000;
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Africa/Lagos",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      })
+        .formatToParts(new Date(minimumTimestamp))
+        .reduce((result, part) => {
+          if (part.type !== "literal") result[part.type] = part.value;
+          return result;
+        }, {});
+
+      return {
+        date: `${parts.year}-${parts.month}-${parts.day}`,
+        time: `${parts.hour}:${parts.minute}`,
+      };
+    },
+
+    minimumRetakeExamDate() {
+      return this.minimumRetakeSchedule.date;
+    },
+
+    minimumRetakeExamTime() {
+      return this.examForm.examDate === this.minimumRetakeExamDate
+        ? this.minimumRetakeSchedule.time
+        : undefined;
+    },
+
     isExamScoreFormValid() {
       const score = Number(this.scoreForm.score);
       return (
@@ -119,11 +165,60 @@ export default {
       );
     },
 
+    activeAdvancedFilterCount() {
+      return [
+        this.examOutcomeFilter,
+        this.examScheduleFilter,
+        this.applicantRouteFilter,
+      ].filter((value) => value !== "all").length;
+    },
+
+    admissionStatCards() {
+      return [
+        {
+          key: "activeQueue",
+          label: "Admission Queue",
+          value: this.admissionStats.activeQueue,
+          icon: "bi-people",
+          filter: "all",
+          tone: "primary",
+        },
+        {
+          key: "examNotScheduled",
+          label: "Exam Not Scheduled",
+          value: this.admissionStats.examNotScheduled,
+          icon: "bi-calendar-x",
+          filter: "exam_not_scheduled",
+          tone: "warning",
+        },
+        {
+          key: "awaitingExamResult",
+          label: "Awaiting Exam Result",
+          value: this.admissionStats.awaitingExamResult,
+          icon: "bi-hourglass-split",
+          filter: "awaiting_result",
+          tone: "info",
+        },
+        {
+          key: "readyForDecision",
+          label: "Ready for Decision",
+          value: this.admissionStats.readyForDecision,
+          icon: "bi-clipboard-check",
+          filter: "decision_ready",
+          tone: "success",
+        },
+      ];
+    },
+
     paginationItems() {
       const total = this.totalPages;
       const visiblePages = new Set([1, 2, total - 1, total]);
 
-      for (let page = this.currentPage - 1; page <= this.currentPage + 1; page += 1) {
+      for (
+        let page = this.currentPage - 1;
+        page <= this.currentPage + 1;
+        page += 1
+      ) {
         if (page >= 1 && page <= total) visiblePages.add(page);
       }
 
@@ -150,10 +245,35 @@ export default {
   watch: {
     programFilter() {
       this.currentPage = 1;
-      this.loadApplications();
+      this.loadAdmissionData();
     },
     academicSessionFilter() {
       if (this.isInitializingFilters) return;
+      this.currentPage = 1;
+      this.loadAdmissionData();
+    },
+    admissionQueueStatus() {
+      if (this.isResettingFilters) return;
+      this.currentPage = 1;
+      this.loadApplications();
+    },
+    examOutcomeFilter() {
+      if (this.isResettingFilters) return;
+      this.currentPage = 1;
+      this.loadApplications();
+    },
+    examScheduleFilter() {
+      if (this.isResettingFilters) return;
+      this.currentPage = 1;
+      this.loadApplications();
+    },
+    applicantRouteFilter() {
+      if (this.isResettingFilters) return;
+      this.currentPage = 1;
+      this.loadApplications();
+    },
+    sortOption() {
+      if (this.isResettingFilters) return;
       this.currentPage = 1;
       this.loadApplications();
     },
@@ -192,7 +312,7 @@ export default {
     await Promise.all([this.loadPrograms(), this.loadAcademicSessions()]);
     this.academicSessionFilter = this.academicSessions[0]?._id || "";
     this.isInitializingFilters = false;
-    await this.loadApplications();
+    await this.loadAdmissionData();
   },
   beforeUnmount() {
     this.unregisterModalA11yHandlers();
@@ -316,16 +436,18 @@ export default {
       try {
         const response = await apiService.getPrograms({ limit: 100 });
         if (response.success && response.data) {
-          this.programs = sortProgramsByAvailability(response.data.map((p) => ({
-            ...p,
-            label: appendProgramAvailability(
-              [p.programType, p.programModeDescription, p.name]
-                .filter(Boolean)
-                .join(" "),
-              p,
-            ),
-            value: p.id,
-          })));
+          this.programs = sortProgramsByAvailability(
+            response.data.map((p) => ({
+              ...p,
+              label: appendProgramAvailability(
+                [p.programType, p.programModeDescription, p.name]
+                  .filter(Boolean)
+                  .join(" "),
+                p,
+              ),
+              value: p.id,
+            })),
+          );
         }
       } catch (error) {
         logger.error("Failed to load programs:", error);
@@ -352,12 +474,18 @@ export default {
       try {
         this.isLoading = true;
 
+        const [sortBy, sortOrder] = this.sortOption.split("_");
+
         const params = {
           page: this.currentPage,
           limit: this.perPage,
-          sortBy: "jambScore",
-          sortOrder: "desc",
-          status: "pending", // Always filter for pending applications only
+          sortBy,
+          sortOrder,
+          admissionQueue: "true",
+          admissionQueueStatus: this.admissionQueueStatus,
+          examOutcome: this.examOutcomeFilter,
+          examSchedule: this.examScheduleFilter,
+          applicantRoute: this.applicantRouteFilter,
         };
 
         if (this.programFilter && this.programFilter !== "all") {
@@ -395,6 +523,10 @@ export default {
             jambScore: app.jambScore,
             entranceExam: app.entranceExam,
             screening: app.screening,
+            matriculationNumber: app.matriculationNumber,
+            admissionQueueStatus:
+              app.admissionQueueStatus || "exam_not_scheduled",
+            examScheduledAt: app.examScheduledAt,
             admissionFlow: app.admissionFlow || {
               entranceExamEnabled: true,
               screeningEnabled: true,
@@ -429,9 +561,64 @@ export default {
       }
     },
 
+    async loadAdmissionStats() {
+      try {
+        this.statsLoading = true;
+        const params = {};
+
+        if (this.programFilter && this.programFilter !== "all") {
+          params.programId = this.programFilter;
+        }
+        if (this.academicSessionFilter) {
+          params.academicSessionId = this.academicSessionFilter;
+        }
+        if (this.searchQuery && this.searchQuery.trim()) {
+          params.search = this.searchQuery.trim();
+        }
+
+        const response = await apiService.getAdmissionQueueStats(params);
+        if (response.success) {
+          this.admissionStats = {
+            activeQueue: response.data?.activeQueue || 0,
+            examNotScheduled: response.data?.examNotScheduled || 0,
+            awaitingExamResult: response.data?.awaitingExamResult || 0,
+            readyForDecision: response.data?.readyForDecision || 0,
+          };
+        }
+      } catch (error) {
+        logger.error("Failed to load admission queue statistics:", error);
+      } finally {
+        this.statsLoading = false;
+      }
+    },
+
+    async loadAdmissionData() {
+      await Promise.all([this.loadApplications(), this.loadAdmissionStats()]);
+    },
+
     searchApplications() {
       this.currentPage = 1;
-      this.loadApplications();
+      this.loadAdmissionData();
+    },
+
+    selectAdmissionStat(filter) {
+      this.admissionQueueStatus =
+        this.admissionQueueStatus === filter && filter !== "all"
+          ? "all"
+          : filter;
+    },
+
+    async resetAdmissionFilters() {
+      this.isResettingFilters = true;
+      this.admissionQueueStatus = "all";
+      this.examOutcomeFilter = "all";
+      this.examScheduleFilter = "all";
+      this.applicantRouteFilter = "all";
+      this.sortOption = "jambScore_desc";
+      this.currentPage = 1;
+      await this.$nextTick();
+      this.isResettingFilters = false;
+      await this.loadApplications();
     },
 
     getStatusBadgeClass(status) {
@@ -445,6 +632,30 @@ export default {
         completed: "badge bg-dark text-white",
       };
       return statusClasses[status] || "badge bg-secondary text-white";
+    },
+
+    getAdmissionQueueLabel(status) {
+      const labels = {
+        exam_not_scheduled: "Exam Not Scheduled",
+        exam_scheduled: "Exam Scheduled",
+        awaiting_exam_result: "Awaiting Exam Result",
+        decision_ready: "Ready for Decision",
+        retake_eligible: "Retake Eligible",
+        retake_scheduled: "Retake Scheduled",
+      };
+      return labels[status] || "Active Queue";
+    },
+
+    getAdmissionQueueBadgeClass(status) {
+      const classes = {
+        exam_not_scheduled: "text-bg-secondary",
+        exam_scheduled: "text-bg-primary",
+        awaiting_exam_result: "text-bg-info",
+        decision_ready: "text-bg-success",
+        retake_eligible: "text-bg-warning",
+        retake_scheduled: "text-bg-primary",
+      };
+      return `badge ${classes[status] || "text-bg-secondary"}`;
     },
 
     getStageName(stageNumber) {
@@ -468,7 +679,10 @@ export default {
     },
 
     getScheduledTimestamp(schedule) {
-      if (!schedule?.date || !/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.time || "")) {
+      if (
+        !schedule?.date ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.time || "")
+      ) {
         return null;
       }
       const date = new Date(schedule.date);
@@ -486,7 +700,9 @@ export default {
     toDateInputValue(value) {
       if (!value) return "";
       const date = new Date(value);
-      return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+      return Number.isNaN(date.getTime())
+        ? ""
+        : date.toISOString().slice(0, 10);
     },
 
     canRescheduleExam(application) {
@@ -506,6 +722,18 @@ export default {
         application.currentStage === 4 &&
         application.entranceExam &&
         application.entranceExam.score === undefined
+      );
+    },
+
+    canScheduleExamRetake(application) {
+      return (
+        this.isEntranceExamEnabled(application) &&
+        application.status === "pending" &&
+        application.admissionDecision === "pending" &&
+        application.entranceExam &&
+        typeof application.entranceExam.score === "number" &&
+        application.entranceExam.passed === false &&
+        !application.matriculationNumber
       );
     },
 
@@ -635,6 +863,7 @@ export default {
         examTime: "",
         examLinkType: "cbt",
         examLink: "",
+        reason: "",
       };
       this.showModal("scheduleExamModal");
     },
@@ -649,6 +878,20 @@ export default {
         examTime: application.entranceExam?.time || "",
         examLinkType: usesCbt ? "cbt" : "custom",
         examLink: usesCbt ? "" : currentLink,
+        reason: "",
+      };
+      this.showModal("scheduleExamModal");
+    },
+
+    scheduleExamRetake(application) {
+      this.selectedApplication = application;
+      this.examScheduleMode = "retake";
+      this.examForm = {
+        examDate: "",
+        examTime: "",
+        examLinkType: "cbt",
+        examLink: "",
+        reason: "",
       };
       this.showModal("scheduleExamModal");
     },
@@ -659,6 +902,23 @@ export default {
       }
 
       return this.cbtExamUrl;
+    },
+
+    handleExamDateChange() {
+      if (this.examScheduleMode !== "retake") return;
+
+      if (!this.examForm.examDate) {
+        this.examForm.examTime = "";
+        return;
+      }
+
+      if (
+        this.minimumRetakeExamTime &&
+        this.examForm.examTime &&
+        this.examForm.examTime < this.minimumRetakeExamTime
+      ) {
+        this.examForm.examTime = "";
+      }
     },
 
     async submitExamSchedule() {
@@ -675,11 +935,43 @@ export default {
           return;
         }
 
+        if (this.examScheduleMode === "retake") {
+          const scheduledTimestamp = this.getScheduledTimestamp({
+            date: this.examForm.examDate,
+            time: this.examForm.examTime,
+          });
+          if (
+            scheduledTimestamp === null ||
+            scheduledTimestamp <= Date.now()
+          ) {
+            this.$swal.fire({
+              icon: "warning",
+              title: "Invalid Retake Schedule",
+              text: "Select a retake exam date and time that is later than the current time.",
+              confirmButtonColor: "#1a5f5f",
+            });
+            return;
+          }
+        }
+
         if (!resolvedExamLink) {
           this.$swal.fire({
             icon: "warning",
             title: "Missing Exam Link",
             text: "Select ALECONS Online CBT or provide a custom exam link.",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
+        if (
+          this.examScheduleMode === "retake" &&
+          !this.examForm.reason.trim()
+        ) {
+          this.$swal.fire({
+            icon: "warning",
+            title: "Retake Reason Required",
+            text: "Enter the reason this applicant is being scheduled for another exam sitting.",
             confirmButtonColor: "#1a5f5f",
           });
           return;
@@ -691,29 +983,57 @@ export default {
           examDate: this.examForm.examDate,
           examTime: this.examForm.examTime,
           examLink: resolvedExamLink,
+          ...(this.examScheduleMode === "retake"
+            ? { reason: this.examForm.reason.trim() }
+            : {}),
         };
         const rescheduling = this.examScheduleMode === "reschedule";
-        const response = rescheduling
-          ? await apiService.rescheduleApplicationExam(this.selectedApplication.id, payload)
-          : await apiService.scheduleApplicationExam(this.selectedApplication.id, payload);
+        const schedulingRetake = this.examScheduleMode === "retake";
+        const response = schedulingRetake
+          ? await apiService.scheduleApplicationExamRetake(
+              this.selectedApplication.id,
+              payload,
+            )
+          : rescheduling
+            ? await apiService.rescheduleApplicationExam(
+                this.selectedApplication.id,
+                payload,
+              )
+            : await apiService.scheduleApplicationExam(
+                this.selectedApplication.id,
+                payload,
+              );
 
         if (response.success) {
+          const notificationSent = response.data?.notificationSent !== false;
           this.$swal.fire({
-            icon: "success",
-            title: rescheduling ? "Exam Rescheduled" : "Exam Scheduled",
-            text: `Entrance exam has been ${rescheduling ? "rescheduled" : "scheduled"} successfully. The applicant will be notified via email.`,
+            icon: notificationSent ? "success" : "warning",
+            title: notificationSent
+              ? schedulingRetake
+                ? "Exam Retake Scheduled"
+                : rescheduling
+                  ? "Exam Rescheduled"
+                  : "Exam Scheduled"
+              : "Schedule Saved; Email Not Sent",
+            text: notificationSent
+              ? schedulingRetake
+                ? "The previous result was preserved, a new exam sitting was scheduled, and the applicant was notified by email."
+                : `Entrance exam has been ${rescheduling ? "rescheduled" : "scheduled"} successfully and the applicant was notified by email.`
+              : "The exam schedule was saved, but the email notification could not be delivered. Please provide the schedule to the applicant manually.",
             confirmButtonColor: "#1a5f5f",
           });
 
           this.hideModal("scheduleExamModal");
-          await this.loadApplications();
+          await this.loadAdmissionData();
         }
       } catch (error) {
         logger.error("Failed to save exam schedule:", error);
         this.$swal.fire({
           icon: "error",
           title: "Failed",
-          text: error.message || "Failed to save the exam schedule. Please try again.",
+          text:
+            error.message ||
+            "Failed to save the exam schedule. Please try again.",
           confirmButtonColor: "#1a5f5f",
         });
       } finally {
@@ -761,7 +1081,7 @@ export default {
           });
 
           this.hideModal("examScoreModal");
-          await this.loadApplications();
+          await this.loadAdmissionData();
         }
       } catch (error) {
         logger.error("Failed to update exam score:", error);
@@ -827,7 +1147,8 @@ export default {
 
         if (response.success) {
           this.$swal.fire({
-            icon: response.data?.notificationSent === false ? "warning" : "success",
+            icon:
+              response.data?.notificationSent === false ? "warning" : "success",
             title: "Screening Scheduled",
             text:
               response.data?.notificationSent === false
@@ -837,7 +1158,7 @@ export default {
           });
 
           this.hideModal("scheduleScreeningModal");
-          await this.loadApplications();
+          await this.loadAdmissionData();
         }
       } catch (error) {
         logger.error("Failed to schedule screening:", error);
@@ -868,7 +1189,11 @@ export default {
 
     async submitAdmissionDecision() {
       if (!this.decisionForm.decision) {
-        await this.$swal.fire({ icon: "warning", title: "Select Decision", text: "Choose whether to admit or reject this applicant." });
+        await this.$swal.fire({
+          icon: "warning",
+          title: "Select Decision",
+          text: "Choose whether to admit or reject this applicant.",
+        });
         return;
       }
       if (
@@ -878,7 +1203,11 @@ export default {
           !this.decisionForm.screeningTime ||
           !this.decisionForm.venue.trim())
       ) {
-        await this.$swal.fire({ icon: "warning", title: "Screening Details Required", text: "Enter the screening date, time, and venue before admitting this applicant." });
+        await this.$swal.fire({
+          icon: "warning",
+          title: "Screening Details Required",
+          text: "Enter the screening date, time, and venue before admitting this applicant.",
+        });
         return;
       }
       try {
@@ -898,32 +1227,35 @@ export default {
 
         if (response.success) {
           this.$swal.fire({
-            icon: response.data?.notificationSent === false ? "warning" : "success",
+            icon:
+              response.data?.notificationSent === false ? "warning" : "success",
             title: "Decision Made",
             text:
               response.data?.notificationSent === false
                 ? "The decision was saved, but one or more notification emails could not be sent."
                 : this.decisionForm.decision === "admitted"
-                ? this.decisionForm.sendProvisionalOffer
-                  ? this.isScreeningEnabled(this.selectedApplication)
-                    ? "Applicant admitted, screening scheduled, and the provisional offer sent."
-                    : "Applicant admitted and the provisional offer sent."
-                  : this.isScreeningEnabled(this.selectedApplication)
-                    ? "Applicant admitted and screening scheduled. Admission notifications have been sent."
-                    : "Applicant admitted. The admission notification has been sent."
-                : "Student rejected. Email notification has been sent.",
+                  ? this.decisionForm.sendProvisionalOffer
+                    ? this.isScreeningEnabled(this.selectedApplication)
+                      ? "Applicant admitted, screening scheduled, and the provisional offer sent."
+                      : "Applicant admitted and the provisional offer sent."
+                    : this.isScreeningEnabled(this.selectedApplication)
+                      ? "Applicant admitted and screening scheduled. Admission notifications have been sent."
+                      : "Applicant admitted. The admission notification has been sent."
+                  : "Student rejected. Email notification has been sent.",
             confirmButtonColor: "#1a5f5f",
           });
 
           this.hideModal("admissionDecisionModal");
-          await this.loadApplications();
+          await this.loadAdmissionData();
         }
       } catch (error) {
         logger.error("Failed to make admission decision:", error);
         this.$swal.fire({
           icon: "error",
           title: "Failed",
-          text: error.message || "Failed to make admission decision. Please try again.",
+          text:
+            error.message ||
+            "Failed to make admission decision. Please try again.",
           confirmButtonColor: "#1a5f5f",
         });
       } finally {
@@ -987,7 +1319,7 @@ export default {
           </div>
           <button
             class="btn btn-staff-primary btn-sm"
-            @click="loadApplications"
+            @click="loadAdmissionData"
           >
             <i class="bi bi-arrow-clockwise me-2"></i>Refresh
           </button>
@@ -995,20 +1327,59 @@ export default {
       </div>
     </div>
 
-    <div class="col-lg-3 col-md-6 mb-3">
-      <select
-        v-model="academicSessionFilter"
-        class="form-select form-select-sm"
-      >
-        <option value="">All Academic Sessions</option>
-        <option
-          v-for="session in academicSessions"
-          :key="session._id"
-          :value="session._id"
+    <div class="row mb-3">
+      <div class="col-lg-3 col-md-6">
+        <label class="form-label fw-semibold" for="admissionSessionFilter">
+          Academic Session
+        </label>
+        <select
+          id="admissionSessionFilter"
+          v-model="academicSessionFilter"
+          class="form-select form-select-sm"
         >
-          {{ session.title }}
-        </option>
-      </select>
+          <option value="">All Academic Sessions</option>
+          <option
+            v-for="session in academicSessions"
+            :key="session._id"
+            :value="session._id"
+          >
+            {{ session.title }}
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Admission queue statistics -->
+    <div class="row g-3 mb-4" aria-label="Admission queue statistics">
+      <div
+        v-for="card in admissionStatCards"
+        :key="card.key"
+        class="col-xl-3 col-md-6"
+      >
+        <button
+          type="button"
+          class="admission-stat-card"
+          :class="[
+            `admission-stat-card--${card.tone}`,
+            { active: admissionQueueStatus === card.filter },
+          ]"
+          :aria-pressed="admissionQueueStatus === card.filter"
+          @click="selectAdmissionStat(card.filter)"
+        >
+          <span class="admission-stat-icon" aria-hidden="true">
+            <i :class="['bi', card.icon]"></i>
+          </span>
+          <span>
+            <span class="admission-stat-label">{{ card.label }}</span>
+            <span v-if="statsLoading" class="placeholder-glow d-block mt-1">
+              <span class="placeholder col-4"></span>
+            </span>
+            <strong v-else class="admission-stat-value">{{
+              card.value
+            }}</strong>
+          </span>
+        </button>
+      </div>
     </div>
 
     <!-- Filters -->
@@ -1016,10 +1387,13 @@ export default {
       <div class="col-12">
         <div class="card p-0 border-0 shadow-sm">
           <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-3">
-                <label class="form-label">Program Filter</label>
+            <div class="row g-3 align-items-end">
+              <div class="col-xl-3 col-md-6">
+                <label class="form-label" for="admissionProgramFilter"
+                  >Program</label
+                >
                 <select
+                  id="admissionProgramFilter"
                   v-model="programFilter"
                   class="form-select form-select-sm"
                 >
@@ -1033,41 +1407,144 @@ export default {
                   </option>
                 </select>
               </div>
-              <div class="col-md-7">
-                <label class="form-label">Search</label>
-                <input
-                  v-model="searchQuery"
-                  type="text"
-                  class="form-control form-control-sm"
-                  placeholder="Search by name, email, or application number..."
-                />
+              <div class="col-xl-3 col-md-6">
+                <label class="form-label" for="admissionQueueFilter"
+                  >Queue Status</label
+                >
+                <select
+                  id="admissionQueueFilter"
+                  v-model="admissionQueueStatus"
+                  class="form-select form-select-sm"
+                >
+                  <option value="all">All Active Applications</option>
+                  <option value="exam_not_scheduled">Exam Not Scheduled</option>
+                  <option value="exam_scheduled">Exam Scheduled</option>
+                  <option value="awaiting_result">Awaiting Exam Result</option>
+                  <option value="decision_ready">
+                    Ready for Admission Decision
+                  </option>
+                  <option value="retake_eligible">Retake Eligible</option>
+                  <option value="retake_scheduled">Retake Scheduled</option>
+                </select>
               </div>
-              <div class="col-md-2 d-flex align-items-end">
-                <button
-                  class="btn btn-outline-staff-primary btn-sm w-100"
-                  @click="searchApplications"
-                >
-                  <i class="bi bi-search me-1"></i>
-                  Search
-                </button>
-                <!-- <button
-                  class="btn btn-outline-staff-primary w-100"
-                  @click="resetFilters"
-                >
-                  <i class="bi bi-funnel-fill me-2"></i>Reset
-                </button> -->
+              <div class="col-xl-4 col-md-8">
+                <label class="form-label" for="admissionSearch">Search</label>
+                <div class="input-group input-group-sm">
+                  <input
+                    id="admissionSearch"
+                    v-model="searchQuery"
+                    type="search"
+                    class="form-control"
+                    placeholder="Name, email, phone, or application number"
+                    @keyup.enter="searchApplications"
+                  />
+                  <button
+                    class="btn btn-outline-staff-primary"
+                    type="button"
+                    @click="searchApplications"
+                  >
+                    <i class="bi bi-search me-1"></i>Search
+                  </button>
+                </div>
+              </div>
+              <div class="col-xl-2 col-md-4">
+                <div class="dropdown">
+                  <button
+                    class="btn btn-outline-staff-primary btn-sm w-100"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                  >
+                    <i class="bi bi-funnel me-1"></i>Filters
+                    <span
+                      v-if="activeAdvancedFilterCount"
+                      class="badge text-bg-primary ms-1"
+                    >
+                      {{ activeAdvancedFilterCount }}
+                    </span>
+                  </button>
+                  <div
+                    class="dropdown-menu dropdown-menu-end admission-filter-menu p-3"
+                  >
+                    <div class="mb-3">
+                      <label class="form-label small fw-semibold"
+                        >Exam Outcome</label
+                      >
+                      <select
+                        v-model="examOutcomeFilter"
+                        class="form-select form-select-sm"
+                      >
+                        <option value="all">All Outcomes</option>
+                        <option value="passed">Passed</option>
+                        <option value="did_not_pass">Did Not Pass</option>
+                      </select>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label small fw-semibold"
+                        >Exam Schedule</label
+                      >
+                      <select
+                        v-model="examScheduleFilter"
+                        class="form-select form-select-sm"
+                      >
+                        <option value="all">All Schedules</option>
+                        <option value="upcoming">Upcoming</option>
+                        <option value="past">Past</option>
+                      </select>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label small fw-semibold"
+                        >Applicant Route</label
+                      >
+                      <select
+                        v-model="applicantRouteFilter"
+                        class="form-select form-select-sm"
+                      >
+                        <option value="all">All Routes</option>
+                        <option value="jamb">JAMB</option>
+                        <option value="jamb_exempt">JAMB Exempt</option>
+                      </select>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label small fw-semibold"
+                        >Sort By</label
+                      >
+                      <select
+                        v-model="sortOption"
+                        class="form-select form-select-sm"
+                      >
+                        <option value="jambScore_desc">
+                          Highest JAMB Score
+                        </option>
+                        <option value="jambScore_asc">Lowest JAMB Score</option>
+                        <option value="examScore_desc">
+                          Highest Exam Score
+                        </option>
+                        <option value="examScore_asc">Lowest Exam Score</option>
+                        <option value="createdAt_desc">
+                          Newest Applications
+                        </option>
+                        <option value="createdAt_asc">
+                          Oldest Applications
+                        </option>
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary btn-sm w-100"
+                      @click="resetAdmissionFilters"
+                    >
+                      <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+                      Filters
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Info Alert -->
-    <div class="alert alert-info" role="alert">
-      <i class="bi bi-info-circle me-2"></i>
-      Showing only applications with <strong>Pending</strong> status, sorted by
-      latest submissions.
     </div>
 
     <!-- Loading State -->
@@ -1091,7 +1568,7 @@ export default {
                     <th class="text-center">Applicant</th>
                     <th>Program</th>
                     <th>Current Stage</th>
-                    <th>Status</th>
+                    <th>Queue Status</th>
                     <th>Exam Status</th>
                     <th>Screening Status</th>
                     <th class="text-center">Actions</th>
@@ -1143,8 +1620,18 @@ export default {
                       </span>
                     </td>
                     <td>
-                      <span :class="getStatusBadgeClass(application.status)">
-                        {{ application.status.toUpperCase() }}
+                      <span
+                        :class="
+                          getAdmissionQueueBadgeClass(
+                            application.admissionQueueStatus,
+                          )
+                        "
+                      >
+                        {{
+                          getAdmissionQueueLabel(
+                            application.admissionQueueStatus,
+                          )
+                        }}
                       </span>
                     </td>
                     <td>
@@ -1261,6 +1748,16 @@ export default {
                               Score
                             </a>
                           </li>
+                          <li v-if="canScheduleExamRetake(application)">
+                            <a
+                              class="dropdown-item"
+                              href="#"
+                              @click.prevent="scheduleExamRetake(application)"
+                            >
+                              <i class="bi bi-arrow-repeat me-2"></i>Schedule
+                              Exam Retake
+                            </a>
+                          </li>
                           <li v-if="canScheduleScreening(application)">
                             <a
                               class="dropdown-item"
@@ -1312,9 +1809,17 @@ export default {
 
                           <div class="d-flex flex-wrap gap-2 mt-2">
                             <span
-                              :class="getStatusBadgeClass(application.status)"
+                              :class="
+                                getAdmissionQueueBadgeClass(
+                                  application.admissionQueueStatus,
+                                )
+                              "
                             >
-                              {{ application.status.toUpperCase() }}
+                              {{
+                                getAdmissionQueueLabel(
+                                  application.admissionQueueStatus,
+                                )
+                              }}
                             </span>
                             <span class="badge bg-info">
                               {{
@@ -1381,6 +1886,18 @@ export default {
                                 >
                                   <i class="bi bi-pencil-square me-1"></i>Exam
                                   Score
+                                </a>
+                              </li>
+                              <li v-if="canScheduleExamRetake(application)">
+                                <a
+                                  class="dropdown-item"
+                                  href="#"
+                                  @click.prevent="
+                                    scheduleExamRetake(application)
+                                  "
+                                >
+                                  <i class="bi bi-arrow-repeat me-1"></i>Exam
+                                  Retake
                                 </a>
                               </li>
                               <li v-if="canScheduleScreening(application)">
@@ -1506,13 +2023,18 @@ export default {
               </p>
             </div>
           </div>
-          <div v-if="totalPages > 1" class="card-footer bg-transparent border-top">
+          <div
+            v-if="totalPages > 1"
+            class="card-footer bg-transparent border-top"
+          >
             <!-- Pagination -->
             <nav
               class="management-pagination-scroll"
               aria-label="Admission applications pagination"
             >
-              <ul class="pagination pagination-sm mb-0 justify-content-center flex-nowrap">
+              <ul
+                class="pagination pagination-sm mb-0 justify-content-center flex-nowrap"
+              >
                 <li class="page-item" :class="{ disabled: currentPage === 1 }">
                   <button
                     type="button"
@@ -1541,7 +2063,9 @@ export default {
                     v-if="item.type === 'page'"
                     class="page-item"
                     :class="{ active: currentPage === item.page }"
-                    :aria-current="currentPage === item.page ? 'page' : undefined"
+                    :aria-current="
+                      currentPage === item.page ? 'page' : undefined
+                    "
                   >
                     <button
                       type="button"
@@ -1570,7 +2094,9 @@ export default {
                   <button
                     type="button"
                     class="page-link"
-                    :disabled="currentPage >= totalPages || applications.length === 0"
+                    :disabled="
+                      currentPage >= totalPages || applications.length === 0
+                    "
                     aria-label="Go to next page"
                     @click="goToPage(currentPage + 1)"
                   >
@@ -1587,7 +2113,9 @@ export default {
                   <button
                     type="button"
                     class="page-link"
-                    :disabled="currentPage >= totalPages || applications.length === 0"
+                    :disabled="
+                      currentPage >= totalPages || applications.length === 0
+                    "
                     aria-label="Go to last page"
                     title="Last page"
                     @click="goToPage(totalPages)"
@@ -1616,9 +2144,11 @@ export default {
         <div class="modal-header">
           <h5 id="scheduleExamModalLabel" class="modal-title">
             {{
-              examScheduleMode === "reschedule"
-                ? "Reschedule Entrance Exam"
-                : "Schedule Entrance Exam"
+              examScheduleMode === "retake"
+                ? "Schedule Entrance Exam Retake"
+                : examScheduleMode === "reschedule"
+                  ? "Reschedule Entrance Exam"
+                  : "Schedule Entrance Exam"
             }}
           </h5>
           <button
@@ -1629,30 +2159,75 @@ export default {
           ></button>
         </div>
         <div class="modal-body">
-          <form @submit.prevent="submitExamSchedule">
-            <div class="mb-3">
-              <label for="examDate" class="form-label">
-                {{ examScheduleMode === "reschedule" ? "New Exam Date" : "Exam Date" }}
-              </label>
-              <input
-                id="examDate"
-                v-model="examForm.examDate"
-                type="date"
-                class="form-control"
-                required
-              />
+          <div
+            v-if="examScheduleMode === 'retake'"
+            class="alert alert-warning"
+            role="alert"
+          >
+            <div class="fw-semibold mb-1">Previous exam result</div>
+            <div>
+              Score: {{ selectedApplication?.entranceExam?.score }}%
+              <span class="ms-2">Outcome: Did not pass</span>
             </div>
-            <div class="mb-3">
-              <label for="examTime" class="form-label">
-                {{ examScheduleMode === "reschedule" ? "New Exam Time" : "Exam Time" }}
-              </label>
-              <input
-                id="examTime"
-                v-model="examForm.examTime"
-                type="time"
-                class="form-control"
-                required
-              />
+            <small>
+              Scheduling a retake preserves this result and creates a new exam
+              sitting awaiting a score.
+            </small>
+          </div>
+          <form @submit.prevent="submitExamSchedule">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="examDate" class="form-label">
+                  {{
+                    examScheduleMode === "schedule"
+                      ? "Exam Date"
+                      : "New Exam Date"
+                  }}
+                </label>
+                <input
+                  id="examDate"
+                  v-model="examForm.examDate"
+                  type="date"
+                  class="form-control"
+                  :min="
+                    examScheduleMode === 'retake'
+                      ? minimumRetakeExamDate
+                      : undefined
+                  "
+                  required
+                  @change="handleExamDateChange"
+                />
+              </div>
+              <div class="col-md-6 mb-3">
+                <label for="examTime" class="form-label">
+                  {{
+                    examScheduleMode === "schedule"
+                      ? "Exam Time"
+                      : "New Exam Time"
+                  }}
+                </label>
+                <input
+                  id="examTime"
+                  v-model="examForm.examTime"
+                  type="time"
+                  class="form-control"
+                  :min="
+                    examScheduleMode === 'retake'
+                      ? minimumRetakeExamTime
+                      : undefined
+                  "
+                  :disabled="
+                    examScheduleMode === 'retake' && !examForm.examDate
+                  "
+                  required
+                />
+                <div
+                  v-if="examScheduleMode === 'retake' && !examForm.examDate"
+                  class="form-text"
+                >
+                  Select the new exam date before choosing a time.
+                </div>
+              </div>
             </div>
             <div class="mb-3">
               <label for="examLinkType" class="form-label">Exam Link</label>
@@ -1686,6 +2261,23 @@ export default {
                 placeholder="https://cbt.platform.com/exam/123"
               />
             </div>
+            <div v-if="examScheduleMode === 'retake'" class="mb-3">
+              <label for="examRetakeReason" class="form-label">
+                Reason for retake
+              </label>
+              <textarea
+                id="examRetakeReason"
+                v-model="examForm.reason"
+                class="form-control"
+                rows="3"
+                maxlength="1000"
+                placeholder="Explain why another exam sitting is being granted"
+                required
+              ></textarea>
+              <div class="form-text">
+                This reason will be recorded in the application audit trail.
+              </div>
+            </div>
           </form>
         </div>
         <div class="modal-footer">
@@ -1706,7 +2298,13 @@ export default {
               v-if="examFormProcessing"
               class="spinner-border spinner-border-sm me-2"
             ></span>
-            {{ examScheduleMode === "reschedule" ? "Reschedule Exam" : "Schedule Exam" }}
+            {{
+              examScheduleMode === "retake"
+                ? "Schedule Retake"
+                : examScheduleMode === "reschedule"
+                  ? "Reschedule Exam"
+                  : "Schedule Exam"
+            }}
           </button>
         </div>
       </div>
@@ -1742,7 +2340,9 @@ export default {
           </div>
           <form @submit.prevent="submitScreeningSchedule">
             <div class="mb-3">
-              <label for="screeningDate" class="form-label">Screening Date</label>
+              <label for="screeningDate" class="form-label"
+                >Screening Date</label
+              >
               <input
                 id="screeningDate"
                 v-model="screeningForm.screeningDate"
@@ -1752,7 +2352,9 @@ export default {
               />
             </div>
             <div class="mb-3">
-              <label for="screeningTime" class="form-label">Screening Time</label>
+              <label for="screeningTime" class="form-label"
+                >Screening Time</label
+              >
               <input
                 id="screeningTime"
                 v-model="screeningForm.screeningTime"
@@ -1987,11 +2589,14 @@ export default {
               </legend>
               <p class="small text-muted">
                 Scheduling is part of admission approval. The applicant can pay
-                the acceptance fee immediately and must still attend this appointment.
+                the acceptance fee immediately and must still attend this
+                appointment.
               </p>
               <div class="row g-3">
                 <div class="col-md-6">
-                  <label for="decisionScreeningDate" class="form-label">Date</label>
+                  <label for="decisionScreeningDate" class="form-label"
+                    >Date</label
+                  >
                   <input
                     id="decisionScreeningDate"
                     v-model="decisionForm.screeningDate"
@@ -2001,7 +2606,9 @@ export default {
                   />
                 </div>
                 <div class="col-md-6">
-                  <label for="decisionScreeningTime" class="form-label">Time</label>
+                  <label for="decisionScreeningTime" class="form-label"
+                    >Time</label
+                  >
                   <input
                     id="decisionScreeningTime"
                     v-model="decisionForm.screeningTime"
@@ -2011,7 +2618,9 @@ export default {
                   />
                 </div>
                 <div class="col-12">
-                  <label for="decisionScreeningVenue" class="form-label">Venue</label>
+                  <label for="decisionScreeningVenue" class="form-label"
+                    >Venue</label
+                  >
                   <textarea
                     id="decisionScreeningVenue"
                     v-model="decisionForm.venue"
@@ -2947,6 +3556,90 @@ export default {
 </template>
 
 <style scoped>
+.admission-stat-card {
+  width: 100%;
+  min-height: 7.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  text-align: left;
+  color: #212529;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 0.25rem 0.75rem rgba(15, 23, 42, 0.06);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.admission-stat-card:hover,
+.admission-stat-card:focus-visible {
+  border-color: var(--staff-primary);
+  box-shadow: 0 0.4rem 1rem rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
+}
+
+.admission-stat-card.active {
+  border-color: var(--staff-primary);
+  box-shadow: 0 0 0 0.2rem rgba(26, 95, 95, 0.14);
+}
+
+.admission-stat-icon {
+  width: 3rem;
+  height: 3rem;
+  flex: 0 0 3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 1.25rem;
+  background: #e9ecef;
+}
+
+.admission-stat-card--primary .admission-stat-icon {
+  color: var(--staff-primary);
+  background: rgba(26, 95, 95, 0.12);
+}
+
+.admission-stat-card--warning .admission-stat-icon {
+  color: #8a5a00;
+  background: #fff3cd;
+}
+
+.admission-stat-card--info .admission-stat-icon {
+  color: #075985;
+  background: #e0f2fe;
+}
+
+.admission-stat-card--success .admission-stat-icon {
+  color: #146c43;
+  background: #d1e7dd;
+}
+
+.admission-stat-label,
+.admission-stat-value {
+  display: block;
+}
+
+.admission-stat-label {
+  color: #6c757d;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.admission-stat-value {
+  margin-top: 0.15rem;
+  font-size: 1.6rem;
+  line-height: 1.15;
+}
+
+.admission-filter-menu {
+  width: min(20rem, calc(100vw - 2rem));
+}
+
 .table thead th {
   font-weight: 600;
   color: var(--staff-primary);

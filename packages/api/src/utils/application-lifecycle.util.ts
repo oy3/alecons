@@ -21,6 +21,10 @@ type ApplicationLifecycleRecord = {
         primary?: unknown;
         secondary?: unknown;
     };
+    entranceExam?: {
+        score?: number | null;
+        passed?: boolean | null;
+    } | null;
 };
 
 const CLOSED_APPLICATION_STATUSES = new Set<string>([
@@ -47,6 +51,18 @@ export function canRevokeAdmissionDecision(application: ApplicationLifecycleReco
     return Boolean(
         application.admissionDecision === AdmissionDecision.DENIED &&
         application.status === ApplicationStatus.REJECTED,
+    );
+}
+
+export function canScheduleEntranceExamRetake(application: ApplicationLifecycleRecord): boolean {
+    return Boolean(
+        application &&
+        application.status === ApplicationStatus.PENDING &&
+        application.admissionDecision === AdmissionDecision.AWAITING_DECISION &&
+        !application.matriculationNumber &&
+        application.entranceExam &&
+        typeof application.entranceExam.score === 'number' &&
+        application.entranceExam.passed === false,
     );
 }
 

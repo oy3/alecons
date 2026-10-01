@@ -89,6 +89,15 @@ export interface EntranceExam {
     link?: string;
     score?: number;
     passed?: boolean;
+    attemptNumber?: number;
+    scheduledAt?: Date;
+    scheduledBy?: Types.ObjectId;
+}
+
+export interface EntranceExamHistoryEntry extends EntranceExam {
+    archivedAt: Date;
+    archivedBy?: Types.ObjectId;
+    retakeReason: string;
 }
 
 export interface Screening {
@@ -271,9 +280,30 @@ export class Application {
             link: String,
             score: Number,
             passed: Boolean,
+            attemptNumber: Number,
+            scheduledAt: Date,
+            scheduledBy: { type: Types.ObjectId, ref: 'User' },
         }
     })
     entranceExam?: EntranceExam;
+
+    @Prop({
+        type: [{
+            date: Date,
+            time: String,
+            link: String,
+            score: Number,
+            passed: Boolean,
+            attemptNumber: Number,
+            scheduledAt: Date,
+            scheduledBy: { type: Types.ObjectId, ref: 'User' },
+            archivedAt: { type: Date, required: true },
+            archivedBy: { type: Types.ObjectId, ref: 'User' },
+            retakeReason: { type: String, required: true, trim: true, maxlength: 1000 },
+        }],
+        default: [],
+    })
+    entranceExamHistory: EntranceExamHistoryEntry[];
 
     // Grouped Screening Fields
     @Prop({

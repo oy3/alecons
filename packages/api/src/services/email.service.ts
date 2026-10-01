@@ -537,7 +537,13 @@ export class EmailService {
     examTime: string,
     examLink: string,
     rescheduled = false,
+    retake = false,
   ): Promise<void> {
+    const eventLabel = retake
+      ? "Retake Scheduled"
+      : rescheduled
+        ? "Rescheduled"
+        : "Scheduled";
     const formattedDate = examDate.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
@@ -548,14 +554,14 @@ export class EmailService {
     const mailOptions = {
       from: `"Alebiosu College of Nursing Sciences" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: `Entrance Examination ${rescheduled ? "Rescheduled" : "Scheduled"} - ALECONS`,
+      subject: `Entrance Examination ${eventLabel} - ALECONS`,
       html: `
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <meta charset="utf-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Entrance Exam ${rescheduled ? "Rescheduled" : "Scheduled"}</title>
+                    <title>Entrance Exam ${eventLabel}</title>
                     <style>
                         body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4; }
                         .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
@@ -568,14 +574,16 @@ export class EmailService {
                 <body>
                     <div class="container">
                         <div class="header">
-                            <h1>🎓 Entrance Examination ${rescheduled ? "Rescheduled" : "Scheduled"}</h1>
+                            <h1>🎓 Entrance Examination ${eventLabel}</h1>
                         </div>
                         
                         <h2>Dear ${firstName},</h2>
                         
-                        <p>${rescheduled
-                          ? "Your entrance examination schedule has changed. Please use the updated details below and disregard the previous schedule."
-                          : "Good news! Your online entrance examination has been scheduled."}</p>
+                        <p>${retake
+                          ? "You have been granted another entrance examination sitting. Your earlier result remains on record; please use the new schedule below for your retake."
+                          : rescheduled
+                            ? "Your entrance examination schedule has changed. Please use the updated details below and disregard the previous schedule."
+                            : "Good news! Your online entrance examination has been scheduled."}</p>
                         
                         <div class="exam-details">
                             <h3>📅 Examination Details:</h3>
@@ -626,6 +634,24 @@ export class EmailService {
       );
       throw error;
     }
+  }
+
+  async sendEntranceExamRetakeScheduledEmail(
+    email: string,
+    firstName: string,
+    examDate: Date,
+    examTime: string,
+    examLink: string,
+  ): Promise<void> {
+    return this.sendEntranceExamScheduledEmail(
+      email,
+      firstName,
+      examDate,
+      examTime,
+      examLink,
+      false,
+      true,
+    );
   }
 
   async sendScreeningScheduledEmail(

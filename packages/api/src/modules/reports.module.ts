@@ -57,6 +57,6 @@ import { StudentFeeObligationService } from '../services/student-fee-obligation.
   ])],
   controllers: [ReportsController, PortalActivityController],
   providers: [ReportsService, ReportsAccessService, ReportExportService, ScheduledReportsService, StudentFeeObligationService, PortalActivityService, EmailService],
+  exports: [ReportsAccessService],
 })
 export class ReportsModule {}
-

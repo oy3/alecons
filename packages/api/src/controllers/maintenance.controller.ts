@@ -22,6 +22,8 @@ import {
 import { UploadService } from '../services/upload.service';
 import { AcademicResultsService } from '../services/academic-results.service';
 import { StudentProgressionService } from '../services/student-progression.service';
+import { MatriculationService } from '../services/matriculation.service';
+import { ReportsAccessService } from '../services/reports-access.service';
 import { createQuestionFingerprint } from '../utils/question-fingerprint';
 
 @Controller('admin/maintenance')
@@ -41,7 +43,53 @@ export class MaintenanceController {
         @InjectModel(PaymentTransaction.name) private readonly paymentTransactionModel: Model<PaymentTransactionDocument>,
         @InjectModel(StudentAcademicSession.name) private readonly studentAcademicSessionModel: Model<StudentAcademicSessionDocument>,
         private readonly uploadService: UploadService,
+        private readonly matriculationService: MatriculationService,
+        private readonly reportsAccessService: ReportsAccessService,
     ) { }
+
+    @Post('migrate-matriculation-counters')
+    async migrateMatriculationCounters(
+        @Body() body: { apply?: boolean; reason?: string; confirmation?: string },
+        @Request() req: any,
+    ) {
+        await this.reportsAccessService.assertUtilityManage(req.user?.userId || req.user?.id);
+        const apply = Boolean(body?.apply);
+        if (apply && (!body.reason?.trim() || body.reason.trim().length < 10)) {
+            throw new BadRequestException('Enter an operational reason of at least 10 characters');
+        }
+        if (apply && body.confirmation !== 'APPLY') {
+            throw new BadRequestException('Type APPLY exactly to confirm');
+        }
+
+        const preview = await this.matriculationService.migrateCounterScope(false);
+        if (!apply) return { success: true, message: 'Matriculation counter migration preview completed', data: preview };
+
+        const actorId = this.toObjectId(req.user?.userId || req.user?.id);
+        const auditCollection = this.connection.collection('matriculationCounterMigrationAudits');
+        const audit = await auditCollection.insertOne({
+            actorId,
+            actorRole: req.user?.role || 'staff',
+            reason: body.reason.trim(),
+            status: 'started',
+            preview,
+            createdAt: new Date(),
+        });
+
+        try {
+            const result = await this.matriculationService.migrateCounterScope(true);
+            await auditCollection.updateOne(
+                { _id: audit.insertedId },
+                { $set: { status: 'completed', result, completedAt: new Date() } },
+            );
+            return { success: true, message: 'Matriculation counters migrated successfully', data: result };
+        } catch (error: any) {
+            await auditCollection.updateOne(
+                { _id: audit.insertedId },
+                { $set: { status: 'failed', error: error?.message || 'Migration failed', completedAt: new Date() } },
+            );
+            throw error;
+        }
+    }
 
     @Post('migrate-screening-workflow')
     async migrateScreeningWorkflow(

@@ -1730,6 +1730,7 @@ export class PaymentsService {
         return {
             ...result,
             internalStatus: paymentTransaction.status,
+            fulfilmentStatus: paymentTransaction.fulfilmentStatus,
             paymentId: paymentTransaction._id.toString(),
             lastVerifiedAt: paymentTransaction.lastVerifiedAt,
         };

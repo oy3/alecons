@@ -1859,14 +1859,62 @@ export default {
           throw new Error(response.message || "Failed to reconcile payment");
         }
 
+        const reconciliation = response.data || {};
         await Promise.all([this.loadPayments(), this.loadPaymentStats()]);
 
+        const internalStatus = reconciliation.internalStatus;
+        const fulfilmentStatus = reconciliation.fulfilmentStatus;
+        let resultAlert;
+
+        if (reconciliation.quarantined || fulfilmentStatus === "quarantined") {
+          const mismatches = Array.isArray(reconciliation.mismatches)
+            ? reconciliation.mismatches.join(", ")
+            : "provider details did not match the local payment record";
+          resultAlert = {
+            icon: "warning",
+            title: "Payment remains quarantined",
+            text: `Paystack reports ${reconciliation.status || "a successful payment"}, but this payment was not applied. Mismatch: ${mismatches}. No application progress was made. Review the reconciliation case.`,
+          };
+        } else if (
+          internalStatus === "successful" &&
+          fulfilmentStatus === "duplicate"
+        ) {
+          resultAlert = {
+            icon: "warning",
+            title: "Duplicate payment confirmed",
+            text: "Paystack confirms this payment, but another successful transaction already covered the fee. A refund review case is available in Reconciliation Issues.",
+          };
+        } else if (
+          internalStatus === "successful" &&
+          fulfilmentStatus === "applied"
+        ) {
+          resultAlert = {
+            icon: "success",
+            title: "Payment verified and applied",
+            text: "Paystack confirmed the payment and it was applied to the applicant's fee. The payment stage has been updated.",
+          };
+        } else if (internalStatus === "pending") {
+          resultAlert = {
+            icon: "info",
+            title: "Payment is still pending",
+            text: "Paystack has not confirmed a final payment result yet. No payment was applied; reconcile again when the provider status updates.",
+          };
+        } else if (internalStatus === "failed") {
+          resultAlert = {
+            icon: "warning",
+            title: "Payment not confirmed",
+            text: "Paystack did not confirm this payment as successful. The transaction remains failed and was not applied.",
+          };
+        } else {
+          resultAlert = {
+            icon: "warning",
+            title: "Payment needs review",
+            text: `Paystack status: ${reconciliation.status || "unknown"}. Internal status: ${internalStatus || "unknown"}. Fulfilment: ${fulfilmentStatus || "unknown"}. Review the transaction before taking further action.`,
+          };
+        }
+
         await this.$swal.fire({
-          icon: "success",
-          title: "Payment reconciled",
-          text:
-            response.message ||
-            "Payment status was refreshed using Paystack verification.",
+          ...resultAlert,
           confirmButtonColor: "#1a5f5f",
         });
       } catch (error) {

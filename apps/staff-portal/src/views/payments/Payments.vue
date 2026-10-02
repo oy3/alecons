@@ -64,6 +64,11 @@ export default {
       isApplyingFilterPreset: false,
       paymentStats: {
         totalRevenue: 0,
+        grossRevenue: 0,
+        refundedAmount: 0,
+        netRevenue: 0,
+        duplicateAmount: 0,
+        duplicateCount: 0,
         awaitingVerification: 0,
         todaysRevenue: 0,
         pendingRemittance: 0,
@@ -81,6 +86,7 @@ export default {
       isInitializingSessionFilter: true,
       processingPaymentId: null,
       isSyncingRemittance: false,
+      isLoadingReconciliation: false,
       remittanceModalOpen: false,
       remittanceModalState: createDefaultRemittanceModalState(),
       remittanceSearchTimeout: null,
@@ -183,6 +189,115 @@ export default {
     },
   },
   methods: {
+    canRefundPayment(payment) {
+      return this.authStore.hasPermission('payments', 'refund') &&
+        payment?.method === 'paystack' &&
+        payment?.status === 'successful' &&
+        payment?.fulfilmentStatus === 'duplicate' &&
+        !['pending', 'processing', 'processed'].includes(payment?.refundStatus)
+    },
+    async initiateRefund(payment) {
+      const result = await Swal.fire({
+        icon: 'warning',
+        title: 'Refund duplicate payment?',
+        html: `<div class="text-start small"><p>This submits a full refund for <strong>${this.escapeHtml(this.formatCurrency(payment.amount))}</strong>.</p><p class="mb-2">Reference: <code>${this.escapeHtml(payment.reference)}</code></p><label class="form-label" for="refundReason">Reason</label><textarea id="refundReason" class="form-control" rows="3"></textarea></div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Submit Refund',
+        confirmButtonColor: '#dc3545',
+        preConfirm: () => {
+          const reason = document.getElementById('refundReason')?.value?.trim()
+          if (!reason) return Swal.showValidationMessage('Enter a refund reason')
+          return reason
+        }
+      })
+      if (!result.isConfirmed) return
+      try {
+        this.processingPaymentId = payment._id
+        const response = await apiService.initiatePaystackRefund(payment._id, result.value)
+        if (!response.success) throw new Error(response.error || 'Refund request failed')
+        await Swal.fire({ icon: 'success', title: 'Refund Submitted', text: 'Paystack accepted the refund request. Its status will update through webhooks.', confirmButtonColor: '#1a5f5f' })
+        await Promise.all([this.loadPayments(), this.loadPaymentStats()])
+      } catch (error) {
+        await Swal.fire({ icon: 'error', title: 'Refund Failed', text: error.message || 'Unable to submit the refund.' })
+      } finally {
+        this.processingPaymentId = null
+      }
+    },
+    async openReconciliationQueue() {
+      if (this.isLoadingReconciliation) return
+      this.isLoadingReconciliation = true
+      try {
+        const response = await apiService.getPaymentReconciliationCases({ status: 'open', page: 1, limit: 100 })
+        if (!response.success) throw new Error(response.error || 'Could not load reconciliation cases')
+        const cases = response.data?.cases || []
+        const rows = cases.map(item => {
+          const payer = [item.userId?.firstName, item.userId?.lastName].filter(Boolean).join(' ') || item.providerSnapshot?.customer?.email || 'Unmatched'
+          const transactionId = item.paymentTransactionId?._id || item.paymentTransactionId
+          const canRefund = item.type === 'refund_recommended' && transactionId && this.authStore.hasPermission('payments', 'refund')
+          return `<tr><td>${this.escapeHtml(String(item.type || '').replaceAll('_', ' '))}</td><td><code>${this.escapeHtml(item.reference || 'N/A')}</code></td><td>${this.escapeHtml(payer)}</td><td>${this.escapeHtml(this.formatCurrency(item.amount || 0))}</td><td class="text-end">${canRefund ? `<button type="button" class="btn btn-sm btn-outline-danger js-refund-case" data-transaction-id="${this.escapeHtml(transactionId)}" data-case-id="${this.escapeHtml(item._id)}">Refund</button>` : ''}<button type="button" class="btn btn-sm btn-outline-secondary ms-1 js-resolve-case" data-case-id="${this.escapeHtml(item._id)}">Resolve</button></td></tr>`
+        }).join('')
+        await Swal.fire({
+          title: 'Reconciliation Issues',
+          width: 1050,
+          html: cases.length ? `<div class="table-responsive text-start"><table class="table table-sm align-middle"><thead><tr><th>Issue</th><th>Reference</th><th>Payer</th><th>Amount</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="text-muted mb-0">There are no open reconciliation cases.</p>',
+          showConfirmButton: false,
+          showCloseButton: true,
+          didOpen: popup => {
+            popup.querySelectorAll('.js-refund-case').forEach(button => button.addEventListener('click', () => {
+              const item = cases.find(entry => entry._id === button.dataset.caseId)
+              Swal.close()
+              if (item) void this.initiateRefund({
+                _id: button.dataset.transactionId,
+                reference: item.reference,
+                amount: item.amount,
+                method: 'paystack',
+                status: 'successful',
+                fulfilmentStatus: 'duplicate'
+              })
+            }))
+            popup.querySelectorAll('.js-resolve-case').forEach(button => button.addEventListener('click', async () => {
+              const caseId = button.dataset.caseId
+              Swal.close()
+              const resolutionResult = await Swal.fire({
+                title: 'Resolve reconciliation issue',
+                input: 'textarea',
+                inputLabel: 'Resolution note',
+                inputPlaceholder: 'Describe how this issue was resolved...',
+                inputAttributes: { 'aria-label': 'Resolution note' },
+                showCancelButton: true,
+                confirmButtonText: 'Resolve Issue',
+                confirmButtonColor: '#1a5f5f',
+                inputValidator: value => !value?.trim() ? 'Enter a resolution note' : undefined,
+              })
+              if (!resolutionResult.isConfirmed) return
+              try {
+                const resolved = await apiService.resolvePaymentReconciliationCase(
+                  caseId,
+                  resolutionResult.value.trim(),
+                )
+                if (!resolved.success) throw new Error(resolved.error || 'Could not resolve this issue')
+                await Swal.fire({
+                  icon: 'success',
+                  title: 'Issue Resolved',
+                  text: 'The reconciliation issue and its resolution were recorded.',
+                  confirmButtonColor: '#1a5f5f',
+                })
+              } catch (error) {
+                await Swal.fire({
+                  icon: 'error',
+                  title: 'Resolution Failed',
+                  text: error.message || 'Could not resolve this reconciliation issue.',
+                })
+              }
+            }))
+          }
+        })
+      } catch (error) {
+        await Swal.fire({ icon: 'error', title: 'Load Failed', text: error.message || 'Could not load reconciliation issues.' })
+      } finally {
+        this.isLoadingReconciliation = false
+      }
+    },
     getTodayFilterValue() {
       const today = new Date();
       const year = today.getFullYear();
@@ -350,6 +465,11 @@ export default {
 
         this.paymentStats = {
           totalRevenue: Number(response.data?.totalRevenue || 0),
+          grossRevenue: Number(response.data?.grossRevenue || response.data?.totalRevenue || 0),
+          refundedAmount: Number(response.data?.refundedAmount || 0),
+          netRevenue: Number(response.data?.netRevenue ?? response.data?.totalRevenue ?? 0),
+          duplicateAmount: Number(response.data?.duplicateAmount || 0),
+          duplicateCount: Number(response.data?.duplicateCount || 0),
           awaitingVerification: Number(
             response.data?.awaitingVerification || 0,
           ),
@@ -360,6 +480,11 @@ export default {
         logger.error("Failed to load payment transaction stats:", error);
         this.paymentStats = {
           totalRevenue: 0,
+          grossRevenue: 0,
+          refundedAmount: 0,
+          netRevenue: 0,
+          duplicateAmount: 0,
+          duplicateCount: 0,
           awaitingVerification: 0,
           todaysRevenue: 0,
           pendingRemittance: 0,
@@ -1794,6 +1919,13 @@ export default {
         </p>
       </div>
       <div class="d-flex ms-auto gap-2 align-items-end">
+        <div v-if="authStore.hasPermission('payments', 'reconcile')">
+          <button class="btn btn-outline-danger btn-sm" :disabled="isLoadingReconciliation" @click="openReconciliationQueue">
+            <span v-if="isLoadingReconciliation" class="spinner-border spinner-border-sm me-2"></span>
+            <i v-else class="bi bi-exclamation-diamond me-2"></i>Reconciliation Issues
+            <span v-if="paymentStats.duplicateCount" class="badge text-bg-danger ms-2">{{ paymentStats.duplicateCount }}</span>
+          </button>
+        </div>
         <div>
           <button class="btn btn-staff-primary btn-sm" @click="refreshPayments">
             <i class="bi bi-arrow-clockwise me-2"></i>Refresh
@@ -1857,7 +1989,7 @@ export default {
 
     <!-- Stats Cards Row -->
     <div class="row mb-4" v-if="authStore.hasPermission('payments', 'manage')">
-      <!-- Total Revenue -->
+      <!-- Net Revenue -->
       <div class="col-lg-3 col-md-6 mb-3">
         <button
           type="button"
@@ -1873,10 +2005,13 @@ export default {
               <i class="bi bi-piggy-bank-fill fs-4 text-success"></i>
             </div>
             <div class="ms-3">
-              <h6 class="card-title text-body-secondary">Total Revenue</h6>
+              <h6 class="card-title text-body-secondary">Net Revenue</h6>
               <h4 class="fw-bold text-dark mb-0">
-                {{ formatCurrency(paymentStats.totalRevenue) }}
+                {{ formatCurrency(paymentStats.netRevenue) }}
               </h4>
+              <small class="text-body-tertiary">
+                Gross {{ formatCurrency(paymentStats.grossRevenue) }} | Refunded {{ formatCurrency(paymentStats.refundedAmount) }}
+              </small>
             </div>
           </div>
         </button>
@@ -2187,6 +2322,12 @@ export default {
                     >
                       {{ formatLabel(payment.status) }}
                     </span>
+                    <div v-if="payment.fulfilmentStatus" class="small mt-1">
+                      <span class="badge bg-light text-dark border">{{ formatLabel(payment.fulfilmentStatus) }}</span>
+                    </div>
+                    <div v-if="payment.refundStatus" class="small mt-1">
+                      <span class="badge bg-info-subtle text-info-emphasis">Refund {{ formatLabel(payment.refundStatus) }}</span>
+                    </div>
                   </td>
                   <td>
                     <div>
@@ -2248,6 +2389,11 @@ export default {
                               ></span>
                               <i v-else class="bi bi-check-circle-fill me-1"></i
                               >Verify
+                            </a>
+                          </li>
+                          <li v-if="canRefundPayment(payment)">
+                            <a class="dropdown-item text-danger" href="#" @click.prevent="initiateRefund(payment)">
+                              <i class="bi bi-arrow-counterclockwise me-1"></i>Refund duplicate
                             </a>
                           </li>
                           <li v-if="canReconcilePaystack(payment)">

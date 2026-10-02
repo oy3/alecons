@@ -1,21 +1,16 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
     const logger = new Logger('Bootstrap');
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
 
     // Configure body parser with larger limits for questions with images
-    const express = require('express');
-    const rawBodyBuffer = (req: any, _res: any, buffer: Buffer) => {
-        if (buffer && buffer.length) {
-            req.rawBody = buffer;
-        }
-    };
-    app.use(express.json({ limit: '5mb', verify: rawBodyBuffer }));
-    app.use(express.urlencoded({ limit: '5mb', extended: true, verify: rawBodyBuffer }));
+    app.useBodyParser('json', { limit: '5mb' });
+    app.useBodyParser('urlencoded', { limit: '5mb', extended: true });
 
     // Enable CORS
     const allowedOrigins = Array.from(

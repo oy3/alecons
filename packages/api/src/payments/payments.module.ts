@@ -19,11 +19,21 @@ import { UploadModule } from '../modules/upload.module';
 import { PaymentRemittanceService } from './payment-remittance.service';
 import { PaymentsReconciliationScheduler } from './payments-reconciliation.scheduler';
 import { StudentModule } from '../modules/student.module';
+import { BullModule } from '@nestjs/bull';
+import { PaymentProviderEvent, PaymentProviderEventSchema } from '../schemas/payment-provider-event.schema';
+import { PaymentReconciliationCase, PaymentReconciliationCaseSchema } from '../schemas/payment-reconciliation-case.schema';
+import { PaymentRefund, PaymentRefundSchema } from '../schemas/payment-refund.schema';
+import { PaymentRecoveryRun, PaymentRecoveryRunSchema } from '../schemas/payment-recovery-run.schema';
+import { PaymentAuditEvent, PaymentAuditEventSchema } from '../schemas/payment-audit-event.schema';
+import { PaystackWebhookQueueService, PaystackWebhookProcessor } from './paystack-webhook.processor';
+import { UserManagementModule } from '../modules/user-management.module';
 
 @Module({
     imports: [
         UploadModule,
         StudentModule,
+        UserManagementModule,
+        BullModule.registerQueue({ name: 'paystack-webhook' }),
         MongooseModule.forFeature([
             { name: Payment.name, schema: PaymentSchema },
             { name: PaymentTransaction.name, schema: PaymentTransactionSchema },
@@ -35,6 +45,11 @@ import { StudentModule } from '../modules/student.module';
             { name: AcademicSession.name, schema: AcademicSessionSchema },
             { name: StudentAcademicSession.name, schema: StudentAcademicSessionSchema },
             { name: PaymentDestinationAccount.name, schema: PaymentDestinationAccountSchema },
+            { name: PaymentProviderEvent.name, schema: PaymentProviderEventSchema },
+            { name: PaymentReconciliationCase.name, schema: PaymentReconciliationCaseSchema },
+            { name: PaymentRefund.name, schema: PaymentRefundSchema },
+            { name: PaymentRecoveryRun.name, schema: PaymentRecoveryRunSchema },
+            { name: PaymentAuditEvent.name, schema: PaymentAuditEventSchema },
         ]),
     ],
     controllers: [PaymentsController, StaffPaymentsController, PaymentTransactionsController, PaystackWebhookController],
@@ -44,6 +59,8 @@ import { StudentModule } from '../modules/student.module';
         PaymentsReconciliationScheduler,
         MatriculationService,
         EmailService,
+        PaystackWebhookQueueService,
+        PaystackWebhookProcessor,
     ],
     exports: [PaymentsService, PaymentRemittanceService],
 })

@@ -191,6 +191,11 @@ When running `npm run dev:all`, access applications at:
 - **Staff verification**: Staff review uploaded receipts from linked payment history and can verify or reject with remarks
 - **Session-aware controls**: Academic session controls can enable or disable Paystack and manual transfer separately for applicants and students
 - **Audience targeting**: Payments can be targeted by audience so applicants, students, academic staff, and admin staff only see the charges intended for them
+- **Durable Paystack attempts**: A local `PaymentTransaction` is created before Paystack initialization for applicant, student, and external-accommodation checkouts, so every provider reference can be reconciled later.
+- **Webhook reconciliation**: Signed Paystack events are stored idempotently and processed through Redis/Bull. Unknown successful charges become reconciliation cases instead of being discarded.
+- **Duplicate protection**: Only the first successful transaction fulfils a specific user, charge, session, and application/accommodation obligation. Later successful collections remain in the ledger as duplicates and are queued for refund review.
+- **Historical recovery**: Staff Utilities can preview Paystack references or transaction IDs, then apply a confirmed recovery run. Existing manual payments remain the applied payment; a recovered Paystack success is classified as a duplicate so both collections remain auditable.
+- **Refund tracking**: Duplicate Paystack payments can be refunded from Payments Management when refunds are enabled. Manual refunds can also be recorded through the staff API, and refund state is stored separately from the original immutable payment transaction.
 
 ### Examination System
 - PDF question import and parsing
@@ -267,12 +272,37 @@ Frontend payment-related env values:
 VITE_PAYSTACK_PUBLIC_KEY=pk_live_or_test_key
 ```
 
+Backend payment-related env values:
+
+```bash
+PAYSTACK_SECRET_KEY=sk_live_or_test_key
+# Keep false until webhook delivery and recovery results have been verified in production.
+PAYSTACK_REFUNDS_ENABLED=false
+```
+
 Notes:
 - The Paystack public key is still required on the frontend to launch Paystack checkout when the session control enables Paystack.
 - Manual transfer receipt uploads depend on the API Spaces configuration being valid in production.
 - Manual transfer bank details and Paystack destination routing are configured from destination accounts in the staff Payments screen, not frontend env files.
 - Pending manual transfer payments show separately from unpaid fees until staff verification is completed.
 - In automated production deploys, set the payment flags and public key in the GitHub `production` environment; destination account details stay in the database.
+- Configure the Paystack dashboard webhook URL as `https://api.alecons.edu.ng/api/v1/payments/webhook/paystack`.
+- The webhook requires the exact raw request body for HMAC validation. The API captures it in `main.ts`; do not place middleware in front of this route that rewrites the JSON body.
+- Redis must be available because accepted webhook events are processed on the `paystack-webhook` Bull queue.
+- Keep `PAYSTACK_REFUNDS_ENABLED=false` during initial deployment. Change it to `true` only after a webhook test succeeds and staff have reviewed the historical recovery preview.
+
+### Paystack Historical Recovery
+
+Use **Staff Portal > Utilities > Recover Paystack Transactions** for historical references supplied by Paystack:
+
+1. Back up the production database.
+2. Select the academic session that owns the payments.
+3. Enter one Paystack reference or numeric transaction ID per line and run the preview.
+4. Review every classification. `recover_and_apply` restores and fulfils an unpaid obligation; `duplicate_refund_recommended` preserves both payments and creates a refund case; `already_reconciled` and `not_successful` are skipped; low-confidence matches require manual review.
+5. Enter an operational reason, type `APPLY`, and apply the exact saved preview.
+6. Open **Payments > Reconciliation Issues** to review unmatched charges, quarantined mismatches, and duplicates.
+
+Recovery never deletes or overwrites a manual-transfer transaction. If a user paid manually after a successful but previously unrecorded Paystack charge, the manual payment remains applied and the recovered Paystack charge becomes a successful duplicate that can be refunded.
 
 ### Workspace Configuration
 This project uses npm workspaces for monorepo management. Each app and package has its own `package.json` with specific dependencies and scripts.
@@ -358,6 +388,7 @@ Optional GitHub production variables with safe deploy defaults:
 - `STUDENT_PORTAL_URL` default: `VITE_APP_STUDENT_PORTAL_URL`
 - `STAFF_PORTAL_URL` default: `VITE_APP_STAFF_PORTAL_URL`
 - `CBT_PORTAL_URL` default: `VITE_APP_CBT_URL`
+- `PAYSTACK_REFUNDS_ENABLED` default: `false`
 
 The production workflow now renders `/home/rootlab/apps/alecons/shared/env/.env.production` from GitHub production secrets and variables during deploy.
 
@@ -511,6 +542,11 @@ curl -i -X OPTIONS 'https://api.alecons.edu.ng/api/v1/auth/staff/login' \
 - If manual transfer is enabled, confirm account details are visible and receipt uploads accept PNG, JPG, or PDF files up to 1MB.
 - Confirm newly submitted manual transfer payments appear as `Pending Verification` until staff approval.
 - Confirm staff can verify or reject a pending manual transfer from linked payment history.
+- Send a Paystack test webhook and confirm it returns HTTP 200, creates one `paymentproviderevents` record, and does not create a second record when the same event is retried.
+- Confirm a successful test payment becomes `successful` with `fulfilmentStatus=applied` and advances its workflow exactly once.
+- Confirm a second successful payment for the same obligation becomes `fulfilmentStatus=duplicate` and appears under **Payments > Reconciliation Issues**.
+- Run a historical recovery preview before applying it and confirm low-confidence or unmatched rows are not automatically attached to a user.
+- Keep live refunds disabled until the duplicate classifications have been reviewed; then enable `PAYSTACK_REFUNDS_ENABLED` and test with a controlled transaction.
 
 ### Docker Deployment (Optional)
 ```bash

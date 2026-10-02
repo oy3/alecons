@@ -740,6 +740,48 @@ class StaffApiService {
         })
     }
 
+    async previewPaystackRecovery(payload) {
+        return this.makeRequest('/staff/payments/recovery/preview', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        })
+    }
+
+    async applyPaystackRecovery(payload) {
+        return this.makeRequest('/staff/payments/recovery/apply', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        })
+    }
+
+    async getPaymentReconciliationCases(filters = {}) {
+        const query = new URLSearchParams(
+            Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+        ).toString()
+        return this.makeRequest(`/staff/payments/reconciliation-cases${query ? `?${query}` : ''}`)
+    }
+
+    async resolvePaymentReconciliationCase(id, resolution) {
+        return this.makeRequest(`/staff/payments/reconciliation-cases/${id}/resolve`, {
+            method: 'PATCH',
+            body: JSON.stringify({ resolution }),
+        })
+    }
+
+    async initiatePaystackRefund(id, reason) {
+        return this.makeRequest(`/staff/payments/payment-transactions/${id}/refunds/paystack`, {
+            method: 'POST',
+            body: JSON.stringify({ reason }),
+        })
+    }
+
+    async recordManualRefund(id, payload) {
+        return this.makeRequest(`/staff/payments/payment-transactions/${id}/refunds/manual`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        })
+    }
+
     async reconcilePendingPaystackPayments(payload = {}) {
         return this.makeRequest('/staff/payments/payment-transactions/reconcile-pending', {
             method: 'POST',

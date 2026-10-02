@@ -31,6 +31,7 @@ jobs:
       DATABASE_URL: ${{ secrets[format('{0}', 'DATABASE_URL')] }}
       JWT_SECRET: ${{ secrets[format('{0}', 'JWT_SECRET')] }}
       PAYSTACK_SECRET_KEY: ${{ secrets[format('{0}', 'PAYSTACK_SECRET_KEY')] }}
+      PAYSTACK_REFUNDS_ENABLED: ${{ vars.PAYSTACK_REFUNDS_ENABLED }}
       SPACES_KEY: ${{ secrets[format('{0}', 'SPACES_KEY')] }}
       SPACES_SECRET: ${{ secrets[format('{0}', 'SPACES_SECRET')] }}
       GOOGLE_CLIENT_ID: ${{ secrets[format('{0}', 'GOOGLE_CLIENT_ID')] }}

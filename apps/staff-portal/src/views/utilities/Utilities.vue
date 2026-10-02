@@ -27,6 +27,7 @@ export default {
       isRebuildingAcademicSummaries: false,
       isMigratingAcademicProgression: false,
       isBackfillingFeeObligations: false,
+      isRecoveringPaystack: false,
       counterStats: null,
       counterRecord: null,
       programDriftSummary: null,
@@ -102,6 +103,14 @@ export default {
           variant: 'success',
           description: 'Create missing fee obligations from each academic session’s student payment controls and reconcile them against successful payment transactions.',
           actionLabel: 'Run Backfill'
+        },
+        {
+          id: 'recover-paystack-transactions',
+          title: 'Recover Paystack Transactions',
+          icon: 'bi-credit-card-2-front',
+          variant: 'danger',
+          description: 'Verify historical Paystack references, restore missing transactions, quarantine mismatches, and identify duplicate collections that may require refunds.',
+          actionLabel: 'Preview Recovery'
         },
         {
           id: 'academic-results-readiness',
@@ -233,6 +242,90 @@ export default {
     }
   },
   methods: {
+    escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;')
+    },
+    async runPaystackRecovery() {
+      if (!this.selectedAcademicSessionId) {
+        await Swal.fire({ icon: 'warning', title: 'Select Academic Session', text: 'Choose the academic session that owns these payments.' })
+        return
+      }
+
+      const input = await Swal.fire({
+        title: 'Preview Paystack Recovery',
+        html: '<p class="text-start small text-muted">Enter one Paystack reference or transaction ID per line. This first step does not change payment records.</p>',
+        input: 'textarea',
+        inputPlaceholder: 'Reference or transaction ID\nReference or transaction ID',
+        inputAttributes: { 'aria-label': 'Paystack references or transaction IDs' },
+        showCancelButton: true,
+        confirmButtonText: 'Run Preview',
+        confirmButtonColor: '#1a5f5f',
+        inputValidator: value => value?.trim() ? undefined : 'Enter at least one Paystack reference or transaction ID'
+      })
+      if (!input.isConfirmed) return
+
+      const identifiers = input.value.split(/[\n,]+/).map(value => value.trim()).filter(Boolean)
+      this.isRecoveringPaystack = true
+      try {
+        const response = await apiService.previewPaystackRecovery({
+          academicSessionId: this.selectedAcademicSessionId,
+          identifiers
+        })
+        if (!response.success) throw new Error(response.error || 'Paystack recovery preview failed')
+        const run = response.data
+        const counts = (run.results || []).reduce((summary, row) => {
+          summary[row.classification] = (summary[row.classification] || 0) + 1
+          return summary
+        }, {})
+        const rows = (run.results || []).slice(0, 50).map(row => `
+          <tr>
+            <td><code>${this.escapeHtml(row.identifier)}</code></td>
+            <td>${this.escapeHtml(String(row.classification || '').replaceAll('_', ' '))}</td>
+            <td>${this.escapeHtml(row.userEmail || 'Unmatched')}</td>
+            <td>${this.escapeHtml(row.paymentName || 'Unknown')}</td>
+          </tr>`).join('')
+        const preview = await Swal.fire({
+          icon: counts.error || counts.unmatched ? 'warning' : 'info',
+          title: 'Recovery Preview',
+          width: 900,
+          html: `<div class="text-start small"><p><strong>Session:</strong> ${this.escapeHtml(this.selectedSession?.title || this.selectedSessionYear)}</p><p><strong>Summary:</strong> ${this.escapeHtml(Object.entries(counts).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${value}`).join(' | '))}</p><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Identifier</th><th>Classification</th><th>User</th><th>Payment</th></tr></thead><tbody>${rows}</tbody></table></div><hr><label class="form-label" for="recoveryReason">Reason for applying</label><textarea id="recoveryReason" class="form-control mb-3" rows="2"></textarea><label class="form-label" for="recoveryConfirmation">Type APPLY to confirm</label><input id="recoveryConfirmation" class="form-control" autocomplete="off"></div>`,
+          showCancelButton: true,
+          confirmButtonText: 'Apply Recovery',
+          confirmButtonColor: '#dc3545',
+          preConfirm: () => {
+            const reason = document.getElementById('recoveryReason')?.value?.trim()
+            const confirmation = document.getElementById('recoveryConfirmation')?.value?.trim()
+            if (!reason) return Swal.showValidationMessage('Enter the operational reason')
+            if (confirmation !== 'APPLY') return Swal.showValidationMessage('Type APPLY exactly to continue')
+            return { reason }
+          }
+        })
+        if (!preview.isConfirmed) return
+
+        const applied = await apiService.applyPaystackRecovery({ runId: run.runId, reason: preview.value.reason })
+        if (!applied.success) throw new Error(applied.error || 'Paystack recovery could not be applied')
+        const appliedCounts = (applied.data?.results || []).reduce((summary, row) => {
+          summary[row.action] = (summary[row.action] || 0) + 1
+          return summary
+        }, {})
+        await Swal.fire({
+          icon: 'success',
+          title: 'Recovery Applied',
+          text: Object.entries(appliedCounts).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${value}`).join(' | '),
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Paystack recovery failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Recovery Failed', text: error.message || 'Unable to recover Paystack transactions.' })
+      } finally {
+        this.isRecoveringPaystack = false
+      }
+    },
     async runMigrateScreeningWorkflow() {
       if (!this.selectedAcademicSessionId) {
         await Swal.fire({ icon: 'warning', title: 'Select Academic Session', text: 'Choose the academic session to inspect before running this utility.' })
@@ -1223,6 +1316,17 @@ export default {
                 <span v-if="isBackfillingFeeObligations" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-database-check me-2"></i>
                 {{ isBackfillingFeeObligations ? 'Backfilling...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'recover-paystack-transactions' && authStore.hasPermission('utilities', 'manage') && authStore.hasPermission('payments', 'reconcile')"
+                class="btn btn-danger"
+                :disabled="isLoading || isRecoveringPaystack || !selectedAcademicSessionId"
+                @click="runPaystackRecovery"
+              >
+                <span v-if="isRecoveringPaystack" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-credit-card-2-front me-2"></i>
+                {{ isRecoveringPaystack ? 'Working...' : utility.actionLabel }}
               </button>
 
               <button

@@ -114,6 +114,35 @@ export default {
     await Promise.all([this.loadPayments(), this.loadPaymentStats()]);
   },
   computed: {
+    totalPages() {
+      return Math.max(1, this.apiTotalPages);
+    },
+    paginationItems() {
+      const total = this.totalPages;
+      const visiblePages = new Set([1, 2, total - 1, total]);
+
+      for (let page = this.currentPage - 1; page <= this.currentPage + 1; page += 1) {
+        if (page >= 1 && page <= total) visiblePages.add(page);
+      }
+
+      const pages = [...visiblePages]
+        .filter((page) => page >= 1 && page <= total)
+        .sort((left, right) => left - right);
+      const items = [];
+
+      pages.forEach((page, index) => {
+        const previousPage = pages[index - 1];
+        if (previousPage && page - previousPage > 1) {
+          items.push({
+            type: "ellipsis",
+            key: `ellipsis-${previousPage}-${page}`,
+          });
+        }
+        items.push({ type: "page", key: `page-${page}`, page });
+      });
+
+      return items;
+    },
     hasActiveFilters() {
       return Object.values(this.filters).some((value) =>
         String(value || "").trim(),
@@ -189,6 +218,10 @@ export default {
     },
   },
   methods: {
+    goToPage(page) {
+      const nextPage = Math.min(this.totalPages, Math.max(1, page));
+      if (nextPage !== this.currentPage) this.currentPage = nextPage;
+    },
     canRefundPayment(payment) {
       return this.authStore.hasPermission('payments', 'refund') &&
         payment?.method === 'paystack' &&
@@ -2662,39 +2695,82 @@ export default {
       </div>
 
       <div class="card-footer bg-transparent border-top-0">
-        <nav>
+        <nav
+          v-if="totalPages > 1"
+          class="payments-pagination-scroll"
+          aria-label="Payments pagination"
+        >
           <ul
-            class="pagination pagination-sm mb-0 justify-content-center flex-wrap gap-1"
+            class="pagination pagination-sm mb-0 justify-content-center flex-nowrap"
           >
-            <li class="page-item" :class="{ disabled: currentPage === 1 }">
+            <li class="page-item" :class="{ disabled: currentPage <= 1 }">
               <button
+                type="button"
                 class="page-link"
-                :disabled="currentPage === 1"
-                @click="currentPage = currentPage - 1"
+                aria-label="Go to first page"
+                title="First page"
+                :disabled="currentPage <= 1"
+                @click="goToPage(1)"
+              >
+                <span aria-hidden="true">&laquo;</span>
+              </button>
+            </li>
+            <li class="page-item" :class="{ disabled: currentPage <= 1 }">
+              <button
+                type="button"
+                class="page-link"
+                aria-label="Go to previous page"
+                :disabled="currentPage <= 1"
+                @click="goToPage(currentPage - 1)"
               >
                 Prev
               </button>
             </li>
-            <li
-              v-for="page in apiTotalPages"
-              :key="page"
-              class="page-item"
-              :class="{ active: currentPage === page }"
-            >
-              <button class="page-link" @click="currentPage = page">
-                {{ page }}
-              </button>
-            </li>
-            <li
-              class="page-item"
-              :class="{ disabled: currentPage >= apiTotalPages }"
-            >
+            <template v-for="item in paginationItems" :key="item.key">
+              <li
+                v-if="item.type === 'page'"
+                class="page-item"
+                :class="{ active: currentPage === item.page }"
+                :aria-current="currentPage === item.page ? 'page' : undefined"
+              >
+                <button
+                  type="button"
+                  class="page-link"
+                  :aria-label="`Go to page ${item.page}`"
+                  @click="goToPage(item.page)"
+                >
+                  {{ item.page }}
+                </button>
+              </li>
+              <li
+                v-else
+                class="page-item disabled pagination-ellipsis"
+                aria-hidden="true"
+              >
+                <span class="page-link">&hellip;</span>
+              </li>
+            </template>
+            <li class="page-item" :class="{ disabled: currentPage >= totalPages }">
               <button
+                type="button"
                 class="page-link"
-                :disabled="currentPage >= apiTotalPages"
-                @click="currentPage = currentPage + 1"
+                aria-label="Go to next page"
+                :disabled="currentPage >= totalPages"
+                @click="goToPage(currentPage + 1)"
               >
                 Next
+              </button>
+            </li>
+            <li class="page-item" :class="{ disabled: currentPage >= totalPages }">
+              <button
+                type="button"
+                class="page-link"
+                aria-label="Go to last page"
+                title="Last page"
+                :disabled="currentPage >= totalPages"
+                @click="goToPage(totalPages)"
+              >
+                <span aria-hidden="true">&raquo;</span>
               </button>
             </li>
           </ul>
@@ -2835,12 +2911,32 @@ export default {
 .pagination .page-link {
   color: var(--staff-primary);
   border-color: var(--staff-light);
+  min-width: 2.25rem;
+  min-height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .pagination .page-item.active .page-link {
   background-color: var(--staff-primary);
   border-color: var(--staff-primary);
   color: #fff;
+}
+
+.payments-pagination-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0.15rem 0;
+  scrollbar-width: thin;
+}
+
+.pagination-ellipsis .page-link {
+  min-width: 2rem;
+  color: #6c757d;
+  background: transparent;
+  cursor: default;
 }
 
 @media (max-width: 991.98px) {

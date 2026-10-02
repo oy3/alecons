@@ -3164,8 +3164,12 @@ export class PaymentsService {
         }
 
         const paymentTransaction: any = await this.paymentTransactionModel.findById(params.paymentTransactionId);
-        if (!paymentTransaction || paymentTransaction.applicationId?.toString() !== inspection.transaction.applicationId.toString()
-            || paymentTransaction.academicSessionId?.toString() !== inspection.transaction.academicSessionId?.toString()) {
+        const currentApplicationId = paymentTransaction?.applicationId?._id || paymentTransaction?.applicationId;
+        const expectedApplicationId = inspection.transaction.applicationId?._id || inspection.transaction.applicationId;
+        const currentAcademicSessionId = paymentTransaction?.academicSessionId?._id || paymentTransaction?.academicSessionId;
+        const expectedAcademicSessionId = inspection.transaction.academicSessionId?._id || inspection.transaction.academicSessionId;
+        if (!paymentTransaction || currentApplicationId?.toString() !== expectedApplicationId?.toString()
+            || currentAcademicSessionId?.toString() !== expectedAcademicSessionId?.toString()) {
             throw new ConflictException('Payment linkage changed after preview; run the preview again');
         }
         const before = {

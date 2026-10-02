@@ -1172,7 +1172,7 @@ export class StaffApplicationsController {
                         { path: 'programModeId', select: 'mode description' },
                     ],
                 })
-                .populate('entryAcademicSession', 'sessionYear')
+                .populate('entryAcademicSession', 'sessionYear title')
                 .exec();
 
             if (!application) {

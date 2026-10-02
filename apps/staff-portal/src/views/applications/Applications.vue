@@ -543,6 +543,16 @@ export default {
       return statusClasses[status] || "bg-light text-dark";
     },
 
+    getPaymentFulfilmentBadgeClass(status) {
+      const classes = {
+        applied: "bg-success-subtle text-success-emphasis",
+        duplicate: "bg-warning-subtle text-warning-emphasis",
+        quarantined: "bg-danger-subtle text-danger-emphasis",
+        unapplied: "bg-secondary-subtle text-secondary-emphasis",
+      };
+      return classes[status] || "bg-light text-muted";
+    },
+
     formatDate(dateString) {
       if (!dateString) return "N/A";
       const date = new Date(dateString);
@@ -669,11 +679,11 @@ export default {
       const session = application?.entryAcademicSession;
       if (!session) return "N/A";
       if (typeof session === "string") return session;
-      return session.sessionYear || "N/A";
+      return session.title || session.sessionYear || "N/A";
     },
 
     getPaymentAcademicSessionLabel(payment) {
-      return payment?.academicSession?.sessionYear || "N/A";
+      return payment?.academicSession?.title || payment?.academicSession?.sessionYear || "N/A";
     },
 
     getProgramTypeLabel(application) {
@@ -4539,6 +4549,13 @@ export default {
                               "
                             >
                               {{ formatLabel(payment.status) }}
+                            </span>
+                            <span
+                              v-if="payment.status === 'successful'"
+                              class="badge rounded-pill ms-1"
+                              :class="getPaymentFulfilmentBadgeClass(payment.fulfilmentStatus)"
+                            >
+                              {{ formatLabel(payment.fulfilmentStatus || "legacy_untracked") }}
                             </span>
                           </td>
                           <td>

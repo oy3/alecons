@@ -2644,7 +2644,7 @@ export class StaffApplicationsController {
     }
 
     @Patch(':id/reschedule-exam')
-    @ApiOperation({ summary: 'Reschedule a future entrance exam for an application' })
+    @ApiOperation({ summary: 'Reschedule an unscored entrance exam for an application' })
     @ApiResponse({ status: 200, description: 'Entrance exam rescheduled successfully' })
     async rescheduleExam(
         @Param('id') id: string,
@@ -2652,6 +2652,7 @@ export class StaffApplicationsController {
             examDate: string;
             examTime: string;
             examLink: string;
+            reason?: string;
         },
         @Request() req,
     ) {
@@ -2709,9 +2710,24 @@ export class StaffApplicationsController {
                 application.entranceExam.date,
                 application.entranceExam.time,
             );
-            if (!currentScheduledAt || currentScheduledAt.getTime() <= Date.now()) {
+            if (!currentScheduledAt) {
                 throw new ConflictException(
-                    'A past entrance examination cannot be rescheduled',
+                    'The current entrance exam schedule is invalid and cannot be rescheduled',
+                );
+            }
+
+            const rescheduleReason = examData.reason?.trim();
+            const reschedulingPastExam = currentScheduledAt.getTime() <= Date.now();
+            if (reschedulingPastExam && !rescheduleReason) {
+                throw new HttpException(
+                    { success: false, message: 'A reason is required to reschedule a past, unscored entrance exam' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+            if (rescheduleReason && rescheduleReason.length > 1000) {
+                throw new HttpException(
+                    { success: false, message: 'The exam reschedule reason cannot exceed 1000 characters' },
+                    HttpStatus.BAD_REQUEST,
                 );
             }
 
@@ -2754,6 +2770,8 @@ export class StaffApplicationsController {
                 description: 'Entrance exam was rescheduled for the application.',
                 actor: req.user,
                 metadata: {
+                    ...(rescheduleReason ? { reason: rescheduleReason } : {}),
+                    reschedulingPastExam,
                     previousDate: previousSchedule.date,
                     previousTime: previousSchedule.time,
                     previousLink: previousSchedule.link,

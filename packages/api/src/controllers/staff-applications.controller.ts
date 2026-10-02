@@ -1971,6 +1971,22 @@ export class StaffApplicationsController {
         );
     }
 
+    @Patch(':id/retry-student-enrollment')
+    @ApiOperation({ summary: 'Retry eligible school-fee application enrollment completion' })
+    @ApiResponse({ status: 200, description: 'Student enrollment completion retried successfully' })
+    async retryStudentEnrollment(
+        @Param('id') id: string,
+        @Body() payload: { reason: string },
+        @Request() req,
+    ) {
+        await this.assertModulePermission(req, 'applications', 'edit');
+        return this.paymentsService.retryStudentEnrollment(
+            id,
+            this.requestUserId(req),
+            payload?.reason,
+        );
+    }
+
     @Patch(':id/expire')
     @ApiOperation({ summary: 'Expire one eligible application with a reason' })
     @ApiResponse({ status: 200, description: 'Application expired successfully' })

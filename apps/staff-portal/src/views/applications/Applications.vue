@@ -819,6 +819,25 @@ export default {
       );
     },
 
+    canRetryStudentEnrollment(application) {
+      return Boolean(
+        application &&
+        application.status === "admitted" &&
+        application.admissionDecision === "admitted" &&
+        Number(application.currentStage) === 9,
+      );
+    },
+
+    escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[character]);
+    },
+
     canExpireApplication(application) {
       return Boolean(
         application &&
@@ -2042,6 +2061,66 @@ export default {
       }
     },
 
+    async retryStudentEnrollment(application) {
+      const result = await this.$swal.fire({
+        icon: "warning",
+        title: "Retry student enrollment",
+        html: `<p class="text-start">This will recheck the applicant's Form, Acceptance, Sundry, and School Fee payments for the correct academic session. If all required payments are confirmed, the existing school-fee completion flow will create or repair the student record, matriculation number, and application status.</p>`,
+        input: "textarea",
+        inputLabel: "Reason for retry",
+        inputPlaceholder: "Explain why enrollment completion is being retried",
+        inputAttributes: { rows: 3, maxlength: 500 },
+        inputValidator: (value) =>
+          value?.trim() ? undefined : "Enter a reason to continue.",
+        showCancelButton: true,
+        confirmButtonText: "Retry enrollment",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#1a5f5f",
+        cancelButtonColor: "#6c757d",
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        this.$swal.fire({
+          title: "Completing student enrollment...",
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          willOpen: () => this.$swal.showLoading(),
+        });
+        const response = await apiService.retryStudentEnrollment(
+          application.id,
+          result.value.trim(),
+        );
+        const enrollment = response.data?.data || response.data || response;
+
+        if (!response.success && !enrollment.matriculationNumber) {
+          throw new Error(response.message || "Enrollment could not be completed.");
+        }
+
+        if (this.selectedApplicationId === application.id) {
+          this.selectedApplication.status = "completed";
+          this.selectedApplication.currentStage = 10;
+          this.selectedApplication.matriculationNumber = enrollment.matriculationNumber;
+        }
+        await this.refreshApplicationsPage();
+        await this.$swal.fire({
+          icon: "success",
+          title: "Student enrollment completed",
+          html: `<p>${this.escapeHtml(application.applicantName)} is now enrolled.</p><p>Matriculation number: <strong>${this.escapeHtml(enrollment.matriculationNumber)}</strong></p><p class="mb-0">${enrollment.emailSent ? `Matriculation email sent to ${this.escapeHtml(enrollment.email)}.` : "Enrollment is complete, but the email could not be sent. Use the matriculation email action to retry it."}</p>`,
+          confirmButtonColor: "#1a5f5f",
+        });
+      } catch (error) {
+        logger.error("Failed to retry student enrollment:", error);
+        this.$swal.fire({
+          icon: "error",
+          title: "Enrollment could not be completed",
+          text: error.message || "Check the fee history and try again.",
+          confirmButtonColor: "#dc3545",
+        });
+      }
+    },
+
     async generateMatriculationNumber(application) {
       try {
         // Show confirmation dialog
@@ -2505,6 +2584,20 @@ export default {
                               Application
                             </a>
                           </li>
+                          <li
+                            v-if="
+                              authStore.hasPermission('applications', 'edit') &&
+                              canRetryStudentEnrollment(app)
+                            "
+                          >
+                            <a
+                              href="#"
+                              class="dropdown-item text-success"
+                              @click.prevent="retryStudentEnrollment(app)"
+                            >
+                              <i class="bi bi-person-check me-2"></i>Retry student enrollment
+                            </a>
+                          </li>
                           <li v-if="app.status === 'completed'" class="">
                             <a
                               class="dropdown-item"
@@ -2813,6 +2906,17 @@ export default {
                         @click="sendAdmissionLetter(app)"
                       >
                         <i class="bi bi-envelope-paper me-1"></i>Send Letter
+                      </button>
+                      <button
+                        v-if="
+                          authStore.hasPermission('applications', 'edit') &&
+                          canRetryStudentEnrollment(app)
+                        "
+                        type="button"
+                        class="btn btn-sm btn-outline-success"
+                        @click="retryStudentEnrollment(app)"
+                      >
+                        <i class="bi bi-person-check me-1"></i>Retry student enrollment
                       </button>
                       <button
                         v-if="app.status === 'completed'"

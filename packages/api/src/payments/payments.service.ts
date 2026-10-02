@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as crypto from 'crypto';
@@ -1022,21 +1022,6 @@ export class PaymentsService {
             .populate('paymentId')
             .lean();
 
-        if (context === 'application-portal' && applicationId) {
-            for (const paymentTransaction of paymentTransactions as any[]) {
-                if (paymentTransaction.status !== PaymentStatus.SUCCESSFUL) continue;
-
-                const successfulPaymentId = paymentTransaction.paymentId?._id || paymentTransaction.paymentId;
-                if (!successfulPaymentId) continue;
-
-                await this.updateApplicationStageAfterPayment(
-                    userObjectId,
-                    successfulPaymentId as Types.ObjectId,
-                    linkedApplication.applicationId,
-                );
-            }
-        }
-
         // Separate paid and unpaid fees
         const paidFees: PaymentSummary[] = [];
         const pendingFees: PaymentSummary[] = [];
@@ -1597,7 +1582,6 @@ export class PaymentsService {
         if (
             paymentTransaction.status === PaymentStatus.SUCCESSFUL
             && paymentTransaction.fulfilmentStatus === PaymentFulfilmentStatus.APPLIED
-            && !wasSuccessful
         ) {
             if (paymentTransaction.paymentContext === PaymentContext.ACCOMMODATION_APPLICATION) {
                 await this.finalizeAccommodationPayment(paymentTransaction);
@@ -2838,6 +2822,104 @@ export class PaymentsService {
         }
     }
 
+    async retryStudentEnrollment(applicationId: string, actorId: string, reason: string) {
+        if (!Types.ObjectId.isValid(applicationId)) throw new BadRequestException('Invalid application ID');
+        if (!reason?.trim()) throw new BadRequestException('A reason is required to retry student enrollment');
+
+        const application: any = await this.applicationModel.findById(applicationId);
+        if (!application) throw new NotFoundException('Application not found');
+        if (
+            application.status !== ApplicationStatus.ADMITTED
+            || application.admissionDecision !== AdmissionDecision.ADMITTED
+            || application.currentStage !== 9
+        ) {
+            throw new ConflictException('Student enrollment can only be retried for an admitted application at the School Fees stage');
+        }
+
+        const userId = application.userId?._id || application.userId;
+        const sessionId = application.entryAcademicSession?._id || application.entryAcademicSession;
+        if (!userId || !sessionId) {
+            throw new ConflictException('The application is missing its applicant or academic session link');
+        }
+
+        const requiredCodes = ['formFee', 'acceptanceFee', 'sundryFee', 'schoolFee'];
+        const requiredPayments = await this.paymentModel.find({ paymentCode: { $in: requiredCodes } })
+            .select('_id paymentCode name')
+            .lean();
+        const paymentIdsByCode = new Map<string, Types.ObjectId>();
+        requiredPayments.forEach((payment: any) => paymentIdsByCode.set(payment.paymentCode, payment._id));
+        const missingPaymentSetup = requiredCodes.filter((code) => !paymentIdsByCode.has(code));
+        if (missingPaymentSetup.length) {
+            throw new ConflictException(`Required fee configuration is missing: ${missingPaymentSetup.join(', ')}`);
+        }
+
+        const successfulTransactions: any[] = await this.paymentTransactionModel.find({
+            applicationId: application._id,
+            userId,
+            paymentContext: PaymentContext.ADMISSION_APPLICATION,
+            academicSessionId: sessionId,
+            paymentId: { $in: [...paymentIdsByCode.values()] },
+            status: PaymentStatus.SUCCESSFUL,
+            $or: [
+                { fulfilmentStatus: PaymentFulfilmentStatus.APPLIED },
+                { fulfilmentStatus: { $exists: false } },
+            ],
+        }).populate('paymentId', 'paymentCode name').lean();
+        const paidCodes = new Set(successfulTransactions.map((transaction) => transaction.paymentId?.paymentCode));
+        const unpaidCodes = requiredCodes.filter((code) => !paidCodes.has(code));
+        if (unpaidCodes.length) {
+            throw new ConflictException(`Enrollment cannot be completed. These required fees are not confirmed as paid for this application and session: ${unpaidCodes.join(', ')}`);
+        }
+
+        const schoolFeeTransaction = successfulTransactions.find(
+            (transaction) => transaction.paymentId?.paymentCode === 'schoolFee',
+        );
+        const completion = await this.completeApplicationProcess(userId, application);
+
+        const [completedApplication, student] = await Promise.all([
+            this.applicationModel.findById(application._id).select('status currentStage matriculationNumber').lean(),
+            this.studentModel.findOne({ $or: [{ userId }, { applicationId: application._id }] })
+                .select('_id matriculationNumber')
+                .lean(),
+        ]);
+        if (
+            completedApplication?.status !== ApplicationStatus.COMPLETED
+            || completedApplication.currentStage !== 10
+            || !completedApplication.matriculationNumber
+            || !student
+        ) {
+            throw new ConflictException('Enrollment completion did not finish. Review the application and try again.');
+        }
+
+        await this.recordPaymentAudit({
+            action: 'student_enrollment_retried',
+            description: reason.trim(),
+            paymentTransactionId: schoolFeeTransaction?._id,
+            actorId,
+            actorType: 'staff',
+            metadata: {
+                applicationId: application._id.toString(),
+                academicSessionId: sessionId.toString(),
+                requiredPaymentCodes: requiredCodes,
+                matriculationNumber: completedApplication.matriculationNumber,
+                studentId: student._id.toString(),
+                emailSent: completion.emailSent,
+            },
+        });
+
+        return {
+            success: true,
+            message: 'Student enrollment completed successfully',
+            data: {
+                applicationId: application._id.toString(),
+                studentId: student._id.toString(),
+                matriculationNumber: completedApplication.matriculationNumber,
+                email: (await this.userModel.findById(userId).select('email').lean())?.email,
+                emailSent: completion.emailSent,
+            },
+        };
+    }
+
     /**
      * Mark old pending payments as failed (can be called periodically)
      */
@@ -2878,7 +2960,7 @@ export class PaymentsService {
     /**
      * Complete application process by generating matriculation number and creating student record
      */
-    private async completeApplicationProcess(userId: Types.ObjectId, application: any): Promise<void> {
+    private async completeApplicationProcess(userId: Types.ObjectId, application: any): Promise<{ emailSent: boolean }> {
         try {
             this.logger.log('Starting application completion process for user:', userId);
 
@@ -2921,10 +3003,42 @@ export class PaymentsService {
                 throw new Error('Academic session not found for matriculation generation');
             }
 
-            const matriculationNumber = fullApplication.matriculationNumber || await this.matriculationService.generateMatriculationNumber(
+            const existingStudent = await this.studentModel.findOne({
+                $or: [
+                    { userId: normalizedUserId },
+                    { applicationId: normalizedApplicationId },
+                ],
+            });
+            let matriculationNumber = fullApplication.matriculationNumber
+                || existingStudent?.matriculationNumber
+                || await this.matriculationService.generateMatriculationNumber(
                 programId.toString(),
                 academicSessionId.toString(),
             );
+
+            if (!fullApplication.matriculationNumber) {
+                const reservedApplication = await this.applicationModel.findOneAndUpdate(
+                    {
+                        _id: normalizedApplicationId,
+                        $or: [
+                            { matriculationNumber: { $exists: false } },
+                            { matriculationNumber: null },
+                            { matriculationNumber: '' },
+                        ],
+                    },
+                    { $set: { matriculationNumber } },
+                    { new: true },
+                ).select('matriculationNumber').lean();
+                if (!reservedApplication) {
+                    const currentApplication = await this.applicationModel.findById(normalizedApplicationId)
+                        .select('matriculationNumber')
+                        .lean();
+                    matriculationNumber = currentApplication?.matriculationNumber || matriculationNumber;
+                } else {
+                    matriculationNumber = reservedApplication.matriculationNumber;
+                }
+                fullApplication.matriculationNumber = matriculationNumber;
+            }
 
             let studentProfileImageUrl: string | undefined;
             if (fullApplication.profileImageUrl) {
@@ -2952,13 +3066,6 @@ export class PaymentsService {
 
             // Create Student record (migrate from applicant to student)
             try {
-                const existingStudent = await this.studentModel.findOne({
-                    $or: [
-                        { userId: normalizedUserId },
-                        { applicationId: normalizedApplicationId },
-                    ],
-                });
-
                 this.logger.log('Existing student check result:', existingStudent ? 'Found' : 'Not found');
 
                 if (!existingStudent) {
@@ -3061,17 +3168,27 @@ export class PaymentsService {
 
             // Send matriculation email
             const studentPortalUrl = process.env.STUDENT_PORTAL_URL || 'http://localhost:3000/student-portal';
-            await this.emailService.sendMatriculationEmail(
-                user.email,
-                user.firstName,
-                matriculationNumber,
-                studentPortalUrl
-            );
+            let emailSent = false;
+            try {
+                await this.emailService.sendMatriculationEmail(
+                    user.email,
+                    user.firstName,
+                    matriculationNumber,
+                    studentPortalUrl
+                );
+                emailSent = true;
+            } catch (emailError) {
+                this.logger.error('Enrollment completed, but matriculation email could not be sent:', emailError);
+            }
 
             this.logger.log('Application completion process finished successfully for user:', userId);
             this.logger.log('Generated matriculation number:', matriculationNumber);
             this.logger.log('Student record created and user role updated');
-            this.logger.log('Matriculation email sent to:', user.email);
+            this.logger.log(emailSent
+                ? `Matriculation email sent to ${user.email}`
+                : `Matriculation email delivery failed for ${user.email}; enrollment remains complete`);
+
+            return { emailSent };
 
         } catch (error) {
             this.logger.error('Error completing application process:', error);

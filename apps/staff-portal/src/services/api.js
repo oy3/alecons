@@ -335,6 +335,13 @@ class StaffApiService {
         })
     }
 
+    async retryStudentEnrollment(id, reason) {
+        return this.makeRequest(`/staff/applications/${id}/retry-student-enrollment`, {
+            method: 'PATCH',
+            body: JSON.stringify({ reason }),
+        })
+    }
+
     async sendMatriculationEmail(id) {
         return this.makeRequest(`/staff/applications/${id}/send-matric-email`, {
             method: 'PATCH',

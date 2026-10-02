@@ -1559,6 +1559,31 @@ export class PaymentsService {
                 paymentTransaction.status = PaymentStatus.FAILED;
                 paymentTransaction.activeAttemptKey = undefined;
             }
+            const referenceMatches = String(transaction?.reference || '') === String(paymentTransaction.reference || '');
+            const gatewayOwner = transaction?.id
+                ? await this.paymentTransactionModel.findOne({
+                    _id: { $ne: paymentTransaction._id },
+                    gatewayId: transaction.id.toString(),
+                }).select('_id')
+                : null;
+            if (referenceMatches && !gatewayOwner && transaction?.id && paymentTransaction.status !== PaymentStatus.SUCCESSFUL) {
+                paymentTransaction.gatewayId = transaction.id.toString();
+                if (paymentTransaction.fulfilmentStatus === PaymentFulfilmentStatus.QUARANTINED) {
+                    paymentTransaction.fulfilmentStatus = PaymentFulfilmentStatus.UNAPPLIED;
+                    if (paymentTransaction.reconciliationCaseId) {
+                        await this.paymentReconciliationCaseModel.updateOne(
+                            { _id: paymentTransaction.reconciliationCaseId },
+                            {
+                                $set: {
+                                    status: ReconciliationCaseStatus.RESOLVED,
+                                    resolvedAt: now,
+                                    resolution: 'Paystack recheck confirmed this reference was not a successful payment',
+                                },
+                            },
+                        );
+                    }
+                }
+            }
             paymentTransaction.remarks = `Payment ${paystackStatus || 'failed'}: ${transaction.gateway_response || 'Payment was not completed'}`;
         } else {
             if (paymentTransaction.status !== PaymentStatus.SUCCESSFUL) {
@@ -1593,6 +1618,82 @@ export class PaymentsService {
             paid_at: transaction.paid_at,
             gateway_response: transaction.gateway_response,
         };
+    }
+
+    private async releaseStaleGatewayIdOwner(
+        transaction: any,
+        actorId?: string,
+    ): Promise<{ released: boolean; reason?: string }> {
+        if (!transaction?.id || !transaction?.reference) return { released: true };
+
+        const providerTransactionId = transaction.id.toString();
+        const owner: any = await this.paymentTransactionModel.findOne({ gatewayId: providerTransactionId });
+        if (!owner || String(owner.reference || '') === String(transaction.reference)) {
+            return { released: true };
+        }
+        if (!owner.reference) {
+            return { released: false, reason: 'The existing gateway ID owner has no reference to verify' };
+        }
+
+        let ownerTransaction: any;
+        try {
+            ownerTransaction = await this.verifyPaystackTransaction(owner.reference);
+        } catch (error: any) {
+            return {
+                released: false,
+                reason: `Could not verify the existing gateway ID owner's reference: ${error?.message || String(error)}`,
+            };
+        }
+
+        if (
+            String(ownerTransaction?.reference || '') !== String(owner.reference)
+            || String(ownerTransaction?.id || '') === providerTransactionId
+        ) {
+            return { released: false, reason: 'Paystack did not confirm that the existing gateway ID link is stale' };
+        }
+
+        const previousGatewayId = owner.gatewayId?.toString();
+        const ownerState = await this.applyPaystackTransactionState(owner, ownerTransaction);
+        const verifiedOwnerGatewayId = ownerTransaction?.id?.toString();
+        if (
+            verifiedOwnerGatewayId
+            && verifiedOwnerGatewayId !== providerTransactionId
+            && String(owner.gatewayId || '') === providerTransactionId
+        ) {
+            const verifiedGatewayOwner = await this.paymentTransactionModel.findOne({
+                _id: { $ne: owner._id },
+                gatewayId: verifiedOwnerGatewayId,
+            }).select('_id');
+            if (!verifiedGatewayOwner) {
+                owner.gatewayId = verifiedOwnerGatewayId;
+                await owner.save();
+            }
+        }
+        const remainingOwner = await this.paymentTransactionModel.findOne({
+            _id: { $ne: owner._id },
+            gatewayId: providerTransactionId,
+        }).select('_id');
+        if (remainingOwner || String(owner.gatewayId || '') === providerTransactionId) {
+            return { released: false, reason: 'The conflicting gateway ID could not be safely released' };
+        }
+
+        await this.recordPaymentAudit({
+            action: 'paystack_gateway_id_repaired',
+            description: `Corrected stale Paystack gateway ID ownership while recovering ${transaction.reference}`,
+            paymentTransactionId: owner._id,
+            reconciliationCaseId: owner.reconciliationCaseId,
+            actorId,
+            actorType: actorId ? 'staff' : 'system',
+            metadata: {
+                previousGatewayId,
+                correctedGatewayId: owner.gatewayId?.toString(),
+                providerReference: ownerTransaction.reference,
+                providerStatus: this.getPaystackStatus(ownerTransaction),
+                quarantined: ownerState?.quarantined || false,
+            },
+        });
+
+        return { released: true };
     }
 
     private async finalizeAccommodationPayment(paymentTransaction: any) {
@@ -2073,19 +2174,22 @@ export class PaymentsService {
         for (const identifier of identifiers) {
             try {
                 const transaction = await this.fetchPaystackTransaction(identifier);
-                const existing = await this.paymentTransactionModel.findOne({
-                    $or: [
-                        { reference: transaction.reference },
-                        { gatewayId: transaction.id?.toString() },
-                    ],
+                const referenceMatch = await this.paymentTransactionModel.findOne({
+                    reference: transaction.reference,
                 }).lean();
+                const gatewayIdOwner = !referenceMatch && transaction.id
+                    ? await this.paymentTransactionModel.findOne({ gatewayId: transaction.id.toString() }).lean()
+                    : null;
+                const existing = referenceMatch || gatewayIdOwner;
                 const owner = await this.findRecoveryOwner(transaction, params.academicSessionId);
                 let classification = 'unmatched';
                 let appliedTransaction: any = null;
-                if (existing) {
+                if (referenceMatch) {
                     classification = existing.status === PaymentStatus.SUCCESSFUL
                         ? 'already_reconciled'
                         : 'recover_existing';
+                } else if (gatewayIdOwner) {
+                    classification = 'gateway_id_reference_conflict';
                 } else if (
                     this.isPaystackSuccessStatus(this.getPaystackStatus(transaction))
                     && owner.user
@@ -2112,6 +2216,8 @@ export class PaymentsService {
                     confidence: owner.confidence,
                     provider: this.sanitizePaystackPayload(transaction),
                     existingTransactionId: existing?._id?.toString(),
+                    existingReference: existing?.reference,
+                    existingMatch: referenceMatch ? 'reference' : (gatewayIdOwner ? 'gateway_id' : undefined),
                     appliedTransactionId: appliedTransaction?._id?.toString(),
                     userId: owner.user?._id?.toString(),
                     userEmail: owner.user?.email || transaction?.customer?.email,
@@ -2156,7 +2262,7 @@ export class PaymentsService {
 
         const appliedResults: any[] = [];
         for (const preview of run.results as any[]) {
-            if (!['recover_existing', 'recover_and_apply', 'duplicate_refund_recommended'].includes(preview.classification)) {
+            if (!['recover_existing', 'recover_and_apply', 'duplicate_refund_recommended', 'gateway_id_reference_conflict'].includes(preview.classification)) {
                 appliedResults.push({ identifier: preview.identifier, action: 'skipped', classification: preview.classification });
                 continue;
             }
@@ -2167,12 +2273,39 @@ export class PaymentsService {
                     continue;
                 }
 
-                let local = await this.paymentTransactionModel.findOne({
-                    $or: [{ reference: transaction.reference }, { gatewayId: transaction.id?.toString() }],
-                });
+                const gatewayRelease = await this.releaseStaleGatewayIdOwner(transaction, params.actorId);
+                if (!gatewayRelease.released) {
+                    const reconciliationCase = await this.paymentReconciliationCaseModel.create({
+                        type: ReconciliationCaseType.PROVIDER_MISMATCH,
+                        status: ReconciliationCaseStatus.OPEN,
+                        provider: 'paystack',
+                        reference: transaction.reference,
+                        providerTransactionId: transaction.id?.toString(),
+                        userId: preview.userId ? new Types.ObjectId(preview.userId) : undefined,
+                        paymentId: preview.paymentId ? new Types.ObjectId(preview.paymentId) : undefined,
+                        academicSessionId: run.academicSessionId,
+                        amount: this.getPaystackRequestedAmountNaira(transaction),
+                        currency: transaction.currency,
+                        reason: `Gateway ID ownership conflict: ${gatewayRelease.reason}`,
+                        providerSnapshot: this.sanitizePaystackPayload(transaction),
+                    });
+                    appliedResults.push({
+                        identifier: preview.identifier,
+                        action: 'quarantined',
+                        reason: gatewayRelease.reason,
+                        reconciliationCaseId: reconciliationCase._id.toString(),
+                    });
+                    continue;
+                }
+
+                let local = await this.paymentTransactionModel.findOne({ reference: transaction.reference });
                 if (!local) {
                     if (!preview.userId || !preview.paymentId || preview.confidence !== 'high') {
-                        appliedResults.push({ identifier: preview.identifier, action: 'quarantined' });
+                        appliedResults.push({
+                            identifier: preview.identifier,
+                            action: 'quarantined',
+                            reason: 'A high-confidence applicant and payment match is required to create the missing transaction record',
+                        });
                         continue;
                     }
                     const paymentContext = preview.applicationId
@@ -2197,7 +2330,7 @@ export class PaymentsService {
                         remarks: `Recovered from Paystack by historical recovery run ${run.runId}`,
                     });
                 }
-                await this.applyPaystackTransactionState(local, transaction);
+                const stateResult = await this.applyPaystackTransactionState(local, transaction);
                 await this.recordPaymentAudit({
                     action: 'paystack_transaction_recovered',
                     description: `Paystack transaction recovered by ${run.runId}`,
@@ -2226,9 +2359,24 @@ export class PaymentsService {
                         },
                     },
                 );
+                const action = stateResult?.quarantined
+                    || local.fulfilmentStatus === PaymentFulfilmentStatus.QUARANTINED
+                    ? 'quarantined'
+                    : local.status !== PaymentStatus.SUCCESSFUL
+                        ? 'not_successful'
+                        : local.fulfilmentStatus === PaymentFulfilmentStatus.DUPLICATE
+                            ? 'recovered_duplicate'
+                            : local.fulfilmentStatus === PaymentFulfilmentStatus.APPLIED
+                                ? 'recovered_applied'
+                                : 'quarantined';
                 appliedResults.push({
                     identifier: preview.identifier,
-                    action: local.fulfilmentStatus === PaymentFulfilmentStatus.DUPLICATE ? 'recovered_duplicate' : 'recovered_applied',
+                    action,
+                    reference: transaction.reference,
+                    providerStatus: this.getPaystackStatus(transaction),
+                    paymentStatus: local.status,
+                    fulfilmentStatus: local.fulfilmentStatus,
+                    mismatches: stateResult?.mismatches,
                     paymentTransactionId: local._id.toString(),
                 });
             } catch (error: any) {

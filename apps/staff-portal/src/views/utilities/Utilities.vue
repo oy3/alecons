@@ -285,15 +285,18 @@ export default {
         const rows = (run.results || []).slice(0, 50).map(row => `
           <tr>
             <td><code>${this.escapeHtml(row.identifier)}</code></td>
+            <td><code>${this.escapeHtml(row.provider?.reference || 'N/A')}</code></td>
+            <td>${this.escapeHtml(row.provider?.status || 'Unknown')}</td>
             <td>${this.escapeHtml(String(row.classification || '').replaceAll('_', ' '))}</td>
             <td>${this.escapeHtml(row.userEmail || 'Unmatched')}</td>
             <td>${this.escapeHtml(row.paymentName || 'Unknown')}</td>
+            <td><code>${this.escapeHtml(row.existingReference || 'None')}</code></td>
           </tr>`).join('')
         const preview = await Swal.fire({
           icon: counts.error || counts.unmatched ? 'warning' : 'info',
           title: 'Recovery Preview',
-          width: 900,
-          html: `<div class="text-start small"><p><strong>Session:</strong> ${this.escapeHtml(this.selectedSession?.title || this.selectedSessionYear)}</p><p><strong>Summary:</strong> ${this.escapeHtml(Object.entries(counts).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${value}`).join(' | '))}</p><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Identifier</th><th>Classification</th><th>User</th><th>Payment</th></tr></thead><tbody>${rows}</tbody></table></div><hr><label class="form-label" for="recoveryReason">Reason for applying</label><textarea id="recoveryReason" class="form-control mb-3" rows="2"></textarea><label class="form-label" for="recoveryConfirmation">Type APPLY to confirm</label><input id="recoveryConfirmation" class="form-control" autocomplete="off"></div>`,
+          width: 1120,
+          html: `<div class="text-start small"><p><strong>Session:</strong> ${this.escapeHtml(this.selectedSession?.title || this.selectedSessionYear)}</p><p><strong>Summary:</strong> ${this.escapeHtml(Object.entries(counts).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${value}`).join(' | '))}</p><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Input</th><th>Paystack reference</th><th>Provider status</th><th>Classification</th><th>User</th><th>Payment</th><th>Existing local reference</th></tr></thead><tbody>${rows}</tbody></table></div><hr><label class="form-label" for="recoveryReason">Reason for applying</label><textarea id="recoveryReason" class="form-control mb-3" rows="2"></textarea><label class="form-label" for="recoveryConfirmation">Type APPLY to confirm</label><input id="recoveryConfirmation" class="form-control" autocomplete="off"></div>`,
           showCancelButton: true,
           confirmButtonText: 'Apply Recovery',
           confirmButtonColor: '#dc3545',
@@ -313,10 +316,17 @@ export default {
           summary[row.action] = (summary[row.action] || 0) + 1
           return summary
         }, {})
+        const needsReview = (applied.data?.results || []).some(row =>
+          ['quarantined', 'error', 'skipped', 'not_successful', 'recovered_duplicate'].includes(row.action)
+        )
+        const reviewRows = (applied.data?.results || [])
+          .filter(row => ['quarantined', 'error', 'skipped', 'not_successful', 'recovered_duplicate'].includes(row.action))
+          .map(row => `<li><code>${this.escapeHtml(row.reference || row.identifier)}</code>: ${this.escapeHtml(String(row.action).replaceAll('_', ' '))}${row.reason ? ` - ${this.escapeHtml(row.reason)}` : ''}${row.mismatches?.length ? ` - mismatch: ${this.escapeHtml(row.mismatches.join(', '))}` : ''}</li>`)
+          .join('')
         await Swal.fire({
-          icon: 'success',
-          title: 'Recovery Applied',
-          text: Object.entries(appliedCounts).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${value}`).join(' | '),
+          icon: needsReview ? 'warning' : 'success',
+          title: needsReview ? 'Recovery finished with items to review' : 'Recovery applied',
+          html: `<p>${this.escapeHtml(Object.entries(appliedCounts).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${value}`).join(' | '))}</p>${reviewRows ? `<ul class="text-start small mb-0">${reviewRows}</ul>` : ''}`,
           confirmButtonColor: '#1a5f5f'
         })
       } catch (error) {

@@ -43,6 +43,92 @@ test('strict Paystack validation rejects amount and metadata mismatches', () => 
     assert.deepEqual(mismatches, ['amount', 'metadata.userId']);
 });
 
+test('Paystack validation compares the requested fee when the customer bears provider charges', () => {
+    const service = serviceWithoutConstructor();
+    const paymentTransactionId = new Types.ObjectId();
+    const userId = new Types.ObjectId();
+    const paymentId = new Types.ObjectId();
+    const mismatches = service.validatePaystackTransaction({
+        _id: paymentTransactionId,
+        reference: 'ALC-customer-fee',
+        amount: 50000,
+        userId,
+        paymentId,
+        providerInitializationStatus: ProviderInitializationStatus.INITIALIZED,
+    }, {
+        reference: 'ALC-customer-fee',
+        amount: 5086295,
+        requested_amount: 5000000,
+        fees: 86295,
+        currency: 'NGN',
+        metadata: {
+            paymentTransactionId: paymentTransactionId.toString(),
+            userId: userId.toString(),
+            paymentId: paymentId.toString(),
+        },
+    });
+
+    assert.deepEqual(mismatches, []);
+});
+
+test('a clean re-verification releases a quarantined customer-fee transaction', async () => {
+    const service = serviceWithoutConstructor();
+    const reconciliationCaseId = new Types.ObjectId();
+    const transaction: any = {
+        _id: new Types.ObjectId(),
+        userId: new Types.ObjectId(),
+        applicationId: new Types.ObjectId(),
+        paymentId: new Types.ObjectId(),
+        academicSessionId: new Types.ObjectId(),
+        paymentContext: PaymentContext.ADMISSION_APPLICATION,
+        reference: 'ALC-recheck',
+        amount: 50000,
+        status: PaymentStatus.PENDING,
+        method: PaymentMethod.PAYSTACK,
+        providerInitializationStatus: ProviderInitializationStatus.INITIALIZED,
+        fulfilmentStatus: PaymentFulfilmentStatus.QUARANTINED,
+        reconciliationCaseId,
+        verificationAttempts: 1,
+        async save() { },
+    };
+    let resolvedCase: any;
+    let stageUpdates = 0;
+    service.paymentTransactionModel = {
+        findOne(query: any) {
+            if (query.gatewayId) return { select: async () => null };
+            return { sort: async () => null };
+        },
+    };
+    service.paymentReconciliationCaseModel = {
+        updateOne: async (query: any, update: any) => { resolvedCase = { query, update }; },
+        create: async () => { throw new Error('not expected'); },
+    };
+    service.updateApplicationStageAfterPayment = async () => { stageUpdates += 1; };
+    service.markSuccessfulPaystackPaymentAwaitingRemittance = () => { };
+
+    await service.applyPaystackTransactionState(transaction, {
+        id: 6615680073,
+        reference: transaction.reference,
+        status: 'success',
+        amount: 5086295,
+        requested_amount: 5000000,
+        fees: 86295,
+        currency: 'NGN',
+        channel: 'card',
+        metadata: {
+            paymentTransactionId: transaction._id.toString(),
+            userId: transaction.userId.toString(),
+            paymentId: transaction.paymentId.toString(),
+        },
+    });
+
+    assert.equal(transaction.status, PaymentStatus.SUCCESSFUL);
+    assert.equal(transaction.fulfilmentStatus, PaymentFulfilmentStatus.APPLIED);
+    assert.equal(stageUpdates, 1);
+    assert.equal(resolvedCase.query._id.toString(), reconciliationCaseId.toString());
+    assert.equal(resolvedCase.update.$set.status, 'resolved');
+});
+
 test('a newly initialized successful payment moves from unapplied to applied once', async () => {
     const service = serviceWithoutConstructor();
     const applicationId = new Types.ObjectId();

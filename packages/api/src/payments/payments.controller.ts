@@ -1008,6 +1008,53 @@ export class StaffPaymentsController {
         return { success: true, data, message: "Paystack recovery applied" };
     }
 
+    @Post("payment-correction/lookup")
+    @ApiOperation({ summary: "Find a local Paystack payment and its applicant applications for correction" })
+    async lookupPaystackPaymentCorrection(
+        @Request() req,
+        @Body() body: { reference: string },
+    ) {
+        await this.authorize(req, "reconcile");
+        return {
+            success: true,
+            data: await this.paymentsService.lookupPaystackPaymentCorrection(body?.reference),
+        };
+    }
+
+    @Post("payment-correction/preview")
+    @ApiOperation({ summary: "Preview reassignment of a successful Paystack payment" })
+    async previewPaystackPaymentCorrection(
+        @Request() req,
+        @Body() body: { paymentTransactionId: string; targetApplicationId: string },
+    ) {
+        await this.authorize(req, "reconcile");
+        return {
+            success: true,
+            data: await this.paymentsService.previewPaystackPaymentCorrection(
+                body?.paymentTransactionId,
+                body?.targetApplicationId,
+            ),
+        };
+    }
+
+    @Post("payment-correction/apply")
+    @ApiOperation({ summary: "Reassign a successful Paystack payment to the verified application and session" })
+    async applyPaystackPaymentCorrection(
+        @Request() req,
+        @Body() body: { paymentTransactionId: string; targetApplicationId: string; reason: string },
+    ) {
+        await this.authorize(req, "reconcile");
+        return {
+            success: true,
+            data: await this.paymentsService.applyPaystackPaymentCorrection({
+                paymentTransactionId: body?.paymentTransactionId,
+                targetApplicationId: body?.targetApplicationId,
+                reason: body?.reason,
+                actorId: this.userId(req),
+            }),
+        };
+    }
+
     @Get("reconciliation-cases")
     async getReconciliationCases(
         @Request() req,

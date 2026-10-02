@@ -145,6 +145,7 @@ export interface StaffLinkedPaymentRecord {
     channel?: string;
     fee?: number;
     status: PaymentStatus;
+    fulfilmentStatus?: PaymentFulfilmentStatus;
     remarks?: string;
     createdAt?: Date;
     updatedAt?: Date;
@@ -165,6 +166,7 @@ export interface StaffLinkedPaymentRecord {
     academicSession?: {
         id?: string;
         sessionYear?: string;
+        title?: string;
     };
 }
 
@@ -2856,19 +2858,49 @@ export class PaymentsService {
         const successfulTransactions: any[] = await this.paymentTransactionModel.find({
             applicationId: application._id,
             userId,
-            paymentContext: PaymentContext.ADMISSION_APPLICATION,
             academicSessionId: sessionId,
             paymentId: { $in: [...paymentIdsByCode.values()] },
             status: PaymentStatus.SUCCESSFUL,
             $or: [
                 { fulfilmentStatus: PaymentFulfilmentStatus.APPLIED },
-                { fulfilmentStatus: { $exists: false } },
+                { fulfilmentStatus: null },
             ],
         }).populate('paymentId', 'paymentCode name').lean();
         const paidCodes = new Set(successfulTransactions.map((transaction) => transaction.paymentId?.paymentCode));
         const unpaidCodes = requiredCodes.filter((code) => !paidCodes.has(code));
         if (unpaidCodes.length) {
-            throw new ConflictException(`Enrollment cannot be completed. These required fees are not confirmed as paid for this application and session: ${unpaidCodes.join(', ')}`);
+            const blockers = unpaidCodes.map((code) => `${code} is not confirmed as paid for this application and session`);
+            if (unpaidCodes.includes('schoolFee')) {
+                const schoolFeePaymentId = paymentIdsByCode.get('schoolFee');
+                const candidates: any[] = schoolFeePaymentId
+                    ? await this.paymentTransactionModel.find({
+                        userId,
+                        paymentId: schoolFeePaymentId,
+                        status: PaymentStatus.SUCCESSFUL,
+                    }).select('reference applicationId academicSessionId fulfilmentStatus').sort({ paidAt: -1 }).lean()
+                    : [];
+                const candidate = candidates[0];
+                if (candidate) {
+                    let detail = `Successful School Fee transaction ${candidate.reference} was found`;
+                    if (candidate.applicationId?.toString() !== application._id.toString()) {
+                        detail += ' but it is not linked to this application';
+                    } else if (candidate.academicSessionId?.toString() !== sessionId.toString()) {
+                        const [paymentSession, applicationSession] = await Promise.all([
+                            candidate.academicSessionId
+                                ? this.academicSessionModel.findById(candidate.academicSessionId).select('title sessionYear').lean()
+                                : null,
+                            this.academicSessionModel.findById(sessionId).select('title sessionYear').lean(),
+                        ]);
+                        const paymentSessionLabel = paymentSession?.title || paymentSession?.sessionYear || 'unknown session';
+                        const applicationSessionLabel = applicationSession?.title || applicationSession?.sessionYear || 'unknown session';
+                        detail += ` but it belongs to ${paymentSessionLabel}, while this application is for ${applicationSessionLabel}`;
+                    } else {
+                        detail += ` but its fulfilment status is ${candidate.fulfilmentStatus || 'legacy/unset'}`;
+                    }
+                    blockers[unpaidCodes.indexOf('schoolFee')] = detail;
+                }
+            }
+            throw new ConflictException(`Enrollment cannot be completed: ${blockers.join('; ')}.`);
         }
 
         const schoolFeeTransaction = successfulTransactions.find(
@@ -4646,7 +4678,7 @@ export class PaymentsService {
         const payments = await this.paymentTransactionModel
             .find(query)
             .populate('paymentId', 'name description amount paymentCode')
-            .populate('academicSessionId', 'sessionYear')
+            .populate('academicSessionId', 'sessionYear title')
             .sort({ paidAt: -1 })
             .limit(limit)
             .skip((page - 1) * limit)
@@ -4760,20 +4792,20 @@ export class PaymentsService {
             ? new Types.ObjectId(options.academicSessionId)
             : null;
 
+        const transactionQuery: any = { userId: userObjectId };
+        if (applicationObjectId) transactionQuery.applicationId = applicationObjectId;
+        if (academicSessionObjectId) transactionQuery.academicSessionId = academicSessionObjectId;
+
         const payments = await this.paymentTransactionModel
-            .find({ userId: userObjectId })
+            .find(transactionQuery)
             .populate('paymentId', 'name description amount paymentCode')
-            .populate('academicSessionId', 'sessionYear')
+            .populate('academicSessionId', 'sessionYear title')
             .populate('verifiedBy', 'firstName lastName')
             .populate('rejectedBy', 'firstName lastName')
             .sort({ createdAt: -1, paidAt: -1 })
             .lean();
 
         const mappedPayments = payments.map(payment => {
-            const linkedApplicationId = payment.applicationId?.toString();
-            const linkedAcademicSessionId = payment.academicSessionId && typeof payment.academicSessionId === 'object' && '_id' in payment.academicSessionId
-                ? payment.academicSessionId._id?.toString()
-                : payment.academicSessionId?.toString();
             const linkedPayment = payment.paymentId && typeof payment.paymentId === 'object' && '_id' in payment.paymentId
                 ? payment.paymentId as any
                 : null;
@@ -4786,6 +4818,7 @@ export class PaymentsService {
                 channel: payment.channel,
                 fee: payment.fee,
                 status: payment.status,
+                fulfilmentStatus: payment.fulfilmentStatus,
                 remarks: payment.remarks,
                 createdAt: payment.createdAt,
                 updatedAt: payment.updatedAt,
@@ -4807,6 +4840,7 @@ export class PaymentsService {
                     ? {
                         id: (payment.academicSessionId as any)._id?.toString(),
                         sessionYear: (payment.academicSessionId as any).sessionYear,
+                        title: (payment.academicSessionId as any).title,
                     }
                     : undefined,
             };

@@ -761,6 +761,27 @@ class StaffApiService {
         })
     }
 
+    async lookupPaystackPaymentCorrection(reference) {
+        return this.makeRequest('/staff/payments/payment-correction/lookup', {
+            method: 'POST',
+            body: JSON.stringify({ reference }),
+        })
+    }
+
+    async previewPaystackPaymentCorrection(payload) {
+        return this.makeRequest('/staff/payments/payment-correction/preview', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        })
+    }
+
+    async applyPaystackPaymentCorrection(payload) {
+        return this.makeRequest('/staff/payments/payment-correction/apply', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        })
+    }
+
     async getPaymentReconciliationCases(filters = {}) {
         const query = new URLSearchParams(
             Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && value !== ''),

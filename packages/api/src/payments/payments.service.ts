@@ -2127,21 +2127,53 @@ export class PaymentsService {
             if (matches.length === 1) payment = matches[0];
         }
 
-        if (!user || !payment) return { user, payment, application: null, student: null, confidence: 'low' };
-        const sessionId = new Types.ObjectId(academicSessionId);
-        const application = await this.applicationModel.findOne({
-            userId: user._id,
-            entryAcademicSession: sessionId,
-        }).sort({ createdAt: -1 }).lean();
+        if (!user || !payment) return { user, payment, application: null, student: null, academicSessionId: undefined, confidence: 'low' };
+        const metadataApplicationId = metadata.applicationId && Types.ObjectId.isValid(metadata.applicationId)
+            ? new Types.ObjectId(metadata.applicationId)
+            : null;
+        let application: any = metadataApplicationId
+            ? await this.applicationModel.findOne({ _id: metadataApplicationId, userId: user._id }).lean()
+            : null;
+        let applicationMatchIsUnambiguous = Boolean(application);
+        if (!application && !metadataApplicationId) {
+            const userApplications = await this.applicationModel.find({ userId: user._id })
+                .select('_id entryAcademicSession')
+                .sort({ createdAt: -1 })
+                .lean();
+            applicationMatchIsUnambiguous = userApplications.length === 1;
+            if (applicationMatchIsUnambiguous) application = userApplications[0];
+            else {
+                const selectedSessionId = new Types.ObjectId(academicSessionId);
+                const sessionMatches = userApplications.filter((candidate: any) =>
+                    candidate.entryAcademicSession?.toString() === selectedSessionId.toString(),
+                );
+                if (sessionMatches.length === 1) application = sessionMatches[0];
+            }
+        }
+        const metadataSessionId = metadata.academicSessionId && Types.ObjectId.isValid(metadata.academicSessionId)
+            ? new Types.ObjectId(metadata.academicSessionId)
+            : null;
+        const applicationSessionId = application?.entryAcademicSession;
+        const linkedSessionId = applicationSessionId || metadataSessionId
+            || (applicationMatchIsUnambiguous ? new Types.ObjectId(academicSessionId) : undefined);
         const student = await this.studentModel.findOne({ userId: user._id }).lean();
         const metadataExact = metadata.userId?.toString() === user._id.toString()
             && metadata.paymentId?.toString() === payment._id.toString();
+        const metadataSessionConflict = Boolean(
+            application && metadataSessionId && applicationSessionId
+            && metadataSessionId.toString() !== applicationSessionId.toString(),
+        );
+        const applicationIdMatchesMetadata = Boolean(application && metadataApplicationId
+            && application._id.toString() === metadataApplicationId.toString());
         return {
             user,
             payment,
             application,
             student,
-            confidence: metadataExact ? 'high' : 'medium',
+            academicSessionId: linkedSessionId?.toString(),
+            confidence: metadataExact && (applicationIdMatchesMetadata || applicationMatchIsUnambiguous
+                || (!metadataApplicationId && !application && student && metadataSessionId))
+                && !metadataSessionConflict ? 'high' : 'medium',
         };
     }
 
@@ -2185,7 +2217,10 @@ export class PaymentsService {
                     const query: any = {
                         userId: owner.user._id,
                         paymentId: owner.payment._id,
-                        academicSessionId: new Types.ObjectId(params.academicSessionId),
+                        academicSessionId: owner.academicSessionId
+                            ? new Types.ObjectId(owner.academicSessionId)
+                            : new Types.ObjectId(params.academicSessionId),
+                        ...(owner.application?._id ? { applicationId: owner.application._id } : {}),
                         status: PaymentStatus.SUCCESSFUL,
                     };
                     appliedTransaction = await this.paymentTransactionModel.findOne(query).sort({ paidAt: 1 }).lean();
@@ -2211,6 +2246,7 @@ export class PaymentsService {
                     paymentName: owner.payment?.name,
                     applicationId: owner.application?._id?.toString(),
                     studentId: owner.student?._id?.toString(),
+                    academicSessionId: owner.academicSessionId,
                 });
             } catch (error: any) {
                 results.push({ identifier, classification: 'error', error: error?.message || String(error) });
@@ -2269,7 +2305,9 @@ export class PaymentsService {
                         providerTransactionId: transaction.id?.toString(),
                         userId: preview.userId ? new Types.ObjectId(preview.userId) : undefined,
                         paymentId: preview.paymentId ? new Types.ObjectId(preview.paymentId) : undefined,
-                        academicSessionId: run.academicSessionId,
+                        academicSessionId: preview.academicSessionId
+                            ? new Types.ObjectId(preview.academicSessionId)
+                            : run.academicSessionId,
                         amount: this.getPaystackRequestedAmountNaira(transaction),
                         currency: transaction.currency,
                         reason: `Gateway ID ownership conflict: ${gatewayRelease.reason}`,
@@ -2303,7 +2341,9 @@ export class PaymentsService {
                         studentId: preview.studentId ? new Types.ObjectId(preview.studentId) : undefined,
                         payerType: preview.applicationId ? PaymentPayerType.APPLICANT : PaymentPayerType.STUDENT,
                         paymentContext,
-                        academicSessionId: run.academicSessionId,
+                        academicSessionId: preview.academicSessionId
+                            ? new Types.ObjectId(preview.academicSessionId)
+                            : run.academicSessionId,
                         paymentId: new Types.ObjectId(preview.paymentId),
                         amount: this.getPaystackRequestedAmountNaira(transaction),
                         reference: transaction.reference,
@@ -2949,6 +2989,250 @@ export class PaymentsService {
                 email: (await this.userModel.findById(userId).select('email').lean())?.email,
                 emailSent: completion.emailSent,
             },
+        };
+    }
+
+    async lookupPaystackPaymentCorrection(reference: string) {
+        const normalizedReference = String(reference || '').trim();
+        if (!normalizedReference) throw new BadRequestException('Enter the Paystack reference');
+        const transaction: any = await this.paymentTransactionModel.findOne({ reference: normalizedReference })
+            .populate('paymentId', 'name paymentCode amount')
+            .populate('academicSessionId', 'title sessionYear')
+            .lean();
+        if (!transaction) throw new NotFoundException('No local payment transaction was found for this reference');
+        if (transaction.method !== PaymentMethod.PAYSTACK) {
+            throw new ConflictException('Only Paystack transactions can be corrected with this utility');
+        }
+        const userId = transaction.userId?._id || transaction.userId;
+        const applications: any[] = await this.applicationModel.find({ userId })
+            .select('_id applicationNumber status admissionDecision currentStage entryAcademicSession programId')
+            .populate('entryAcademicSession', 'title sessionYear')
+            .populate('programId', 'name type mode')
+            .sort({ createdAt: -1 })
+            .lean();
+        const currentApplicationId = transaction.applicationId?._id || transaction.applicationId;
+        return {
+            transaction: {
+                id: transaction._id.toString(),
+                reference: transaction.reference,
+                amount: transaction.amount,
+                status: transaction.status,
+                method: transaction.method,
+                fulfilmentStatus: transaction.fulfilmentStatus || 'legacy/unset',
+                paymentContext: transaction.paymentContext,
+                payment: transaction.paymentId,
+                currentApplicationId: currentApplicationId?.toString(),
+                currentApplicationNumber: applications.find((app) => app._id.toString() === currentApplicationId?.toString())?.applicationNumber,
+                currentSession: transaction.academicSessionId,
+                paidAt: transaction.paidAt,
+            },
+            applications: applications.map((application) => ({
+                id: application._id.toString(),
+                applicationNumber: application.applicationNumber,
+                status: application.status,
+                admissionDecision: application.admissionDecision,
+                currentStage: application.currentStage,
+                session: application.entryAcademicSession,
+                program: application.programId,
+            })),
+        };
+    }
+
+    private async inspectPaystackPaymentCorrection(paymentTransactionId: string, targetApplicationId: string) {
+        if (!Types.ObjectId.isValid(paymentTransactionId) || !Types.ObjectId.isValid(targetApplicationId)) {
+            throw new BadRequestException('Select a valid payment and destination application');
+        }
+        const transaction: any = await this.paymentTransactionModel.findById(paymentTransactionId)
+            .populate('paymentId', 'name paymentCode amount')
+            .populate('academicSessionId', 'title sessionYear')
+            .lean();
+        if (!transaction) throw new NotFoundException('Payment transaction not found');
+        if (transaction.method !== PaymentMethod.PAYSTACK || transaction.status !== PaymentStatus.SUCCESSFUL) {
+            throw new ConflictException('Only successful Paystack transactions can be reassigned');
+        }
+        if (transaction.paymentContext !== PaymentContext.ADMISSION_APPLICATION || !transaction.applicationId) {
+            throw new ConflictException('This is not currently linked to an admission application; use unmatched-payment recovery instead');
+        }
+        const target: any = await this.applicationModel.findById(targetApplicationId)
+            .populate('entryAcademicSession', 'title sessionYear')
+            .populate('programId', 'name type mode')
+            .lean();
+        if (!target) throw new NotFoundException('Destination application not found');
+        if (target.userId?.toString() !== transaction.userId?.toString()) {
+            throw new ConflictException('The destination application must belong to the same payer');
+        }
+        const targetSessionId = target.entryAcademicSession?._id || target.entryAcademicSession;
+        if (!targetSessionId) throw new ConflictException('Destination application has no academic session');
+        const sourceId = transaction.applicationId.toString();
+        const targetId = target._id.toString();
+        const source = sourceId === targetId
+            ? target
+            : await this.applicationModel.findById(sourceId).select('_id applicationNumber status currentStage matriculationNumber').lean();
+        if (!source) throw new ConflictException('The current linked application no longer exists; manual review is required');
+        if (sourceId !== targetId) {
+            const sourceStudent = await this.studentModel.findOne({ $or: [{ applicationId: source._id }, { userId: transaction.userId, applicationId: source._id }] })
+                .select('_id matriculationNumber')
+                .lean();
+            if (sourceStudent || source.status === ApplicationStatus.COMPLETED || source.currentStage >= 10 || source.matriculationNumber) {
+                throw new ConflictException('The currently linked application has completed or created a student record. This reassignment needs manual review; no changes were made.');
+            }
+            if (transaction.fulfilmentStatus === PaymentFulfilmentStatus.APPLIED && source.currentStage > 9) {
+                throw new ConflictException('The payment has already advanced the current application beyond School Fees. This reassignment needs manual review; no changes were made.');
+            }
+        }
+        const paymentId = transaction.paymentId?._id || transaction.paymentId;
+        const existing = await this.paymentTransactionModel.findOne({
+            _id: { $ne: transaction._id },
+            userId: transaction.userId,
+            applicationId: target._id,
+            academicSessionId: targetSessionId,
+            paymentId,
+            status: PaymentStatus.SUCCESSFUL,
+            $or: [
+                { fulfilmentStatus: PaymentFulfilmentStatus.APPLIED },
+                { fulfilmentStatus: null },
+            ],
+        }).select('_id reference method fulfilmentStatus').lean();
+        const currentSessionId = transaction.academicSessionId?._id || transaction.academicSessionId;
+        return {
+            transaction,
+            target,
+            source,
+            targetSessionId,
+            duplicatePayment: existing ? { id: existing._id.toString(), reference: existing.reference } : null,
+            changes: {
+                application: { from: source.applicationNumber, to: target.applicationNumber },
+                session: {
+                    from: currentSessionId?.toString(),
+                    to: targetSessionId.toString(),
+                    fromLabel: transaction.academicSessionId?.title || transaction.academicSessionId?.sessionYear || 'Unknown session',
+                    toLabel: target.entryAcademicSession?.title || target.entryAcademicSession?.sessionYear || 'Unknown session',
+                },
+            },
+        };
+    }
+
+    async previewPaystackPaymentCorrection(paymentTransactionId: string, targetApplicationId: string) {
+        const inspection = await this.inspectPaystackPaymentCorrection(paymentTransactionId, targetApplicationId);
+        const providerTransaction = await this.verifyPaystackTransaction(inspection.transaction.reference);
+        const mismatches = this.validatePaystackTransaction(inspection.transaction, providerTransaction);
+        if (!this.isPaystackSuccessStatus(this.getPaystackStatus(providerTransaction))) {
+            throw new ConflictException('Paystack does not currently report this transaction as successful');
+        }
+        if (mismatches.length) {
+            throw new ConflictException(`Provider verification does not match this payment: ${mismatches.join(', ')}`);
+        }
+        if (providerTransaction?.id) {
+            const gatewayOwner = await this.paymentTransactionModel.findOne({
+                _id: { $ne: inspection.transaction._id },
+                gatewayId: providerTransaction.id.toString(),
+            }).select('reference').lean();
+            if (gatewayOwner) throw new ConflictException(`Paystack transaction is already owned by local reference ${gatewayOwner.reference}; manual review is required`);
+        }
+        return {
+            reference: inspection.transaction.reference,
+            amount: inspection.transaction.amount,
+            payment: inspection.transaction.paymentId,
+            fulfilmentStatus: inspection.transaction.fulfilmentStatus || 'legacy/unset',
+            fromApplication: inspection.source.applicationNumber,
+            toApplication: inspection.target.applicationNumber,
+            fromSession: inspection.changes.session.fromLabel,
+            toSession: inspection.changes.session.toLabel,
+            duplicatePayment: inspection.duplicatePayment,
+            willBeDuplicate: Boolean(inspection.duplicatePayment),
+        };
+    }
+
+    async applyPaystackPaymentCorrection(params: { paymentTransactionId: string; targetApplicationId: string; actorId: string; reason: string }) {
+        if (!params.reason?.trim()) throw new BadRequestException('A correction reason is required');
+        const inspection = await this.inspectPaystackPaymentCorrection(params.paymentTransactionId, params.targetApplicationId);
+        if (inspection.transaction.applicationId.toString() === inspection.target._id.toString()
+            && inspection.transaction.academicSessionId?.toString() === inspection.targetSessionId.toString()) {
+            throw new ConflictException('This payment is already linked to the selected application and session');
+        }
+        const providerTransaction = await this.verifyPaystackTransaction(inspection.transaction.reference);
+        const mismatches = this.validatePaystackTransaction(inspection.transaction, providerTransaction);
+        if (!this.isPaystackSuccessStatus(this.getPaystackStatus(providerTransaction)) || mismatches.length) {
+            throw new ConflictException(`Paystack verification is not safe for reassignment${mismatches.length ? `: ${mismatches.join(', ')}` : ''}`);
+        }
+        if (providerTransaction?.id) {
+            const gatewayOwner = await this.paymentTransactionModel.findOne({
+                _id: { $ne: params.paymentTransactionId },
+                gatewayId: providerTransaction.id.toString(),
+            }).select('reference').lean();
+            if (gatewayOwner) throw new ConflictException(`Paystack transaction is already owned by local reference ${gatewayOwner.reference}; no changes were made`);
+        }
+
+        const paymentTransaction: any = await this.paymentTransactionModel.findById(params.paymentTransactionId);
+        if (!paymentTransaction || paymentTransaction.applicationId?.toString() !== inspection.transaction.applicationId.toString()
+            || paymentTransaction.academicSessionId?.toString() !== inspection.transaction.academicSessionId?.toString()) {
+            throw new ConflictException('Payment linkage changed after preview; run the preview again');
+        }
+        const before = {
+            applicationId: paymentTransaction.applicationId?.toString(),
+            academicSessionId: paymentTransaction.academicSessionId?.toString(),
+            fulfilmentStatus: paymentTransaction.fulfilmentStatus,
+            fulfilledObligationKey: paymentTransaction.fulfilledObligationKey,
+            reconciliationCaseId: paymentTransaction.reconciliationCaseId?.toString(),
+        };
+        if (paymentTransaction.reconciliationCaseId) {
+            await this.paymentReconciliationCaseModel.updateOne(
+                {
+                    _id: paymentTransaction.reconciliationCaseId,
+                    status: { $in: [ReconciliationCaseStatus.OPEN, ReconciliationCaseStatus.INVESTIGATING] },
+                },
+                {
+                    $set: {
+                        status: ReconciliationCaseStatus.RESOLVED,
+                        resolvedBy: new Types.ObjectId(params.actorId),
+                        resolvedAt: new Date(),
+                        resolution: `Payment linkage corrected to ${inspection.target.applicationNumber}`,
+                    },
+                },
+            );
+        }
+        paymentTransaction.applicationId = inspection.target._id;
+        paymentTransaction.academicSessionId = inspection.targetSessionId;
+        paymentTransaction.paymentContext = PaymentContext.ADMISSION_APPLICATION;
+        paymentTransaction.payerType = PaymentPayerType.APPLICANT;
+        paymentTransaction.studentId = undefined;
+        paymentTransaction.fulfilmentStatus = PaymentFulfilmentStatus.UNAPPLIED;
+        paymentTransaction.fulfilledObligationKey = undefined;
+        paymentTransaction.duplicateOfTransactionId = undefined;
+        paymentTransaction.reconciliationCaseId = undefined;
+        await paymentTransaction.save();
+        const stateResult = await this.applyPaystackTransactionState(paymentTransaction, providerTransaction);
+        await this.recordPaymentAudit({
+            action: 'paystack_payment_application_reassigned',
+            description: params.reason.trim(),
+            paymentTransactionId: paymentTransaction._id,
+            actorId: params.actorId,
+            actorType: 'staff',
+            metadata: {
+                reference: paymentTransaction.reference,
+                paymentCode: inspection.transaction.paymentId?.paymentCode,
+                before,
+                after: {
+                    applicationId: inspection.target._id.toString(),
+                    applicationNumber: inspection.target.applicationNumber,
+                    academicSessionId: inspection.targetSessionId.toString(),
+                    sessionTitle: inspection.target.entryAcademicSession?.title || inspection.target.entryAcademicSession?.sessionYear,
+                    fulfilmentStatus: paymentTransaction.fulfilmentStatus,
+                },
+                sourceApplicationId: inspection.source._id.toString(),
+                duplicatePayment: inspection.duplicatePayment,
+            },
+        });
+        if (stateResult?.quarantined) throw new ConflictException('Linkage was corrected but provider state is quarantined. Review the payment reconciliation case before proceeding.');
+        return {
+            reference: paymentTransaction.reference,
+            applicationNumber: inspection.target.applicationNumber,
+            sessionTitle: inspection.target.entryAcademicSession?.title || inspection.target.entryAcademicSession?.sessionYear,
+            fulfilmentStatus: paymentTransaction.fulfilmentStatus,
+            duplicateOfReference: inspection.duplicatePayment?.reference,
+            message: paymentTransaction.fulfilmentStatus === PaymentFulfilmentStatus.DUPLICATE
+                ? 'Payment was linked to the selected application and marked as a duplicate collection for refund review.'
+                : 'Payment was linked to the selected application and standard verification was re-run.',
         };
     }
 

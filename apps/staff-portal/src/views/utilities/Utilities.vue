@@ -28,6 +28,7 @@ export default {
       isMigratingAcademicProgression: false,
       isBackfillingFeeObligations: false,
       isRecoveringPaystack: false,
+      isCorrectingPaystackPayment: false,
       counterStats: null,
       counterRecord: null,
       programDriftSummary: null,
@@ -111,6 +112,14 @@ export default {
           variant: 'danger',
           description: 'Verify historical Paystack references, restore missing transactions, quarantine mismatches, and identify duplicate collections that may require refunds.',
           actionLabel: 'Preview Recovery'
+        },
+        {
+          id: 'correct-paystack-payment-linkage',
+          title: 'Correct Paystack Payment Linkage',
+          icon: 'bi-arrow-left-right',
+          variant: 'warning',
+          description: 'Correct a successful Paystack transaction linked to the wrong admission application or academic session. Provider verification, duplicate checks, and audit logging are required.',
+          actionLabel: 'Find Payment'
         },
         {
           id: 'academic-results-readiness',
@@ -258,7 +267,7 @@ export default {
 
       const input = await Swal.fire({
         title: 'Preview Paystack Recovery',
-        html: '<p class="text-start small text-muted">Enter one Paystack reference or transaction ID per line. This first step does not change payment records.</p>',
+        html: '<p class="text-start small text-muted">Enter one Paystack reference or transaction ID per line. Payment-time application/session metadata is used when available; ambiguous records require review. This step does not change payment records.</p>',
         input: 'textarea',
         inputPlaceholder: 'Reference or transaction ID\nReference or transaction ID',
         inputAttributes: { 'aria-label': 'Paystack references or transaction IDs' },
@@ -290,13 +299,15 @@ export default {
             <td>${this.escapeHtml(String(row.classification || '').replaceAll('_', ' '))}</td>
             <td>${this.escapeHtml(row.userEmail || 'Unmatched')}</td>
             <td>${this.escapeHtml(row.paymentName || 'Unknown')}</td>
+            <td>${this.escapeHtml(row.applicationId || 'Needs review')}</td>
+            <td>${this.escapeHtml(this.academicSessions.find(session => session._id === row.academicSessionId)?.title || row.academicSessionId || 'Needs review')}</td>
             <td><code>${this.escapeHtml(row.existingReference || 'None')}</code></td>
           </tr>`).join('')
         const preview = await Swal.fire({
           icon: counts.error || counts.unmatched ? 'warning' : 'info',
           title: 'Recovery Preview',
           width: 1120,
-          html: `<div class="text-start small"><p><strong>Session:</strong> ${this.escapeHtml(this.selectedSession?.title || this.selectedSessionYear)}</p><p><strong>Summary:</strong> ${this.escapeHtml(Object.entries(counts).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${value}`).join(' | '))}</p><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Input</th><th>Paystack reference</th><th>Provider status</th><th>Classification</th><th>User</th><th>Payment</th><th>Existing local reference</th></tr></thead><tbody>${rows}</tbody></table></div><hr><label class="form-label" for="recoveryReason">Reason for applying</label><textarea id="recoveryReason" class="form-control mb-3" rows="2"></textarea><label class="form-label" for="recoveryConfirmation">Type APPLY to confirm</label><input id="recoveryConfirmation" class="form-control" autocomplete="off"></div>`,
+          html: `<div class="text-start small"><p><strong>Selected session fallback:</strong> ${this.escapeHtml(this.selectedSession?.title || this.selectedSessionYear)}</p><p class="text-muted">Newer Paystack payments are matched to the application and session recorded when payment was initialized. Older ambiguous payments stay in review instead of being assigned to the selected session automatically.</p><p><strong>Summary:</strong> ${this.escapeHtml(Object.entries(counts).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${value}`).join(' | '))}</p><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Input</th><th>Paystack reference</th><th>Provider status</th><th>Classification</th><th>User</th><th>Payment</th><th>Resolved application</th><th>Resolved session ID</th><th>Existing local reference</th></tr></thead><tbody>${rows}</tbody></table></div><hr><label class="form-label" for="recoveryReason">Reason for applying</label><textarea id="recoveryReason" class="form-control mb-3" rows="2"></textarea><label class="form-label" for="recoveryConfirmation">Type APPLY to confirm</label><input id="recoveryConfirmation" class="form-control" autocomplete="off"></div>`,
           showCancelButton: true,
           confirmButtonText: 'Apply Recovery',
           confirmButtonColor: '#dc3545',
@@ -334,6 +345,91 @@ export default {
         await Swal.fire({ icon: 'error', title: 'Recovery Failed', text: error.message || 'Unable to recover Paystack transactions.' })
       } finally {
         this.isRecoveringPaystack = false
+      }
+    },
+    async correctPaystackPaymentLinkage() {
+      const referenceResult = await Swal.fire({
+        title: 'Find Paystack Payment',
+        text: 'Enter the exact local Paystack reference to inspect its current application and session linkage.',
+        input: 'text',
+        inputPlaceholder: 'ALC...',
+        showCancelButton: true,
+        confirmButtonText: 'Find Payment',
+        confirmButtonColor: '#1a5f5f',
+        inputValidator: value => value?.trim() ? undefined : 'Enter a payment reference'
+      })
+      if (!referenceResult.isConfirmed) return
+
+      this.isCorrectingPaystackPayment = true
+      try {
+        const lookup = await apiService.lookupPaystackPaymentCorrection(referenceResult.value.trim())
+        if (!lookup.success) throw new Error(lookup.error || 'Payment lookup failed')
+        const { transaction, applications = [] } = lookup.data || {}
+        if (!transaction || !applications.length) throw new Error('No applicant applications were found for this payer')
+
+        const sessionLabel = session => session?.title || session?.sessionYear || 'Unknown session'
+        const applicationOptions = applications.reduce((options, application) => {
+          const program = application.program?.name || 'Unknown programme'
+          const label = `${application.applicationNumber} | ${application.status} | ${program} | ${sessionLabel(application.session)}`
+          options[application.id] = label
+          return options
+        }, {})
+        const applicationResult = await Swal.fire({
+          title: 'Select the Correct Application',
+          html: `<div class="text-start small mb-3"><div><strong>Reference:</strong> <code>${this.escapeHtml(transaction.reference)}</code></div><div><strong>Fee:</strong> ${this.escapeHtml(transaction.payment?.name || transaction.payment?.paymentCode || 'Unknown')}</div><div><strong>Amount:</strong> ₦${Number(transaction.amount || 0).toLocaleString()}</div><div><strong>Current linkage:</strong> ${this.escapeHtml(transaction.currentApplicationNumber || 'Unknown application')} / ${this.escapeHtml(sessionLabel(transaction.currentSession))}</div><div><strong>Payment:</strong> ${this.escapeHtml(transaction.status)} / fulfilment ${this.escapeHtml(transaction.fulfilmentStatus)}</div></div>`,
+          input: 'select',
+          inputOptions: applicationOptions,
+          inputPlaceholder: 'Choose destination application',
+          showCancelButton: true,
+          confirmButtonText: 'Preview Correction',
+          confirmButtonColor: '#1a5f5f',
+          inputValidator: value => value ? undefined : 'Select the correct application'
+        })
+        if (!applicationResult.isConfirmed) return
+
+        const preview = await apiService.previewPaystackPaymentCorrection({
+          paymentTransactionId: transaction.id,
+          targetApplicationId: applicationResult.value
+        })
+        if (!preview.success) throw new Error(preview.error || 'Correction preview failed')
+        const detail = preview.data
+        const duplicateAlert = detail.willBeDuplicate
+          ? `<p class="alert alert-warning text-start small mt-3 mb-0">A successful payment for this same fee already fulfils the destination application (${this.escapeHtml(detail.duplicatePayment.reference)}). This payment will be marked as a duplicate and flagged for refund review; it will not fulfil the fee twice.</p>`
+          : ''
+        const confirmation = await Swal.fire({
+          icon: detail.willBeDuplicate ? 'warning' : 'info',
+          title: 'Review Payment Correction',
+          html: `<div class="text-start small"><dl class="row mb-0"><dt class="col-5">Paystack reference</dt><dd class="col-7"><code>${this.escapeHtml(detail.reference)}</code></dd><dt class="col-5">Fee / amount</dt><dd class="col-7">${this.escapeHtml(detail.payment?.name || detail.payment?.paymentCode || 'Fee')} / ₦${Number(detail.amount || 0).toLocaleString()}</dd><dt class="col-5">Current application</dt><dd class="col-7">${this.escapeHtml(detail.fromApplication)} (${this.escapeHtml(detail.fromSession)})</dd><dt class="col-5">Destination</dt><dd class="col-7">${this.escapeHtml(detail.toApplication)} (${this.escapeHtml(detail.toSession)})</dd><dt class="col-5">Current fulfilment</dt><dd class="col-7">${this.escapeHtml(detail.fulfilmentStatus)}</dd></dl>${duplicateAlert}<hr><label for="paymentCorrectionReason" class="form-label">Reason for correction</label><textarea id="paymentCorrectionReason" class="form-control mb-3" rows="2"></textarea><label for="paymentCorrectionConfirm" class="form-label">Type REASSIGN to confirm</label><input id="paymentCorrectionConfirm" class="form-control" autocomplete="off"></div>`,
+          showCancelButton: true,
+          confirmButtonText: 'Apply Correction',
+          confirmButtonColor: '#dc3545',
+          preConfirm: () => {
+            const reason = document.getElementById('paymentCorrectionReason')?.value?.trim()
+            const typed = document.getElementById('paymentCorrectionConfirm')?.value?.trim()
+            if (!reason) return Swal.showValidationMessage('Enter the operational reason')
+            if (typed !== 'REASSIGN') return Swal.showValidationMessage('Type REASSIGN exactly to continue')
+            return { reason }
+          }
+        })
+        if (!confirmation.isConfirmed) return
+
+        const applied = await apiService.applyPaystackPaymentCorrection({
+          paymentTransactionId: transaction.id,
+          targetApplicationId: applicationResult.value,
+          reason: confirmation.value.reason
+        })
+        if (!applied.success) throw new Error(applied.error || 'Payment correction failed')
+        await Swal.fire({
+          icon: applied.data?.duplicateOfReference ? 'warning' : 'success',
+          title: applied.data?.duplicateOfReference ? 'Corrected; Duplicate Flagged' : 'Payment Linkage Corrected',
+          text: `${applied.data?.message || 'Payment corrected.'} Destination: ${applied.data?.applicationNumber} (${applied.data?.sessionTitle}); fulfilment: ${applied.data?.fulfilmentStatus}.`,
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Paystack payment linkage correction failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Correction Not Applied', text: error.message || 'Unable to correct this payment.' })
+      } finally {
+        this.isCorrectingPaystackPayment = false
       }
     },
     async runMigrateScreeningWorkflow() {
@@ -1337,6 +1433,17 @@ export default {
                 <span v-if="isRecoveringPaystack" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-credit-card-2-front me-2"></i>
                 {{ isRecoveringPaystack ? 'Working...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'correct-paystack-payment-linkage' && authStore.hasPermission('utilities', 'manage') && authStore.hasPermission('payments', 'reconcile')"
+                class="btn btn-warning"
+                :disabled="isLoading || isCorrectingPaystackPayment"
+                @click="correctPaystackPaymentLinkage"
+              >
+                <span v-if="isCorrectingPaystackPayment" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-arrow-left-right me-2"></i>
+                {{ isCorrectingPaystackPayment ? 'Checking...' : utility.actionLabel }}
               </button>
 
               <button

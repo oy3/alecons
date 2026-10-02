@@ -154,6 +154,13 @@ export default {
         : undefined;
     },
 
+    needsRescheduleReason() {
+      return (
+        this.examScheduleMode === "reschedule" &&
+        this.isPastScheduledExam(this.selectedApplication?.entranceExam)
+      );
+    },
+
     isExamScoreFormValid() {
       const score = Number(this.scoreForm.score);
       return (
@@ -706,14 +713,22 @@ export default {
     },
 
     canRescheduleExam(application) {
+      const examTime = this.getScheduledTimestamp(application?.entranceExam);
       return (
         this.isEntranceExamEnabled(application) &&
-        application.currentStage === 4 &&
+        application.status === "pending" &&
+        application.admissionDecision === "pending" &&
         application.entranceExam &&
         (application.entranceExam.score === undefined ||
           application.entranceExam.score === null) &&
-        this.isUpcomingSchedule(application.entranceExam)
+        examTime !== null &&
+        !application.matriculationNumber
       );
+    },
+
+    isPastScheduledExam(schedule) {
+      const timestamp = this.getScheduledTimestamp(schedule);
+      return timestamp !== null && timestamp <= this.scheduleNow;
     },
 
     canInputExamScore(application) {
@@ -905,7 +920,7 @@ export default {
     },
 
     handleExamDateChange() {
-      if (this.examScheduleMode !== "retake") return;
+      if (!["retake", "reschedule"].includes(this.examScheduleMode)) return;
 
       if (!this.examForm.examDate) {
         this.examForm.examTime = "";
@@ -935,7 +950,7 @@ export default {
           return;
         }
 
-        if (this.examScheduleMode === "retake") {
+        if (["retake", "reschedule"].includes(this.examScheduleMode)) {
           const scheduledTimestamp = this.getScheduledTimestamp({
             date: this.examForm.examDate,
             time: this.examForm.examTime,
@@ -946,8 +961,8 @@ export default {
           ) {
             this.$swal.fire({
               icon: "warning",
-              title: "Invalid Retake Schedule",
-              text: "Select a retake exam date and time that is later than the current time.",
+              title: "Invalid Exam Schedule",
+              text: "Select an exam date and time that is later than the current time.",
               confirmButtonColor: "#1a5f5f",
             });
             return;
@@ -977,13 +992,23 @@ export default {
           return;
         }
 
+        if (this.needsRescheduleReason && !this.examForm.reason.trim()) {
+          this.$swal.fire({
+            icon: "warning",
+            title: "Reschedule Reason Required",
+            text: "Enter why this past, unscored exam is being rescheduled.",
+            confirmButtonColor: "#1a5f5f",
+          });
+          return;
+        }
+
         this.examFormProcessing = true;
 
         const payload = {
           examDate: this.examForm.examDate,
           examTime: this.examForm.examTime,
           examLink: resolvedExamLink,
-          ...(this.examScheduleMode === "retake"
+          ...(this.examScheduleMode === "retake" || this.needsRescheduleReason
             ? { reason: this.examForm.reason.trim() }
             : {}),
         };
@@ -2174,6 +2199,14 @@ export default {
               sitting awaiting a score.
             </small>
           </div>
+          <div
+            v-if="needsRescheduleReason"
+            class="alert alert-warning"
+            role="alert"
+          >
+            The scheduled exam time has passed and no score is recorded. Enter
+            a reason to document why a new date is being assigned.
+          </div>
           <form @submit.prevent="submitExamSchedule">
             <div class="row">
               <div class="col-md-6 mb-3">
@@ -2190,7 +2223,7 @@ export default {
                   type="date"
                   class="form-control"
                   :min="
-                    examScheduleMode === 'retake'
+                    ['retake', 'reschedule'].includes(examScheduleMode)
                       ? minimumRetakeExamDate
                       : undefined
                   "
@@ -2212,17 +2245,21 @@ export default {
                   type="time"
                   class="form-control"
                   :min="
-                    examScheduleMode === 'retake'
+                    ['retake', 'reschedule'].includes(examScheduleMode)
                       ? minimumRetakeExamTime
                       : undefined
                   "
                   :disabled="
-                    examScheduleMode === 'retake' && !examForm.examDate
+                    ['retake', 'reschedule'].includes(examScheduleMode) &&
+                    !examForm.examDate
                   "
                   required
                 />
                 <div
-                  v-if="examScheduleMode === 'retake' && !examForm.examDate"
+                  v-if="
+                    ['retake', 'reschedule'].includes(examScheduleMode) &&
+                    !examForm.examDate
+                  "
                   class="form-text"
                 >
                   Select the new exam date before choosing a time.
@@ -2261,9 +2298,16 @@ export default {
                 placeholder="https://cbt.platform.com/exam/123"
               />
             </div>
-            <div v-if="examScheduleMode === 'retake'" class="mb-3">
+            <div
+              v-if="examScheduleMode === 'retake' || needsRescheduleReason"
+              class="mb-3"
+            >
               <label for="examRetakeReason" class="form-label">
-                Reason for retake
+                {{
+                  examScheduleMode === "retake"
+                    ? "Reason for retake"
+                    : "Reason for rescheduling"
+                }}
               </label>
               <textarea
                 id="examRetakeReason"
@@ -2271,7 +2315,11 @@ export default {
                 class="form-control"
                 rows="3"
                 maxlength="1000"
-                placeholder="Explain why another exam sitting is being granted"
+                :placeholder="
+                  examScheduleMode === 'retake'
+                    ? 'Explain why another exam sitting is being granted'
+                    : 'Explain why the applicant needs a new exam date'
+                "
                 required
               ></textarea>
               <div class="form-text">

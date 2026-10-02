@@ -333,8 +333,13 @@ export class PaymentsService {
         if (String(transaction?.reference || '') !== String(paymentTransaction.reference || '')) {
             mismatches.push('reference');
         }
-        const providerAmount = Number(transaction?.amount || 0) / 100;
-        if (!Number.isFinite(providerAmount) || providerAmount !== Number(paymentTransaction.amount)) {
+        const providerAmountKobo = this.getPaystackRequestedAmountKobo(transaction);
+        const expectedAmountKobo = Math.round(Number(paymentTransaction.amount) * 100);
+        if (
+            !Number.isFinite(providerAmountKobo)
+            || !Number.isFinite(expectedAmountKobo)
+            || providerAmountKobo !== expectedAmountKobo
+        ) {
             mismatches.push('amount');
         }
         if (String(transaction?.currency || '').toUpperCase() !== 'NGN') {
@@ -357,6 +362,20 @@ export class PaymentsService {
         return mismatches;
     }
 
+    private getPaystackRequestedAmountKobo(transaction: any): number {
+        const requestedAmount = Number(transaction?.requested_amount);
+        if (Number.isFinite(requestedAmount) && requestedAmount > 0) {
+            return Math.round(requestedAmount);
+        }
+
+        const grossAmount = Number(transaction?.amount);
+        return Number.isFinite(grossAmount) ? Math.round(grossAmount) : Number.NaN;
+    }
+
+    private getPaystackRequestedAmountNaira(transaction: any): number {
+        return this.getPaystackRequestedAmountKobo(transaction) / 100;
+    }
+
     private sanitizePaystackPayload(data: any): Record<string, unknown> {
         return {
             id: data?.id?.toString(),
@@ -364,6 +383,8 @@ export class PaymentsService {
             transactionReference: data?.transaction_reference || data?.transaction?.reference,
             status: data?.status,
             amount: data?.amount,
+            requestedAmount: data?.requested_amount,
+            fees: data?.fees,
             currency: data?.currency,
             channel: data?.channel,
             paidAt: data?.paid_at,
@@ -1412,7 +1433,10 @@ export class PaymentsService {
             if (mismatches.length) {
                 paymentTransaction.fulfilmentStatus = PaymentFulfilmentStatus.QUARANTINED;
                 paymentTransaction.activeAttemptKey = undefined;
-                paymentTransaction.remarks = `Paystack verification quarantined: ${mismatches.join(', ')} mismatch`;
+                const amountDetail = mismatches.includes('amount')
+                    ? ` (expected NGN ${Number(paymentTransaction.amount).toFixed(2)}, Paystack requested NGN ${this.getPaystackRequestedAmountNaira(transaction).toFixed(2)}, gross NGN ${(Number(transaction?.amount || 0) / 100).toFixed(2)})`
+                    : '';
+                paymentTransaction.remarks = `Paystack verification quarantined: ${mismatches.join(', ')} mismatch${amountDetail}`;
                 await paymentTransaction.save();
                 let reconciliationCase = paymentTransaction.reconciliationCaseId
                     ? await this.paymentReconciliationCaseModel.findById(paymentTransaction.reconciliationCaseId)
@@ -1428,7 +1452,7 @@ export class PaymentsService {
                         userId: paymentTransaction.userId,
                         paymentId: paymentTransaction.paymentId,
                         academicSessionId: paymentTransaction.academicSessionId,
-                        amount: transaction?.amount ? Number(transaction.amount) / 100 : undefined,
+                        amount: this.getPaystackRequestedAmountNaira(transaction),
                         currency: transaction?.currency,
                         reason: `Verification mismatch: ${mismatches.join(', ')}`,
                         providerSnapshot: this.sanitizePaystackPayload(transaction),
@@ -1443,6 +1467,22 @@ export class PaymentsService {
                     quarantined: true,
                     mismatches,
                 };
+            }
+
+            if (paymentTransaction.fulfilmentStatus === PaymentFulfilmentStatus.QUARANTINED) {
+                paymentTransaction.fulfilmentStatus = PaymentFulfilmentStatus.UNAPPLIED;
+                if (paymentTransaction.reconciliationCaseId) {
+                    await this.paymentReconciliationCaseModel.updateOne(
+                        { _id: paymentTransaction.reconciliationCaseId },
+                        {
+                            $set: {
+                                status: ReconciliationCaseStatus.RESOLVED,
+                                resolvedAt: now,
+                                resolution: 'Transaction passed Paystack verification after recheck',
+                            },
+                        },
+                    );
+                }
             }
 
             paymentTransaction.status = PaymentStatus.SUCCESSFUL;
@@ -1511,7 +1551,7 @@ export class PaymentsService {
             if (!wasSuccessful) {
                 this.markSuccessfulPaystackPaymentAwaitingRemittance(
                     paymentTransaction,
-                    transaction.amount ? (transaction.amount / 100) : paymentTransaction.amount,
+                    this.getPaystackRequestedAmountNaira(transaction) || paymentTransaction.amount,
                 );
             }
         } else if (this.isPaystackFailureStatus(paystackStatus)) {
@@ -1994,7 +2034,7 @@ export class PaymentsService {
             payment = await this.paymentModel.findById(metadata.paymentId).lean();
         }
         if (!payment) {
-            const amount = Number(transaction?.amount || 0) / 100;
+            const amount = this.getPaystackRequestedAmountNaira(transaction);
             const matches = await this.paymentModel.find({ amount }).limit(3).lean();
             if (matches.length === 1) payment = matches[0];
         }
@@ -2145,7 +2185,7 @@ export class PaymentsService {
                         paymentContext,
                         academicSessionId: run.academicSessionId,
                         paymentId: new Types.ObjectId(preview.paymentId),
-                        amount: Number(transaction.amount) / 100,
+                        amount: this.getPaystackRequestedAmountNaira(transaction),
                         reference: transaction.reference,
                         status: PaymentStatus.PENDING,
                         method: PaymentMethod.PAYSTACK,

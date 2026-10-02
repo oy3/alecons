@@ -20,6 +20,7 @@ export default {
       isRepairingAcademicSessions: false,
       isMigratingDemographics: false,
       isMigratingQuestionBank: false,
+      isMigratingMatriculationCounters: false,
       isMigratingScreeningWorkflow: false,
       isBackfillingStudentSessionHistory: false,
       isCheckingAcademicResultsReadiness: false,
@@ -48,6 +49,14 @@ export default {
           variant: 'primary',
           description: 'Inspect the application counter for the selected year and repair it when the stored sequence falls behind the highest issued application number.',
           actionLabel: 'Repair Counter'
+        },
+        {
+          id: 'matriculation-counter-migration',
+          title: 'Unify Matriculation Counters',
+          icon: 'bi-person-vcard',
+          variant: 'warning',
+          description: 'Merge batch-specific sequences into a shared academic-year/programme counter and reserve existing student and application numbers to prevent collisions.',
+          actionLabel: 'Preview & Migrate'
         },
         {
           id: 'program-drift-repair',
@@ -258,6 +267,63 @@ export default {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;')
+    },
+    async runMatriculationCounterMigration() {
+      const ready = await Swal.fire({
+        icon: 'warning',
+        title: 'Preview Matriculation Counter Migration',
+        html: '<div class="text-start small"><p>This operation scans student numbers, application reservations, existing reservation records, and legacy counters.</p><p class="mb-0">Preview makes no changes. Apply will seed one shared sequence per year, programme type, and programme code.</p></div>',
+        showCancelButton: true,
+        confirmButtonText: 'Run Preview',
+        confirmButtonColor: '#1a5f5f'
+      })
+      if (!ready.isConfirmed) return
+
+      this.isMigratingMatriculationCounters = true
+      try {
+        const response = await apiService.migrateMatriculationCounters({ apply: false })
+        if (!response.success) throw new Error(response.error || 'Preview failed')
+        const preview = response.data || {}
+        const groups = preview.counterGroups || []
+        const rows = groups.map(group => `<tr><td><code>${this.escapeHtml(group.counterId)}</code></td><td>${this.escapeHtml(group.highestSequence)}</td><td>${this.escapeHtml(group.knownNumbers)}</td></tr>`).join('')
+        const blockers = (preview.conflictingAssignments?.length || 0) + (preview.unmappedCounters?.length || 0) + (preview.unmappedMatriculationNumbers?.length || 0)
+        const confirmation = await Swal.fire({
+          icon: blockers ? 'error' : 'info',
+          title: blockers ? 'Review Required Before Applying' : 'Matriculation Counter Preview',
+          width: 900,
+          html: `<div class="text-start small"><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Shared counter</th><th>Highest sequence</th><th>Known numbers</th></tr></thead><tbody>${rows || '<tr><td colspan="3">No matriculation numbers or counters found</td></tr>'}</tbody></table></div><p>Reservation records to seed: <strong>${this.escapeHtml(preview.reservationCount || 0)}</strong></p><p>Conflicting assignments: <strong>${preview.conflictingAssignments?.length || 0}</strong> · Unmapped counters: <strong>${preview.unmappedCounters?.length || 0}</strong> · Unmapped numbers: <strong>${preview.unmappedMatriculationNumbers?.length || 0}</strong></p>${blockers ? '<p class="text-danger mb-0">Resolve these data issues before applying the migration.</p>' : '<hr><label for="matriculationMigrationReason" class="form-label">Reason for applying</label><textarea id="matriculationMigrationReason" class="form-control mb-3" rows="2"></textarea><label for="matriculationMigrationConfirmation" class="form-label">Type APPLY to confirm</label><input id="matriculationMigrationConfirmation" class="form-control" autocomplete="off">'}</div>`,
+          showCancelButton: true,
+          showConfirmButton: !blockers,
+          confirmButtonText: 'Apply Migration',
+          confirmButtonColor: '#dc3545',
+          preConfirm: () => {
+            const reason = document.getElementById('matriculationMigrationReason')?.value?.trim()
+            const typed = document.getElementById('matriculationMigrationConfirmation')?.value?.trim()
+            if (!reason || reason.length < 10) return Swal.showValidationMessage('Enter a reason of at least 10 characters')
+            if (typed !== 'APPLY') return Swal.showValidationMessage('Type APPLY exactly to continue')
+            return { reason }
+          }
+        })
+        if (!confirmation.isConfirmed) return
+
+        const applied = await apiService.migrateMatriculationCounters({
+          apply: true,
+          reason: confirmation.value.reason,
+          confirmation: 'APPLY'
+        })
+        if (!applied.success) throw new Error(applied.error || 'Migration failed')
+        await Swal.fire({
+          icon: 'success',
+          title: 'Matriculation Counters Unified',
+          html: `<p>Shared counters seeded: <strong>${applied.data?.countersSeeded || 0}</strong></p><p class="mb-0">Existing matriculation numbers reserved: <strong>${applied.data?.reservationsSeeded || 0}</strong></p>`,
+          confirmButtonColor: '#1a5f5f'
+        })
+      } catch (error) {
+        logger.error('Matriculation counter migration failed:', error)
+        await Swal.fire({ icon: 'error', title: 'Migration Failed', text: error.message || 'Unable to migrate matriculation counters.' })
+      } finally {
+        this.isMigratingMatriculationCounters = false
+      }
     },
     async runPaystackRecovery() {
       if (!this.selectedAcademicSessionId) {
@@ -1345,6 +1411,17 @@ export default {
                 <span v-if="isRepairingCounter" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-wrench-adjustable-circle me-2"></i>
                 {{ isRepairingCounter ? 'Repairing...' : utility.actionLabel }}
+              </button>
+
+              <button
+                v-else-if="utility.id === 'matriculation-counter-migration' && authStore.hasPermission('utilities', 'manage')"
+                class="btn btn-warning"
+                :disabled="isLoading || isMigratingMatriculationCounters"
+                @click="runMatriculationCounterMigration"
+              >
+                <span v-if="isMigratingMatriculationCounters" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-person-vcard me-2"></i>
+                {{ isMigratingMatriculationCounters ? 'Migrating...' : utility.actionLabel }}
               </button>
 
               <button

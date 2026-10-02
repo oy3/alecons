@@ -372,6 +372,14 @@ export const ApplicationSchema = SchemaFactory.createForClass(Application);
 ApplicationSchema.index({ entryAcademicSession: 1, programId: 1, status: 1 });
 ApplicationSchema.index({ createdAt: -1, isActive: 1 });
 ApplicationSchema.index({ admissionDecision: 1, currentStage: 1 });
+ApplicationSchema.index(
+    { matriculationNumber: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { matriculationNumber: { $type: 'string', $gt: '' } },
+        name: 'uniq_application_matriculation_number',
+    },
+);
 
 // Note: Application number generation is now handled by ApplicationNumberService
 // to ensure uniqueness and avoid race conditions.

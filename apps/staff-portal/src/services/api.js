@@ -534,6 +534,13 @@ class StaffApiService {
         })
     }
 
+    async migrateMatriculationCounters({ apply = false, reason = '', confirmation = '' } = {}) {
+        return this.makeRequest('/admin/maintenance/migrate-matriculation-counters', {
+            method: 'POST',
+            body: JSON.stringify({ apply, reason, confirmation }),
+        })
+    }
+
     async backfillStudentSessionHistory({ apply = false } = {}) {
         return this.makeRequest('/admin/maintenance/backfill-student-session-history', {
             method: 'POST',

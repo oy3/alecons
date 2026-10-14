@@ -3,6 +3,7 @@ import Swal from "sweetalert2";
 import { apiService } from "../../services/api.js";
 import { useAuthStore } from "../../stores/auth.js";
 import RichTextEditor from "../../components/RichTextEditor.vue";
+import WebsiteAnnouncements from "./WebsiteAnnouncements.vue";
 import { logger } from "@shared/utils/logger";
 import {
   appendProgramAvailability,
@@ -22,7 +23,7 @@ const emptyForm = () => ({
 
 export default {
   name: "NotificationsManagement",
-  components: { RichTextEditor },
+  components: { RichTextEditor, WebsiteAnnouncements },
   setup() {
     return { authStore: useAuthStore() };
   },
@@ -44,6 +45,7 @@ export default {
       isLoading: true,
       isSaving: false,
       showComposer: false,
+      showWebsiteAnnouncements: false,
       editingId: null,
       form: emptyForm(),
       audiencePreview: null,
@@ -567,6 +569,7 @@ export default {
 
 <template>
   <main class="container-fluid py-4 px-lg-4">
+    <WebsiteAnnouncements v-if="showWebsiteAnnouncements" @close="showWebsiteAnnouncements = false" />
     <div
       class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4"
     >
@@ -578,14 +581,23 @@ export default {
           Create and manage institutional notifications.
         </p>
       </div>
-      <button
-        v-if="canCreate"
-        class="btn btn-staff-primary"
-        type="button"
-        @click="openComposer()"
-      >
-        <i class="bi bi-plus-lg me-2"></i>New Notification
-      </button>
+      <div class="d-flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          @click="showWebsiteAnnouncements = true"
+        >
+          <i class="bi bi-megaphone me-2"></i>Website Announcements
+        </button>
+        <button
+          v-if="canCreate"
+          class="btn btn-staff-primary"
+          type="button"
+          @click="openComposer()"
+        >
+          <i class="bi bi-plus-lg me-2"></i>New Notification
+        </button>
+      </div>
     </div>
 
     <div class="row g-3 mb-4">

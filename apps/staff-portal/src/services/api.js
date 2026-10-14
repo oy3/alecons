@@ -1914,6 +1914,18 @@ class StaffApiService {
     }
 
     // Current user's notification inbox
+    getWebsiteAnnouncements() {
+        return this.makeRequest('/staff/website-announcements')
+    }
+    saveWebsiteAnnouncement(payload, id) {
+        return this.makeRequest(`/staff/website-announcements${id ? `/${id}` : ''}`, {
+            method: id ? 'PATCH' : 'POST', body: JSON.stringify(payload),
+        })
+    }
+    expireWebsiteAnnouncement(id, expectedRevision) {
+        return this.post(`/staff/website-announcements/${id}/expire`, { expectedRevision })
+    }
+
     async getNotificationInbox(params = {}) {
         const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')).toString()
         return this.makeRequest(`/notifications${query ? `?${query}` : ''}`)

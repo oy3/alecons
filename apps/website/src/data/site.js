@@ -51,13 +51,6 @@ export const navigation = [
   { label: "External Accommodation", to: "/accommodation/external", footerOnly: true },
 ];
 
-export const announcement = {
-  active: true,
-  text: `${admissionsConfig.activeBatch} admissions for the ${admissionsConfig.academicSession} academic session are now open.`,
-  linkLabel: "Apply now",
-  href: applyUrl,
-};
-
 export const whatsappUrl = "https://wa.me/2347084601610";
 
 export const statistics = [

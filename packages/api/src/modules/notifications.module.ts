@@ -19,10 +19,14 @@ import {
     NotificationScheduleService,
 } from '../services/notification-delivery.service';
 import { ContentSanitizationService } from '../services/content-sanitization.service';
+import { WebsiteAnnouncementBoard, WebsiteAnnouncementBoardSchema } from '../schemas/website-announcement.schema';
+import { WebsiteAnnouncementsService } from '../services/website-announcements.service';
+import { PublicWebsiteAnnouncementsController, StaffWebsiteAnnouncementsController } from '../controllers/website-announcements.controller';
 
 @Module({
     imports: [
         MongooseModule.forFeature([
+            { name: WebsiteAnnouncementBoard.name, schema: WebsiteAnnouncementBoardSchema },
             { name: Notification.name, schema: NotificationSchema },
             { name: NotificationRecipient.name, schema: NotificationRecipientSchema },
             { name: NotificationAudit.name, schema: NotificationAuditSchema },
@@ -35,8 +39,9 @@ import { ContentSanitizationService } from '../services/content-sanitization.ser
         ]),
         BullModule.registerQueue({ name: 'notification-delivery' }),
     ],
-    controllers: [NotificationsController, StaffNotificationsController],
+    controllers: [NotificationsController, StaffNotificationsController, PublicWebsiteAnnouncementsController, StaffWebsiteAnnouncementsController],
     providers: [
+        WebsiteAnnouncementsService,
         NotificationsService,
         NotificationDeliveryService,
         NotificationDeliveryProcessor,

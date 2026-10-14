@@ -291,6 +291,16 @@ Notes:
 - Redis must be available because accepted webhook events are processed on the `paystack-webhook` Bull queue.
 - Keep `PAYSTACK_REFUNDS_ENABLED=false` during initial deployment. Change it to `true` only after a webhook test succeeds and staff have reviewed the historical recovery preview.
 
+### Website Announcements
+
+- Open **Notifications Management > Website Announcements** to publish the website banner. The previous hardcoded admissions banner is removed; publish the first announcement after deploying the API, staff portal, and website.
+- Messages are plain text (240 characters), with an optional HTTPS or website-relative link and link label. Publication dates use Africa/Lagos time; blank start means now and blank end means no expiry.
+- One announcement can be active and one can be scheduled. Publishing a replacement requires confirmation. A scheduled replacement ends the current announcement at the new start time; cancelling that schedule restores the current announcement's original end date.
+- Editing active text or links and republishing expired announcements changes the publication version. Extending or removing the end date preserves it. Republish resets the old dates so staff must choose a fresh window or leave it open.
+- Staff use the existing Notifications view/create/edit/send/archive permissions. Publication and expiry changes preserve staff audit history, and concurrent edits require a refresh before retrying.
+- The website reads `GET /api/v1/public/website-announcements/active`, refreshes every minute while visible and when the tab becomes visible, and hides an expired announcement. Dismissal is per publication version in browser session storage.
+- No data migration or new environment variable is required. The website's existing API base URL must point to the deployed API.
+
 ### Paystack Historical Recovery
 
 Use **Staff Portal > Utilities > Recover Paystack Transactions** for historical references supplied by Paystack:

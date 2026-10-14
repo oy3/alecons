@@ -310,6 +310,26 @@ p {
   justify-content: center;
   gap: 0.75rem;
   position: relative;
+  padding-right: 2rem;
+}
+
+.announcement__viewport { min-width: 0; overflow: hidden; }
+.announcement__track { display: flex; align-items: center; gap: 0.75rem; width: max-content; }
+.announcement__track--scrolling { max-width: none; animation: announcement-scroll 28s linear infinite; }
+.announcement__track--scrolling span { white-space: nowrap; }
+.announcement__track--scrolling a { white-space: nowrap; }
+.announcement__track--paused,
+.announcement__viewport:hover .announcement__track,
+.announcement__viewport:focus-within .announcement__track { animation-play-state: paused; }
+.announcement button.announcement__pause { position: static; flex-shrink: 0; }
+@keyframes announcement-scroll {
+  0%, 10%, 95%, 100% { transform: translateX(0); }
+  45%, 60% { transform: translateX(calc(-1 * var(--announcement-overflow, 0px))); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .announcement__track--scrolling { animation: none; width: auto; }
+  .announcement__track--scrolling span { white-space: normal; }
+  .announcement__track--scrolling a { white-space: normal; }
 }
 
 .announcement span {
@@ -1168,15 +1188,6 @@ p {
 
   .announcement span i {
     display: none;
-  }
-
-  .announcement a {
-    font-size: 0;
-  }
-
-  .announcement a::after {
-    content: "Apply";
-    font-size: 0.68rem;
   }
 
   .button-row {

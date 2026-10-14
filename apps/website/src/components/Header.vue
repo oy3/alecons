@@ -9,17 +9,30 @@ import {
 } from "vue";
 import { useRoute } from "vue-router";
 import BrandLogo from "./BrandLogo.vue";
-import {
-  announcement,
-  applyUrl,
-  navigation,
-  portalLinks,
-  whatsappUrl,
-} from "../data/site";
+import { publicApiService } from "../services/publicApi";
+import { applyUrl, navigation, portalLinks, whatsappUrl } from "../data/site";
 
 const route = useRoute();
 const menuOpen = ref(false);
-const announcementVisible = ref(announcement.active);
+const announcement = ref(null);
+const dismissedVersion = ref("");
+const announcementKey = computed(() =>
+  announcement.value
+    ? `${announcement.value.id}:${announcement.value.version}`
+    : "",
+);
+const announcementVisible = computed(
+  () => announcement.value && dismissedVersion.value !== announcementKey.value,
+);
+const announcementPaused = ref(false);
+const announcementViewport = ref(null);
+const announcementTrack = ref(null);
+const announcementOverflows = ref(false);
+let announcementRefreshTimer;
+let announcementBoundaryTimer;
+let announcementObserver;
+let fetchingAnnouncement = false;
+let headerUnmounted = false;
 const scrolled = ref(false);
 const overlayHeader = computed(
   () => route.meta.overlayHeader === true && !scrolled.value,
@@ -54,9 +67,70 @@ const handleKeydown = (event) => {
   }
 };
 const dismissAnnouncement = () => {
-  announcementVisible.value = false;
-  sessionStorage.setItem("alecons-announcement-dismissed", "true");
+  dismissedVersion.value = announcementKey.value;
+  try {
+    sessionStorage.setItem(
+      "alecons-announcement-dismissed-version",
+      announcementKey.value,
+    );
+  } catch {}
 };
+const measureAnnouncement = () => {
+  const overflow = Math.max(
+    0,
+    (announcementTrack.value?.scrollWidth || 0) -
+      (announcementViewport.value?.clientWidth || 0),
+  );
+  announcementOverflows.value = overflow > 1;
+  announcementTrack.value?.style.setProperty(
+    "--announcement-overflow",
+    `${overflow}px`,
+  );
+};
+const refreshAnnouncement = async () => {
+  if (fetchingAnnouncement || document.hidden) return;
+  fetchingAnnouncement = true;
+  try {
+    const response = await publicApiService.getWebsiteAnnouncement();
+    if (headerUnmounted) return;
+    announcement.value = response.data;
+    clearTimeout(announcementBoundaryTimer);
+    const boundary = [response.data?.endsAt, response.data?.supersededAt]
+      .filter(Boolean)
+      .map(Date.parse)
+      .sort((a, b) => a - b)[0];
+    if (boundary)
+      announcementBoundaryTimer = setTimeout(
+        () => {
+          announcement.value = null;
+          refreshAnnouncement();
+        },
+        Math.max(1, Math.min(boundary - Date.now(), 2147483647)),
+      );
+  } catch {
+    const boundary = [
+      announcement.value?.endsAt,
+      announcement.value?.supersededAt,
+    ]
+      .filter(Boolean)
+      .map(Date.parse)
+      .sort((a, b) => a - b)[0];
+    if (boundary && boundary <= Date.now()) announcement.value = null;
+  } finally {
+    fetchingAnnouncement = false;
+  }
+};
+watch(announcementVisible, async () => {
+  await nextTick();
+  announcementObserver?.disconnect();
+  if (announcementViewport.value)
+    announcementObserver?.observe(announcementViewport.value);
+  measureAnnouncement();
+});
+watch(announcement, async () => {
+  await nextTick();
+  measureAnnouncement();
+});
 const onScroll = () => {
   scrolled.value = window.scrollY > 20;
 };
@@ -75,14 +149,25 @@ watch(
 );
 
 onMounted(() => {
-  announcementVisible.value =
-    announcement.active &&
-    sessionStorage.getItem("alecons-announcement-dismissed") !== "true";
+  try {
+    dismissedVersion.value =
+      sessionStorage.getItem("alecons-announcement-dismissed-version") || "";
+  } catch {}
+  if (typeof ResizeObserver !== "undefined")
+    announcementObserver = new ResizeObserver(measureAnnouncement);
+  refreshAnnouncement();
+  announcementRefreshTimer = setInterval(refreshAnnouncement, 60000);
+  document.addEventListener("visibilitychange", refreshAnnouncement);
   window.addEventListener("scroll", onScroll, { passive: true });
   document.addEventListener("keydown", handleKeydown);
   onScroll();
 });
 onBeforeUnmount(() => {
+  headerUnmounted = true;
+  clearInterval(announcementRefreshTimer);
+  clearTimeout(announcementBoundaryTimer);
+  announcementObserver?.disconnect();
+  document.removeEventListener("visibilitychange", refreshAnnouncement);
   window.removeEventListener("scroll", onScroll);
   document.removeEventListener("keydown", handleKeydown);
   document.body.style.overflow = previousOverflow;
@@ -94,17 +179,49 @@ onBeforeUnmount(() => {
     v-if="announcementVisible"
     class="announcement"
     role="region"
-    aria-label="Admissions announcement"
+    aria-label="Website announcement"
   >
     <div class="site-container announcement__inner">
-      <span><i class="bi bi-circle-fill" aria-hidden="true"></i>{{ announcement.text }}</span>
-      <a
-        :href="announcement.href"
-        target="_blank"
-        rel="noopener noreferrer"
-        data-umami-event="apply-click"
-        >{{ announcement.linkLabel }}
-        <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+      <div ref="announcementViewport" class="announcement__viewport">
+        <div
+          ref="announcementTrack"
+          class="announcement__track"
+          :class="{
+            'announcement__track--scrolling': announcementOverflows,
+            'announcement__track--paused': announcementPaused,
+          }"
+        >
+          <span
+            ><i class="bi bi-circle-fill" aria-hidden="true"></i
+            >{{ announcement.message }}</span
+          >
+          <a
+            v-if="announcement.linkUrl"
+            :href="announcement.linkUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-umami-event="announcement-click"
+            >{{ announcement.linkLabel }}
+            <i class="bi bi-chevron-right" aria-hidden="true"></i
+          ></a>
+        </div>
+      </div>
+      <button
+        v-if="announcementOverflows"
+        type="button"
+        class="announcement__pause"
+        :aria-label="
+          announcementPaused ? 'Resume announcement' : 'Pause announcement'
+        "
+        :title="announcementPaused ? 'Resume' : 'Pause'"
+        :aria-pressed="announcementPaused"
+        @click="announcementPaused = !announcementPaused"
+      >
+        <i
+          :class="announcementPaused ? 'bi bi-play-fill' : 'bi bi-pause-fill'"
+          aria-hidden="true"
+        ></i>
+      </button>
       <button
         type="button"
         aria-label="Dismiss announcement"
@@ -128,7 +245,11 @@ onBeforeUnmount(() => {
           <BrandLogo compact :inverse="overlayHeader" />
         </RouterLink>
         <nav class="desktop-nav" aria-label="Primary navigation">
-          <RouterLink v-for="item in navigation.filter((link) => !link.footerOnly)" :key="item.to" :to="item.to">
+          <RouterLink
+            v-for="item in navigation.filter((link) => !link.footerOnly)"
+            :key="item.to"
+            :to="item.to"
+          >
             {{ item.label }}
           </RouterLink>
           <details class="portal-menu">
@@ -206,7 +327,11 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <nav aria-label="Mobile navigation">
-          <RouterLink v-for="item in navigation.filter((link) => !link.footerOnly)" :key="item.to" :to="item.to">
+          <RouterLink
+            v-for="item in navigation.filter((link) => !link.footerOnly)"
+            :key="item.to"
+            :to="item.to"
+          >
             {{ item.label }}
             <i class="bi bi-chevron-right" aria-hidden="true"></i>
           </RouterLink>
@@ -219,7 +344,8 @@ onBeforeUnmount(() => {
             rel="noopener noreferrer"
             data-umami-event="portal-click"
             >{{ portal.label
-            }}<i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+            }}<i class="bi bi-box-arrow-up-right" aria-hidden="true"></i
+          ></a>
         </nav>
         <a
           :href="applyUrl"

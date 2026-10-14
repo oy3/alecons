@@ -4,6 +4,9 @@ const API_BASE_URL =
     "http://localhost:8000/api/v1";
 
 class PublicApiService {
+    getWebsiteAnnouncement() {
+        return this.request('/public/website-announcements/active', { cache: 'no-store' });
+    }
     async request(path, options = {}) {
         const response = await fetch(`${API_BASE_URL}${path}`, { headers: { Accept: 'application/json', ...(options.headers || {}) }, ...options });
         const data = await response.json().catch(() => ({}));

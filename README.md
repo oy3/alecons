@@ -291,6 +291,14 @@ Notes:
 - Redis must be available because accepted webhook events are processed on the `paystack-webhook` Bull queue.
 - Keep `PAYSTACK_REFUNDS_ENABLED=false` during initial deployment. Change it to `true` only after a webhook test succeeds and staff have reviewed the historical recovery preview.
 
+### External Accommodation Checkout
+
+- External residents pay in a Paystack popup on `/accommodation/external`. The API creates the transaction and returns an access code; this checkout does not need a website Paystack public key. Applicant/student portal payment configuration stays as documented above.
+- A popup success callback requests server verification using the initialized reference. Only server-confirmed payment advances allocation, documents, and email delivery. Existing webhook processing and the `paymentReference` redirect-return URL remain supported.
+- Closing checkout does not mark a payment failed. **Check payment status** reconciles the existing attempt; an unfinished Paystack checkout can be resumed with the same reference. Pending, unavailable, duplicate, and quarantined confirmations block another charge. A new attempt is allowed only after provider-confirmed failure/abandonment, or an initialization that never exposed checkout.
+- The page restores the latest attempt from the API after refresh and blocks manual receipt submission while a Paystack attempt is unresolved. Browser confirmation retries are bounded; the status-check button remains available afterward.
+- Deploy the API and website together. No database migration or new environment variable is needed. Before using live payments, test popup success, cancellation, resuming unfinished checkout, delayed/webhook-first verification, and refresh recovery in Paystack test mode. Check that allocation and document emails occur once.
+
 ### Website Announcements
 
 - Open **Notifications Management > Website Announcements** to publish the website banner. The previous hardcoded admissions banner is removed; publish the first announcement after deploying the API, staff portal, and website.

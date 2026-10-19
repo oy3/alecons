@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { randomBytes, createHash } from "crypto";
@@ -45,6 +46,8 @@ import {
   PaymentTransaction,
   PaymentTransactionDocument,
   PaymentStatus,
+  PaymentMethod,
+  PaymentFulfilmentStatus,
 } from "../schemas/payment-transaction.schema";
 import { PaymentsService } from "../payments/payments.service";
 import { EmailService } from "./email.service";
@@ -729,9 +732,11 @@ export class AccommodationService {
       throw new ConflictException(
         "External accommodation payment is unavailable",
       );
-    return this.paymentsService.getExternalAccommodationPaymentOptions(
-      paymentId.toString(),
-    );
+    const [options, paymentAttempt] = await Promise.all([
+      this.paymentsService.getExternalAccommodationPaymentOptions(paymentId.toString()),
+      this.paymentsService.getExternalAccommodationPaymentAttempt(application._id as Types.ObjectId, paymentId),
+    ]);
+    return { ...options, paymentAttempt };
   }
 
   async submitExternalManualTransfer(
@@ -781,22 +786,38 @@ export class AccommodationService {
   }
 
   async verifyExternalPayment(token: string, reference: string) {
+    if (typeof reference !== 'string' || !reference.trim() || reference.length > 100) {
+      throw new BadRequestException('A valid payment reference is required');
+    }
     const application = await this.applicationFromResumeToken(token);
     const transaction = await this.transactionModel.findOne({
-      reference,
+      reference: reference.trim(),
       accommodationApplicationId: application._id,
+      method: PaymentMethod.PAYSTACK,
     });
     if (!transaction)
       throw new NotFoundException(
         "Payment attempt not found for this accommodation application",
       );
-    await this.paymentsService.verifyPayment(reference);
+    try {
+      await this.paymentsService.verifyPayment(transaction.reference);
+    } catch (error) {
+      const current = await this.transactionModel.findById(transaction._id).lean();
+      if (current?.status !== PaymentStatus.SUCCESSFUL || current.fulfilmentStatus !== PaymentFulfilmentStatus.APPLIED) {
+        throw new ServiceUnavailableException('Payment confirmation is temporarily unavailable. Check payment status again before making another payment.');
+      }
+    }
     const refreshed = await this.transactionModel
       .findById(transaction._id)
       .lean();
-    if (refreshed?.status === PaymentStatus.SUCCESSFUL)
+    if (refreshed?.status === PaymentStatus.SUCCESSFUL && refreshed.fulfilmentStatus === PaymentFulfilmentStatus.APPLIED) {
+      await this.paymentsService.retryAccommodationPaymentFulfilment(refreshed);
       await this.allocateAutomatically(application._id as Types.ObjectId);
-    return this.externalApplicationView(application._id as Types.ObjectId);
+    }
+    return {
+      ...await this.externalApplicationView(application._id as Types.ObjectId),
+      paymentAttempt: this.paymentsService.externalAccommodationPaymentState(refreshed),
+    };
   }
 
   async allocateAutomatically(applicationId: Types.ObjectId, actorId?: string) {

@@ -1602,7 +1602,7 @@ export class PaymentsService {
         const applications = db.collection('accommodationapplications');
         const assignments = db.collection('accommodationassignments');
         await applications.updateOne(
-            { _id: applicationId },
+            { _id: applicationId, status: { $ne: 'allocated' } },
             { $set: { status: 'paid_awaiting_allocation', paidAt: paymentTransaction.paidAt || new Date(), updatedAt: new Date() } },
         );
         await db.collection('tenancyagreements').updateOne(
@@ -1631,7 +1631,14 @@ export class PaymentsService {
             },
             { upsert: true },
         );
-        if (await assignments.findOne({ accommodationApplicationId: applicationId, status: 'active' })) return;
+        const existingAssignment = await assignments.findOne({ accommodationApplicationId: applicationId, status: 'active' });
+        if (existingAssignment) {
+            await applications.updateOne(
+                { _id: applicationId, status: 'paid_awaiting_allocation' },
+                { $set: { status: 'allocated', allocatedAt: existingAssignment.allocatedAt || new Date(), updatedAt: new Date() } },
+            );
+            return;
+        }
         const application = await applications.findOne({ _id: applicationId });
         if (!application) return;
 
@@ -2470,7 +2477,43 @@ export class PaymentsService {
             paymentId: payment._id,
             status: PaymentStatus.SUCCESSFUL,
         });
-        if (existing) throw new Error('Accommodation payment has already been completed');
+        if (existing) {
+            const blocked = [PaymentFulfilmentStatus.QUARANTINED, PaymentFulfilmentStatus.DUPLICATE].includes(existing.fulfilmentStatus);
+            return { reference: existing.reference, alreadyPaid: !blocked, pending: blocked };
+        }
+
+        const previousAttempt = await this.paymentTransactionModel.findOne({
+            accommodationApplicationId: new Types.ObjectId(input.accommodationApplicationId),
+            paymentId: payment._id,
+            method: PaymentMethod.PAYSTACK,
+        }).sort({ createdAt: -1 });
+        if (previousAttempt) {
+            // A locally cancelled/failed checkout can still settle at Paystack.
+            // Only an initialization that never exposed checkout can skip verification.
+            const neverInitialized = previousAttempt.providerInitializationStatus === ProviderInitializationStatus.FAILED
+                && !previousAttempt.accessCode
+                && previousAttempt.status === PaymentStatus.FAILED;
+            if (!neverInitialized) {
+                if (previousAttempt.providerInitializationStatus === ProviderInitializationStatus.CREATED) {
+                    return { reference: previousAttempt.reference, pending: true };
+                }
+                try {
+                    const providerTransaction = await this.verifyPaystackTransaction(previousAttempt.reference);
+                    await this.applyPaystackTransactionState(previousAttempt, providerTransaction);
+                } catch (error) {
+                    this.logger.warn(`External accommodation payment ${previousAttempt.reference} could not be confirmed: ${error instanceof Error ? error.message : error}`);
+                    return { reference: previousAttempt.reference, pending: true };
+                }
+                const state = this.externalAccommodationPaymentState(previousAttempt);
+                if (state.needsReview) return { reference: state.reference, pending: true };
+                if (previousAttempt.status === PaymentStatus.SUCCESSFUL) return { reference: state.reference, alreadyPaid: true };
+                if (state.canResume) {
+                    return { reference: state.reference, access_code: previousAttempt.accessCode,
+                        authorization_url: `https://checkout.paystack.com/${previousAttempt.accessCode}` };
+                }
+                if (!state.canRetry) return { reference: state.reference, pending: true };
+            }
+        }
 
         const reference = this.buildPaymentReference();
         const obligationKey = this.buildPaymentObligationKey({
@@ -2504,7 +2547,8 @@ export class PaymentsService {
         } catch (error: any) {
             if (error?.code === 11000) {
                 const active = await this.paymentTransactionModel.findOne({ activeAttemptKey });
-                return { reference: active?.reference || reference, pending: true };
+                if (!active) throw error;
+                return { reference: active.reference, pending: true };
             }
             throw error;
         }
@@ -2548,6 +2592,40 @@ export class PaymentsService {
             access_code: response.data.access_code,
             reference,
         };
+    }
+
+    externalAccommodationPaymentState(transaction: any) {
+        if (!transaction) return null;
+        const needsReview = [PaymentFulfilmentStatus.QUARANTINED, PaymentFulfilmentStatus.DUPLICATE].includes(transaction.fulfilmentStatus);
+        return {
+            reference: transaction.reference,
+            status: transaction.status,
+            fulfilmentStatus: transaction.fulfilmentStatus,
+            needsReview,
+            canResume: !needsReview && transaction.status === PaymentStatus.PENDING
+                && transaction.gatewayStatus === 'ongoing'
+                && transaction.providerInitializationStatus === ProviderInitializationStatus.INITIALIZED
+                && Boolean(transaction.accessCode),
+            canRetry: !needsReview && transaction.status === PaymentStatus.FAILED,
+        };
+    }
+
+    async retryAccommodationPaymentFulfilment(transaction: any) {
+        if (transaction.status !== PaymentStatus.SUCCESSFUL
+            || transaction.fulfilmentStatus !== PaymentFulfilmentStatus.APPLIED
+            || transaction.paymentContext !== PaymentContext.ACCOMMODATION_APPLICATION) return;
+        const application = await this.paymentTransactionModel.db.collection('accommodationapplications')
+            .findOne({ _id: transaction.accommodationApplicationId });
+        if ([AccommodationApplicationStatus.AWAITING_PAYMENT, AccommodationApplicationStatus.PAYMENT_PENDING_REVIEW].includes(application?.status)) {
+            await this.finalizeAccommodationPayment(transaction);
+        }
+    }
+
+    async getExternalAccommodationPaymentAttempt(accommodationApplicationId: Types.ObjectId, paymentId: Types.ObjectId) {
+        const transaction = await this.paymentTransactionModel.findOne({
+            accommodationApplicationId, paymentId, method: PaymentMethod.PAYSTACK,
+        }).sort({ createdAt: -1 }).select('reference status fulfilmentStatus gatewayStatus providerInitializationStatus accessCode').lean();
+        return this.externalAccommodationPaymentState(transaction);
     }
 
     async getExternalAccommodationPaymentOptions(paymentId: string) {

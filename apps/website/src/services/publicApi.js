@@ -41,8 +41,8 @@ class PublicApiService {
         return this.request(`/accommodation/external/agreement?token=${encodeURIComponent(token)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     }
 
-    initializeExternalAccommodationPayment(resumeToken) {
-        return this.request('/accommodation/external/payment/initialize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resumeToken }) });
+    initializeExternalAccommodationPayment(resumeToken, { signal } = {}) {
+        return this.request('/accommodation/external/payment/initialize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resumeToken }), signal });
     }
 
     getExternalAccommodationPaymentOptions(resumeToken) {
@@ -55,8 +55,8 @@ class PublicApiService {
         return this.request(`/accommodation/external/payment/manual-transfer?token=${encodeURIComponent(resumeToken)}`, { method: 'POST', body });
     }
 
-    verifyExternalAccommodationPayment(resumeToken, reference) {
-        return this.request('/accommodation/external/payment/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resumeToken, reference }) });
+    verifyExternalAccommodationPayment(resumeToken, reference, { signal } = {}) {
+        return this.request('/accommodation/external/payment/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resumeToken, reference }), signal });
     }
 
     async downloadExternalAccommodationDocument(resumeToken, documentType) {

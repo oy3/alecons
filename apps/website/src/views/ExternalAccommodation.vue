@@ -1,15 +1,35 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PageHero from '../components/PageHero.vue';
 import TenancyAgreementForm from '../components/accommodation/TenancyAgreementForm.vue';
 import { publicApiService } from '../services/publicApi';
+import { prepareAccommodationCheckout } from '../services/accommodationPayment';
 
 const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const error = ref('');
 const message = ref('');
+const messageTone = ref('success');
+const paymentPhase = ref('');
+const paymentAttempt = ref(null);
+const successfulCheckouts = ref(new Set());
+const paymentAbort = new AbortController();
+let disposed = false;
+const unresolvedPayment = computed(() => Boolean(paymentAttempt.value && !paymentAttempt.value.canRetry));
+const canResumePayment = computed(() => {
+  const reference = paymentAttempt.value?.reference;
+  if (!paymentAttempt.value?.canResume || successfulCheckouts.value.has(reference)) return false;
+  try { return sessionStorage.getItem(`aleconsAccommodationCheckout:${reference}`) !== 'completed'; }
+  catch { return true; }
+});
+const paymentStatusMessage = computed(() => {
+  if (paymentAttempt.value?.needsReview) return 'This payment needs review. Please contact the college before making another payment.';
+  if (canResumePayment.value) return 'Your checkout is unfinished. Continue payment to reopen the same checkout.';
+  if (unresolvedPayment.value) return 'Payment confirmation is pending. Check payment status before making another payment.';
+  return '';
+});
 const application = ref(null);
 const resumeToken = ref(typeof window !== 'undefined' ? (localStorage.getItem('aleconsAccommodationResumeToken') || '') : '');
 const profile = ref(null);
@@ -37,7 +57,9 @@ const maskedVerificationEmail = computed(() => {
 });
 
 async function withRequest(action) {
+  if (loading.value) return;
   loading.value = true; error.value = ''; message.value = '';
+  messageTone.value = 'success';
   try { await action(); } catch (err) { error.value = err.message || 'Something went wrong'; }
   finally { loading.value = false; }
 }
@@ -51,6 +73,7 @@ function restartApplication() {
   resumeToken.value = '';
   application.value = null;
   paymentOptions.value = null;
+  paymentAttempt.value = null;
   localStorage.removeItem('aleconsAccommodationResumeToken');
   verificationSentTo.value = '';
   sessionStorage.removeItem('aleconsAccommodationVerificationSentTo');
@@ -65,7 +88,13 @@ async function loadApplication() {
     throw requestError;
   }
   if (application.value?.status === 'awaiting_payment') {
-    paymentOptions.value = await publicApiService.getExternalAccommodationPaymentOptions(resumeToken.value);
+    try {
+      paymentOptions.value = await publicApiService.getExternalAccommodationPaymentOptions(resumeToken.value);
+      paymentAttempt.value = paymentOptions.value.paymentAttempt || null;
+    } catch (failure) {
+      application.value = await publicApiService.resumeExternalAccommodation(resumeToken.value);
+      if (application.value?.status === 'awaiting_payment') throw failure;
+    }
   }
 }
 
@@ -91,14 +120,100 @@ async function submitAgreement(payload) {
   await withRequest(async () => {
     application.value = await publicApiService.signExternalAccommodationAgreement(resumeToken.value, payload);
     paymentOptions.value = await publicApiService.getExternalAccommodationPaymentOptions(resumeToken.value);
+    paymentAttempt.value = paymentOptions.value.paymentAttempt || null;
     message.value = 'Your tenancy agreement has been signed. You may now complete payment.';
   });
 }
 
 async function pay() {
   await withRequest(async () => {
-    const result = await publicApiService.initializeExternalAccommodationPayment(resumeToken.value);
-    window.location.assign(result.authorization_url);
+    paymentPhase.value = 'opening';
+    try {
+      const openCheckout = await prepareAccommodationCheckout();
+      let result;
+      try {
+        result = await publicApiService.initializeExternalAccommodationPayment(resumeToken.value, { signal: paymentAbort.signal });
+      } catch (failure) {
+        if (disposed) return;
+        await loadApplication();
+        if (stage.value !== 'payment') return;
+        throw failure;
+      }
+      if (disposed) return;
+      if (!result.reference) throw new Error('Payment could not be started. Refresh your application before trying again.');
+      paymentAttempt.value = { reference: result.reference, status: 'pending', canRetry: false, canResume: false };
+      if (result.pending || result.alreadyPaid) {
+        await confirmPayment(result.reference);
+        return;
+      }
+      const outcome = await openCheckout(result.access_code, {
+        signal: paymentAbort.signal,
+        onLoad: () => { paymentPhase.value = 'checkout'; },
+      });
+      if (disposed) return;
+      if (outcome.status === 'success') {
+        successfulCheckouts.value.add(result.reference);
+        try { sessionStorage.setItem(`aleconsAccommodationCheckout:${result.reference}`, 'completed'); } catch { /* The in-memory guard still applies. */ }
+      }
+      // Always verify our initialized reference, never a reference supplied by the popup.
+      await confirmPayment(result.reference, outcome.status === 'success' ? 3 : 1);
+      if (stage.value === 'payment' && outcome.status !== 'success') {
+        messageTone.value = 'info';
+        message.value = outcome.status === 'cancelled'
+          ? 'Checkout closed. Your application has been saved.'
+          : 'Checkout could not be opened. Check payment status before trying again.';
+      }
+    } finally { paymentPhase.value = ''; }
+  });
+}
+
+function waitForConfirmation() {
+  return new Promise(resolve => {
+    if (paymentAbort.signal.aborted) return resolve();
+    const done = () => { clearTimeout(timer); paymentAbort.signal.removeEventListener('abort', done); resolve(); };
+    const timer = setTimeout(done, 1500);
+    paymentAbort.signal.addEventListener('abort', done, { once: true });
+  });
+}
+
+async function confirmPayment(reference, attempts = 1) {
+  paymentPhase.value = 'verifying';
+  let lastError;
+  for (let attempt = 0; attempt < attempts && !disposed; attempt += 1) {
+    try {
+      const result = await publicApiService.verifyExternalAccommodationPayment(resumeToken.value, reference, { signal: paymentAbort.signal });
+      if (disposed) return;
+      application.value = result;
+      paymentAttempt.value = result.paymentAttempt || { reference, status: 'pending', canRetry: false };
+      if (stage.value !== 'payment' || paymentAttempt.value.canRetry) {
+        successfulCheckouts.value.delete(reference);
+        try { sessionStorage.removeItem(`aleconsAccommodationCheckout:${reference}`); } catch { /* Storage may be disabled. */ }
+      }
+      lastError = null;
+      if (stage.value !== 'payment' || paymentAttempt.value.canRetry || paymentAttempt.value.needsReview) break;
+    } catch (failure) {
+      if (disposed) return;
+      lastError = failure;
+      // The webhook may have confirmed payment while this verification request failed.
+      try { await loadApplication(); } catch { /* Retain the reference for a later status check. */ }
+      if (stage.value !== 'payment') return;
+    }
+    if (attempt < attempts - 1) await waitForConfirmation();
+  }
+  if (disposed) return;
+  if (lastError) throw new Error('We could not confirm this payment yet. Check payment status again before paying or transferring money.');
+  if (stage.value === 'payment' && paymentAttempt.value?.canRetry) {
+    messageTone.value = 'info';
+    message.value = 'Paystack confirmed this attempt was not completed. You may try again or use manual transfer.';
+  }
+}
+
+async function checkPaymentStatus() {
+  await withRequest(async () => {
+    try {
+      if (paymentAttempt.value?.reference) await confirmPayment(paymentAttempt.value.reference);
+      else await loadApplication();
+    } finally { paymentPhase.value = ''; }
   });
 }
 
@@ -146,12 +261,19 @@ onMounted(() => withRequest(async () => {
     return;
   }
   if (route.query.paymentReference && resumeToken.value) {
-    application.value = await publicApiService.verifyExternalAccommodationPayment(resumeToken.value, String(route.query.paymentReference));
+    const reference = String(route.query.paymentReference);
+    await loadApplication();
+    if (stage.value === 'payment') {
+      paymentAttempt.value = { reference, status: 'pending', canRetry: false };
+      try { await confirmPayment(reference, 3); } finally { paymentPhase.value = ''; }
+    }
     await router.replace({ path: route.path });
     return;
   }
   await loadApplication();
 }));
+
+onBeforeUnmount(() => { disposed = true; paymentAbort.abort(); });
 </script>
 
 <template>
@@ -171,8 +293,8 @@ onMounted(() => withRequest(async () => {
 
       <div class="accommodation-form">
         <div v-if="error" class="alert alert-danger" role="alert">{{ error }}</div>
-        <div v-if="message" class="alert alert-success" role="status">{{ message }}</div>
-        <button v-if="resumeToken || stage === 'email_sent'" type="button" class="btn btn-link px-0 mb-3" @click="restartApplication"><i class="bi bi-arrow-left me-1"></i>Start a different application</button>
+        <div v-if="message" class="alert" :class="`alert-${messageTone}`" role="status">{{ message }}</div>
+        <button v-if="resumeToken || stage === 'email_sent'" type="button" class="btn btn-link px-0 mb-3" :disabled="loading" @click="restartApplication"><i class="bi bi-arrow-left me-1"></i>Start a different application</button>
 
         <div v-if="stage === 'email_sent'" class="email-sent" role="status">
           <span class="email-sent-icon" aria-hidden="true"><i class="bi bi-envelope-check"></i></span>
@@ -213,12 +335,18 @@ onMounted(() => withRequest(async () => {
         <div v-else-if="stage === 'payment'">
           <h2>Complete accommodation payment</h2>
           <p>Your application <strong>{{ application?.applicationNumber }}</strong> is ready. The fee is <strong v-if="paymentOptions">₦{{ Number(paymentOptions.payment?.amount || 0).toLocaleString() }}</strong>.</p>
-          <button v-if="paymentOptions?.paystackEnabled" class="btn btn-primary" :disabled="loading" @click="pay"><i class="bi bi-credit-card me-2"></i>Pay securely</button>
+          <div v-if="paymentStatusMessage" class="alert" :class="paymentAttempt?.needsReview ? 'alert-warning' : 'alert-info'" role="status">{{ paymentStatusMessage }}</div>
+          <div class="d-flex flex-wrap gap-2">
+            <button v-if="paymentOptions?.paystackEnabled" type="button" class="btn btn-primary" :disabled="loading || (unresolvedPayment && !canResumePayment)" @click="pay"><i class="bi bi-credit-card me-2"></i>{{ canResumePayment ? 'Continue payment' : 'Pay securely' }}</button>
+            <button v-if="paymentAttempt?.reference" type="button" class="btn btn-outline-primary" :disabled="loading" @click="checkPaymentStatus"><i class="bi bi-arrow-repeat me-2"></i>Check payment status</button>
+          </div>
+          <p v-if="paymentPhase" class="small text-muted mt-3" role="status"><span class="spinner-border spinner-border-sm me-2"></span>{{ paymentPhase === 'verifying' ? 'Confirming payment...' : paymentPhase === 'checkout' ? 'Complete your payment in the secure checkout.' : 'Opening secure checkout...' }}</p>
+          <p v-if="paymentAttempt?.reference" class="small text-muted mt-3">Payment reference: <span class="text-break">{{ paymentAttempt.reference }}</span></p>
           <div v-if="paymentOptions?.manualTransfer?.enabled" class="manual-transfer mt-4">
             <h3>Manual bank transfer</h3>
             <dl><div><dt>Bank</dt><dd>{{ paymentOptions.manualTransfer.bankName }}</dd></div><div><dt>Account number</dt><dd>{{ paymentOptions.manualTransfer.accountNumber }}</dd></div><div><dt>Account name</dt><dd>{{ paymentOptions.manualTransfer.accountName }}</dd></div></dl>
-            <label for="receipt">Upload transfer receipt</label><input id="receipt" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="form-control" @change="receipt = $event.target.files?.[0] || null">
-            <button class="btn btn-outline-primary mt-3" :disabled="!receipt || loading" @click="submitReceipt">Submit receipt</button>
+            <label for="receipt">Upload transfer receipt</label><input id="receipt" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="form-control" :disabled="loading || unresolvedPayment" @change="receipt = $event.target.files?.[0] || null">
+            <button class="btn btn-outline-primary mt-3" :disabled="!receipt || loading || unresolvedPayment" @click="submitReceipt">Submit receipt</button>
           </div>
         </div>
         <div v-else-if="stage === 'review'"><h2>Receipt under review</h2><p>Your transfer receipt has been received. Allocation starts after a staff member verifies the payment.</p></div>

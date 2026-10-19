@@ -1,8 +1,16 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import Swal from "sweetalert2";
 import { apiService } from "../../services/api";
 import { useAuthStore } from "../../stores/auth";
+import { compactPagination } from "../../utils/pagination";
 
 const auth = useAuthStore();
 const activeTab = ref("applications");
@@ -38,6 +46,20 @@ const canAllocate = computed(() =>
 );
 const totalPages = computed(() =>
   Math.max(1, Math.ceil(total.value / filters.limit)),
+);
+const paginationItems = computed(() =>
+  compactPagination(filters.page, totalPages.value),
+);
+const firstApplication = computed(() =>
+  total.value && applications.value.length
+    ? (filters.page - 1) * filters.limit + 1
+    : 0,
+);
+const lastApplication = computed(() =>
+  Math.min(
+    total.value,
+    (filters.page - 1) * filters.limit + applications.value.length,
+  ),
 );
 const inventoryTotals = computed(() => {
   const totalSlots = inventory.rooms.reduce(
@@ -106,16 +128,26 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+let applicationRequestId = 0;
 async function loadApplications() {
+  const requestId = ++applicationRequestId;
   loading.value = true;
   try {
-    const result = await apiService.getAccommodationApplications(filters);
+    const result = await apiService.getAccommodationApplications({
+      ...filters,
+    });
+    if (requestId !== applicationRequestId) return;
     applications.value = result.items || result.data?.items || [];
     total.value = result.total || result.data?.total || 0;
+    if (filters.page > totalPages.value) {
+      filters.page = totalPages.value;
+      await loadApplications();
+    }
   } catch (error) {
+    if (requestId !== applicationRequestId) return;
     await Swal.fire("Could not load applications", message(error), "error");
   } finally {
-    loading.value = false;
+    if (requestId === applicationRequestId) loading.value = false;
   }
 }
 async function loadInventory() {
@@ -147,11 +179,15 @@ async function loadSessions() {
   if (!inventorySessionId.value) inventorySessionId.value = filters.sessionId;
 }
 async function changeSession() {
+  window.clearTimeout(applicationSearchTimer);
   filters.page = 1;
   await loadApplications();
 }
 async function changePage(page) {
-  filters.page = Math.min(totalPages.value, Math.max(1, page));
+  if (loading.value) return;
+  const nextPage = Math.min(totalPages.value, Math.max(1, page));
+  if (nextPage === filters.page) return;
+  filters.page = nextPage;
   await loadApplications();
 }
 async function toggleInventory(type, record) {
@@ -753,7 +789,7 @@ onMounted(async () => {
         <select
           v-model="filters.applicantType"
           class="form-select"
-          @change="loadApplications"
+          @change="changeSession"
         >
           <option value="">All resident types</option>
           <option value="internal">Internal students</option>
@@ -762,7 +798,7 @@ onMounted(async () => {
         <select
           v-model="filters.status"
           class="form-select"
-          @change="loadApplications"
+          @change="changeSession"
         >
           <option value="">All statuses</option>
           <option
@@ -914,26 +950,126 @@ onMounted(async () => {
           </tbody>
         </table>
       </div>
-      <div class="d-flex justify-content-between align-items-center mt-2">
-        <p class="small text-muted mb-0">
+      <div
+        class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-3"
+      >
+        <p class="small text-muted mb-0" role="status" aria-live="polite">
+          Showing {{ firstApplication }}&ndash;{{ lastApplication }} of
           {{ total }} application{{ total === 1 ? "" : "s" }}
         </p>
-        <div v-if="totalPages > 1" class="btn-group">
-          <button
-            class="btn btn-sm btn-outline-secondary"
-            :disabled="filters.page <= 1"
-            @click="changePage(filters.page - 1)"
+        <nav
+          v-if="totalPages > 1"
+          class="mw-100 overflow-auto"
+          aria-label="Accommodation applications pagination"
+          :aria-busy="loading"
+        >
+          <ul class="pagination pagination-sm flex-nowrap mb-0">
+            <li
+              class="page-item"
+              :class="{ disabled: loading || filters.page === 1 }"
+            >
+              <button
+                type="button"
+                class="page-link h-100 d-flex align-items-center justify-content-center"
+                aria-label="Go to first page"
+                title="First page"
+                :disabled="loading || filters.page === 1"
+                @click="changePage(1)"
+              >
+                <i class="bi bi-chevron-double-left" aria-hidden="true"></i>
+              </button>
+            </li>
+            <li
+              class="page-item"
+              :class="{ disabled: loading || filters.page === 1 }"
+            >
+              <button
+                type="button"
+                class="page-link h-100 d-flex align-items-center justify-content-center"
+                aria-label="Go to previous page"
+                title="Previous page"
+                :disabled="loading || filters.page === 1"
+                @click="changePage(filters.page - 1)"
+              >
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+              </button>
+            </li>
+            <li
+              v-for="item in paginationItems"
+              :key="item.key"
+              class="page-item"
+              :class="{
+                active: item.page === filters.page,
+                disabled: item.type === 'ellipsis' || loading,
+              }"
+            >
+              <span
+                v-if="item.type === 'ellipsis'"
+                class="page-link h-100 d-flex align-items-center justify-content-center"
+                aria-hidden="true"
+                >&hellip;</span
+              >
+              <button
+                v-else
+                type="button"
+                class="page-link h-100 d-flex align-items-center justify-content-center"
+                :aria-label="`Go to page ${item.page}`"
+                :aria-current="item.page === filters.page ? 'page' : undefined"
+                :disabled="loading || item.page === filters.page"
+                @click="changePage(item.page)"
+              >
+                {{ item.page }}
+              </button>
+            </li>
+            <li
+              class="page-item"
+              :class="{ disabled: loading || filters.page === totalPages }"
+            >
+              <button
+                type="button"
+                class="page-link h-100 d-flex align-items-center justify-content-center"
+                aria-label="Go to next page"
+                title="Next page"
+                :disabled="loading || filters.page === totalPages"
+                @click="changePage(filters.page + 1)"
+              >
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+              </button>
+            </li>
+            <li
+              class="page-item"
+              :class="{ disabled: loading || filters.page === totalPages }"
+            >
+              <button
+                type="button"
+                class="page-link h-100 d-flex align-items-center justify-content-center"
+                aria-label="Go to last page"
+                title="Last page"
+                :disabled="loading || filters.page === totalPages"
+                @click="changePage(totalPages)"
+              >
+                <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+              </button>
+            </li>
+          </ul>
+        </nav>
+        <div class="d-flex align-items-center gap-2">
+          <label
+            for="accommodation-page-size"
+            class="small text-muted text-nowrap"
+            >Rows per page</label
           >
-            <i class="bi bi-chevron-left"></i></button
-          ><span class="btn btn-sm btn-light disabled"
-            >{{ filters.page }} / {{ totalPages }}</span
-          ><button
-            class="btn btn-sm btn-outline-secondary"
-            :disabled="filters.page >= totalPages"
-            @click="changePage(filters.page + 1)"
+          <select
+            id="accommodation-page-size"
+            v-model.number="filters.limit"
+            class="form-select form-select-sm w-auto"
+            :disabled="loading"
+            @change="changeSession"
           >
-            <i class="bi bi-chevron-right"></i>
-          </button>
+            <option v-for="size in [10, 25, 50, 100]" :key="size" :value="size">
+              {{ size }}
+            </option>
+          </select>
         </div>
       </div>
     </template>
